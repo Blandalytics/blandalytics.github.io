@@ -155,7 +155,10 @@ class Session:
         d, eng = self.draft, self.eng
         if not self.opts:
             return json.dumps(None)
-        cands = [i for i, _ in self.opts] + [SKIP]
+        # the result array's columns follow this order for the whole run; tables() re-sorts a
+        # copy for display, so the pairing of labels and data never drifts between chunks
+        self.cand_opts = list(self.opts)
+        cands = [i for i, _ in self.cand_opts] + [SKIP]
         snap = eng.make_snap(d)
         out = league = None
         done = 0
@@ -172,7 +175,7 @@ class Session:
 
     def tables(self, out, league, done):
         d, eng = self.draft, self.eng
-        opts, res, base, measure = rank_options(d, self.opts, out)
+        opts, res, base, measure = rank_options(d, self.cand_opts, out)
         self.opts = opts                              # numbered picks follow the ranked order
         ranked = res[measure]
         mean = ranked.mean(axis=1)
