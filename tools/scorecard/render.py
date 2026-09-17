@@ -654,7 +654,7 @@ td.mix,th.mix{padding:6px 14px 6px 10px; text-align:left !important; white-space
 /* ---------- readout + legend ---------- */
 /* pitch-by-pitch panel, fixed so the table's scroll container cannot clip it */
 .pitchlist{
-  position:fixed; z-index:50; display:none; pointer-events:none;
+  position:fixed; z-index:50; display:none;
   min-width:252px; max-width:340px;
   background:var(--raise); border:1px solid var(--rule); border-radius:6px;
   box-shadow:var(--shadow); padding:8px 0 7px;
@@ -673,6 +673,11 @@ td.mix,th.mix{padding:6px 14px 6px 10px; text-align:left !important; white-space
   padding:2.5px 12px; align-items:baseline;
 }
 .pl-n{color:var(--faint); text-align:right}
+/* pitch numbers link to the pitch's video */
+a.pl-n{color:var(--muted); text-decoration:underline; text-underline-offset:2px;
+       text-decoration-color:var(--rule)}
+a.pl-n:hover{color:var(--ink); text-decoration-color:var(--ink)}
+a.pl-n:focus-visible{outline:2px solid var(--ink); outline-offset:1px; border-radius:2px}
 .pl-t{color:var(--ink)}
 .pl-v{color:var(--muted); text-align:right; font-variant-numeric:tabular-nums}
 .pl-r{font-size:10.5px; white-space:nowrap}
@@ -727,6 +732,7 @@ td.mix,th.mix{padding:6px 14px 6px 10px; text-align:left !important; white-space
 
 JS = """
 var PITCH_NAME = {"FF":"Four-Seam","SI":"Sinker","FT":"Two-Seam","FC":"Cutter","SL":"Slider","ST":"Sweeper","SV":"Slurve","CU":"Curveball","KC":"Knuckle Cv","CS":"Slow Curve","CH":"Changeup","FS":"Splitter","FO":"Forkball","SC":"Screwball","KN":"Knuckler","EP":"Eephus","PO":"Pitchout"};
+var VIDEO = "https://baseballsavant.mlb.com/sporty-videos?playId=";
 var RESULT_NAME = {"Swinging Strike (Blocked)":"Swinging Strike",
   "In play, out(s)":"In play, out", "In play, no out":"In play",
   "In play, run(s)":"In play, run", "Ball In Dirt":"Ball in dirt"};
@@ -761,8 +767,8 @@ var INNINGS = %s;
     var html='<div class="pl-head desc">'+esc(el.dataset.desc)+'</div>';
     for(var i=0;i<seq.length;i++){
       var p=seq[i], res=RESULT_NAME[p[3]]||p[3];
-      if(p.length>4){                       // put in play: show what it went for
-        res=p[4]+': '+p[5].toFixed(1)+' @ '+p[6]+'°';
+      if(p.length>5){                       // put in play: show what it went for
+        res=p[5]+': '+p[6].toFixed(1)+' @ '+p[7]+'°';
       }
       var last=(i===seq.length-1);
       var style=' style="color:'+(last?paColour:'#ffffff')+'"';
@@ -771,7 +777,11 @@ var INNINGS = %s;
             +'<span class="pl-auto'+(last?' last':'')+'"'+style+'>'+esc(p[3])+'</span></div>';
         continue;
       }
-      html+='<div class="pl-row"><span class="pl-n">'+p[0]+'</span>'
+      // the pitch number is the link to that pitch's video on Baseball Savant
+      var num=p[4]
+        ? '<a class="pl-n" href="'+VIDEO+encodeURIComponent(p[4])+'" target="_blank" rel="noopener">'+p[0]+'</a>'
+        : '<span class="pl-n">'+p[0]+'</span>';
+      html+='<div class="pl-row">'+num
           +'<span class="pl-t">'+esc(PITCH_NAME[p[1]]||p[1])+'</span>'
           +'<span class="pl-v">'+p[2].toFixed(1)+'</span>'
           +'<span class="pl-r'+(last?' last':'')+'"'+style+'>'+esc(res)+'</span></div>';
@@ -786,6 +796,12 @@ var INNINGS = %s;
     panel.setAttribute('aria-hidden','true');
     play.textContent=idle; meta.textContent=idleMeta;
   }
+  // links live in the panel, so give the cursor a moment to cross the gap to it
+  var hideTimer=null;
+  function scheduleHide(){ clearTimeout(hideTimer); hideTimer=setTimeout(hide,220); }
+  function cancelHide(){ clearTimeout(hideTimer); }
+  panel.addEventListener('mouseenter',cancelHide);
+  panel.addEventListener('mouseleave',scheduleHide);
 
   function showInning(el){
     var g=INNINGS[el.dataset.inn];
@@ -805,10 +821,10 @@ var INNINGS = %s;
 
   function bind(sel, fn){
     document.querySelectorAll(sel).forEach(function(el){
-      el.addEventListener('mouseenter',function(){ fn(el); });
-      el.addEventListener('focus',function(){ fn(el); });
-      el.addEventListener('mouseleave',hide);
-      el.addEventListener('blur',hide);
+      el.addEventListener('mouseenter',function(){ cancelHide(); fn(el); });
+      el.addEventListener('focus',function(){ cancelHide(); fn(el); });
+      el.addEventListener('mouseleave',scheduleHide);
+      el.addEventListener('blur',scheduleHide);
     });
   }
   bind('[data-abi]', show);

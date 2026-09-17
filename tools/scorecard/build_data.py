@@ -248,10 +248,12 @@ def build(game_pk, feed_json, pitches_df):
             "ev": round(float(bip.launch_speed.iloc[-1]), 1) if len(bip) else None,
             "la": int(bip.launch_angle.iloc[-1]) if len(bip) else None,
             "dist": int(bip.hit_distance.iloc[-1]) if len(bip) and pd.notna(bip.hit_distance.iloc[-1]) else None,
-            # every pitch of the plate appearance: number, type, velo, result
+            # every pitch of the plate appearance: number, type, velo, result, and
+            # the statcast playId that keys its video on Baseball Savant
             "seq": [[int(r.pitch_number),
                      str(r.pitch_type) if pd.notna(r.pitch_type) else "--",
-                     round(float(r.release_speed), 1), str(r.description)]
+                     round(float(r.release_speed), 1), str(r.description),
+                     str(r.play_id) if pd.notna(r.play_id) else None]
                     for r in g.itertuples()],
             "bb_label": (batted_ball(float(bip.launch_speed.iloc[-1]),
                                      float(bip.launch_angle.iloc[-1]))[1] if len(bip) else None),

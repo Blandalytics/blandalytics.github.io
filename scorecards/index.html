@@ -99,7 +99,7 @@ iframe{width:100%; height:100%; border:0; background:var(--ground); display:bloc
 
 <main class="stage">
   <iframe id="frame" title="Scorecard"></iframe>
-  <div class="empty" id="empty">Pick a date to see that day&rsquo;s games.</div>
+  <div class="empty" id="empty">Pick a date or a team.</div>
 </main>
 
 <script>
@@ -128,36 +128,28 @@ iframe{width:100%; height:100%; border:0; background:var(--ground); display:bloc
     }
     sel.disabled = items.length === 0;
   }
-  function gamesOn(date) {
-    return Object.keys(games).filter(function (pk) { return games[pk].date === date; })
-      .sort(function (a, b) {          // by away team, then home, stable enough for doubleheaders
-        var x = games[a], y = games[b];
-        return (x.away + x.home).localeCompare(y.away + y.home) || (a - b);
-      });
+  function shortDate(iso) {             // 2026-08-28 -> Aug 28
+    var d = new Date(iso + 'T12:00:00');
+    return MONTHS[d.getMonth()] + ' ' + d.getDate();
   }
 
-  // ---- the three selectors cascade: date -> team -> game ------------------
-  function onDate() {
-    var pks = gamesOn(dateSel.value);
-    var teams = {};
-    pks.forEach(function (pk) {
+  // ---- date and team are independent filters over every game --------------
+  // "all games on this day", "all games for this team", or both at once
+  function matching() {
+    var date = dateSel.value, ab = teamSel.value;
+    return Object.keys(games).filter(function (pk) {
       var g = games[pk];
-      teams[g.away_abbr] = g.away; teams[g.home_abbr] = g.home;
+      return (!date || g.date === date) && (!ab || g.away_abbr === ab || g.home_abbr === ab);
+    }).sort(function (a, b) {            // newest first, then by matchup
+      var x = games[a], y = games[b];
+      return y.date.localeCompare(x.date) || (x.away + x.home).localeCompare(y.away + y.home) || (a - b);
     });
-    var list = Object.keys(teams).sort(function (a, b) { return teams[a].localeCompare(teams[b]); })
-      .map(function (ab) { return [ab, teams[ab]]; });
-    fill(teamSel, [['', 'All teams']].concat(list), true);
-    onTeam();
   }
-  function onTeam() {
-    var ab = teamSel.value;
-    var pks = gamesOn(dateSel.value).filter(function (pk) {
-      var g = games[pk];
-      return !ab || g.away_abbr === ab || g.home_abbr === ab;
-    });
+  function refresh() {
+    var pks = matching();
     fill(gameSel, pks.map(function (pk) {
       var g = games[pk];
-      return [pk, g.away_abbr + ' ' + g.away_r + ' @ ' + g.home_abbr + ' ' + g.home_r + '  ·  ' + g.title];
+      return [pk, shortDate(g.date) + '  ·  ' + g.away_abbr + ' ' + g.away_r + ' @ ' + g.home_abbr + ' ' + g.home_r + '  ·  ' + g.title];
     }), true);
     onGame();
   }
@@ -165,6 +157,8 @@ iframe{width:100%; height:100%; border:0; background:var(--ground); display:bloc
     var pk = gameSel.value;
     if (!pk || !games[pk]) {
       frame.removeAttribute('src'); empty.hidden = false; open.hidden = true;
+      empty.textContent = 'No games match that date and team.';
+      document.title = 'Scorecards';
       return;
     }
     var g = games[pk];
@@ -175,18 +169,17 @@ iframe{width:100%; height:100%; border:0; background:var(--ground); display:bloc
     if (location.hash !== '#' + pk) history.replaceState(null, '', '#' + pk);
   }
 
-  dateSel.addEventListener('change', onDate);
-  teamSel.addEventListener('change', onTeam);
+  dateSel.addEventListener('change', refresh);
+  teamSel.addEventListener('change', refresh);
   gameSel.addEventListener('change', onGame);
 
-  // a #gamePk in the URL selects that game directly
+  // a #gamePk in the URL selects that game directly, narrowing to its date
   function selectFromHash() {
     var pk = location.hash.replace('#', '');
     if (!games[pk]) return false;
     dateSel.value = games[pk].date;
-    onDate();
     teamSel.value = '';
-    onTeam();
+    refresh();
     gameSel.value = pk;
     onGame();
     return true;
@@ -197,15 +190,23 @@ iframe{width:100%; height:100%; border:0; background:var(--ground); display:bloc
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function (m) {
       games = m.games || {};
-      var dates = {};
-      Object.keys(games).forEach(function (pk) { dates[games[pk].date] = 1; });
+      var dates = {}, teams = {};
+      Object.keys(games).forEach(function (pk) {
+        var g = games[pk];
+        dates[g.date] = 1;
+        teams[g.away_abbr] = g.away; teams[g.home_abbr] = g.home;
+      });
       var list = Object.keys(dates).sort().reverse();
-      fill(dateSel, list.map(function (d) { return [d, niceDate(d)]; }));
+      fill(dateSel, [['', 'All dates']].concat(list.map(function (d) { return [d, niceDate(d)]; })));
+      fill(teamSel, [['', 'All teams']].concat(
+        Object.keys(teams).sort(function (a, b) { return teams[a].localeCompare(teams[b]); })
+          .map(function (ab) { return [ab, teams[ab]]; })));
       var n = Object.keys(games).length;
       status.textContent = n + ' game' + (n === 1 ? '' : 's') + ' across ' + list.length
         + ' date' + (list.length === 1 ? '' : 's') + (m.built ? ' · updated ' + m.built.slice(0, 10) : '');
       if (!list.length) { empty.textContent = 'No games built yet.'; return; }
-      if (!selectFromHash()) { dateSel.value = list[0]; onDate(); }
+      // land on the most recent day rather than the whole archive
+      if (!selectFromHash()) { dateSel.value = list[0]; refresh(); }
     })
     .catch(function (e) {
       status.textContent = 'Could not load games.json';
