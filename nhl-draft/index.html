@@ -70,8 +70,10 @@ td.neg{color:var(--bad)} td.posv{color:var(--good)} td.zero{color:var(--faint)}
 .note{color:var(--faint); font-size:12.5px; margin-top:8px}
 kbd{font-family:"JetBrains Mono",monospace; font-size:12px; background:var(--ground); border:1px solid var(--rule); border-radius:4px; padding:1px 5px}
 [hidden]{display:none!important}
-details summary{cursor:pointer; color:var(--muted); font-size:13px}
-details[open] summary{margin-bottom:8px}
+details summary{cursor:pointer; font-size:17px; font-weight:600; list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary span{color:var(--muted); font-weight:400; font-size:13px; margin-left:10px}
+details[open] summary{margin-bottom:10px}
 </style>
 </head>
 <body>
@@ -83,11 +85,12 @@ details[open] summary{margin-bottom:8px}
   </header>
 
   <section id="setup" class="card">
-    <h2>Settings</h2>
+    <details id="setup_details" open>
+    <summary><b>Settings</b></summary>
     <div class="grid">
       <label><b>Your draft slot</b><input id="slot" type="number" min="1" max="20" value="1"><small>1 … teams</small></label>
       <label><b>Mode</b><select id="mock"><option value="1">Mock draft — rivals draft themselves</option><option value="0">Follow a real draft — enter every pick</option></select><small>In a real draft your options are re-priced at every stop</small></label>
-      <label><b>Simulated finishes per option</b><input id="sims" type="number" min="10" max="2000" value="150"><small>More is sharper and slower; tables refine as they run</small></label>
+      <label><b>Simulated finishes per option</b><input id="sims" type="number" min="10" max="2000" value="200"><small>More is sharper and slower; tables refine as they run</small></label>
       <label><b>Options per position</b><input id="per_pos" type="number" min="0" max="5" value="2"><small>Best C, LW, RW, D and G by assigned position</small></label>
       <label><b>Options from the board</b><input id="board" type="number" min="0" max="15" value="5"><small>Next players on your blended board</small></label>
       <label><b>Your board's VORP weight</b><input id="my_weight" type="number" min="0" max="1" step="0.05" value="0.6"><small>Blend of VORP rank and ADP rank you read the board in; it orders options, it does not pick</small></label>
@@ -112,6 +115,7 @@ details[open] summary{margin-bottom:8px}
       <button id="start" class="primary" disabled>Start draft</button>
       <span id="status" class="status">starting the Python runtime…</span>
     </div>
+    </details>
   </section>
 
   <section id="draft" hidden>
@@ -137,6 +141,6 @@ details[open] summary{margin-bottom:8px}
 
   <section id="final" class="card" hidden></section>
 </main>
-<script src="app.js"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

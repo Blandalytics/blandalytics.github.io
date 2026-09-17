@@ -13,6 +13,8 @@ const status = (text) => postMessage({ type: "status", text });
 self.progress = (json) => postMessage({ type: "progress", result: JSON.parse(json) });
 self.pylog = (text) => status(text);
 
+let VERSION = "0";
+
 async function init() {
   status("loading Python runtime");
   importScripts(PYODIDE + "pyodide.js");
@@ -22,11 +24,11 @@ async function init() {
   status("loading the draft tool");
   pyodide.FS.mkdirTree("/draft");
   for (const f of PY_FILES) {
-    const src = await (await fetch("py/" + f + "?v=" + Date.now())).text();
+    const src = await (await fetch("py/" + f + "?v=" + VERSION)).text();
     pyodide.FS.writeFile("/draft/" + f, src);
   }
   for (const f of DATA_FILES) {
-    const src = await (await fetch("data/" + f)).text();
+    const src = await (await fetch("data/" + f + "?v=" + VERSION)).text();
     pyodide.FS.writeFile("/draft/" + f, src);
   }
   await pyodide.runPythonAsync(`
@@ -47,7 +49,7 @@ function call(expr) {
 self.onmessage = async (e) => {
   const m = e.data;
   try {
-    if (m.type === "init") return await init();
+    if (m.type === "init") { VERSION = m.version || VERSION; return await init(); }
     if (m.type === "setup") {
       if (m.sheetText) pyodide.FS.writeFile("/draft/sheet_upload.csv", m.sheetText);
       const cfg = { ...m.cfg, sheet: m.sheetText ? "sheet_upload.csv" : "sheet_live.csv" };
@@ -65,9 +67,9 @@ session = web_api.Session(json.loads(cfg_json), log=pylog)
       return postMessage({ type: "result", result });
     }
     if (m.type === "take") {
-      pyodide.globals.set("take_index", m.index === undefined ? null : m.index);
-      pyodide.globals.set("take_text", m.text === undefined ? null : m.text);
-      return postMessage({ type: "took", r: call("session.take(index=take_index, text=take_text)") });
+      // arguments cross as JSON: a JS null would arrive in Python as a JsNull proxy, not None
+      pyodide.globals.set("args_json", JSON.stringify({ index: m.index ?? null, text: m.text ?? null }));
+      return postMessage({ type: "took", r: call("session.take(**json.loads(args_json))") });
     }
     if (m.type === "auto") return postMessage({ type: "took", r: call("session.auto_pick()") });
     if (m.type === "next") return postMessage({ type: "stop", info: call("session.begin_stop()") });
@@ -77,9 +79,8 @@ session = web_api.Session(json.loads(cfg_json), log=pylog)
       return postMessage({ type: "stop", info: call("session.begin_stop()") });
     }
     if (m.type === "board") {
-      pyodide.globals.set("board_pos", m.pos || null);
-      pyodide.globals.set("board_n", m.n || 15);
-      return postMessage({ type: "board", pos: m.pos || "", rows: call("session.board(board_pos, board_n)") });
+      pyodide.globals.set("args_json", JSON.stringify({ pos: m.pos || null, n: m.n || 15 }));
+      return postMessage({ type: "board", pos: m.pos || "", rows: call("session.board(**json.loads(args_json))") });
     }
     if (m.type === "rosters") return postMessage({ type: "rosters", rows: call("session.rosters()") });
     if (m.type === "final") return postMessage({ type: "final", data: call("session.final()") });

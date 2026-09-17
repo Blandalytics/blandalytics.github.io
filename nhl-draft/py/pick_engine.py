@@ -46,7 +46,7 @@ import pandas as pd
 
 from boards import AdpBoard, VorBoard
 from draft_sim import snake_order
-from league import CATS, STATS, Roster, rank_average
+from league import CATS, STATS
 from valuation import position_values
 
 N_SIMS = 500
@@ -139,7 +139,17 @@ class Engine:
         code = {t: k for k, t in enumerate(self.etypes)}
         self.pc = [code[t] for t in types]
         self.all_legal = (True,) * self.n_types
+        # Hall's condition on the 2^k subsets of the k starting slot types: a set of seated
+        # players fits iff, for every subset S, the players eligible only within S number at
+        # most S's capacity.  hall[S, t] = 1 when type t's slots all lie in S.
+        slot_names = list(league.slots)
+        masks = [sum(1 << slot_names.index(x) for x in t) for t in self.etypes]
+        subsets = range(1 << len(slot_names))
+        self.hall = np.array([[1 if masks[t] & ~S == 0 else 0 for t in range(self.n_types)] for S in subsets], float)
+        self.hall_cap = np.array([sum(league.slots[x] for k, x in enumerate(slot_names) if S >> k & 1) for S in subsets], float)
         self._legal = lru_cache(maxsize=None)(self._legal_uncached)
+        self.value_list = self.value.tolist()
+        self.bench_cost_list = self.bench_cost.tolist()
 
         # the unsampled board the drafter reads: one VORP rank, one ADP rank, drawn from nothing
         self.rank_vor = np.empty(self.n)
@@ -169,16 +179,11 @@ class Engine:
         remain to still fill every starting slot afterwards.
         """
         counts, bench = state[:-1], state[-1]
-        R = Roster(self.lg.slots)
-        pid = 0
-        for k, c in enumerate(counts):
-            for _ in range(c):
-                R.add(pid, self.etypes[k])
-                pid += 1
         seated = sum(counts)
         picks_left = self.roster_size - seated - bench
         bench_open = bench < self.n_bench and picks_left > self.n_start - seated
-        routable = tuple(R.find_slot(t)[0] is not None for t in self.etypes)
+        load = self.hall @ np.array(counts, float)                    # players confined to each subset
+        routable = tuple(bool(v) for v in ((load[:, None] + self.hall) <= self.hall_cap[:, None]).all(axis=0))
         return tuple(r or bench_open for r in routable), routable
 
     def legal(self, counts, bench):
@@ -188,15 +193,22 @@ class Engine:
 
     def league_points(self, rosters):
         """Roto points per team and category, [teams, cats], from the starters' projections."""
-        tot = np.array([self.stats[r].sum(axis=0) if r else np.zeros(len(STATS)) for r in rosters])
+        idx = [i for r in rosters for i in r]
+        tid = [t for t, r in enumerate(rosters) for _ in r]
+        tot = np.zeros((self.n_teams, len(STATS)))
+        np.add.at(tot, tid, self.stats[idx])
         sa, gs = tot[:, I_SV] + tot[:, I_GA], tot[:, I_GS]
         with np.errstate(invalid="ignore", divide="ignore"):
             cats = np.column_stack([tot[:, :I_GA], np.where(sa > 0, tot[:, I_SV] / sa, 0.0),
                                     -np.where(gs > 0, tot[:, I_GA] / gs, 0.0)])   # GAA negated: lower is better
-        return rank_average(cats, axis=0)
+        # rank with ties averaged: (below + at-or-below + 1) / 2, best = n_teams
+        below = (cats[None, :, :] < cats[:, None, :]).sum(axis=1)
+        at_or_below = (cats[None, :, :] <= cats[:, None, :]).sum(axis=1)
+        return (below + at_or_below + 1) / 2.0
 
     def team_vorp(self, starters, bench):
-        return float(self.value[starters].sum() - self.slot_cost + (self.value[bench] - self.bench_cost[bench]).sum())
+        v, b = self.value_list, self.bench_cost_list
+        return sum(v[i] for i in starters) - self.slot_cost + sum(v[i] - b[i] for i in bench)
 
     # ---- per-simulation board construction ----------------------------------
 
@@ -314,9 +326,10 @@ class Engine:
                 cp = self.league_points(rosters)
                 if cand == SKIP:
                     league[:, :, s] = cp
-                tot = cp.sum(axis=1)
-                place = rank_average(-tot)[me]
-                out[PTS, k, s] = tot[me]
+                tot = cp.sum(axis=1).tolist()
+                mine = tot[me]
+                place = (sum(1 for v in tot if v > mine) + sum(1 for v in tot if v >= mine) + 1) / 2.0
+                out[PTS, k, s] = mine
                 out[VOR, k, s] = self.team_vorp(rosters[me], benches[me])
                 out[FIN, k, s] = place
                 out[WIN, k, s] = float(place == 1.0)
