@@ -56,3 +56,29 @@ Or one game, without the site machinery:
 from tools.scorecard.scorecard import scorecard
 html = scorecard(824638)
 ```
+
+## NHL Draft Tool
+
+[blandalytics.com/nhl-draft/](https://blandalytics.com/nhl-draft/) — a draft tool for a 12-team
+rotisserie hockey league. You sit in one seat; the other teams draft themselves off boards
+that blend a value-over-replacement ranking with ADP, and at every stop each of your options
+is priced by simulating the rest of the draft hundreds of times and scoring the league it
+leads to: roto points, plus what the pick adds in every category and where every team sits.
+
+It runs entirely in the browser: [Pyodide](https://pyodide.org) loads the same Python the
+command-line tool uses, so there is no server and nothing to install.
+
+| file | role |
+|---|---|
+| `nhl-draft/index.html`, `app.js` | the page: settings for every argument of the CLI tool, a do-not-draft list, the draft console |
+| `nhl-draft/worker.js` | a Web Worker that loads Pyodide, numpy and pandas, then drives `web_api.Session` |
+| `nhl-draft/py/` | the tool itself — `league.py`, `valuation.py`, `boards.py`, `draft_sim.py`, `pick_engine.py`, `draft_tool.py`, `web_api.py` |
+| `nhl-draft/data/sheet_live.csv` | the projections and eligibility sheet; `merged_players.csv` carries Yahoo ranks |
+
+### Updating
+
+The projections are a snapshot. To refresh them, replace `nhl-draft/data/sheet_live.csv`
+with a new export of the sheet (same columns), then bump `VERSION` in `app.js` and the
+`app.js?v=` query in `index.html` so browsers fetch the new files. The same bump is needed
+after any change to the Python under `nhl-draft/py/`. A different projections file can also
+be loaded on the page itself, without deploying, through the *Projections* file input.

@@ -6,7 +6,8 @@ const f2 = (v) => (v === null || v === undefined) ? "-" : Number(v).toFixed(2);
 const pct = (v) => Math.round(100 * v) + "%";
 const signed = (v) => { const s = (v > 0 ? "+" : "") + Number(v).toFixed(1); return `<td class="${v > 0.05 ? "posv" : v < -0.05 ? "neg" : "zero"}">${s}</td>`; };
 
-const worker = new Worker("worker.js");
+const VERSION = "4";                     // bump with every deploy: it busts the cache on the worker and the Python files
+const worker = new Worker("worker.js?v=" + VERSION);
 let players = [];
 let dnd = [];
 let stop = null;          // the current stop's info
@@ -65,10 +66,10 @@ function renderClock(info) {
   let html;
   if (info.done) html = `<div class="clock"><span class="pick">Draft complete</span></div>`;
   else html = `<div class="clock"><span class="pick">Round ${info.round}, pick ${info.pick} <span style="color:var(--muted);font-weight:400">(overall ${info.overall} of ${info.teams * info.rounds})</span></span>
-    <span class="who ${mine ? "mine" : ""}">${mine ? "YOUR PICK" : `team ${info.team} on the clock`}${info.mock ? "" : " — enter their pick with <kbd>p name</kbd>"}</span></div>`;
+    <span class="who ${mine ? "mine" : ""}">${mine ? "YOUR PICK" : `team ${info.team} on the clock`}${info.mock || mine ? "" : " — enter their pick with <kbd>p name</kbd>"}</span></div>`;
   const bySlot = {};
   for (const r of info.roster) (bySlot[r.slot] = bySlot[r.slot] || []).push(r.name);
-  const rosterTxt = Object.keys(bySlot).length ? Object.entries(bySlot).map(([s, n]) => `<b>${s}</b>${n.map(esc).join(", ")}`).join(" &nbsp;|&nbsp; ") : "(empty)";
+  const rosterTxt = Object.keys(bySlot).length ? Object.entries(bySlot).map(([s, n]) => `<b>${s}</b> ${n.map(esc).join(", ")}`).join(" &nbsp;|&nbsp; ") : "(empty)";
   html += `<div class="roster"><b>you have</b> ${rosterTxt}</div>`;
   if (info.between.length) html += `<h3>picks since your last</h3><pre class="picks">` + info.between.map((p) =>
     `${String(p.round).padStart(2)}.${String(p.pick).padStart(2, "0")}  team ${String(p.team).padEnd(2)}  ${esc(p.name.padEnd(24))} ${p.pos.padEnd(7)} ${p.nhl.padEnd(4)}${(p.w !== null && p.w !== undefined) ? "  (w " + p.w.toFixed(2) + ")" : ""}`).join("\n") + `</pre>`;
@@ -125,7 +126,7 @@ function renderRosters(rows) {
   for (const t of rows) {
     const bySlot = {};
     for (const r of t.players) (bySlot[r.slot] = bySlot[r.slot] || []).push(r.name);
-    const txt = Object.keys(bySlot).length ? Object.entries(bySlot).map(([s, n]) => `<b>${s}</b>${n.map(esc).join(", ")}`).join(" &nbsp;|&nbsp; ") : "(empty)";
+    const txt = Object.keys(bySlot).length ? Object.entries(bySlot).map(([s, n]) => `<b>${s}</b> ${n.map(esc).join(", ")}`).join(" &nbsp;|&nbsp; ") : "(empty)";
     html += `<div class="roster"><b style="color:${t.you ? "var(--good)" : "var(--muted)"}">${t.you ? "you" : "team " + t.team}</b> ${txt}</div>`;
   }
   $("panel").innerHTML = html;
@@ -168,7 +169,7 @@ function command(text) {
 
 function simulate() {
   if (!stop || stop.done || !stop.has_pick || !stop.options.length) return;
-  setBusy(true); msg("");
+  setBusy(true);
   worker.postMessage({ type: "simulate" });
 }
 
@@ -196,7 +197,9 @@ worker.onmessage = (e) => {
   if (m.type === "stop") {
     stop = m.info; result = null;
     $("draft").hidden = false;
-    $("setup").querySelector("h2").textContent = "Settings (draft in progress)";
+    const det = $("setup_details");
+    det.open = false;
+    det.querySelector("summary").innerHTML = `<b>Settings</b><span>draft in progress — you are team ${stop.user_team}, ${stop.sims} finishes per option, ${stop.mock ? "mock draft" : "following a real draft"}${stop.dnd.length ? ", " + stop.dnd.length + " do-not-draft" : ""} (click to review)</span>`;
     setStatus(`draft in progress — you are team ${stop.user_team}`);
     renderClock(stop);
     $("panel").innerHTML = "";
@@ -225,4 +228,4 @@ worker.onmessage = (e) => {
   if (m.type === "final") { setBusy(false); renderFinal(m.data); return; }
 };
 
-worker.postMessage({ type: "init" });
+worker.postMessage({ type: "init", version: VERSION });
