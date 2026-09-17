@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Scorecards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
+  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684;
+  --rule:#242c37; --rule-soft:#1e252f;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  display:flex; flex-direction:column;
+}
+
+/* ---------- picker bar ---------- */
+.bar{
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 18px;
+  padding:16px 20px 14px; border-bottom:1px solid var(--rule); background:var(--surface);
+}
+.brand{margin-right:auto; display:flex; flex-direction:column; gap:2px}
+.brand h1{margin:0; font-size:19px; font-weight:700; letter-spacing:-.01em}
+.brand .sub{
+  font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
+  font-variant-numeric:tabular-nums;
+}
+.field{display:flex; flex-direction:column; gap:5px; min-width:150px}
+.field label{
+  font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
+  font-weight:600;
+}
+select{
+  appearance:none; -webkit-appearance:none;
+  font:inherit; font-size:14px; font-weight:500; color:var(--ink);
+  background:var(--raise) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238a96a6' stroke-width='1.5'/></svg>") no-repeat right 11px center;
+  border:1px solid var(--rule); border-radius:6px; padding:8px 30px 8px 11px;
+  cursor:pointer; font-variant-numeric:tabular-nums;
+}
+select:hover{border-color:var(--faint)}
+select:focus-visible{outline:2px solid var(--ink); outline-offset:1px}
+select:disabled{opacity:.45; cursor:default}
+#game{min-width:280px}
+.open{
+  font-size:12.5px; color:var(--muted); text-decoration:none; align-self:center;
+  border:1px solid var(--rule); border-radius:6px; padding:8px 12px; white-space:nowrap;
+}
+.open:hover{color:var(--ink); border-color:var(--faint)}
+.open[hidden]{display:none}
+
+/* ---------- the scorecard itself ---------- */
+.stage{flex:1; min-height:0; position:relative}
+iframe{width:100%; height:100%; border:0; background:var(--ground); display:block}
+.empty{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  color:var(--muted); font-size:15px; text-align:center; padding:0 20px;
+}
+.empty[hidden]{display:none}
+
+@media (max-width:640px){
+  .bar{padding:12px 12px 10px; gap:10px 12px}
+  .brand{flex-basis:100%; margin:0}
+  .field{flex:1; min-width:0}
+  #game{min-width:0; flex-basis:100%}
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <h1>Scorecards</h1>
+    <span class="sub" id="status">Loading games…</span>
+  </div>
+  <div class="field">
+    <label for="date">Date</label>
+    <select id="date" disabled></select>
+  </div>
+  <div class="field">
+    <label for="team">Team</label>
+    <select id="team" disabled></select>
+  </div>
+  <div class="field">
+    <label for="game">Game</label>
+    <select id="game" disabled></select>
+  </div>
+  <a class="open" id="open" href="#" target="_blank" rel="noopener" hidden>Open full page ↗</a>
+</header>
+
+<main class="stage">
+  <iframe id="frame" title="Scorecard"></iframe>
+  <div class="empty" id="empty">Pick a date to see that day&rsquo;s games.</div>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var dateSel = $('date'), teamSel = $('team'), gameSel = $('game');
+  var frame = $('frame'), empty = $('empty'), open = $('open'), status = $('status');
+  var games = {};                       // gamePk -> manifest entry
+
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function niceDate(iso) {              // 2026-08-28 -> Fri, Aug 28 2026
+    var d = new Date(iso + 'T12:00:00');
+    var dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+    return dow + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ' ' + d.getFullYear();
+  }
+  function fill(sel, items, keep) {     // items: [[value, label], ...]
+    var prev = keep ? sel.value : null;
+    sel.innerHTML = '';
+    items.forEach(function (it) {
+      var o = document.createElement('option');
+      o.value = it[0]; o.textContent = it[1];
+      sel.appendChild(o);
+    });
+    if (prev !== null && [].some.call(sel.options, function (o) { return o.value === prev; })) {
+      sel.value = prev;
+    }
+    sel.disabled = items.length === 0;
+  }
+  function gamesOn(date) {
+    return Object.keys(games).filter(function (pk) { return games[pk].date === date; })
+      .sort(function (a, b) {          // by away team, then home, stable enough for doubleheaders
+        var x = games[a], y = games[b];
+        return (x.away + x.home).localeCompare(y.away + y.home) || (a - b);
+      });
+  }
+
+  // ---- the three selectors cascade: date -> team -> game ------------------
+  function onDate() {
+    var pks = gamesOn(dateSel.value);
+    var teams = {};
+    pks.forEach(function (pk) {
+      var g = games[pk];
+      teams[g.away_abbr] = g.away; teams[g.home_abbr] = g.home;
+    });
+    var list = Object.keys(teams).sort(function (a, b) { return teams[a].localeCompare(teams[b]); })
+      .map(function (ab) { return [ab, teams[ab]]; });
+    fill(teamSel, [['', 'All teams']].concat(list), true);
+    onTeam();
+  }
+  function onTeam() {
+    var ab = teamSel.value;
+    var pks = gamesOn(dateSel.value).filter(function (pk) {
+      var g = games[pk];
+      return !ab || g.away_abbr === ab || g.home_abbr === ab;
+    });
+    fill(gameSel, pks.map(function (pk) {
+      var g = games[pk];
+      return [pk, g.away_abbr + ' ' + g.away_r + ' @ ' + g.home_abbr + ' ' + g.home_r + '  ·  ' + g.title];
+    }), true);
+    onGame();
+  }
+  function onGame() {
+    var pk = gameSel.value;
+    if (!pk || !games[pk]) {
+      frame.removeAttribute('src'); empty.hidden = false; open.hidden = true;
+      return;
+    }
+    var g = games[pk];
+    frame.src = g.file;
+    open.href = g.file;
+    empty.hidden = true; open.hidden = false;
+    document.title = g.title + ' — Scorecards';
+    if (location.hash !== '#' + pk) history.replaceState(null, '', '#' + pk);
+  }
+
+  dateSel.addEventListener('change', onDate);
+  teamSel.addEventListener('change', onTeam);
+  gameSel.addEventListener('change', onGame);
+
+  // a #gamePk in the URL selects that game directly
+  function selectFromHash() {
+    var pk = location.hash.replace('#', '');
+    if (!games[pk]) return false;
+    dateSel.value = games[pk].date;
+    onDate();
+    teamSel.value = '';
+    onTeam();
+    gameSel.value = pk;
+    onGame();
+    return true;
+  }
+  window.addEventListener('hashchange', selectFromHash);
+
+  fetch('games.json', { cache: 'no-cache' })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (m) {
+      games = m.games || {};
+      var dates = {};
+      Object.keys(games).forEach(function (pk) { dates[games[pk].date] = 1; });
+      var list = Object.keys(dates).sort().reverse();
+      fill(dateSel, list.map(function (d) { return [d, niceDate(d)]; }));
+      var n = Object.keys(games).length;
+      status.textContent = n + ' game' + (n === 1 ? '' : 's') + ' across ' + list.length
+        + ' date' + (list.length === 1 ? '' : 's') + (m.built ? ' · updated ' + m.built.slice(0, 10) : '');
+      if (!list.length) { empty.textContent = 'No games built yet.'; return; }
+      if (!selectFromHash()) { dateSel.value = list[0]; onDate(); }
+    })
+    .catch(function (e) {
+      status.textContent = 'Could not load games.json';
+      empty.textContent = 'The game manifest is missing. Run build_site.py to create it.';
+    });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+# the scraper is cloned at build time, not vendored
+statcast_scraper/
+__pycache__/
+*.pyc
+# local scratch from running the tools by hand
+tools/scorecard/feed_*.json
+tools/scorecard/pitches_*.parquet
+tools/scorecard/scorecard_*.json
