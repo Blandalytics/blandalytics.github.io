@@ -1,5 +1,5 @@
 {
- "built": "2026-09-17T08:52:22Z",
+ "built": "2026-09-17T09:13:35Z",
  "games": {
   "822691": {
    "away": "Miami Marlins",
@@ -15,6 +15,34 @@
    "title": "Nationals 9, Marlins 2",
    "venue": "Nationals Park"
   },
+  "822692": {
+   "away": "Colorado Rockies",
+   "away_abbr": "COL",
+   "away_nick": "Rockies",
+   "away_r": 13,
+   "date": "2026-08-26",
+   "file": "games/822692.html",
+   "home": "Washington Nationals",
+   "home_abbr": "WSH",
+   "home_nick": "Nationals",
+   "home_r": 1,
+   "title": "Rockies 13, Nationals 1",
+   "venue": "Nationals Park"
+  },
+  "822694": {
+   "away": "Colorado Rockies",
+   "away_abbr": "COL",
+   "away_nick": "Rockies",
+   "away_r": 1,
+   "date": "2026-08-27",
+   "file": "games/822694.html",
+   "home": "Washington Nationals",
+   "home_abbr": "WSH",
+   "home_nick": "Nationals",
+   "home_r": 7,
+   "title": "Nationals 7, Rockies 1",
+   "venue": "Nationals Park"
+  },
   "822769": {
    "away": "Seattle Mariners",
    "away_abbr": "SEA",
@@ -27,6 +55,34 @@
    "home_nick": "Blue Jays",
    "home_r": 8,
    "title": "Blue Jays 8, Mariners 1",
+   "venue": "Rogers Centre"
+  },
+  "822771": {
+   "away": "Kansas City Royals",
+   "away_abbr": "KC",
+   "away_nick": "Royals",
+   "away_r": 13,
+   "date": "2026-08-27",
+   "file": "games/822771.html",
+   "home": "Toronto Blue Jays",
+   "home_abbr": "TOR",
+   "home_nick": "Blue Jays",
+   "home_r": 2,
+   "title": "Royals 13, Blue Jays 2",
+   "venue": "Rogers Centre"
+  },
+  "822772": {
+   "away": "Kansas City Royals",
+   "away_abbr": "KC",
+   "away_nick": "Royals",
+   "away_r": 0,
+   "date": "2026-08-26",
+   "file": "games/822772.html",
+   "home": "Toronto Blue Jays",
+   "home_abbr": "TOR",
+   "home_nick": "Blue Jays",
+   "home_r": 3,
+   "title": "Blue Jays 3, Royals 0",
    "venue": "Rogers Centre"
   },
   "822935": {
@@ -57,6 +113,48 @@
    "title": "Cardinals 4, Pirates 1",
    "venue": "Busch Stadium"
   },
+  "823014": {
+   "away": "Baltimore Orioles",
+   "away_abbr": "BAL",
+   "away_nick": "Orioles",
+   "away_r": 5,
+   "date": "2026-08-27",
+   "file": "games/823014.html",
+   "home": "St. Louis Cardinals",
+   "home_abbr": "STL",
+   "home_nick": "Cardinals",
+   "home_r": 7,
+   "title": "Cardinals 7, Orioles 5",
+   "venue": "Busch Stadium"
+  },
+  "823015": {
+   "away": "Baltimore Orioles",
+   "away_abbr": "BAL",
+   "away_nick": "Orioles",
+   "away_r": 8,
+   "date": "2026-08-26",
+   "file": "games/823015.html",
+   "home": "St. Louis Cardinals",
+   "home_abbr": "STL",
+   "home_nick": "Cardinals",
+   "home_r": 7,
+   "title": "Orioles 8, Cardinals 7",
+   "venue": "Busch Stadium"
+  },
+  "823096": {
+   "away": "Philadelphia Phillies",
+   "away_abbr": "PHI",
+   "away_nick": "Phillies",
+   "away_r": 6,
+   "date": "2026-08-26",
+   "file": "games/823096.html",
+   "home": "Seattle Mariners",
+   "home_abbr": "SEA",
+   "home_nick": "Mariners",
+   "home_r": 0,
+   "title": "Phillies 6, Mariners 0",
+   "venue": "T-Mobile Park"
+  },
   "823178": {
    "away": "Arizona Diamondbacks",
    "away_abbr": "AZ",
@@ -70,6 +168,62 @@
    "home_r": 6,
    "title": "D-backs 10, Giants 6",
    "venue": "Oracle Park"
+  },
+  "823179": {
+   "away": "Arizona Diamondbacks",
+   "away_abbr": "AZ",
+   "away_nick": "D-backs",
+   "away_r": 1,
+   "date": "2026-08-27",
+   "file": "games/823179.html",
+   "home": "San Francisco Giants",
+   "home_abbr": "SF",
+   "home_nick": "Giants",
+   "home_r": 6,
+   "title": "Giants 6, D-backs 1",
+   "venue": "Oracle Park"
+  },
+  "823180": {
+   "away": "Cincinnati Reds",
+   "away_abbr": "CIN",
+   "away_nick": "Reds",
+   "away_r": 10,
+   "date": "2026-08-26",
+   "file": "games/823180.html",
+   "home": "San Francisco Giants",
+   "home_abbr": "SF",
+   "home_nick": "Giants",
+   "home_r": 9,
+   "title": "Reds 10, Giants 9",
+   "venue": "Oracle Park"
+  },
+  "823255": {
+   "away": "Pittsburgh Pirates",
+   "away_abbr": "PIT",
+   "away_nick": "Pirates",
+   "away_r": 0,
+   "date": "2026-08-26",
+   "file": "games/823255.html",
+   "home": "San Diego Padres",
+   "home_abbr": "SD",
+   "home_nick": "Padres",
+   "home_r": 3,
+   "title": "Padres 3, Pirates 0",
+   "venue": "Petco Park"
+  },
+  "823503": {
+   "away": "Houston Astros",
+   "away_abbr": "HOU",
+   "away_nick": "Astros",
+   "away_r": 5,
+   "date": "2026-08-27",
+   "file": "games/823503.html",
+   "home": "New York Yankees",
+   "home_abbr": "NYY",
+   "home_nick": "Yankees",
+   "home_r": 1,
+   "title": "Astros 5, Yankees 1",
+   "venue": "Yankee Stadium"
   },
   "823504": {
    "away": "Boston Red Sox",
@@ -85,6 +239,34 @@
    "title": "Yankees 1, Red Sox 0",
    "venue": "Yankee Stadium"
   },
+  "823506": {
+   "away": "Houston Astros",
+   "away_abbr": "HOU",
+   "away_nick": "Astros",
+   "away_r": 3,
+   "date": "2026-08-26",
+   "file": "games/823506.html",
+   "home": "New York Yankees",
+   "home_abbr": "NYY",
+   "home_nick": "Yankees",
+   "home_r": 9,
+   "title": "Yankees 9, Astros 3",
+   "venue": "Yankee Stadium"
+  },
+  "823581": {
+   "away": "Milwaukee Brewers",
+   "away_abbr": "MIL",
+   "away_nick": "Brewers",
+   "away_r": 8,
+   "date": "2026-08-27",
+   "file": "games/823581.html",
+   "home": "New York Mets",
+   "home_abbr": "NYM",
+   "home_nick": "Mets",
+   "home_r": 2,
+   "title": "Brewers 8, Mets 2",
+   "venue": "Citi Field"
+  },
   "823583": {
    "away": "Houston Astros",
    "away_abbr": "HOU",
@@ -97,6 +279,20 @@
    "home_nick": "Mets",
    "home_r": 1,
    "title": "Astros 3, Mets 1",
+   "venue": "Citi Field"
+  },
+  "823584": {
+   "away": "Milwaukee Brewers",
+   "away_abbr": "MIL",
+   "away_nick": "Brewers",
+   "away_r": 8,
+   "date": "2026-08-26",
+   "file": "games/823584.html",
+   "home": "New York Mets",
+   "home_abbr": "NYM",
+   "home_nick": "Mets",
+   "home_r": 1,
+   "title": "Brewers 8, Mets 1",
    "venue": "Citi Field"
   },
   "823666": {
@@ -127,6 +323,20 @@
    "title": "Brewers 6, Rangers 1",
    "venue": "American Family Field"
   },
+  "823825": {
+   "away": "Boston Red Sox",
+   "away_abbr": "BOS",
+   "away_nick": "Red Sox",
+   "away_r": 0,
+   "date": "2026-08-26",
+   "file": "games/823825.html",
+   "home": "Miami Marlins",
+   "home_abbr": "MIA",
+   "home_nick": "Marlins",
+   "home_r": 4,
+   "title": "Marlins 4, Red Sox 0",
+   "venue": "loanDepot park"
+  },
   "823985": {
    "away": "Philadelphia Phillies",
    "away_abbr": "PHI",
@@ -139,6 +349,20 @@
    "home_nick": "Angels",
    "home_r": 3,
    "title": "Phillies 5, Angels 3",
+   "venue": "Angel Stadium"
+  },
+  "823988": {
+   "away": "Cleveland Guardians",
+   "away_abbr": "CLE",
+   "away_nick": "Guardians",
+   "away_r": 4,
+   "date": "2026-08-26",
+   "file": "games/823988.html",
+   "home": "Los Angeles Angels",
+   "home_abbr": "LAA",
+   "home_nick": "Angels",
+   "home_r": 3,
+   "title": "Guardians 4, Angels 3",
    "venue": "Angel Stadium"
   },
   "824231": {
@@ -155,6 +379,20 @@
    "title": "Dodgers 2, Tigers 1",
    "venue": "Comerica Park"
   },
+  "824234": {
+   "away": "Tampa Bay Rays",
+   "away_abbr": "TB",
+   "away_nick": "Rays",
+   "away_r": 3,
+   "date": "2026-08-26",
+   "file": "games/824234.html",
+   "home": "Detroit Tigers",
+   "home_abbr": "DET",
+   "home_nick": "Tigers",
+   "home_r": 0,
+   "title": "Rays 3, Tigers 0",
+   "venue": "Comerica Park"
+  },
   "824396": {
    "away": "Kansas City Royals",
    "away_abbr": "KC",
@@ -168,6 +406,20 @@
    "home_r": 0,
    "title": "Royals 3, Guardians 0",
    "venue": "Progressive Field"
+  },
+  "824555": {
+   "away": "Texas Rangers",
+   "away_abbr": "TEX",
+   "away_nick": "Rangers",
+   "away_r": 4,
+   "date": "2026-08-26",
+   "file": "games/824555.html",
+   "home": "Chicago White Sox",
+   "home_abbr": "CWS",
+   "home_nick": "White Sox",
+   "home_r": 10,
+   "title": "White Sox 10, Rangers 4",
+   "venue": "Rate Field"
   },
   "824638": {
    "away": "Cincinnati Reds",
@@ -197,6 +449,34 @@
    "title": "Braves 6, Rockies 4",
    "venue": "Truist Park"
   },
+  "824878": {
+   "away": "Los Angeles Dodgers",
+   "away_abbr": "LAD",
+   "away_nick": "Dodgers",
+   "away_r": 5,
+   "date": "2026-08-26",
+   "file": "games/824878.html",
+   "home": "Atlanta Braves",
+   "home_abbr": "ATL",
+   "home_nick": "Braves",
+   "home_r": 6,
+   "title": "Braves 6, Dodgers 5",
+   "venue": "Truist Park"
+  },
+  "824879": {
+   "away": "Los Angeles Dodgers",
+   "away_abbr": "LAD",
+   "away_nick": "Dodgers",
+   "away_r": 0,
+   "date": "2026-08-27",
+   "file": "games/824879.html",
+   "home": "Atlanta Braves",
+   "home_abbr": "ATL",
+   "home_nick": "Braves",
+   "home_r": 1,
+   "title": "Braves 1, Dodgers 0",
+   "venue": "Truist Park"
+  },
   "824960": {
    "away": "Baltimore Orioles",
    "away_abbr": "BAL",
@@ -210,6 +490,34 @@
    "home_r": 3,
    "title": "Orioles 4, Athletics 3",
    "venue": "Sutter Health Park"
+  },
+  "824963": {
+   "away": "Minnesota Twins",
+   "away_abbr": "MIN",
+   "away_nick": "Twins",
+   "away_r": 4,
+   "date": "2026-08-26",
+   "file": "games/824963.html",
+   "home": "Athletics",
+   "home_abbr": "ATH",
+   "home_nick": "Athletics",
+   "home_r": 7,
+   "title": "Athletics 7, Twins 4",
+   "venue": "Sutter Health Park"
+  },
+  "825039": {
+   "away": "Chicago Cubs",
+   "away_abbr": "CHC",
+   "away_nick": "Cubs",
+   "away_r": 0,
+   "date": "2026-08-26",
+   "file": "games/825039.html",
+   "home": "Arizona Diamondbacks",
+   "home_abbr": "AZ",
+   "home_nick": "D-backs",
+   "home_r": 2,
+   "title": "D-backs 2, Cubs 0",
+   "venue": "Chase Field"
   }
  }
 }
