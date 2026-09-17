@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Blandalytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
+  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  display:flex; align-items:center; justify-content:center; padding:24px;
+}
+main{width:100%; max-width:520px; display:flex; flex-direction:column; gap:28px}
+h1{margin:0; font-size:34px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
+.tag{margin:6px 0 0; color:var(--muted); font-size:15px}
+.cards{display:flex; flex-direction:column; gap:12px}
+a.card{
+  display:flex; flex-direction:column; gap:4px; text-decoration:none; color:inherit;
+  background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px;
+}
+a.card:hover{background:var(--raise); border-color:var(--faint)}
+a.card:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+a.card b{font-size:17px; font-weight:600}
+a.card span{color:var(--muted); font-size:14px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Blandalytics</h1>
+    <p class="tag">Baseball, scored the long way.</p>
+  </header>
+  <nav class="cards">
+    <a class="card" href="/scorecards/">
+      <b>Scorecards</b>
+      <span>A pitch-by-pitch scorecard for every MLB game, built from Statcast. Pick a date, a team, a game.</span>
+    </a>
+  </nav>
+</main>
+</body>
+</html>
