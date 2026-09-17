@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>NHL Draft Tool · Blandalytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
+  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
+  --accent:#6cb4ff; --good:#7bd88f; --bad:#ff8a80; --warn:#ffd166;
+}
+*{box-sizing:border-box}
+body{margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased; padding:24px 16px}
+main{max-width:1180px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1{margin:0; font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
+h2{margin:0 0 10px; font-size:17px; font-weight:600}
+h3{margin:14px 0 6px; font-size:14px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em}
+.tag{margin:6px 0 0; color:var(--muted); font-size:14px}
+a{color:var(--accent)}
+a.home{color:var(--muted); text-decoration:none; font-size:14px}
+a.home:hover{color:var(--ink)}
+.card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
+.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px 16px}
+label{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
+label b{color:var(--ink); font-weight:500}
+label small{color:var(--faint); font-size:12px}
+input,select,button{font:inherit; color:var(--ink)}
+input[type=text],input[type=number],select{background:var(--ground); border:1px solid var(--rule); border-radius:6px; padding:7px 9px; width:100%}
+input[type=file]{font-size:13px; color:var(--muted)}
+input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
+button{background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:7px 12px; cursor:pointer}
+button:hover:not(:disabled){border-color:var(--faint); background:#222b36}
+button:disabled{opacity:.45; cursor:default}
+button.primary{background:var(--accent); color:#0b1320; border-color:var(--accent); font-weight:600}
+button.primary:hover:not(:disabled){background:#8cc6ff}
+button.take{padding:3px 9px; font-size:12px}
+.row{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+.status{color:var(--muted); font-size:13px}
+.status.err{color:var(--bad)}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px}
+.chip{background:var(--raise); border:1px solid var(--rule); border-radius:999px; padding:3px 10px; font-size:13px; display:inline-flex; gap:8px; align-items:center}
+.chip button{padding:0 4px; border:none; background:none; color:var(--muted); font-size:14px; line-height:1}
+.chip button:hover{color:var(--bad)}
+.clock{display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; align-items:baseline}
+.clock .pick{font-size:20px; font-weight:600}
+.clock .who{font-size:15px; color:var(--muted)}
+.clock .who.mine{color:var(--good); font-weight:600}
+.tbl{overflow-x:auto; margin-top:6px}
+table{border-collapse:collapse; width:100%; font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; white-space:nowrap}
+th,td{padding:4px 7px; text-align:right; border-bottom:1px solid var(--rule)}
+th{color:var(--muted); font-weight:500; position:sticky; top:0; background:var(--surface)}
+td.l,th.l{text-align:left}
+tr.you td{background:#17242f}
+tr.best td{color:var(--good)}
+td.pos{color:var(--muted)}
+td.neg{color:var(--bad)} td.posv{color:var(--good)} td.zero{color:var(--faint)}
+.baseline td{color:var(--warn)}
+.picks{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:12.5px; color:var(--muted); white-space:pre-wrap; margin:6px 0 0}
+.roster{font-size:13.5px; margin:8px 0 0}
+.roster b{color:var(--muted); font-weight:500; margin-right:4px}
+.cmd{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px}
+.cmd input{flex:1 1 320px}
+.note{color:var(--faint); font-size:12.5px; margin-top:8px}
+kbd{font-family:"JetBrains Mono",monospace; font-size:12px; background:var(--ground); border:1px solid var(--rule); border-radius:4px; padding:1px 5px}
+[hidden]{display:none!important}
+details summary{cursor:pointer; color:var(--muted); font-size:13px}
+details[open] summary{margin-bottom:8px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <a class="home" href="/">← Blandalytics</a>
+    <h1>NHL Draft Tool</h1>
+    <p class="tag">Sit in one seat of a 12-team roto snake draft. Every option is priced by simulating the rest of the draft, and shown as the team it leads to — roto points, category by category. Runs entirely in your browser.</p>
+  </header>
+
+  <section id="setup" class="card">
+    <h2>Settings</h2>
+    <div class="grid">
+      <label><b>Your draft slot</b><input id="slot" type="number" min="1" max="20" value="1"><small>1 … teams</small></label>
+      <label><b>Mode</b><select id="mock"><option value="1">Mock draft — rivals draft themselves</option><option value="0">Follow a real draft — enter every pick</option></select><small>In a real draft your options are re-priced at every stop</small></label>
+      <label><b>Simulated finishes per option</b><input id="sims" type="number" min="10" max="2000" value="150"><small>More is sharper and slower; tables refine as they run</small></label>
+      <label><b>Options per position</b><input id="per_pos" type="number" min="0" max="5" value="2"><small>Best C, LW, RW, D and G by assigned position</small></label>
+      <label><b>Options from the board</b><input id="board" type="number" min="0" max="15" value="5"><small>Next players on your blended board</small></label>
+      <label><b>Your board's VORP weight</b><input id="my_weight" type="number" min="0" max="1" step="0.05" value="0.6"><small>Blend of VORP rank and ADP rank you read the board in; it orders options, it does not pick</small></label>
+      <label><b>Rival VOR weight, low</b><input id="w_lo" type="number" min="0" max="1" step="0.05" value="0.25"><small>Each rival draws w ~ U[low, high]</small></label>
+      <label><b>Rival VOR weight, high</b><input id="w_hi" type="number" min="0" max="1" step="0.05" value="0.75"><small>Simulations re-deal all twelve every time</small></label>
+      <label><b>Teams</b><input id="teams" type="number" min="4" max="20" value="12"></label>
+      <label><b>Roster slots</b><input id="slots" type="text" value="C:2,LW:2,RW:2,D:4,UTIL:2,G:2"><small>Starting slots; UTIL takes any skater</small></label>
+      <label><b>Bench</b><input id="bench" type="number" min="0" max="10" value="0"><small>Drafted, not counted in totals</small></label>
+      <label><b>Seed</b><input id="seed" type="number" value="960122"><small>Same settings and seed reproduce a draft</small></label>
+      <label><b>Calibration leagues</b><input id="calib_sims" type="number" min="20" max="1000" value="200"><small>Market drafts used to fit the category coefficients at start-up</small></label>
+      <label><b>Projections (optional)</b><input id="sheet" type="file" accept=".csv,text/csv"><small>A CSV with the sheet's columns replaces the bundled projections</small></label>
+    </div>
+    <h3>Do not draft</h3>
+    <div class="row">
+      <input id="dnd_input" type="text" list="players" placeholder="type a player's name and press Enter" style="max-width:360px">
+      <button id="dnd_add">Add</button>
+      <span class="status">Kept off your options and board. Rivals may still take them, and you can still pick one by name.</span>
+    </div>
+    <datalist id="players"></datalist>
+    <div id="dnd_chips" class="chips"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="start" class="primary" disabled>Start draft</button>
+      <span id="status" class="status">starting the Python runtime…</span>
+    </div>
+  </section>
+
+  <section id="draft" hidden>
+    <div id="clock" class="card"></div>
+    <div id="options" class="card"></div>
+    <div id="standings" class="card"></div>
+    <div id="commands" class="card">
+      <h2>Commands</h2>
+      <div class="cmd">
+        <input id="cmd" type="text" placeholder="p <name>  ·  b [POS] [n]  ·  r  ·  s  ·  u  ·  or an option number">
+        <button id="send">Go</button>
+        <button id="resim">Re-simulate</button>
+        <button id="undo">Undo</button>
+        <button id="auto">Auto-pick</button>
+        <button id="show_board">Board</button>
+        <button id="show_rosters">Rosters</button>
+      </div>
+      <p class="note">Take an option with its button or number. <kbd>p name</kbd> takes any available player (do-not-draft included, and at a rival's stop this records their pick). <kbd>b RW 25</kbd> lists the best RW-eligible players on your board. <kbd>s</kbd> re-runs the simulations on fresh draws, <kbd>u</kbd> rewinds one stop.</p>
+      <div id="panel"></div>
+      <div id="msg" class="status"></div>
+    </div>
+  </section>
+
+  <section id="final" class="card" hidden></section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
