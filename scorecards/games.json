@@ -1,5 +1,5 @@
 {
- "built": "2026-09-17T14:45:42Z",
+ "built": "2026-09-18T14:12:19Z",
  "games": {
   "822680": {
    "away": "Philadelphia Phillies",
@@ -113,6 +113,20 @@
    "title": "Blue Jays 3, Royals 0",
    "venue": "Rogers Centre"
   },
+  "822845": {
+   "away": "Boston Red Sox",
+   "away_abbr": "BOS",
+   "away_nick": "Red Sox",
+   "away_r": 4,
+   "date": "2026-09-17",
+   "file": "games/822845.html",
+   "home": "Texas Rangers",
+   "home_abbr": "TEX",
+   "home_nick": "Rangers",
+   "home_r": 3,
+   "title": "Red Sox 4, Rangers 3",
+   "venue": "Globe Life Field"
+  },
   "822846": {
    "away": "Boston Red Sox",
    "away_abbr": "BOS",
@@ -126,6 +140,20 @@
    "home_r": 7,
    "title": "Rangers 7, Red Sox 3",
    "venue": "Globe Life Field"
+  },
+  "822924": {
+   "away": "Athletics",
+   "away_abbr": "ATH",
+   "away_nick": "Athletics",
+   "away_r": 1,
+   "date": "2026-09-17",
+   "file": "games/822924.html",
+   "home": "Tampa Bay Rays",
+   "home_abbr": "TB",
+   "home_nick": "Rays",
+   "home_r": 10,
+   "title": "Rays 10, Athletics 1",
+   "venue": "Tropicana Field"
   },
   "822926": {
    "away": "Athletics",
@@ -295,6 +323,20 @@
    "title": "Brewers 5, Pirates 4",
    "venue": "PNC Park"
   },
+  "823334": {
+   "away": "Milwaukee Brewers",
+   "away_abbr": "MIL",
+   "away_nick": "Brewers",
+   "away_r": 4,
+   "date": "2026-09-17",
+   "file": "games/823334.html",
+   "home": "Pittsburgh Pirates",
+   "home_abbr": "PIT",
+   "home_nick": "Pirates",
+   "home_r": 7,
+   "title": "Pirates 7, Brewers 4",
+   "venue": "PNC Park"
+  },
   "823503": {
    "away": "Houston Astros",
    "away_abbr": "HOU",
@@ -336,6 +378,20 @@
    "home_r": 9,
    "title": "Yankees 9, Astros 3",
    "venue": "Yankee Stadium"
+  },
+  "823573": {
+   "away": "Philadelphia Phillies",
+   "away_abbr": "PHI",
+   "away_nick": "Phillies",
+   "away_r": 3,
+   "date": "2026-09-17",
+   "file": "games/823573.html",
+   "home": "New York Mets",
+   "home_abbr": "NYM",
+   "home_nick": "Mets",
+   "home_r": 0,
+   "title": "Phillies 3, Mets 0",
+   "venue": "Citi Field"
   },
   "823576": {
    "away": "Baltimore Orioles",
@@ -449,6 +505,20 @@
    "title": "Marlins 4, Red Sox 0",
    "venue": "loanDepot park"
   },
+  "823978": {
+   "away": "Minnesota Twins",
+   "away_abbr": "MIN",
+   "away_nick": "Twins",
+   "away_r": 4,
+   "date": "2026-09-17",
+   "file": "games/823978.html",
+   "home": "Los Angeles Angels",
+   "home_abbr": "LAA",
+   "home_nick": "Angels",
+   "home_r": 5,
+   "title": "Angels 5, Twins 4",
+   "venue": "Angel Stadium"
+  },
   "823979": {
    "away": "Seattle Mariners",
    "away_abbr": "SEA",
@@ -505,6 +575,20 @@
    "title": "Royals 5, Astros 2",
    "venue": "Daikin Park"
   },
+  "824141": {
+   "away": "Kansas City Royals",
+   "away_abbr": "KC",
+   "away_nick": "Royals",
+   "away_r": 2,
+   "date": "2026-09-17",
+   "file": "games/824141.html",
+   "home": "Houston Astros",
+   "home_abbr": "HOU",
+   "home_nick": "Astros",
+   "home_r": 6,
+   "title": "Astros 6, Royals 2",
+   "venue": "Daikin Park"
+  },
   "824231": {
    "away": "Los Angeles Dodgers",
    "away_abbr": "LAD",
@@ -532,6 +616,20 @@
    "home_r": 0,
    "title": "Rays 3, Tigers 0",
    "venue": "Comerica Park"
+  },
+  "824305": {
+   "away": "San Diego Padres",
+   "away_abbr": "SD",
+   "away_nick": "Padres",
+   "away_r": 9,
+   "date": "2026-09-17",
+   "file": "games/824305.html",
+   "home": "Colorado Rockies",
+   "home_abbr": "COL",
+   "home_nick": "Rockies",
+   "home_r": 2,
+   "title": "Padres 9, Rockies 2",
+   "venue": "Coors Field"
   },
   "824306": {
    "away": "San Diego Padres",
@@ -575,6 +673,20 @@
    "title": "Royals 3, Guardians 0",
    "venue": "Progressive Field"
   },
+  "824464": {
+   "away": "Los Angeles Dodgers",
+   "away_abbr": "LAD",
+   "away_nick": "Dodgers",
+   "away_r": 8,
+   "date": "2026-09-17",
+   "file": "games/824464.html",
+   "home": "Cincinnati Reds",
+   "home_abbr": "CIN",
+   "home_nick": "Reds",
+   "home_r": 2,
+   "title": "Dodgers 8, Reds 2",
+   "venue": "Great American Ball Park"
+  },
   "824467": {
    "away": "Los Angeles Dodgers",
    "away_abbr": "LAD",
@@ -588,6 +700,20 @@
    "home_r": 6,
    "title": "Reds 6, Dodgers 2",
    "venue": "Great American Ball Park"
+  },
+  "824548": {
+   "away": "Detroit Tigers",
+   "away_abbr": "DET",
+   "away_nick": "Tigers",
+   "away_r": 1,
+   "date": "2026-09-17",
+   "file": "games/824548.html",
+   "home": "Chicago White Sox",
+   "home_abbr": "CWS",
+   "home_nick": "White Sox",
+   "home_r": 3,
+   "title": "White Sox 3, Tigers 1",
+   "venue": "Rate Field"
   },
   "824555": {
    "away": "Texas Rangers",
