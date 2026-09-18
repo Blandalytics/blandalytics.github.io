@@ -40,7 +40,7 @@ $("dnd_input").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.p
 
 function cfg() {
   const num = (id) => Number($(id).value);
-  return { slot: num("slot"), teams: num("teams"), slots: $("slots").value.trim(), bench: num("bench"), sims: num("sims"),
+  return { slot: num("slot"), teams: num("teams"), slots: $("slots").value.trim(), bench: num("bench"), sims: num("sims"), rival_sims: num("rival_sims"),
            seed: num("seed"), my_weight: num("my_weight"), w_lo: num("w_lo"), w_hi: num("w_hi"), per_pos: num("per_pos"),
            board: num("board"), mock: $("mock").value === "1", calib_sims: num("calib_sims"), dnd: dnd.slice() };
 }
@@ -199,7 +199,7 @@ worker.onmessage = (e) => {
     $("draft").hidden = false;
     const det = $("setup_details");
     det.open = false;
-    det.querySelector("summary").innerHTML = `<b>Settings</b><span>draft in progress — you are team ${stop.user_team}, ${stop.sims} finishes per option, ${stop.mock ? "mock draft" : "following a real draft"}${stop.dnd.length ? ", " + stop.dnd.length + " do-not-draft" : ""} (click to review)</span>`;
+    det.querySelector("summary").innerHTML = `<b>Settings</b><span>draft in progress — you are team ${stop.user_team}, ${$("sims").value} finishes per option${stop.mock ? "" : " (" + $("rival_sims").value + " at a rival's pick)"}, ${stop.mock ? "mock draft" : "following a real draft"}${stop.dnd.length ? ", " + stop.dnd.length + " do-not-draft" : ""} (click to review)</span>`;
     setStatus(`draft in progress — you are team ${stop.user_team} (tool v${VERSION})`);
     renderClock(stop);
     $("panel").innerHTML = "";
