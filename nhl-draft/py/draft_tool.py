@@ -33,7 +33,8 @@ so it does not reshuffle under you from one pick to the next.
 By default this is a mock draft and the tool only stops on your pick.  --no-mock-draft follows
 a real one: it stops at every pick for you to enter and accepts any available player at a
 rival's whether or not the roster rules allow it.  Your options are re-priced at every stop,
-as if you were on the clock now, so the picture is fresh after each pick you enter.
+as if you were on the clock now, so the picture is fresh after each pick you enter -- with
+--rival-sims finishes per option (25) at a rival's stop and --sims (200) at your own.
 
 Commands on the clock:
 
@@ -55,6 +56,7 @@ from league import CATS, League, STATS, Roster, load_players
 from pick_engine import CAT0, FIN, N_SIMS, PTS, SKIP, VOR, WIN, Engine, Parallel, best_available
 
 MY_WEIGHT = 0.6                 # the VORP/ADP blend your own board is shown in
+RIVAL_SIMS = 25                 # finishes per option at a rival's stop (--no-mock-draft), a quick preview
 SEED = 960122                   # fixed, so the same flags give the same draft
 N_PER_POS = 2                   # best available at each position offered as options
 N_BOARD = 5                     # then the next players on your board
@@ -178,7 +180,9 @@ class Draft:
 
         "2nd C" is the second-best centre on the board whether or not the best one is legal for
         you; a player your roster cannot legally add is dropped rather than shown.  The board
-        fill takes the best legal players not already named.
+        fill takes the best legal players not already named who could still seat in one of
+        their own positions' slots: once your C slots are full, a centre is still offered as
+        "top C" (he is legal through UTIL) but no longer fills the board.
         """
         board = self.my_board()
         out, count = [], dict.fromkeys(TOP_POS, 0)
@@ -192,10 +196,12 @@ class Draft:
             if all(c >= self.per_pos for c in count.values()):
                 break
         seen, filled = {i for i, _ in out}, 0
+        counts, slots = self.counts[self.user_team], self.eng.players["slots"]
         for i in board:
             if filled >= self.n_board:
                 break
-            if i not in seen and self.legal_for(self.user_team, i):
+            if (i not in seen and self.legal_for(self.user_team, i)
+                    and self.eng.dedicated_open(counts, slots.iat[i])):
                 out.append((i, "board"))
                 seen.add(i)
                 filled += 1
@@ -417,9 +423,11 @@ class Console:
 
     HELP = "  ? 1-%d to pick, p <name>, b [POS] [n], r [team], s, u, q"
 
-    def __init__(self, draft, n_sims, rng, auto=False, mock=True, pool=None):
+    def __init__(self, draft, n_sims, rng, auto=False, mock=True, pool=None, rival_sims=RIVAL_SIMS):
         self.draft = draft
         self.n_sims = n_sims
+        self.rival_sims = rival_sims
+        self.sims_here = n_sims
         self.rng = rng
         self.auto = auto
         self.mock = mock
@@ -456,15 +464,17 @@ class Console:
                 self.opts, self.res = [(i, "board") for i in d.my_board()[: d.n_options]], None
             else:
                 self.opts, _ = d.candidates()
+                self.sims_here = self.rival_sims
                 print("")
                 print("  your options as if you were on the clock now; simulating %d finishes for each of %d..."
-                      % (self.n_sims, len(self.opts)), end=" ", flush=True)
+                      % (self.sims_here, len(self.opts)), end=" ", flush=True)
                 self._simulate()
             return "\n  team %d pick> " % (team + 1)
         show_between(d, self.between, self.mock)
         self.between = []
         self.opts, _ = d.candidates()
-        print("\n  simulating %d finishes for each of %d options..." % (self.n_sims, len(self.opts)), end=" ", flush=True)
+        self.sims_here = self.n_sims
+        print("\n  simulating %d finishes for each of %d options..." % (self.sims_here, len(self.opts)), end=" ", flush=True)
         self._simulate()
         return "\n  pick> "
 
@@ -526,7 +536,7 @@ class Console:
 
     def _simulate(self):
         d = self.draft
-        res, league = d.eng.evaluate(d, [i for i, _ in self.opts] + [SKIP], self.n_sims, self.rng, self.pool)
+        res, league = d.eng.evaluate(d, [i for i, _ in self.opts] + [SKIP], self.sims_here, self.rng, self.pool)
         print("done")
         self.opts, self.res, self.base, self.basis = rank_options(d, self.opts, res)
         show_options(d, self.opts, self.res, self.basis)
@@ -595,7 +605,9 @@ def resolve_names(players, text):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--slot", type=int, default=1, help="your draft slot, 1..teams")
-    ap.add_argument("--sims", type=int, default=N_SIMS, help="simulated finishes per option")
+    ap.add_argument("--sims", type=int, default=N_SIMS, help="simulated finishes per option at your own pick")
+    ap.add_argument("--rival-sims", type=int, default=RIVAL_SIMS,
+                    help="finishes per option at a rival's stop with --no-mock-draft, where your options are only previewed")
     ap.add_argument("--seed", type=int, default=SEED)
     ap.add_argument("--my-weight", type=float, default=MY_WEIGHT,
                     help="the VORP weight your own board is shown in; it orders the options, it does not draft for you")
@@ -650,7 +662,7 @@ def main(argv=None):
         pool = Parallel(eng.spec(), a.workers)
         print("simulating on %d worker processes" % pool.workers)
     try:
-        if Console(draft, a.sims, rng, a.auto, a.mock_draft, pool).run():
+        if Console(draft, a.sims, rng, a.auto, a.mock_draft, pool, a.rival_sims).run():
             show_final(draft, a.mock_draft)
     finally:
         if pool is not None:

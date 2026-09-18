@@ -90,7 +90,8 @@ details[open] summary{margin-bottom:10px}
     <div class="grid">
       <label><b>Your draft slot</b><input id="slot" type="number" min="1" max="20" value="1"><small>1 … teams</small></label>
       <label><b>Mode</b><select id="mock"><option value="1">Mock draft — rivals draft themselves</option><option value="0">Follow a real draft — enter every pick</option></select><small>In a real draft your options are re-priced at every stop</small></label>
-      <label><b>Simulated finishes per option</b><input id="sims" type="number" min="10" max="2000" value="200"><small>More is sharper and slower; tables refine as they run</small></label>
+      <label><b>Simulated finishes per option</b><input id="sims" type="number" min="10" max="2000" value="200"><small>At your own pick. More is sharper and slower; tables refine as they run</small></label>
+      <label><b>Finishes at a rival's pick</b><input id="rival_sims" type="number" min="5" max="2000" value="25"><small>Real-draft mode only: the quick preview of your options between your picks</small></label>
       <label><b>Options per position</b><input id="per_pos" type="number" min="0" max="5" value="2"><small>Best C, LW, RW, D and G by assigned position</small></label>
       <label><b>Options from the board</b><input id="board" type="number" min="0" max="15" value="5"><small>Next players on your blended board</small></label>
       <label><b>Your board's VORP weight</b><input id="my_weight" type="number" min="0" max="1" step="0.05" value="0.6"><small>Blend of VORP rank and ADP rank you read the board in; it orders options, it does not pick</small></label>
@@ -141,6 +142,6 @@ details[open] summary{margin-bottom:10px}
 
   <section id="final" class="card" hidden></section>
 </main>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

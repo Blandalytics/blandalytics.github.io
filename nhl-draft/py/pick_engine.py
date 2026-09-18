@@ -49,7 +49,7 @@ from draft_sim import snake_order
 from league import CATS, STATS
 from valuation import position_values
 
-N_SIMS = 500
+N_SIMS = 200
 N_CHUNKS = 12                                   # pieces a decision splits into, pool or no
 BIG = float("inf")
 MEASURES = ("roto pts", "team vorp", "finish", "win", "avail")
@@ -147,6 +147,14 @@ class Engine:
         subsets = range(1 << len(slot_names))
         self.hall = np.array([[1 if masks[t] & ~S == 0 else 0 for t in range(self.n_types)] for S in subsets], float)
         self.hall_cap = np.array([sum(league.slots[x] for k, x in enumerate(slot_names) if S >> k & 1) for S in subsets], float)
+        # the same without UTIL, for "is this position's own slot still open" (dedicated_open)
+        self.slot_index = {x: k for k, x in enumerate(slot_names)}
+        self.subsets = np.arange(len(self.hall_cap))
+        util = 1 << self.slot_index["UTIL"] if "UTIL" in self.slot_index else 0
+        masks_ded = [m & ~util for m in masks]
+        self.hall_ded = np.array([[1 if masks_ded[t] & ~S == 0 else 0 for t in range(self.n_types)] for S in subsets], float)
+        self.hall_cap_ded = np.array([sum(league.slots[x] for k, x in enumerate(slot_names) if S >> k & 1 and x != "UTIL")
+                                      for S in subsets], float)
         self._legal = lru_cache(maxsize=None)(self._legal_uncached)
         self.value_list = self.value.tolist()
         self.bench_cost_list = self.bench_cost.tolist()
@@ -188,6 +196,19 @@ class Engine:
 
     def legal(self, counts, bench):
         return self._legal(tuple(counts) + (bench,))
+
+    def dedicated_open(self, counts, types):
+        """Could a player eligible at `types` still take one of his own positions' slots, UTIL
+        not counting?  With UTIL removed the roster may already exceed its dedicated slots (those
+        players are the UTIL occupants); the new player has a dedicated seat iff adding him does
+        not deepen that shortfall.  Hall's deficiency, so one matrix product."""
+        mask = sum(1 << self.slot_index[t] for t in types if t in self.slot_index and t != "UTIL")
+        if not mask:
+            return False
+        load = self.hall_ded @ np.array(counts, float)
+        short = max(0.0, float((load - self.hall_cap_ded).max()))
+        confined = (mask & ~self.subsets == 0).astype(float)
+        return max(0.0, float((load + confined - self.hall_cap_ded).max())) == short
 
     # ---- what a finished roster is worth (static projections) ---------------
 

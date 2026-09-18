@@ -21,7 +21,7 @@ from draft_tool import Draft, SLOT_ORDER, rank_options, resolve, resolve_names, 
 from league import CATS, League, STATS, load_players, roto_points, team_totals
 from pick_engine import CAT0, FIN, PTS, SKIP, VOR, WIN, Engine
 
-DEFAULTS = dict(slot=1, teams=12, slots="C:2,LW:2,RW:2,D:4,UTIL:2,G:2", bench=0, sims=150, seed=960122,
+DEFAULTS = dict(slot=1, teams=12, slots="C:2,LW:2,RW:2,D:4,UTIL:2,G:2", bench=0, sims=200, rival_sims=25, seed=960122,
                 my_weight=0.6, w_lo=0.25, w_hi=0.75, per_pos=2, board=5, mock=True, dnd=[],
                 sheet="sheet_live.csv", yahoo="merged_players.csv", calib_sims=200, chunk=15)
 
@@ -54,9 +54,15 @@ class Session:
         self.rng = np.random.default_rng(int(c["seed"]))
         self.draft = Draft(self.eng, int(c["slot"]) - 1, self.rng, float(c["my_weight"]), int(c["per_pos"]), int(c["board"]))
         self.mock, self.sims, self.chunk = bool(c["mock"]), int(c["sims"]), int(c["chunk"])
+        self.rival_sims = int(c["rival_sims"])
         self.snaps, self.between, self.opts, self.result = [], [], [], None
 
     # ---- describing the draft ----------------------------------------------
+
+    def sims_here(self):
+        """Finishes per option at this stop: --sims at your own pick, --rival-sims at a rival's."""
+        d = self.draft
+        return self.sims if d.done() or d.on_clock()[1] == d.user_team else self.rival_sims
 
     def player(self, i):
         p = self.eng.players
@@ -79,7 +85,7 @@ class Session:
     def stop_info(self):
         d = self.draft
         info = {"done": d.done(), "dnd": [self.player(int(i)) for i in np.flatnonzero(self.eng.dnd)],
-                "unknown_dnd": self.unknown_dnd, "mock": self.mock, "sims": self.sims,
+                "unknown_dnd": self.unknown_dnd, "mock": self.mock, "sims": self.sims_here(),
                 "teams": d.lg.n_teams, "rounds": d.lg.roster_size, "user_team": d.user_team + 1,
                 "weights": [None if t == d.user_team else round(float(w), 2) for t, w in enumerate(d.weights)],
                 "roster": self.roster_rows(d.user_team), "between": [self.pick_row(*p) for p in self.between],
@@ -161,19 +167,19 @@ class Session:
         cands = [i for i, _ in self.cand_opts] + [SKIP]
         snap = eng.make_snap(d)
         out = league = None
-        done = 0
-        while done < self.sims:
-            k = min(self.chunk, self.sims - done)
+        done, n = 0, self.sims_here()
+        while done < n:
+            k = min(self.chunk, n - done)
             o, lg = eng.chunk(snap, cands, k, self.rng.spawn(1)[0])
             out = o if out is None else np.concatenate([out, o], axis=2)
             league = lg if league is None else np.concatenate([league, lg], axis=2)
             done += k
-            self.result = self.tables(out, league, done)
-            if progress is not None and done < self.sims:
+            self.result = self.tables(out, league, done, n)
+            if progress is not None and done < n:
                 progress(json.dumps(self.result))
         return json.dumps(self.result)
 
-    def tables(self, out, league, done):
+    def tables(self, out, league, done, of):
         d, eng = self.draft, self.eng
         opts, res, base, measure = rank_options(d, self.cand_opts, out)
         self.opts = opts                              # numbered picks follow the ranked order
@@ -200,7 +206,7 @@ class Session:
                       "w": None if (not self.mock or int(t) == d.user_team) else round(float(d.weights[t]), 2),
                       "cats": [round(float(v), 1) for v in lmean[t]], "total": round(float(ltot[t]), 1)}
                      for t in np.argsort(-ltot, kind="stable")]
-        return {"sims": int(done), "of": self.sims, "measure": ["roto pts", "team vorp"][measure], "cats": CATS,
+        return {"sims": int(done), "of": int(of), "measure": ["roto pts", "team vorp"][measure], "cats": CATS,
                 "options": rows, "baseline": {"cats": [round(float(v), 1) for v in now], "total": round(float(now.sum()), 1)},
                 "standings": standings}
 

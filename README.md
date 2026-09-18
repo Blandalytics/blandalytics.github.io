@@ -70,7 +70,7 @@ command-line tool uses, so there is no server and nothing to install.
 
 | file | role |
 |---|---|
-| `nhl-draft/index.html`, `app.js` | the page: settings for every argument of the CLI tool, a do-not-draft list, the draft console |
+| `nhl-draft/index.html`, `app.js` | the page: settings for every argument of the CLI tool (including a separate finish count for rival stops in a real draft), a do-not-draft list, the draft console |
 | `nhl-draft/worker.js` | a Web Worker that loads Pyodide, numpy and pandas, then drives `web_api.Session` |
 | `nhl-draft/py/` | the tool itself — `league.py`, `valuation.py`, `boards.py`, `draft_sim.py`, `pick_engine.py`, `draft_tool.py`, `web_api.py` |
 | `nhl-draft/data/sheet_live.csv` | the projections and eligibility sheet; `merged_players.csv` carries Yahoo ranks |
