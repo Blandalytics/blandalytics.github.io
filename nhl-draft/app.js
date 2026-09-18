@@ -6,7 +6,7 @@ const f2 = (v) => (v === null || v === undefined) ? "-" : Number(v).toFixed(2);
 const pct = (v) => Math.round(100 * v) + "%";
 const signed = (v) => { const s = (v > 0 ? "+" : "") + Number(v).toFixed(1); return `<td class="${v > 0.05 ? "posv" : v < -0.05 ? "neg" : "zero"}">${s}</td>`; };
 
-const VERSION = "5";                     // bump with every deploy: it busts the cache on the worker and the Python files
+const VERSION = "6";                     // bump with every deploy: it busts the cache on the worker and the Python files
 const worker = new Worker("worker.js?v=" + VERSION);
 let players = [];
 let dnd = [];
@@ -191,7 +191,7 @@ worker.onmessage = (e) => {
     players = m.players;
     $("players").innerHTML = players.map((p) => `<option value="${esc(p.name)}">${esc(p.pos)} ${esc(p.nhl)}</option>`).join("");
     $("start").disabled = false;
-    setStatus(`${players.length} players loaded — set the draft up and start`);
+    setStatus(`${players.length} players loaded — set the draft up and start (tool v${VERSION})`);
     return;
   }
   if (m.type === "stop") {
@@ -200,7 +200,7 @@ worker.onmessage = (e) => {
     const det = $("setup_details");
     det.open = false;
     det.querySelector("summary").innerHTML = `<b>Settings</b><span>draft in progress — you are team ${stop.user_team}, ${stop.sims} finishes per option, ${stop.mock ? "mock draft" : "following a real draft"}${stop.dnd.length ? ", " + stop.dnd.length + " do-not-draft" : ""} (click to review)</span>`;
-    setStatus(`draft in progress — you are team ${stop.user_team}`);
+    setStatus(`draft in progress — you are team ${stop.user_team} (tool v${VERSION})`);
     renderClock(stop);
     $("panel").innerHTML = "";
     setBusy(false);
