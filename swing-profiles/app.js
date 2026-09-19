@@ -6,7 +6,6 @@
 
   const FIRST_SEASON = 2024;  // bat tracking begins in 2024
   const DEFAULT_PLAYER = "Junior Caminero";  // shown on arrival, latest season, his main side
-  const MAX_SUGGESTIONS = 10;
 
   const $ = (id) => document.getElementById(id);
   const el = {
@@ -97,13 +96,14 @@
 
   // ---- player suggestions --------------------------------------------------
 
-  // At most MAX_SUGGESTIONS hitters for what has been typed: a prefix of the full
-  // name first, then of the surname, then any substring, matched with the same
-  // accent- and punctuation-folding the resolver uses. Nothing typed yet lists
-  // the regulars -- the most competitive swings, who are sure to have a card.
+  // Every hitter matching what has been typed -- a prefix of the full name first,
+  // then of the surname, then any substring -- matched with the same accent- and
+  // punctuation-folding the resolver uses. Nothing typed yet lists everyone, the
+  // regulars first (most competitive swings, who are sure to have a card). The
+  // list shows ten rows and scrolls through the rest.
   function suggestions(query) {
     const q = Swing.normalize(query);
-    if (!q) return hitters.slice().sort((a, b) => b.swings - a.swings || a.name.localeCompare(b.name)).slice(0, MAX_SUGGESTIONS);
+    if (!q) return hitters.slice().sort((a, b) => b.swings - a.swings || a.name.localeCompare(b.name));
     const scored = [];
     for (const h of hitters) {
       let score;
@@ -115,7 +115,7 @@
       scored.push([score, h]);
     }
     scored.sort((a, b) => a[0] - b[0] || b[1].swings - a[1].swings);
-    return scored.slice(0, MAX_SUGGESTIONS).map((x) => x[1]);
+    return scored.map((x) => x[1]);
   }
 
   let active = -1;
