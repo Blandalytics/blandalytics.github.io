@@ -113,19 +113,19 @@ details[open] summary{margin-bottom:10px}
       <a id="card_link" target="_blank" rel="noopener">Source card</a>
     </div>
     <details style="margin-top:14px">
-      <summary>The card this was digitized from<span>Baseball Savant</span></summary>
+      <summary>The image this was derived from:<span>Baseball Savant</span></summary>
       <img id="card_img" class="card-img" alt="Baseball Savant swing-path card">
     </details>
   </section>
 
   <section class="card">
     <details>
-      <summary>How it works<span>and what it assumes</span></summary>
+      <summary>How it works</summary>
       <div class="method">
-        <p><b>The curve.</b> Savant's swing-path cards carry a small chart in the bottom-left panel: bat speed against <em>normalized</em> swing time, 0 at the start of the swing and 1 at impact. The page fetches the card and reads that chart back out of the pixels — the teal markers are thresholded, each column's midpoint becomes a point, a local linear fit flattens the pixel quantization, and the result is resampled onto 101 evenly spaced points. Read back against the card's printed bat speed, impact values land within about 0.7 mph.</p>
-        <p><b>The duration.</b> The card has no clock. The bat-tracking leaderboard supplies the missing scale: it reports <code>swing_length</code> (feet of barrel travel) alongside <code>avg_bat_speed</code>. Swing length is the path integral of speed over the swing, so with a normalized time axis <code>s = T · mean(v)</code>, and <code>T = s / mean(v)</code>, where the mean is integrated from the player's own digitized curve rather than assumed. It is a representative swing for that player and bat side, not any individual one, and it assumes Savant's swing-start window for <code>swing_length</code> matches the card's t = 0.</p>
-        <p><b>The derivatives.</b> Acceleration and jerk come from a Savitzky–Golay filter (window 15, cubic), which fits a local polynomial rather than differencing neighbours, so it does not amplify the digitizer's residual pixel noise. Jerk is the analytic second derivative of the same local fit — the two cannot disagree — but it is a third derivative of a curve digitized at roughly 0.9 mph resolution: read its shape, not its precise magnitude. The first and last few samples are trimmed from the plotted derivatives, where the edge fit is least trustworthy.</p>
-        <p><b>The check.</b> The card's impact speed and the leaderboard's <code>avg_bat_speed</code> are independent measurements of the same quantity. When they differ by more than 2 mph the two sources are not describing the same swings, and the duration is flagged as suspect.</p>
+        <p><b>Bat Speed Curve.</b> Savant's swing-path cards carry a small chart in the bottom-left panel: bat speed against <em>normalized</em> swing time, 0 at the start of the swing and 1 at impact. The page fetches the card and reads that chart back out of the pixels — the teal markers are thresholded, each column's midpoint becomes a point, a local linear fit flattens the pixel quantization, and the result is resampled onto 101 evenly spaced points. Read back against the card's printed bat speed, impact values land within about 0.7 mph.</p>
+        <p><b>Swing Duration.</b> The card has no clock. The bat-tracking leaderboard supplies the missing scale: it reports <code>swing_length</code> (feet of barrel travel) alongside <code>avg_bat_speed</code>. Swing length is the path integral of speed over the swing, so with a normalized time axis <code>s = T · mean(v)</code>, and <code>T = s / mean(v)</code>, where the mean is integrated from the player's own digitized curve rather than assumed. It is a representative swing for that player and bat side, not any individual one, and it assumes Savant's swing-start window for <code>swing_length</code> matches the card's t = 0.</p>
+        <p><b>Derivative Kinematics.</b> Acceleration and jerk come from a Savitzky–Golay filter (window 15, cubic), which fits a local polynomial rather than differencing neighbours, so it does not amplify the digitizer's residual pixel noise. Jerk is the analytic second derivative of the same local fit — the two cannot disagree — but it is a third derivative of a curve digitized at roughly 0.9 mph resolution: read its shape, not its precise magnitude. The first and last few samples are trimmed from the plotted derivatives, where the edge fit is least trustworthy.</p>
+        <p><b>Sanity Check.</b> The card's impact speed and the leaderboard's <code>avg_bat_speed</code> are independent measurements of the same quantity. When they differ by more than 2 mph the two sources are not describing the same swings, and the duration is flagged as suspect.</p>
       </div>
     </details>
   </section>
