@@ -1,8 +1,11 @@
-# the scraper is cloned at build time, not vendored
+# the scraper and the model files are cloned at build time, not vendored
 statcast_scraper/
+player_cards/
 __pycache__/
 *.pyc
 # local scratch from running the tools by hand
 tools/scorecard/feed_*.json
 tools/scorecard/pitches_*.parquet
 tools/scorecard/scorecard_*.json
+# the cached comparison seasons behind the pitcher cards
+tools/pitcher_card/cache/

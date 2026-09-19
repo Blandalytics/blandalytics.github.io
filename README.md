@@ -57,34 +57,88 @@ from tools.scorecard.scorecard import scorecard
 html = scorecard(824638)
 ```
 
-## Swing Profiles
+## PLV Pitcher Game Cards
 
-[blandalytics.com/swing-profiles/](https://blandalytics.com/swing-profiles/) — bat speed,
-acceleration and jerk through an MLB hitter's swing. Pick a season, a player and a bat side;
-the page fetches the player's Baseball Savant swing-path card, digitizes the bat-speed chart
-out of its pixels, imputes the swing's real duration from the bat-tracking leaderboard
-(swing length / mean bat speed), and differentiates. The figure downloads as a PNG, the
-curve as a CSV, and a profile is linkable as `swing-profiles/#<mlbam id>-<season>-<L|R>`.
+[blandalytics.com/pitcher-cards/](https://blandalytics.com/pitcher-cards/) — the Pitcher List
+Stats game card for every pitcher in every MLB game. Pick a date, a game (or every game that
+day) and a pitcher; toggle the comparison to an earlier season and choose which one. The card
+is the same one the Streamlit app in
+[Blandalytics/player_cards](https://github.com/Blandalytics/player_cards) draws
+(`pitcher_game_card.py`), rebuilt as a page: the box-score line and game grade, the Stuff /
+Locations / PLV grades, the primary fastball's shape, usage against each side of the plate,
+movement with the arm angle and the comparison season's shaded regions, locations against
+each side, and the per-pitch-type metrics table. **Save PNG** rasterises the card at 2x with
+the font and logo embedded.
 
-It is [Blandalytics/swing_profiles](https://github.com/Blandalytics/swing_profiles) ported
-to JavaScript, module for module, so it runs in the browser with nothing to install: both
-Savant endpoints allow cross-origin requests, and the browser decodes the card natively.
-The port was checked against the Python on six player-seasons — the digitized curves are
-bit-identical, and durations and derivatives agree to floating-point noise.
+### How it works
+
+Like the scorecards, the pages are pre-built by a scheduled workflow:
+
+- [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
+  morning at 10:30 UTC. It clones
+  [Blandalytics/statcast_scraper](https://github.com/Blandalytics/statcast_scraper) (the
+  pitches) and [Blandalytics/player_cards](https://github.com/Blandalytics/player_cards) (the
+  PLV model files), builds a card for every pitcher who threw a tracked pitch the day before,
+  and commits the result.
+- [`pitcher-cards/cards/<gamePk>-<pitcherId>.html`](pitcher-cards/cards/) — one standalone
+  page per pitcher per game. The card is a single SVG drawn in the original figure's
+  1500 × 2000 coordinate system, so every panel keeps the matplotlib layout. Every comparison
+  season's layer is in the page, tagged `data-cmp="<year>"`; `#cmp=<year>` in the URL picks
+  one and `#cmp=0` hides them.
+- [`pitcher-cards/days/<date>.json`](pitcher-cards/days/) — that day's games and pitchers,
+  which the picker reads; [`pitcher-cards/index.json`](pitcher-cards/index.json) lists the
+  dates built and which date each game is on. A card can be linked directly as
+  `pitcher-cards/#<gamePk>-<pitcherId>`.
+
+The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 
 | file | role |
 |---|---|
-| `swing-profiles/swing.js` | the pipeline: leaderboard fetch and name resolution (`savant_lookup`), card digitizer (`swing_path_extract`), duration (`swing_duration`), Savitzky–Golay derivatives (`swing_profile`) |
-| `swing-profiles/plot.js` | the figure, on a canvas at 200 dpi with the same geometry and theme as `swing_plot.py` |
-| `swing-profiles/index.html`, `app.js` | the page: season, player and bat-side controls, the stats strip, downloads |
+| `card.py` | `pitcher_card(game_pk, pitcher_id)` → HTML string; `cards_for_date(date)` → every pitcher that day from one scrape |
+| `fetch.py` | the statsapi live feed (box score, bio, teams), Baseball Savant's arm angles, and `SeasonStore`: regular-season pitches by year, cached as parquet and topped up a day at a time |
+| `prep.py` | per-pitch metrics from the scraper's columns: counts before the pitch, approach angles, break as acceleration, fastball differences, the per-type tables |
+| `models.py` | the stuff / location / PLV model chains and the xSLG model, from the `player_cards` checkout |
+| `shapes.py` | the comparison season's movement regions (seaborn's 90%-mass KDE contours) as SVG paths |
+| `grades.py` | palette, pitch-type names and colours, benchmark bins, letter grades and both game-score formulas |
+| `build_data.py` | assembles all of that into one card dict |
+| `render.py` | renders the dict as the page |
+| `build_site.py` | builds a date range into `pitcher-cards/` and maintains the manifests |
 
-### Updating
+Data comes from statsapi.mlb.com through the scraper wherever it can: the game's pitches
+(`statfast.mlb_day`) and the comparison seasons (`statfast.mlb_season`). The only other
+sources are the game's live feed (box score, bio, team names — one request per game) and
+Baseball Savant's arm-angle leaderboard, which the scraper does not cover. The card is MLB
+only, because the scraper is; the minor-league and international levels the app offered
+are not built. Comparison seasons go back to 2023, as in the app; a season is offered once
+the pitcher has three appearances in it before the game.
 
-Nothing is stored: every profile is fetched and computed on request. If Savant changes the
-card template, the pixel anchors at the top of `swing.js` (`WIN_*`, `X_START`, `X_IMPACT`,
-`Y_ZERO`, `PX_PER_MPH`) need rechecking, exactly as in the Python. After any change to the
-JavaScript, bump the `?v=` query on the three script tags in `index.html` so browsers fetch
-the new files.
+The code passes `ruff check` and `ruff format` with the config in
+[`tools/pitcher_card/ruff.toml`](tools/pitcher_card/ruff.toml), including a McCabe
+complexity limit of 5 per function.
+
+### Backfilling or re-rendering
+
+Run the workflow by hand from the **Actions** tab (*Build pitcher cards → Run workflow*)
+with a `start` and `end` date; tick `force` to re-render cards that already exist, which is
+what you want after changing anything in `render.py`. A day of games is roughly 150 cards
+at about half a second each. The first run also pulls each comparison season once (about a
+minute per season), after which they come from the workflow's cache.
+
+Locally, from the repo root with the scraper and the models cloned alongside:
+
+```bash
+git clone --depth 1 https://github.com/Blandalytics/statcast_scraper.git
+git clone --depth 1 https://github.com/Blandalytics/player_cards.git
+pip install -r tools/pitcher_card/requirements.txt
+python tools/pitcher_card/build_site.py --start 2026-09-17 --end 2026-09-17
+```
+
+Or one card, without the site machinery:
+
+```python
+from tools.pitcher_card.card import pitcher_card
+html = pitcher_card(822845, 543243)
+```
 
 ## NHL Draft Tool
 

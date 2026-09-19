@@ -1,0 +1,1213 @@
+{
+ "822845": {
+  "away": "BOS",
+  "date": "2026-09-17",
+  "home": "TEX",
+  "pitchers": [
+   {
+    "file": "cards/822845-641302.html",
+    "grade": "B+",
+    "hand": "L",
+    "id": 641302,
+    "line": "1.0 IP, 0 ER, 0 Hits, 1 BB, 0 Ks - 0 Whiffs, 16.7% CSW, 18 Pitches",
+    "name": "Tyler Alexander",
+    "side": "home",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/822845-543243.html",
+    "grade": "B",
+    "hand": "R",
+    "id": 543243,
+    "line": "6.1 IP, 3 ER, 3 Hits (1 HR), 3 BBs, 6 Ks - 16 Whiffs, 25.5% CSW, 102 Pitches",
+    "name": "Sonny Gray",
+    "side": "away",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/822845-674003.html",
+    "grade": "B",
+    "hand": "L",
+    "id": 674003,
+    "line": "4.1 IP, 0 ER, 3 Hits, 1 BB, 3 Ks - 9 Whiffs, 37.0% CSW, 73 Pitches",
+    "name": "Cody Bradford",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/822845-681217.html",
+    "grade": "C-",
+    "hand": "R",
+    "id": 681217,
+    "line": "0.2 IP, 0 ER, 1 Hit, 0 BBs, 2 Ks - 2 Whiffs, 15.4% CSW, 13 Pitches",
+    "name": "Chase Silseth",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/822845-695239.html",
+    "grade": "C",
+    "hand": "L",
+    "id": 695239,
+    "line": "0.2 IP, 1 ER, 0 Hits, 2 BBs, 0 Ks - 0 Whiffs, 11.1% CSW, 18 Pitches",
+    "name": "Robby Ahlstrom",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/822845-596001.html",
+    "grade": "C",
+    "hand": "R",
+    "id": 596001,
+    "line": "0.1 IP, 2 ER, 0 Hits, 1 BB, 0 Ks - 0 Whiffs, 21.4% CSW, 14 Pitches",
+    "name": "Jakob Junis",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/822845-656641.html",
+    "grade": "D-",
+    "hand": "L",
+    "id": 656641,
+    "line": "1.0 IP, 1 ER, 1 Hit (1 HR), 0 BBs, 1 K - 3 Whiffs, 26.7% CSW, 15 Pitches",
+    "name": "Jacob Latz",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/822845-656756.html",
+    "grade": "A",
+    "hand": "L",
+    "id": 656756,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 0 Ks - 0 Whiffs, 12.5% CSW, 16 Pitches",
+    "name": "Jordan Montgomery",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/822845-681544.html",
+    "grade": "B+",
+    "hand": "R",
+    "id": 681544,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 1 K - 0 Whiffs, 8.3% CSW, 12 Pitches",
+    "name": "Wyatt Olds",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/822845-687941.html",
+    "grade": "D+",
+    "hand": "L",
+    "id": 687941,
+    "line": "0.2 IP, 0 ER, 1 Hit, 0 BBs, 0 Ks - 0 Whiffs, 0.0% CSW, 7 Pitches",
+    "name": "Alec Gamboa",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/822845-676477.html",
+    "grade": "A",
+    "hand": "R",
+    "id": 676477,
+    "line": "1.0 IP, 0 ER, 0 Hits, 1 BB, 0 Ks - 3 Whiffs, 33.3% CSW, 12 Pitches",
+    "name": "Garrett Whitlock",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   }
+  ]
+ },
+ "822924": {
+  "away": "ATH",
+  "date": "2026-09-17",
+  "home": "TBR",
+  "pitchers": [
+   {
+    "file": "cards/822924-656876.html",
+    "grade": "B+",
+    "hand": "R",
+    "id": 656876,
+    "line": "5.0 IP, 0 ER, 4 Hits, 2 BBs, 3 Ks - 11 Whiffs, 35.5% CSW, 76 Pitches",
+    "name": "Drew Rasmussen",
+    "side": "home",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/822924-605488.html",
+    "grade": "D-",
+    "hand": "L",
+    "id": 605488,
+    "line": "3.1 IP, 6 ER, 5 Hits, 2 BBs, 4 Ks - 7 Whiffs, 22.7% CSW, 66 Pitches",
+    "name": "Jeffrey Springs",
+    "side": "away",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/822924-668984.html",
+    "grade": "C-",
+    "hand": "R",
+    "id": 668984,
+    "line": "1.0 IP, 1 ER, 1 Hit (1 HR), 0 BBs, 0 Ks - 1 Whiff, 18.2% CSW, 11 Pitches",
+    "name": "Casey Legumina",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/822924-811315.html",
+    "grade": "B-",
+    "hand": "R",
+    "id": 811315,
+    "line": "1.0 IP, 0 ER, 0 Hits, 1 BB, 1 K - 0 Whiffs, 47.1% CSW, 17 Pitches",
+    "name": "Brody Hopkins",
+    "side": "home",
+    "start": false,
+    "years": []
+   },
+   {
+    "file": "cards/822924-571927.html",
+    "grade": "B",
+    "hand": "L",
+    "id": 571927,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 2 Ks - 2 Whiffs, 42.9% CSW, 14 Pitches",
+    "name": "Steven Matz",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/822924-702047.html",
+    "grade": "B",
+    "hand": "R",
+    "id": 702047,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 2 Ks - 3 Whiffs, 53.8% CSW, 13 Pitches",
+    "name": "Alex Cook",
+    "side": "home",
+    "start": false,
+    "years": []
+   },
+   {
+    "file": "cards/822924-664129.html",
+    "grade": "B+",
+    "hand": "R",
+    "id": 664129,
+    "line": "1.2 IP, 0 ER, 0 Hits, 0 BBs, 2 Ks - 2 Whiffs, 38.9% CSW, 18 Pitches",
+    "name": "Geoff Hartlieb",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/822924-697812.html",
+    "grade": "D+",
+    "hand": "L",
+    "id": 697812,
+    "line": "0.0 IP, 2 ER, 1 Hit, 2 BBs, 0 Ks - 1 Whiff, 25.0% CSW, 16 Pitches",
+    "name": "Joe Rock",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/822924-688297.html",
+    "grade": "C+",
+    "hand": "R",
+    "id": 688297,
+    "line": "1.0 IP, 0 ER, 0 Hits, 2 BBs, 2 Ks - 3 Whiffs, 25.9% CSW, 27 Pitches",
+    "name": "Chris Roycroft",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/822924-814305.html",
+    "grade": "C",
+    "hand": "R",
+    "id": 814305,
+    "line": "1.2 IP, 0 ER, 1 Hit, 3 BBs, 2 Ks - 4 Whiffs, 19.5% CSW, 41 Pitches",
+    "name": "Yunior Tur",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/822924-680723.html",
+    "grade": "C+",
+    "hand": "L",
+    "id": 680723,
+    "line": "0.1 IP, 0 ER, 0 Hits, 0 BBs, 0 Ks - 0 Whiffs, 25.0% CSW, 4 Pitches",
+    "name": "Drew Rom",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026
+    ]
+   }
+  ]
+ },
+ "823334": {
+  "away": "MIL",
+  "date": "2026-09-17",
+  "home": "PIT",
+  "pitchers": [
+   {
+    "file": "cards/823334-696062.html",
+    "grade": "C-",
+    "hand": "R",
+    "id": 696062,
+    "line": "2.0 IP, 1 ER, 3 Hits, 1 BB, 2 Ks - 3 Whiffs, 26.7% CSW, 30 Pitches",
+    "name": "Wilber Dotel",
+    "side": "home",
+    "start": true,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/823334-690986.html",
+    "grade": "F",
+    "hand": "L",
+    "id": 690986,
+    "line": "1.2 IP, 4 ER, 4 Hits, 2 BBs, 2 Ks - 5 Whiffs, 24.0% CSW, 50 Pitches",
+    "name": "Kyle Harrison",
+    "side": "away",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823334-694753.html",
+    "grade": "B+",
+    "hand": "R",
+    "id": 694753,
+    "line": "3.1 IP, 1 ER, 1 Hit, 3 BBs, 3 Ks - 7 Whiffs, 24.6% CSW, 61 Pitches",
+    "name": "Khristian Curtis",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/823334-642397.html",
+    "grade": "C",
+    "hand": "L",
+    "id": 642397,
+    "line": "0.2 IP, 0 ER, 1 Hit, 0 BBs, 0 Ks - 1 Whiff, 37.5% CSW, 16 Pitches",
+    "name": "Gregory Soto",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823334-666808.html",
+    "grade": "C+",
+    "hand": "R",
+    "id": 666808,
+    "line": "1.0 IP, 0 ER, 1 Hit, 0 BBs, 2 Ks - 4 Whiffs, 46.2% CSW, 13 Pitches",
+    "name": "Camilo Doval",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823334-596133.html",
+    "grade": "D-",
+    "hand": "R",
+    "id": 596133,
+    "line": "0.2 IP, 2 ER, 3 Hits (1 HR), 0 BBs, 0 Ks - 0 Whiffs, 17.6% CSW, 17 Pitches",
+    "name": "Luke Weaver",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823334-682254.html",
+    "grade": "A",
+    "hand": "L",
+    "id": 682254,
+    "line": "1.1 IP, 0 ER, 0 Hits, 2 BBs, 2 Ks - 3 Whiffs, 41.4% CSW, 29 Pitches",
+    "name": "Mason Montgomery",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823334-694477.html",
+    "grade": "B",
+    "hand": "R",
+    "id": 694477,
+    "line": "1.1 IP, 0 ER, 0 Hits, 1 BB, 2 Ks - 3 Whiffs, 30.0% CSW, 20 Pitches",
+    "name": "Chad Patrick",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823334-668941.html",
+    "grade": "B",
+    "hand": "L",
+    "id": 668941,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 1 K - 3 Whiffs, 45.5% CSW, 11 Pitches",
+    "name": "JoJo Romero",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823334-668831.html",
+    "grade": "B+",
+    "hand": "R",
+    "id": 668831,
+    "line": "3.0 IP, 0 ER, 1 Hit, 1 BB, 6 Ks - 3 Whiffs, 38.1% CSW, 42 Pitches",
+    "name": "Garrett Stallings",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/823334-676879.html",
+    "grade": "F",
+    "hand": "L",
+    "id": 676879,
+    "line": "1.0 IP, 2 ER, 2 Hits (1 HR), 1 BB, 0 Ks - 1 Whiff, 26.9% CSW, 26 Pitches",
+    "name": "Aaron Ashby",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   }
+  ]
+ },
+ "823573": {
+  "away": "PHI",
+  "date": "2026-09-17",
+  "home": "NYM",
+  "pitchers": [
+   {
+    "file": "cards/823573-690997.html",
+    "grade": "B+",
+    "hand": "R",
+    "id": 690997,
+    "line": "6.0 IP, 1 ER, 7 Hits, 3 BBs, 5 Ks - 4 Whiffs, 25.6% CSW, 82 Pitches",
+    "name": "Nolan McLean",
+    "side": "home",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823573-605400.html",
+    "grade": "A",
+    "hand": "R",
+    "id": 605400,
+    "line": "7.0 IP, 0 ER, 3 Hits, 3 BBs, 4 Ks - 9 Whiffs, 32.1% CSW, 81 Pitches",
+    "name": "Aaron Nola",
+    "side": "away",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823573-668964.html",
+    "grade": "B+",
+    "hand": "R",
+    "id": 668964,
+    "line": "2.0 IP, 1 ER, 1 Hit, 2 BBs, 0 Ks - 0 Whiffs, 12.5% CSW, 32 Pitches",
+    "name": "Tobias Myers",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823573-681810.html",
+    "grade": "B",
+    "hand": "R",
+    "id": 681810,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 1 K - 2 Whiffs, 23.1% CSW, 13 Pitches",
+    "name": "Austin Warren",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823573-680742.html",
+    "grade": "B-",
+    "hand": "R",
+    "id": 680742,
+    "line": "0.2 IP, 0 ER, 0 Hits, 1 BB, 2 Ks - 3 Whiffs, 35.3% CSW, 21 Pitches",
+    "name": "Jonathan Bowlan",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823573-641835.html",
+    "grade": "C",
+    "hand": "L",
+    "id": 641835,
+    "line": "0.1 IP, 0 ER, 0 Hits, 1 BB, 0 Ks - 0 Whiffs, 14.3% CSW, 3 Pitches",
+    "name": "Tim Mayza",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823573-661395.html",
+    "grade": "A-",
+    "hand": "R",
+    "id": 661395,
+    "line": "1.0 IP, 0 ER, 1 Hit, 0 BBs, 2 Ks - 4 Whiffs, 35.7% CSW, 14 Pitches",
+    "name": "Jhoan Duran",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   }
+  ]
+ },
+ "823978": {
+  "away": "MIN",
+  "date": "2026-09-17",
+  "home": "LAA",
+  "pitchers": [
+   {
+    "file": "cards/823978-700712.html",
+    "grade": "A+",
+    "hand": "R",
+    "id": 700712,
+    "line": "7.0 IP, 0 ER, 4 Hits, 0 BBs, 9 Ks - 22 Whiffs, 35.2% CSW, 91 Pitches",
+    "name": "Walbert Ureña",
+    "side": "home",
+    "start": true,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/823978-671737.html",
+    "grade": "A-",
+    "hand": "R",
+    "id": 671737,
+    "line": "7.0 IP, 3 ER, 5 Hits, 1 BB, 9 Ks - 20 Whiffs, 31.6% CSW, 98 Pitches",
+    "name": "Taj Bradley",
+    "side": "away",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823978-684665.html",
+    "grade": "D",
+    "hand": "R",
+    "id": 684665,
+    "line": "0.1 IP, 1 ER, 2 Hits, 0 BBs, 1 K - 0 Whiffs, 25.0% CSW, 8 Pitches",
+    "name": "Luke Murphy",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/823978-642048.html",
+    "grade": "B+",
+    "hand": "L",
+    "id": 642048,
+    "line": "0.2 IP, 0 ER, 0 Hits, 1 BB, 1 K - 1 Whiff, 36.4% CSW, 11 Pitches",
+    "name": "Tayler Saucedo",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823978-690829.html",
+    "grade": "D-",
+    "hand": "R",
+    "id": 690829,
+    "line": "1.0 IP, 2 ER, 2 Hits (1 HR), 0 BBs, 3 Ks - 5 Whiffs, 47.6% CSW, 21 Pitches",
+    "name": "Ben Joyce",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823978-676620.html",
+    "grade": "F",
+    "hand": "L",
+    "id": 676620,
+    "line": "1.0 IP, 0 ER, 2 Hits, 1 BB, 1 K - 2 Whiffs, 21.4% CSW, 14 Pitches",
+    "name": "Blake Weiman",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/823978-702193.html",
+    "grade": "B+",
+    "hand": "R",
+    "id": 702193,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 2 Ks - 2 Whiffs, 46.2% CSW, 13 Pitches",
+    "name": "Andrew Morris",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/823978-621345.html",
+    "grade": "C-",
+    "hand": "L",
+    "id": 621345,
+    "line": "0.2 IP, 0 ER, 1 Hit, 0 BBs, 2 Ks - 2 Whiffs, 21.4% CSW, 14 Pitches",
+    "name": "A.J. Minter",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823978-656546.html",
+    "grade": "B+",
+    "hand": "R",
+    "id": 656546,
+    "line": "0.1 IP, 0 ER, 0 Hits, 1 BB, 1 K - 3 Whiffs, 60.0% CSW, 5 Pitches",
+    "name": "Jeff Hoffman",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823978-672782.html",
+    "grade": "D-",
+    "hand": "R",
+    "id": 672782,
+    "line": "0.1 IP, 1 ER, 1 Hit, 1 BB, 0 Ks - 1 Whiff, 27.8% CSW, 18 Pitches",
+    "name": "Yoendrys Gómez",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/823978-681892.html",
+    "grade": "D",
+    "hand": "L",
+    "id": 681892,
+    "line": "0.0 IP, 0 ER, 1 Hit, 0 BBs, 0 Ks - 0 Whiffs, 0.0% CSW, 1 Pitches",
+    "name": "Kody Funderburk",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   }
+  ]
+ },
+ "824141": {
+  "away": "KCR",
+  "date": "2026-09-17",
+  "home": "HOU",
+  "pitchers": [
+   {
+    "file": "cards/824141-699044.html",
+    "grade": "C",
+    "hand": "R",
+    "id": 699044,
+    "line": "0.2 IP, 1 ER, 0 Hits, 2 BBs, 0 Ks - 0 Whiffs, 9.1% CSW, 11 Pitches",
+    "name": "Miguel Ullola",
+    "side": "home",
+    "start": true,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/824141-607625.html",
+    "grade": "C-",
+    "hand": "R",
+    "id": 607625,
+    "line": "5.0 IP, 4 ER, 8 Hits (4 HR), 1 BB, 5 Ks - 11 Whiffs, 30.3% CSW, 76 Pitches",
+    "name": "Seth Lugo",
+    "side": "away",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824141-687911.html",
+    "grade": "A-",
+    "hand": "L",
+    "id": 687911,
+    "line": "1.1 IP, 0 ER, 0 Hits, 0 BBs, 1 K - 2 Whiffs, 43.8% CSW, 16 Pitches",
+    "name": "Bryan King",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824141-814490.html",
+    "grade": "B+",
+    "hand": "R",
+    "id": 814490,
+    "line": "5.2 IP, 1 ER, 3 Hits, 0 BBs, 4 Ks - 8 Whiffs, 25.4% CSW, 71 Pitches",
+    "name": "Ethan Pecko",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/824141-650556.html",
+    "grade": "B-",
+    "hand": "R",
+    "id": 650556,
+    "line": "0.1 IP, 0 ER, 0 Hits, 0 BBs, 1 K - 2 Whiffs, 40.0% CSW, 5 Pitches",
+    "name": "Bryan Abreu",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824141-623352.html",
+    "grade": "B",
+    "hand": "L",
+    "id": 623352,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 0 Ks - 2 Whiffs, 28.6% CSW, 14 Pitches",
+    "name": "Josh Hader",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824141-671162.html",
+    "grade": "C-",
+    "hand": "L",
+    "id": 671162,
+    "line": "1.0 IP, 1 ER, 2 Hits, 1 BB, 0 Ks - 0 Whiffs, 19.0% CSW, 21 Pitches",
+    "name": "Connor Thomas",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/824141-621016.html",
+    "grade": "B",
+    "hand": "R",
+    "id": 621016,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 1 K - 1 Whiff, 50.0% CSW, 14 Pitches",
+    "name": "Jose Cuas",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/824141-656638.html",
+    "grade": "C",
+    "hand": "R",
+    "id": 656638,
+    "line": "1.0 IP, 1 ER, 1 Hit (1 HR), 0 BBs, 1 K - 5 Whiffs, 30.4% CSW, 23 Pitches",
+    "name": "Alex Lange",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026
+    ]
+   }
+  ]
+ },
+ "824305": {
+  "away": "SDP",
+  "date": "2026-09-17",
+  "home": "COL",
+  "pitchers": [
+   {
+    "file": "cards/824305-685299.html",
+    "grade": "F",
+    "hand": "R",
+    "id": 685299,
+    "line": "3.0 IP, 7 ER, 10 Hits (1 HR), 2 BBs, 3 Ks - 13 Whiffs, 24.4% CSW, 86 Pitches",
+    "name": "Tanner Gordon",
+    "side": "home",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824305-650633.html",
+    "grade": "B",
+    "hand": "R",
+    "id": 650633,
+    "line": "6.0 IP, 2 ER, 7 Hits, 2 BBs, 6 Ks - 11 Whiffs, 26.0% CSW, 104 Pitches",
+    "name": "Michael King",
+    "side": "away",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824305-688642.html",
+    "grade": "C",
+    "hand": "R",
+    "id": 688642,
+    "line": "3.0 IP, 2 ER, 5 Hits, 0 BBs, 2 Ks - 7 Whiffs, 26.3% CSW, 57 Pitches",
+    "name": "Zach Agnos",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824305-677955.html",
+    "grade": "B",
+    "hand": "R",
+    "id": 677955,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 0 Ks - 1 Whiff, 30.8% CSW, 13 Pitches",
+    "name": "Jaden Hill",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824305-657514.html",
+    "grade": "B",
+    "hand": "L",
+    "id": 657514,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 2 Ks - 6 Whiffs, 41.2% CSW, 17 Pitches",
+    "name": "Brennan Bernardino",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824305-605447.html",
+    "grade": "B-",
+    "hand": "R",
+    "id": 605447,
+    "line": "1.0 IP, 0 ER, 0 Hits, 1 BB, 2 Ks - 3 Whiffs, 53.8% CSW, 13 Pitches",
+    "name": "Jordan Romano",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824305-673513.html",
+    "grade": "B",
+    "hand": "L",
+    "id": 673513,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 2 Ks - 4 Whiffs, 40.0% CSW, 10 Pitches",
+    "name": "Yuki Matsui",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824305-656288.html",
+    "grade": "B",
+    "hand": "R",
+    "id": 656288,
+    "line": "2.0 IP, 0 ER, 2 Hits, 1 BB, 1 K - 1 Whiff, 8.3% CSW, 24 Pitches",
+    "name": "Griffin Canning",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   }
+  ]
+ },
+ "824464": {
+  "away": "LAD",
+  "date": "2026-09-17",
+  "home": "CIN",
+  "pitchers": [
+   {
+    "file": "cards/824464-663903.html",
+    "grade": "F",
+    "hand": "R",
+    "id": 663903,
+    "line": "3.1 IP, 7 ER, 9 Hits (1 HR), 4 BBs, 0 Ks - 5 Whiffs, 22.9% CSW, 96 Pitches",
+    "name": "Brady Singer",
+    "side": "home",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824464-680736.html",
+    "grade": "B-",
+    "hand": "L",
+    "id": 680736,
+    "line": "3.0 IP, 0 ER, 0 Hits, 0 BBs, 3 Ks - 5 Whiffs, 40.6% CSW, 32 Pitches",
+    "name": "Justin Wrobleski",
+    "side": "away",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824464-682825.html",
+    "grade": "B",
+    "hand": "R",
+    "id": 682825,
+    "line": "1.2 IP, 0 ER, 1 Hit, 0 BBs, 2 Ks - 4 Whiffs, 28.6% CSW, 21 Pitches",
+    "name": "Luis Mey",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824464-663574.html",
+    "grade": "C+",
+    "hand": "R",
+    "id": 663574,
+    "line": "1.0 IP, 0 ER, 0 Hits, 2 BBs, 0 Ks - 1 Whiff, 25.0% CSW, 16 Pitches",
+    "name": "Tony Santillan",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824464-572955.html",
+    "grade": "B",
+    "hand": "R",
+    "id": 572955,
+    "line": "1.0 IP, 0 ER, 0 Hits, 0 BBs, 0 Ks - 2 Whiffs, 30.0% CSW, 10 Pitches",
+    "name": "Pierce Johnson",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824464-682227.html",
+    "grade": "B-",
+    "hand": "L",
+    "id": 682227,
+    "line": "2.0 IP, 1 ER, 2 Hits (1 HR), 0 BBs, 1 K - 2 Whiffs, 28.0% CSW, 25 Pitches",
+    "name": "Brandon Williamson",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/824464-595014.html",
+    "grade": "C-",
+    "hand": "R",
+    "id": 595014,
+    "line": "1.0 IP, 1 ER, 1 Hit (1 HR), 0 BBs, 2 Ks - 1 Whiff, 27.3% CSW, 22 Pitches",
+    "name": "Blake Treinen",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824464-689017.html",
+    "grade": "B",
+    "hand": "R",
+    "id": 689017,
+    "line": "4.0 IP, 0 ER, 4 Hits, 0 BBs, 2 Ks - 6 Whiffs, 23.0% CSW, 61 Pitches",
+    "name": "Landon Knack",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824464-678020.html",
+    "grade": "C+",
+    "hand": "R",
+    "id": 678020,
+    "line": "1.0 IP, 1 ER, 2 Hits, 0 BBs, 1 K - 1 Whiff, 18.8% CSW, 16 Pitches",
+    "name": "Seth Halvorsen",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   }
+  ]
+ },
+ "824548": {
+  "away": "DET",
+  "date": "2026-09-17",
+  "home": "CWS",
+  "pitchers": [
+   {
+    "file": "cards/824548-607200.html",
+    "grade": "B",
+    "hand": "R",
+    "id": 607200,
+    "line": "4.2 IP, 1 ER, 4 Hits, 2 BBs, 6 Ks - 8 Whiffs, 30.3% CSW, 89 Pitches",
+    "name": "Erick Fedde",
+    "side": "home",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824548-664285.html",
+    "grade": "C+",
+    "hand": "L",
+    "id": 664285,
+    "line": "5.0 IP, 3 ER, 3 Hits (1 HR), 4 BBs, 8 Ks - 16 Whiffs, 37.8% CSW, 90 Pitches",
+    "name": "Framber Valdez",
+    "side": "away",
+    "start": true,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824548-663542.html",
+    "grade": "B",
+    "hand": "L",
+    "id": 663542,
+    "line": "1.1 IP, 0 ER, 1 Hit, 0 BBs, 1 K - 1 Whiff, 45.5% CSW, 11 Pitches",
+    "name": "Bryan Hudson",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824548-663855.html",
+    "grade": "C-",
+    "hand": "R",
+    "id": 663855,
+    "line": "0.2 IP, 0 ER, 1 Hit, 1 BB, 2 Ks - 4 Whiffs, 32.0% CSW, 25 Pitches",
+    "name": "Jordan Hicks",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824548-691799.html",
+    "grade": "C",
+    "hand": "R",
+    "id": 691799,
+    "line": "2.1 IP, 0 ER, 2 Hits, 2 BBs, 1 K - 4 Whiffs, 31.4% CSW, 35 Pitches",
+    "name": "Grant Taylor",
+    "side": "home",
+    "start": false,
+    "years": [
+     2026,
+     2025
+    ]
+   },
+   {
+    "file": "cards/824548-621097.html",
+    "grade": "C",
+    "hand": "R",
+    "id": 621097,
+    "line": "1.0 IP, 0 ER, 1 Hit, 0 BBs, 2 Ks - 4 Whiffs, 58.3% CSW, 12 Pitches",
+    "name": "Jacob Waguespack",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026
+    ]
+   },
+   {
+    "file": "cards/824548-680744.html",
+    "grade": "A-",
+    "hand": "R",
+    "id": 680744,
+    "line": "2.0 IP, 0 ER, 1 Hit, 0 BBs, 1 K - 3 Whiffs, 28.0% CSW, 25 Pitches",
+    "name": "Ty Madden",
+    "side": "away",
+    "start": false,
+    "years": [
+     2026
+    ]
+   }
+  ]
+ }
+}

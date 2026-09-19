@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>PLV Pitcher Game Card</title>
+<link rel="icon" href="https://res.cloudinary.com/dduabusaf/image/upload/v1772839606/teal_letter_logo_owufaj.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --ground:#101222; --surface:#292C42; --raise:#32344a;
+  --ink:#ffffff; --accent:#00d4ff; --muted:#8D96B3; --faint:#6b7684;
+  --rule:#32344a; --card:#292C42;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  display:flex; flex-direction:column;
+}
+
+/* ---------- picker bar ---------- */
+.bar{
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 18px;
+  padding:14px 20px 14px; border-bottom:1px solid var(--rule); background:var(--surface);
+}
+.brand{margin-right:auto; display:flex; align-items:center; gap:12px}
+.brand img{height:34px; width:auto}
+.brand div{display:flex; flex-direction:column; gap:1px}
+.brand h1{margin:0; font-size:19px; font-weight:700; letter-spacing:-.01em; color:var(--accent)}
+.brand .sub{
+  font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
+  font-variant-numeric:tabular-nums;
+}
+.field{display:flex; flex-direction:column; gap:5px; min-width:150px}
+.field label{
+  font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
+  font-weight:600;
+}
+select{
+  appearance:none; -webkit-appearance:none;
+  font:inherit; font-size:14px; font-weight:500; color:var(--ink);
+  background:var(--raise) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238D96B3' stroke-width='1.5'/></svg>") no-repeat right 11px center;
+  border:1px solid var(--rule); border-radius:6px; padding:8px 30px 8px 11px;
+  cursor:pointer; font-variant-numeric:tabular-nums;
+}
+select:hover{border-color:var(--faint)}
+select:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+select:disabled{opacity:.45; cursor:default}
+#pitcher{min-width:260px}
+.check{display:flex; align-items:center; gap:8px; padding:8px 0; font-size:14px; font-weight:500}
+.check input{accent-color:var(--accent); width:16px; height:16px; margin:0}
+.check.off{opacity:.45}
+#year{min-width:90px}
+.btn,.open{
+  font:inherit; font-size:12.5px; font-weight:600; color:var(--ink); text-decoration:none;
+  background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:8px 12px;
+  white-space:nowrap; cursor:pointer; align-self:flex-end;
+}
+.btn:hover,.open:hover{border-color:var(--accent); color:var(--accent)}
+.btn[hidden],.open[hidden]{display:none}
+.btn:disabled{opacity:.45; cursor:default}
+
+/* ---------- the card ---------- */
+.stage{flex:1; min-height:0; position:relative; display:flex; justify-content:center; overflow:auto; padding:12px}
+iframe{border:0; background:var(--card); height:100%; aspect-ratio:3/4; max-width:100%; border-radius:6px; display:block}
+iframe[hidden]{display:none}
+.empty{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  color:var(--muted); font-size:15px; text-align:center; padding:0 20px;
+}
+.empty[hidden]{display:none}
+.note{padding:6px 20px 10px; color:var(--muted); font-size:12px; border-top:1px solid var(--rule); background:var(--surface)}
+.note a{color:var(--accent)}
+
+@media (max-width:760px){
+  .bar{padding:12px 12px 10px; gap:10px 12px}
+  .brand{flex-basis:100%; margin:0}
+  .field{flex:1; min-width:0}
+  #pitcher{min-width:0; flex-basis:100%}
+  .stage{display:block; padding:8px}
+  iframe{width:100%; height:auto}
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <img src="PitcherList_Stats_watermark_with_logo.webp" alt="Pitcher List Stats">
+    <div>
+      <h1>PLV Pitcher Game Card</h1>
+      <span class="sub" id="status">Loading cards…</span>
+    </div>
+  </div>
+  <div class="field">
+    <label for="date">Game date</label>
+    <select id="date" disabled></select>
+  </div>
+  <div class="field">
+    <label for="game">Game</label>
+    <select id="game" disabled></select>
+  </div>
+  <div class="field">
+    <label for="pitcher">Pitcher</label>
+    <select id="pitcher" disabled></select>
+  </div>
+  <label class="check off" id="compareWrap"><input type="checkbox" id="compare" checked disabled>Compare to previous stats?</label>
+  <div class="field">
+    <label for="year">Year for comparison</label>
+    <select id="year" disabled></select>
+  </div>
+  <button class="btn" id="png" type="button" hidden>Save PNG</button>
+  <a class="open" id="open" href="#" target="_blank" rel="noopener" hidden>Open full page ↗</a>
+</header>
+
+<main class="stage">
+  <iframe id="frame" title="PLV Pitcher Game Card" hidden></iframe>
+  <div class="empty" id="empty">Pick a date, a game and a pitcher.</div>
+</main>
+
+<footer class="note">
+  Data (especially pitch types) are subject to change. Cards are built each morning for the previous
+  day's completed MLB games. Please send any feedback to Kyle Bland, on
+  <a href="https://bsky.app/profile/blandalytics.pitcherlist.com" target="_blank" rel="noopener">Bluesky</a> or
+  <a href="https://x.com/blandalytics" target="_blank" rel="noopener">Twitter</a>.
+</footer>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var dateSel = $('date'), gameSel = $('game'), pitcherSel = $('pitcher');
+  var compare = $('compare'), compareWrap = $('compareWrap'), yearSel = $('year');
+  var frame = $('frame'), empty = $('empty'), open = $('open'), png = $('png'), status = $('status');
+  var index = {days: {}, games: {}};   // dates built, and gamePk -> date
+  var day = {};                        // the selected date's games: gamePk -> {home, away, pitchers}
+  var dayCache = {};
+
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function niceDate(iso) {              // 2026-09-17 -> Thu, Sep 17 2026
+    var d = new Date(iso + 'T12:00:00');
+    var dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+    return dow + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ' ' + d.getFullYear();
+  }
+  function fill(sel, items, keep) {     // items: [[value, label], ...]
+    var prev = keep ? sel.value : null;
+    sel.innerHTML = '';
+    items.forEach(function (it) {
+      var o = document.createElement('option');
+      o.value = it[0]; o.textContent = it[1];
+      sel.appendChild(o);
+    });
+    if (prev !== null && [].some.call(sel.options, function (o) { return o.value === prev; })) {
+      sel.value = prev;
+    }
+    sel.disabled = items.length === 0;
+  }
+  function lastName(name) { return name.split(' ').slice(-1)[0].toLowerCase(); }
+  function team(g, p) { return p.side === 'home' ? g.home : g.away; }
+  function opp(g, p) { return p.side === 'home' ? 'vs ' + g.away : '@ ' + g.home; }
+
+  // ---- the game list for a date, and the pitcher list for a game (or the whole day) ----
+  function pks() {
+    return Object.keys(day).sort(function (a, b) {
+      return (day[a].away + day[a].home).localeCompare(day[b].away + day[b].home) || (a - b);
+    });
+  }
+  function fillGames() {
+    fill(gameSel, [['', 'All games']].concat(pks().map(function (pk) {
+      var g = day[pk];
+      return [pk, g.away + ' @ ' + g.home];
+    })), true);
+  }
+  function pitcherItems() {
+    var pk = gameSel.value, items = [];
+    if (pk && day[pk]) {                // the game's pitchers in the card order: starters first
+      day[pk].pitchers.forEach(function (p) {
+        items.push([pk + '-' + p.id, p.name + ' (' + team(day[pk], p) + (p.start ? ', SP' : '') + ')']);
+      });
+      return items;
+    }
+    pks().forEach(function (k) {        // every pitcher that day, by last name
+      day[k].pitchers.forEach(function (p) {
+        items.push([k + '-' + p.id, p.name + '  ·  ' + team(day[k], p) + ' ' + opp(day[k], p), lastName(p.name)]);
+      });
+    });
+    items.sort(function (a, b) { return a[2].localeCompare(b[2]) || a[1].localeCompare(b[1]); });
+    return items;
+  }
+  function fillPitchers() {
+    fill(pitcherSel, pitcherItems(), true);
+    onPitcher();
+  }
+
+  // ---- showing a card ----
+  function selected() {
+    var v = pitcherSel.value.split('-');
+    var g = day[v[0]];
+    if (!g) return null;
+    var p = g.pitchers.filter(function (x) { return String(x.id) === v[1]; })[0];
+    return p ? {pk: v[0], game: g, pitcher: p} : null;
+  }
+  function cmpYear() {
+    return compare.checked && !yearSel.disabled ? yearSel.value : '0';
+  }
+  function onPitcher() {
+    var sel = selected();
+    if (!sel) {
+      frame.hidden = true; frame.removeAttribute('src');
+      empty.hidden = false; open.hidden = true; png.hidden = true;
+      empty.textContent = 'No cards match.';
+      document.title = 'PLV Pitcher Game Card';
+      return;
+    }
+    var p = sel.pitcher, years = p.years || [];
+    fill(yearSel, years.map(function (y) { return [String(y), String(y)]; }), true);
+    compare.disabled = years.length === 0;
+    compareWrap.classList.toggle('off', years.length === 0);
+    yearSel.disabled = years.length === 0 || !compare.checked;
+    frame.src = p.file + '#cmp=' + cmpYear();
+    open.href = p.file;
+    frame.hidden = false; empty.hidden = true; open.hidden = false; png.hidden = false;
+    document.title = p.name + ' — ' + p.line.split(' - ')[0] + ' — PLV Pitcher Game Card';
+    var hash = '#' + sel.pk + '-' + p.id;
+    if (location.hash !== hash) history.replaceState(null, '', hash);
+  }
+  function onCompare() {
+    var sel = selected();
+    if (!sel) return;
+    yearSel.disabled = compare.disabled || !compare.checked;
+    try { frame.contentWindow.location.hash = '#cmp=' + cmpYear(); }
+    catch (e) { frame.src = sel.pitcher.file + '#cmp=' + cmpYear(); }
+  }
+
+  // ---- loading a date ----
+  function loadDay(date) {
+    if (dayCache[date]) return Promise.resolve(dayCache[date]);
+    return fetch('days/' + date + '.json', {cache: 'no-cache'})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) { dayCache[date] = d; return d; });
+  }
+  function onDate() {
+    var date = dateSel.value;
+    loadDay(date).then(function (d) {
+      if (dateSel.value !== date) return;
+      day = d;
+      fillGames();
+      fillPitchers();
+    }).catch(function () {
+      day = {};
+      fillGames(); fillPitchers();
+      empty.textContent = 'Could not load the cards for ' + niceDate(date) + '.';
+    });
+  }
+
+  dateSel.addEventListener('change', function () { gameSel.value = ''; onDate(); });
+  gameSel.addEventListener('change', fillPitchers);
+  pitcherSel.addEventListener('change', onPitcher);
+  compare.addEventListener('change', onCompare);
+  yearSel.addEventListener('change', onCompare);
+  png.addEventListener('click', function () {
+    try { png.disabled = true; frame.contentWindow.savePng().then(function () { png.disabled = false; }); }
+    catch (e) { png.disabled = false; }
+  });
+
+  // a #gamePk-pitcherId in the URL selects that card directly
+  function selectFromHash() {
+    var m = /^#(\d+)-(\d+)$/.exec(location.hash);
+    if (!m || !index.games[m[1]]) return false;
+    var date = index.games[m[1]];
+    dateSel.value = date;
+    loadDay(date).then(function (d) {
+      day = d;
+      fillGames();
+      gameSel.value = m[1];
+      fill(pitcherSel, pitcherItems(), false);
+      pitcherSel.value = m[1] + '-' + m[2];
+      onPitcher();
+    });
+    return true;
+  }
+  window.addEventListener('hashchange', selectFromHash);
+
+  fetch('index.json', {cache: 'no-cache'})
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (m) {
+      index = m;
+      var dates = Object.keys(m.days || {}).sort().reverse();
+      fill(dateSel, dates.map(function (d) { return [d, niceDate(d)]; }));
+      var n = 0; dates.forEach(function (d) { n += m.days[d]; });
+      status.textContent = n + ' card' + (n === 1 ? '' : 's') + ' across ' + dates.length
+        + ' date' + (dates.length === 1 ? '' : 's') + (m.built ? ' · updated ' + m.built.slice(0, 10) : '');
+      if (!dates.length) { empty.textContent = 'No cards built yet.'; return; }
+      // land on the most recent day rather than the whole archive
+      if (!selectFromHash()) { dateSel.value = dates[0]; onDate(); }
+    })
+    .catch(function () {
+      status.textContent = 'Could not load index.json';
+      empty.textContent = 'The card manifest is missing. Run tools/pitcher_card/build_site.py to create it.';
+    });
+})();
+</script>
+</body>
+</html>

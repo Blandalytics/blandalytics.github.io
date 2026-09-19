@@ -1,0 +1,78 @@
+name: Build pitcher cards
+
+on:
+  schedule:
+    # 10:30 UTC is 6:30am Eastern: every game from the night before is final, and the
+    # scorecards run at 10:00 has had its turn at pushing
+    - cron: "30 10 * * *"
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "First date to build (YYYY-MM-DD). Default: yesterday."
+        required: false
+      end:
+        description: "Last date to build (YYYY-MM-DD). Default: today."
+        required: false
+      force:
+        description: "Re-render cards already built (after a rendering change)"
+        type: boolean
+        default: false
+
+# the job commits the generated pages back to the repo
+permissions:
+  contents: write
+
+concurrency:
+  group: pitcher-cards
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/pitcher_card/requirements.txt
+
+      - name: Fetch the scraper and the models
+        run: |
+          git clone --depth 1 https://github.com/Blandalytics/statcast_scraper.git
+          git clone --depth 1 https://github.com/Blandalytics/player_cards.git
+
+      - name: Install
+        run: pip install -r tools/pitcher_card/requirements.txt
+
+      # the comparison seasons: finished seasons are pulled once, the current one is
+      # topped up by a day each run. Every run saves a fresh copy; restore-keys picks
+      # up the newest.
+      - name: Restore the season cache
+        uses: actions/cache@v4
+        with:
+          path: tools/pitcher_card/cache
+          key: pitcher-seasons-${{ github.run_id }}
+          restore-keys: pitcher-seasons-
+
+      - name: Build
+        run: |
+          ARGS=""
+          [ -n "${{ inputs.start }}" ] && ARGS="$ARGS --start ${{ inputs.start }}"
+          [ -n "${{ inputs.end }}" ]   && ARGS="$ARGS --end ${{ inputs.end }}"
+          [ "${{ inputs.force }}" = "true" ] && ARGS="$ARGS --force"
+          python tools/pitcher_card/build_site.py --out pitcher-cards $ARGS
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pitcher-cards
+          if git diff --cached --quiet; then
+            echo "nothing new"
+          else
+            git commit -m "Pitcher cards: $(date -u +%Y-%m-%d)"
+            git pull --rebase origin main
+            git push
+          fi
