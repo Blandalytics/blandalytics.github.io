@@ -48,6 +48,12 @@ button.primary:hover:not(:disabled){background:#8cc6ff}
 .status.warn{color:var(--warn)}
 .figure{display:flex; justify-content:center; background:#292C42; border-radius:8px; overflow:hidden}
 .figure canvas{display:block; width:100%; max-width:800px; height:auto}
+.suggest{position:relative}
+.suggest-list{position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:5; margin:0; padding:4px; list-style:none;
+  background:var(--raise); border:1px solid var(--rule); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.4); max-height:320px; overflow-y:auto}
+.suggest-list li{display:flex; justify-content:space-between; gap:12px; padding:6px 9px; border-radius:4px; cursor:pointer; font-size:14px; color:var(--ink)}
+.suggest-list li small{color:var(--muted); font-size:12px; white-space:nowrap}
+.suggest-list li.active{background:#222b36}
 .stats{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px 16px; margin-top:14px}
 .stat{display:flex; flex-direction:column; gap:2px}
 .stat span{color:var(--muted); font-size:12.5px}
@@ -80,11 +86,15 @@ details[open] summary{margin-bottom:10px}
   <section class="card">
     <form id="form" class="controls">
       <label><b>Season</b><select id="season"></select></label>
-      <label class="player"><b>Player</b><input id="player" type="text" list="players" placeholder="name or MLBAM id" autocomplete="off" spellcheck="false"></label>
-      <label><b>Bats</b><select id="hand"><option value="">Auto</option><option value="L">Left</option><option value="R">Right</option></select></label>
+      <label class="player"><b>Player</b>
+        <div class="suggest">
+          <input id="player" type="text" placeholder="name or MLBAM id" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest">
+          <ul id="suggest" class="suggest-list" role="listbox" hidden></ul>
+        </div>
+      </label>
+      <label><b>Bats</b><select id="hand"><option value="L">Left</option><option value="R">Right</option></select></label>
       <button id="go" class="primary" type="submit" disabled>Profile</button>
     </form>
-    <datalist id="players"></datalist>
     <div class="row" style="margin-top:12px">
       <label class="check"><input id="jerk" type="checkbox"> Show jerk</label>
       <span id="status" class="status">loading the leaderboard…</span>
@@ -121,8 +131,8 @@ details[open] summary{margin-bottom:10px}
     </details>
   </section>
 </main>
-<script src="swing.js?v=1"></script>
-<script src="plot.js?v=1"></script>
-<script src="app.js?v=1"></script>
+<script src="swing.js?v=2"></script>
+<script src="plot.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>
