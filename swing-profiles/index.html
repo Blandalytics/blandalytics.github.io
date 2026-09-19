@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Swing Profiles · Blandalytics</title>
-<meta name="description" content="Bat speed, acceleration and jerk through an MLB hitter's swing, digitized from Baseball Savant's swing-path cards.">
+<meta name="description" content="Bat Speed, Acceleration, and Jerk through an MLB hitter's swing, derived from Baseball Savant's swing-path images.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -80,7 +80,7 @@ details[open] summary{margin-bottom:10px}
   <header>
     <a class="home" href="/">← Blandalytics</a>
     <h1>Swing Profiles</h1>
-    <p class="tag">Bat speed, acceleration and jerk through an MLB hitter's swing. The bat-speed curve is digitized from the player's Baseball Savant swing-path card, its real duration is imputed from the bat-tracking leaderboard, and the derivatives follow. Runs entirely in your browser.</p>
+    <p class="tag">Bat Speed, Acceleration, and Jerk through an MLB hitter's swing. The Bat Speed curve is derived from the player's Baseball Savant swing-path image. The swing duration is imputed from the bat-tracking leaderboard, with Acceleration and Jerk based on it.</p>
   </header>
 
   <section class="card">
@@ -122,10 +122,10 @@ details[open] summary{margin-bottom:10px}
     <details>
       <summary>How it works</summary>
       <div class="method">
-        <p><b>Bat Speed Curve.</b> Savant's swing-path cards carry a small chart in the bottom-left panel: bat speed against <em>normalized</em> swing time, 0 at the start of the swing and 1 at impact. The page fetches the card and reads that chart back out of the pixels — the teal markers are thresholded, each column's midpoint becomes a point, a local linear fit flattens the pixel quantization, and the result is resampled onto 101 evenly spaced points. Read back against the card's printed bat speed, impact values land within about 0.7 mph.</p>
-        <p><b>Swing Duration.</b> The card has no clock. The bat-tracking leaderboard supplies the missing scale: it reports <code>swing_length</code> (feet of barrel travel) alongside <code>avg_bat_speed</code>. Swing length is the path integral of speed over the swing, so with a normalized time axis <code>s = T · mean(v)</code>, and <code>T = s / mean(v)</code>, where the mean is integrated from the player's own digitized curve rather than assumed. It is a representative swing for that player and bat side, not any individual one, and it assumes Savant's swing-start window for <code>swing_length</code> matches the card's t = 0.</p>
-        <p><b>Derivative Kinematics.</b> Acceleration and jerk come from a Savitzky–Golay filter (window 15, cubic), which fits a local polynomial rather than differencing neighbours, so it does not amplify the digitizer's residual pixel noise. Jerk is the analytic second derivative of the same local fit — the two cannot disagree — but it is a third derivative of a curve digitized at roughly 0.9 mph resolution: read its shape, not its precise magnitude. The first and last few samples are trimmed from the plotted derivatives, where the edge fit is least trustworthy.</p>
-        <p><b>Sanity Check.</b> The card's impact speed and the leaderboard's <code>avg_bat_speed</code> are independent measurements of the same quantity. When they differ by more than 2 mph the two sources are not describing the same swings, and the duration is flagged as suspect.</p>
+        <p><b>Bat Speed Curve</b>: Savant's swing-path images carry a small chart in the bottom-left panel: Bat Speed against <em>normalized</em> swing time (0 at the start of the swing and 1 at impact). This page fetches the card, reads each point on the Speed-over-time chart, smooths with a local linear fit, and resamples the resulting points into 101 evenly spaced points. Imputed Bat Speed values are within ~0.7 mph of stated values on Baseball Savant.</p>
+        <p><b>Swing Duration</b>: Baseball Savant/Statcast do not provide swing duration times. It is derived using the player's <code>swing_length</code> (feet of barrel travel) alongside <code>avg_bat_speed</code>: <code>T = s / mean(v)</code>, where the mean is integrated from the imputed Bat Speed value. This makes it a "representative swing" for that player and bat side, not necessarily any individual observed one. It assumes Baseball Savant's swing start window for <code>swing_length</code> matches the card's t = 0.</p>
+        <p><b>Derivative Kinematics:</b>: Acceleration and Jerk come from a Savitzky–Golay filter (window 15, cubic). Note: Jerk is a third derivative of a curve digitized at roughly 0.9 mph resolution. Read its shape, not its precise magnitude. The first and last few samples are trimmed from the plotted derivatives, where the edge fit is least trustworthy.</p>
+        <p><b>Sanity Check.</b> The card's imputed speed at impact and the player's <code>avg_bat_speed</code> via Baseball Savant are independent measurements of the same quantity. When they differ by more than 2 mph, the two sources are not describing the same swings, and the duration is flagged as suspect (Bat Speed description highlighted in yellow).</p>
       </div>
     </details>
   </section>
