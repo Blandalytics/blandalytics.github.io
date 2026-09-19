@@ -2,7 +2,7 @@
 
 Source for [blandalytics.com](https://blandalytics.com).
 
-## Scorecards
+## MLB Scorecards
 
 [blandalytics.com/scorecards/](https://blandalytics.com/scorecards/) — a pitch-by-pitch
 scorecard for every MLB game, built from Statcast tracking data. Pick a date, a team

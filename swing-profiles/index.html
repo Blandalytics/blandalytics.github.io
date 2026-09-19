@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Swing Profiles · Blandalytics</title>
+<meta name="description" content="Bat Speed, Acceleration, and Jerk through an MLB hitter's swing, derived from Baseball Savant's swing-path images.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
+  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
+  --accent:#6cb4ff; --good:#7bd88f; --bad:#ff8a80; --warn:#ffd166;
+}
+*{box-sizing:border-box}
+body{margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased; padding:24px 16px}
+main{max-width:860px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1{margin:0; font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
+h2{margin:0 0 10px; font-size:17px; font-weight:600}
+h3{margin:14px 0 6px; font-size:14px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em}
+p{margin:0}
+.tag{margin:6px 0 0; color:var(--muted); font-size:14px}
+a{color:var(--accent)}
+a.home{color:var(--muted); text-decoration:none; font-size:14px}
+a.home:hover{color:var(--ink)}
+.card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
+.controls{display:grid; grid-template-columns:110px minmax(200px,1fr) 100px auto; gap:12px 14px; align-items:end}
+@media (max-width:600px){.controls{grid-template-columns:1fr 1fr} .controls .player{grid-column:1 / -1}}
+label{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
+label b{color:var(--ink); font-weight:500}
+label.check{flex-direction:row; align-items:center; gap:7px; color:var(--ink); font-size:14px}
+input,select,button{font:inherit; color:var(--ink)}
+input[type=text],select{background:var(--ground); border:1px solid var(--rule); border-radius:6px; padding:7px 9px; width:100%}
+input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
+button{background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:7px 12px; cursor:pointer}
+button:hover:not(:disabled){border-color:var(--faint); background:#222b36}
+button:disabled{opacity:.45; cursor:default}
+button.primary{background:var(--accent); color:#0b1320; border-color:var(--accent); font-weight:600}
+button.primary:hover:not(:disabled){background:#8cc6ff}
+.row{display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center}
+.status{color:var(--muted); font-size:13px}
+.status.err{color:var(--bad)}
+.status.warn{color:var(--warn)}
+.figure{display:flex; justify-content:center; background:#292C42; border-radius:8px; overflow:hidden}
+.figure canvas{display:block; width:100%; max-width:800px; height:auto}
+.suggest{position:relative}
+/* ten rows tall (32px each plus the list's own padding and border), scrolling through the rest */
+.suggest-list{--rows:10; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:5; margin:0; padding:4px; list-style:none;
+  background:var(--raise); border:1px solid var(--rule); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.4);
+  max-height:calc(var(--rows) * 32px + 10px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--faint) transparent}
+.suggest-list li{display:flex; justify-content:space-between; gap:12px; padding:6px 9px; border-radius:4px; cursor:pointer; font-size:14px; line-height:20px; color:var(--ink)}
+.suggest-list li small{color:var(--muted); font-size:12px; white-space:nowrap}
+.suggest-list li.active{background:#222b36}
+.stats{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px 16px; margin-top:14px}
+.stat{display:flex; flex-direction:column; gap:2px}
+.stat span{color:var(--muted); font-size:12.5px}
+.stat b{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-size:17px; font-weight:600}
+.stat small{color:var(--faint); font-size:12px}
+.stat.warn b{color:var(--warn)}
+.actions{margin-top:14px}
+.note{color:var(--faint); font-size:12.5px; margin-top:8px}
+.method{color:var(--muted); font-size:14px}
+.method p{margin:0 0 10px}
+.method p:last-child{margin-bottom:0}
+.method code{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:12.5px; background:var(--ground); border:1px solid var(--rule); border-radius:4px; padding:1px 5px; color:var(--ink)}
+.method b{color:var(--ink); font-weight:500}
+.card-img{display:block; width:100%; max-width:640px; border-radius:6px; margin-top:8px}
+[hidden]{display:none!important}
+details summary{cursor:pointer; font-size:17px; font-weight:600; list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary span{color:var(--muted); font-weight:400; font-size:13px; margin-left:10px}
+details[open] summary{margin-bottom:10px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <a class="home" href="/">← Blandalytics</a>
+    <h1>Swing Profiles</h1>
+    <p class="tag">Bat Speed, Acceleration, and Jerk through an MLB hitter's swing. The Bat Speed curve is derived from the player's Baseball Savant swing-path image. The swing duration is imputed from the bat-tracking leaderboard, with Acceleration and Jerk based on it.</p>
+  </header>
+
+  <section class="card">
+    <form id="form" class="controls">
+      <label><b>Season</b><select id="season"></select></label>
+      <label class="player"><b>Player</b>
+        <div class="suggest">
+          <input id="player" type="text" placeholder="name or MLBAM id" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest">
+          <ul id="suggest" class="suggest-list" role="listbox" hidden></ul>
+        </div>
+      </label>
+      <label><b>Bats</b><select id="hand"><option value="L">Left</option><option value="R">Right</option></select></label>
+      <button id="go" class="primary" type="submit" disabled>Profile</button>
+    </form>
+    <div class="row" style="margin-top:12px">
+      <label class="check"><input id="jerk" type="checkbox"> Show jerk</label>
+      <span id="status" class="status">loading the leaderboard…</span>
+    </div>
+  </section>
+
+  <section id="out" class="card" hidden>
+    <div class="figure"><canvas id="fig" width="1600" height="1400"></canvas></div>
+    <div id="stats" class="stats"></div>
+    <div id="notes"></div>
+    <div class="row actions">
+      <button id="dl_png">Download PNG</button>
+      <button id="dl_csv">Download CSV</button>
+      <button id="other_side" hidden></button>
+      <a id="savant_link" target="_blank" rel="noopener">Savant player page</a>
+      <a id="card_link" target="_blank" rel="noopener">Source card</a>
+    </div>
+    <details style="margin-top:14px">
+      <summary>The image this was derived from:<span>Baseball Savant</span></summary>
+      <img id="card_img" class="card-img" alt="Baseball Savant swing-path card">
+    </details>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>How it works</summary>
+      <div class="method">
+        <p><b>Bat Speed Curve:</b> Savant's swing-path images carry a small chart in the bottom-left panel: Bat Speed against <em>normalized</em> swing time (0 at the start of the swing and 1 at contact). This page fetches the card, reads each point on the Speed-over-time chart, smooths with a local linear fit, and resamples into 101 evenly spaced points. Imputed Bat Speed values at contact are within ~0.7 mph of stated values on Baseball Savant.</p>
+        <p><b>Swing Duration:</b> Baseball Savant/Statcast do not provide individual or aggregated swing duration times (<code>T</code>). It is derived using the player's swing length (<code>s</code>) and swing speed (<code>v</code>): <code>T = s / mean(v)</code>, where the mean is integrated from the imputed Bat Speed value. This makes it a "representative swing" for that player and bat side, not necessarily any individual observed one. It assumes Baseball Savant's swing start window for <code>swing_length</code> matches the card's t = 0.</p>
+        <p><b>Derivative Kinematics:</b> Acceleration and Jerk are derived using a Savitzky–Golay filter (window 15, cubic). Note: Jerk is a third derivative of a curve digitized at roughly 0.9 mph resolution. Read its shape, not its precise magnitude. The first and last few samples are trimmed from the plotted derivatives, where the edge fit is least trustworthy.</p>
+        <p><b>Sanity Check:</b> The card's imputed speed at contact and the player's <code>avg_bat_speed</code> via Baseball Savant are independent measurements of the same quantity. When they differ by more than 2 mph, the two sources are not describing the same swings, and the duration is flagged as suspect (Bat Speed description highlighted in yellow).</p>
+      </div>
+    </details>
+  </section>
+</main>
+<script src="swing.js?v=3"></script>
+<script src="plot.js?v=3"></script>
+<script src="app.js?v=3"></script>
+</body>
+</html>
