@@ -313,7 +313,7 @@
       const wFrac = 0.25;
       const w = wFrac * figW * S, h = w * (mark.height / mark.width);
       //ctx.drawImage(mark, X(right) - w, figH * S - 0.24 * S - h, w, h);
-      ctx.drawImage(mark, X(right) - w, 0.4 * S, w, h);
+      ctx.drawImage(mark, X(right) - w, 0.3 * S, w, h);
     }
 
     return { canvas: cv, peak, trough, warnings };
