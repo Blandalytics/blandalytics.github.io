@@ -237,7 +237,7 @@
       // Sit the label just above the point, but never push it past the ceiling.
       text(`${fmt1(v[n - 1])} mph at Impact`,
         sx(t[n - 1] - 0.01 * span), sy(Math.min(v[n - 1] + 0.03 * speedYlim, 0.93 * speedYlim)),
-        { size: 10, ha: "right", va: "bottom" });
+        { size: 14, ha: "right", va: "bottom" });
       yLabel(p, "Bat speed (mph)", tickWidth);
     }
 
@@ -258,7 +258,7 @@
       const [ha, xa] = labelSide(t[peak]);
       text(`Peak: ${fmt0(a[peak])} g at ${fmt0(t[peak])} ms`,
         sx(xa), sy(Math.min(a[peak] + 0.02 * accelYlim, 0.93 * accelYlim)),
-        { size: 10, ha, va: "bottom" });
+        { size: 14, ha, va: "bottom" });
       yLabel(p, "Acceleration (g)", tickWidth);
     }
 
@@ -277,9 +277,9 @@
       marker(sx(t[trough]), sy(j[trough]), c.jerk);
       // The let-off is the informative extreme, so label the trough.
       const [ha, xj] = labelSide(t[trough]);
-      text(`let-off ${fmtComma0(j[trough])} g/s at ${fmt0(t[trough])} ms`,
+      text(`Let-off: ${fmtComma0(j[trough])} g/s at ${fmt0(t[trough])} ms`,
         sx(xj), sy(Math.max(j[trough] - 0.02 * (hi - lo), lo + 0.06 * (hi - lo))),
-        { size: 10, ha, va: "top" });
+        { size: 14, ha, va: "top" });
       yLabel(p, "Jerk (g per second)", tickWidth);
       const jMax = Math.max(...j), jMin = Math.min(...j);
       if (jMax > hi || jMin < lo) warnings.push(`jerk spans ${jMin.toFixed(0)} to ${jMax.toFixed(0)}, outside the fixed axis ${lo} to ${hi}; the curve is clipped.`);
