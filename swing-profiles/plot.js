@@ -298,9 +298,9 @@
     // header block sits a fixed distance from the top in inches, so it does not
     // drift when a third panel makes the figure taller.
     if (profile.display_name) {
-      text(profile.display_name, X(left), 0.3 * S, { size: 24, weight: 700, color: c.header, va: "top" });
+      text(profile.display_name, X(left), 0.25 * S, { size: 30, weight: 700, color: c.header, va: "top" });
     }
-    text(`${profile.year} Swing Kinematics, as ${profile.handedness}HB`, X(left), 0.65 * S, { size: 12, color: c.subheader, va: "top" });
+    text(`${profile.year} Swing Kinematics, as ${profile.handedness}HB`, X(left), 0.7 * S, { size: 18, color: c.subheader, va: "top" });
 
     const note = breakAfterFirstSentence(
       "Derived from Baseball Savant images and data. Duration imputed as swing " +
@@ -310,9 +310,10 @@
     note.forEach((s, i) => text(s, X(left), noteBottom - (note.length - 1 - i) * lineH, { size: 10, color: c.chrome, va: "bottom" }));
 
     if (mark) {
-      const wFrac = 0.18;
+      const wFrac = 0.25;
       const w = wFrac * figW * S, h = w * (mark.height / mark.width);
-      ctx.drawImage(mark, X(right) - w, figH * S - 0.24 * S - h, w, h);
+      //ctx.drawImage(mark, X(right) - w, figH * S - 0.24 * S - h, w, h);
+      ctx.drawImage(mark, X(right) - w, 0.5 * S, w, h);
     }
 
     return { canvas: cv, peak, trough, warnings };
