@@ -235,7 +235,7 @@
       line(p, t, v, sx, sy, c.velocity);
       marker(sx(t[n - 1]), sy(v[n - 1]), c.velocity);
       // Sit the label just above the point, but never push it past the ceiling.
-      text(`${fmt1(v[n - 1])} mph at Impact`,
+      text(`${fmt1(v[n - 1])} mph at Contact`,
         sx(t[n - 1] - 0.01 * span), sy(Math.min(v[n - 1] + 0.03 * speedYlim, 0.93 * speedYlim)),
         { size: 14, ha: "right", va: "bottom" });
       yLabel(p, "Bat speed (mph)", tickWidth);
