@@ -215,7 +215,7 @@
     const f = (x, n = 1) => x.toFixed(n);
     const signed = (x, n) => { const s = Math.abs(x).toFixed(n); return Number(s) === 0 ? s : (x < 0 ? "−" : "+") + s; };
     const stats = [
-      ["Bat speed at contact", `${f(p.impact_mph)} mph`, `Statcast: ${f(t.leaderboard_bat_speed_mph, 1)} (${signed(t.speed_check_mph, 1)})`, !t.speed_check_ok],
+      ["Bat speed at contact", `${f(p.impact_mph)} mph`, `Statcast: ${f(t.leaderboard_bat_speed_mph, 2)} (${signed(t.speed_check_mph, 2)})`, !t.speed_check_ok],
       ["Imputed swing duration", `~${f(p.duration_ms, 0)} ms`, `${f(t.swing_length_ft, 2)} ft / ${f(t.mean_bat_speed_mph)} mph mean`],
       ["Peak acceleration", `~${f(d.acceleration[peak])} g`, `at ${f(d.swing_time[peak], 0)} ms`],
     //  ["Mean / impact speed", f(t.shape_ratio, 3), "shape of the curve"],
