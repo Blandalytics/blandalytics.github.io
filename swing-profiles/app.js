@@ -192,7 +192,8 @@
         el.otherSide.textContent = `Other side (${other})`;
         el.otherSide.dataset.side = other;
       }
-      status(p.warning ? p.warning : `${p.display_name || p.mlbam_id}, ${p.year} (${p.handedness}HB)`, p.warning ? "warn" : "");
+      status(p.warning ? p.warning : ``, p.warning ? "warn" : "");
+      // status(p.warning ? p.warning : `${p.display_name || p.mlbam_id}, ${p.year} (${p.handedness}HB)`, p.warning ? "warn" : "");
     } catch (e) {
       status(e.message || String(e), "err");
       if (!(e instanceof Swing.SavantError)) console.error(e);
