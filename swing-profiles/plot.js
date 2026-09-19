@@ -94,7 +94,7 @@
   // Plot bat speed and its derivative on a shared x-axis. `profile` is what
   // Swing.getSwingProfile returns. Returns the canvas (200 dpi, ready to save).
   async function plotSwingKinematics(profile, {
-    theme = "pitcherlist", showJerk = false, showWordmark = false, canvas = null,
+    theme = "pitcherlist", showJerk = false, showWordmark = true, canvas = null,
     speedYlim = SPEED_YLIM, accelYlim = ACCEL_YLIM_G, jerkYlim = JERK_YLIM,
   } = {}) {
     if (!(theme in THEMES)) throw new Error(`theme must be one of ${Object.keys(THEMES).sort()}`);

@@ -9,7 +9,7 @@
   const $ = (id) => document.getElementById(id);
   const el = {
     form: $("form"), season: $("season"), player: $("player"), hand: $("hand"), go: $("go"),
-    players: $("players"), jerk: $("jerk"), wordmark: $("wordmark"), status: $("status"),
+    players: $("players"), jerk: $("jerk"), status: $("status"),
     out: $("out"), fig: $("fig"), stats: $("stats"), notes: $("notes"),
     dlPng: $("dl_png"), dlCsv: $("dl_csv"), otherSide: $("other_side"),
     savantLink: $("savant_link"), cardLink: $("card_link"), cardImg: $("card_img"),
@@ -107,7 +107,7 @@
     if (!profile) return;
     const p = profile;
     const { peak, trough, warnings } = await SwingPlot.plotSwingKinematics(p, {
-      canvas: el.fig, showJerk: el.jerk.checked, showWordmark: el.wordmark.checked,
+      canvas: el.fig, showJerk: el.jerk.checked,
     });
     el.out.hidden = false;
 
@@ -168,7 +168,6 @@
   });
   el.season.addEventListener("change", () => loadLeaderboard(Number(el.season.value)));
   el.jerk.addEventListener("change", render);
-  el.wordmark.addEventListener("change", render);
   el.otherSide.addEventListener("click", () => {
     if (profile) run(String(profile.mlbam_id), profile.year, el.otherSide.dataset.side);
   });
