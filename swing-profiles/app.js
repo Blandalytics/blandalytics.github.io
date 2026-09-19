@@ -5,17 +5,20 @@
   "use strict";
 
   const FIRST_SEASON = 2024;  // bat tracking begins in 2024
+  const DEFAULT_PLAYER = "Junior Caminero";  // shown on arrival, latest season, his main side
+  const MAX_SUGGESTIONS = 10;
 
   const $ = (id) => document.getElementById(id);
   const el = {
     form: $("form"), season: $("season"), player: $("player"), hand: $("hand"), go: $("go"),
-    players: $("players"), jerk: $("jerk"), status: $("status"),
+    suggest: $("suggest"), jerk: $("jerk"), status: $("status"),
     out: $("out"), fig: $("fig"), stats: $("stats"), notes: $("notes"),
     dlPng: $("dl_png"), dlCsv: $("dl_csv"), otherSide: $("other_side"),
     savantLink: $("savant_link"), cardLink: $("card_link"), cardImg: $("card_img"),
   };
 
   let leaderboard = null;   // rows for the selected season
+  let hitters = [];         // one entry per player, for the suggestion list
   let profile = null;       // the profile on screen
   let cardObjectUrl = null;
   let running = false;
@@ -43,30 +46,119 @@
       status(`could not load the ${year} bat-tracking leaderboard: ${e.message}`, "err");
       return false;
     }
-    // One datalist entry per player; a switch hitter is listed once, both sides
-    // reachable through the Bats control.
-    const names = new Map();
-    for (const r of leaderboard) if (!names.has(r.id)) names.set(r.id, Swing.displayName(r.name));
-    el.players.replaceChildren(...[...names.values()].sort((a, b) => a.localeCompare(b)).map((n) => {
-      const o = document.createElement("option"); o.value = n; return o;
-    }));
+    // One entry per player; a switch hitter is listed once, both sides reachable
+    // through the Bats control (or the "Other side" button once one is drawn).
+    const byId = new Map();
+    for (const r of leaderboard) {
+      const h = byId.get(r.id) || { id: r.id, name: Swing.displayName(r.name), keys: Swing.nameKeys(r.name), sides: [], sideSwings: {}, swings: 0 };
+      h.sides.push(r.bat_side);
+      h.sideSwings[r.bat_side] = r.swings_competitive || 0;
+      h.swings += r.swings_competitive || 0;
+      byId.set(r.id, h);
+    }
+    hitters = [...byId.values()].map((h) => {
+      const k = h.name.lastIndexOf(" ");
+      const sides = ["L", "R"].filter((x) => h.sides.includes(x));
+      const main = sides.reduce((a, b) => (h.sideSwings[b] > h.sideSwings[a] ? b : a));
+      return { ...h, sides, main, full: Swing.normalize(h.name), last: Swing.normalize(k < 0 ? h.name : h.name.slice(k + 1)) };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+    hideSuggestions();
+    setSides(exactHitter(), el.hand.value);  // same hitter in a new season keeps the side
     if (!leaderboard.length) {
       status(`no bat-tracking data for ${year} yet`, "warn");
       return false;
     }
-    status(`${names.size} hitters, ${leaderboard.length} player-sides · ${year}`);
+    status(`${hitters.length} hitters, ${leaderboard.length} player-sides · ${year}`);
     el.go.disabled = false;
     return true;
   }
 
-  // ---- running the pipeline ----------------------------------------------
+  // ---- the Bats control ------------------------------------------------------
 
-  // Bats on "Auto": the side with more competitive swings for that player.
-  function pickSide(ref) {
-    const rows = leaderboard.filter((r) => r.id === ref.mlbam_id);
-    if (!rows.length) return ref.bat_side || "R";
-    return rows.reduce((best, r) => (r.swings_competitive > best.swings_competitive ? r : best)).bat_side;
+  const hitterById = (id) => hitters.find((h) => h.id === Number(id)) || null;
+  const exactHitter = () => { const q = Swing.normalize(el.player.value); return q ? hitters.find((h) => h.full === q) || null : null; };
+
+  // Offer only the sides this hitter has on the season's leaderboard -- the only
+  // ones a card can exist for. Until a hitter is known, both. `preferred` wins
+  // when the hitter has it; otherwise the side they swing from most.
+  let narrowedId = null;
+  function setSides(h, preferred) {
+    const sides = h ? h.sides : ["L", "R"];
+    narrowedId = h ? h.id : null;
+    el.hand.replaceChildren(...sides.map((x) => new Option(x === "L" ? "Left" : "Right", x)));
+    el.hand.value = sides.includes(preferred) ? preferred : (h ? h.main : sides[0]);
+    return el.hand.value;
   }
+
+  // While typing or picking, a newly identified hitter starts on their main side
+  // and the same hitter keeps the current choice. A link or a run passes its
+  // side explicitly instead.
+  const preferredFor = (h) => (!h || h.id === narrowedId ? el.hand.value : null);
+
+  // ---- player suggestions --------------------------------------------------
+
+  // At most MAX_SUGGESTIONS hitters for what has been typed: a prefix of the full
+  // name first, then of the surname, then any substring, matched with the same
+  // accent- and punctuation-folding the resolver uses. Nothing typed yet lists
+  // the regulars -- the most competitive swings, who are sure to have a card.
+  function suggestions(query) {
+    const q = Swing.normalize(query);
+    if (!q) return hitters.slice().sort((a, b) => b.swings - a.swings || a.name.localeCompare(b.name)).slice(0, MAX_SUGGESTIONS);
+    const scored = [];
+    for (const h of hitters) {
+      let score;
+      if (h.full.startsWith(q)) score = 0;
+      else if (h.last.startsWith(q)) score = 1;
+      else if (h.full.includes(q) || String(h.id).startsWith(q)) score = 2;
+      else if ([...h.keys].some((k) => k.includes(q))) score = 3;
+      else continue;
+      scored.push([score, h]);
+    }
+    scored.sort((a, b) => a[0] - b[0] || b[1].swings - a[1].swings);
+    return scored.slice(0, MAX_SUGGESTIONS).map((x) => x[1]);
+  }
+
+  let active = -1;
+  let shown = [];
+
+  function showSuggestions() {
+    shown = hitters.length ? suggestions(el.player.value) : [];
+    active = -1;
+    el.suggest.replaceChildren(...shown.map((h, i) => {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.dataset.index = String(i);
+      const name = document.createElement("span"); name.textContent = h.name;
+      const side = document.createElement("small");
+      side.textContent = h.sides.length > 1 ? "switch" : `bats ${h.sides[0]}`;
+      li.append(name, side);
+      return li;
+    }));
+    el.suggest.hidden = !shown.length;
+    el.player.setAttribute("aria-expanded", shown.length ? "true" : "false");
+  }
+
+  function hideSuggestions() {
+    el.suggest.hidden = true;
+    el.player.setAttribute("aria-expanded", "false");
+    shown = [];
+    active = -1;
+  }
+
+  function setActive(i) {
+    active = i;
+    [...el.suggest.children].forEach((li, k) => li.classList.toggle("active", k === i));
+    if (i >= 0) el.suggest.children[i].scrollIntoView({ block: "nearest" });
+  }
+
+  // A pick is unambiguous, so it runs by id rather than back through the name match.
+  function pick(h) {
+    hideSuggestions();
+    el.player.value = h.name;
+    run(String(h.id), Number(el.season.value), setSides(h, preferredFor(h)));
+  }
+
+  // ---- running the pipeline ----------------------------------------------
 
   async function run(player, year, hand) {
     if (running) return;
@@ -77,8 +169,14 @@
         el.season.value = String(year);
         if (!(await loadLeaderboard(year))) return;
       }
-      const ref = Swing.resolvePlayer(player, year, hand || null, leaderboard);
-      const side = hand || pickSide(ref);
+      let ref;
+      try {
+        ref = Swing.resolvePlayer(player, year, hand || null, leaderboard);
+      } catch (e) {
+        if (!hand || !(e instanceof Swing.SavantError) || e instanceof Swing.AmbiguousPlayerError) throw e;
+        ref = Swing.resolvePlayer(player, year, null, leaderboard);
+      }
+      const side = setSides(hitterById(ref.mlbam_id), hand);
       status(`fetching the ${year} card for ${ref.name ? Swing.displayName(ref.name) : ref.mlbam_id} (${side})…`);
       const p = await Swing.getSwingProfile(ref.mlbam_id, year, side, { leaderboard });
       profile = p;
@@ -86,6 +184,7 @@
       const key = `${p.mlbam_id}-${p.year}-${p.handedness}`;
       history.replaceState(null, "", `#${key}`);
       el.player.value = p.display_name || String(p.mlbam_id);
+      setSides(hitterById(p.mlbam_id), p.handedness);
       const sides = leaderboard.filter((r) => r.id === p.mlbam_id).map((r) => r.bat_side);
       const other = sides.find((s) => s !== p.handedness);
       el.otherSide.hidden = !other;
@@ -162,11 +261,37 @@
 
   el.form.addEventListener("submit", (e) => {
     e.preventDefault();
+    hideSuggestions();
     const player = el.player.value.trim();
     if (!player) { status("type a player's name or MLBAM id", "warn"); return; }
     run(player, Number(el.season.value), el.hand.value);
   });
   el.season.addEventListener("change", () => loadLeaderboard(Number(el.season.value)));
+  el.player.addEventListener("input", () => { showSuggestions(); const h = exactHitter(); setSides(h, preferredFor(h)); });
+  el.player.addEventListener("focus", showSuggestions);
+  el.player.addEventListener("blur", () => setTimeout(hideSuggestions, 150));
+  el.player.addEventListener("keydown", (e) => {
+    if (el.suggest.hidden) {
+      if (e.key === "ArrowDown") { e.preventDefault(); showSuggestions(); if (shown.length) setActive(0); }
+      return;
+    }
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive((active + 1) % shown.length); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive((active - 1 + shown.length) % shown.length); }
+    else if (e.key === "Enter" && active >= 0) { e.preventDefault(); pick(shown[active]); }
+    else if (e.key === "Escape") { hideSuggestions(); }
+  });
+  // pointerdown rather than click, and prevented, so the input keeps focus and
+  // its blur does not close the list before the pick registers.
+  el.suggest.addEventListener("pointerdown", (e) => {
+    const li = e.target.closest("li");
+    if (!li) return;
+    e.preventDefault();
+    pick(shown[Number(li.dataset.index)]);
+  });
+  el.suggest.addEventListener("pointermove", (e) => {
+    const li = e.target.closest("li");
+    if (li) setActive(Number(li.dataset.index));
+  });
   el.jerk.addEventListener("change", render);
   el.otherSide.addEventListener("click", () => {
     if (profile) run(String(profile.mlbam_id), profile.year, el.otherSide.dataset.side);
@@ -200,8 +325,13 @@
       el.season.value = String(h.year);
       el.hand.value = h.hand;
       await run(h.id, h.year, h.hand);
-    } else {
-      await loadLeaderboard(Number(el.season.value));
+      return;
     }
+    // No link: the latest season with bat tracking, and the default hitter in it.
+    for (const o of el.season.options) {
+      el.season.value = o.value;
+      if (await loadLeaderboard(Number(o.value))) break;
+    }
+    if (leaderboard && leaderboard.length) await run(DEFAULT_PLAYER, Number(el.season.value), "");
   })();
 })();
