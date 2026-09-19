@@ -57,6 +57,35 @@ from tools.scorecard.scorecard import scorecard
 html = scorecard(824638)
 ```
 
+## Swing Profiles
+
+[blandalytics.com/swing-profiles/](https://blandalytics.com/swing-profiles/) — bat speed,
+acceleration and jerk through an MLB hitter's swing. Pick a season, a player and a bat side;
+the page fetches the player's Baseball Savant swing-path card, digitizes the bat-speed chart
+out of its pixels, imputes the swing's real duration from the bat-tracking leaderboard
+(swing length / mean bat speed), and differentiates. The figure downloads as a PNG, the
+curve as a CSV, and a profile is linkable as `swing-profiles/#<mlbam id>-<season>-<L|R>`.
+
+It is [Blandalytics/swing_profiles](https://github.com/Blandalytics/swing_profiles) ported
+to JavaScript, module for module, so it runs in the browser with nothing to install: both
+Savant endpoints allow cross-origin requests, and the browser decodes the card natively.
+The port was checked against the Python on six player-seasons — the digitized curves are
+bit-identical, and durations and derivatives agree to floating-point noise.
+
+| file | role |
+|---|---|
+| `swing-profiles/swing.js` | the pipeline: leaderboard fetch and name resolution (`savant_lookup`), card digitizer (`swing_path_extract`), duration (`swing_duration`), Savitzky–Golay derivatives (`swing_profile`) |
+| `swing-profiles/plot.js` | the figure, on a canvas at 200 dpi with the same geometry and theme as `swing_plot.py` |
+| `swing-profiles/index.html`, `app.js` | the page: season, player and bat-side controls, the stats strip, downloads |
+
+### Updating
+
+Nothing is stored: every profile is fetched and computed on request. If Savant changes the
+card template, the pixel anchors at the top of `swing.js` (`WIN_*`, `X_START`, `X_IMPACT`,
+`Y_ZERO`, `PX_PER_MPH`) need rechecking, exactly as in the Python. After any change to the
+JavaScript, bump the `?v=` query on the three script tags in `index.html` so browsers fetch
+the new files.
+
 ## NHL Draft Tool
 
 [blandalytics.com/nhl-draft/](https://blandalytics.com/nhl-draft/) — a draft tool for a 12-team
