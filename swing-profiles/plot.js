@@ -298,7 +298,7 @@
     // header block sits a fixed distance from the top in inches, so it does not
     // drift when a third panel makes the figure taller.
     if (profile.display_name) {
-      text(profile.display_name, X(left), 0.35 * S, { size: 24, weight: 700, color: c.header, va: "top" });
+      text(profile.display_name, X(left), 0.3 * S, { size: 24, weight: 700, color: c.header, va: "top" });
     }
     text(`${profile.year} Swing Kinematics, as ${profile.handedness}HB`, X(left), 0.65 * S, { size: 12, color: c.subheader, va: "top" });
 
