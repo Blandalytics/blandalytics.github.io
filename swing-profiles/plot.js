@@ -306,8 +306,7 @@
       "Derived from Baseball Savant images and data. Duration imputed as swing " +
       `length / mean bat speed ≈ ${fmt0(swingDuration * 1000)} ms.`);
     const lineH = pt(7.5) * 1.6;
-    // const lineH = pt(7.5) * 1.6 * 1.3;
-    const noteBottom = figH * S - 0.28 * S;
+    const noteBottom = figH * S - 0.3 * S;
     note.forEach((s, i) => text(s, X(left), noteBottom - (note.length - 1 - i) * lineH, { size: 7.5, color: c.chrome, va: "bottom" }));
 
     if (mark) {
