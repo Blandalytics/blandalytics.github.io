@@ -300,12 +300,13 @@
     if (profile.display_name) {
       text(profile.display_name, X(left), 0.35 * S, { size: 18, weight: 700, color: c.header, va: "top" });
     }
-    text(`${profile.year} Swing Kinematics, ${profile.handedness}HB`, X(left), 0.65 * S, { size: 10, color: c.subheader, va: "top" });
+    text(`${profile.year} Swing Kinematics, as ${profile.handedness}HB`, X(left), 0.65 * S, { size: 10, color: c.subheader, va: "top" });
 
     const note = breakAfterFirstSentence(
       "Derived from Baseball Savant images and data. Duration imputed as swing " +
-      `length / mean bat speed = ${fmt0(swingDuration * 1000)} ms.`);
-    const lineH = pt(7.5) * 1.6 * 1.3;
+      `length / mean bat speed ≈ ${fmt0(swingDuration * 1000)} ms.`);
+    const lineH = pt(7.5) * 1.6;
+    // const lineH = pt(7.5) * 1.6 * 1.3;
     const noteBottom = figH * S - 0.28 * S;
     note.forEach((s, i) => text(s, X(left), noteBottom - (note.length - 1 - i) * lineH, { size: 7.5, color: c.chrome, va: "bottom" }));
 
