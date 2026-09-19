@@ -298,7 +298,7 @@
     // header block sits a fixed distance from the top in inches, so it does not
     // drift when a third panel makes the figure taller.
     if (profile.display_name) {
-      text(profile.display_name, X(left), 0.25 * S, { size: 30, weight: 700, color: c.header, va: "top" });
+      text(profile.display_name, X(left), 0.25 * S, { size: 24, weight: 700, color: c.header, va: "top" });
     }
     text(`${profile.year} Swing Kinematics, as ${profile.handedness}HB`, X(left), 0.7 * S, { size: 18, color: c.subheader, va: "top" });
 
@@ -313,7 +313,7 @@
       const wFrac = 0.25;
       const w = wFrac * figW * S, h = w * (mark.height / mark.width);
       //ctx.drawImage(mark, X(right) - w, figH * S - 0.24 * S - h, w, h);
-      ctx.drawImage(mark, X(right) - w, 0.5 * S, w, h);
+      ctx.drawImage(mark, X(right) - w, 0.4 * S, w, h);
     }
 
     return { canvas: cv, peak, trough, warnings };
