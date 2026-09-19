@@ -300,7 +300,7 @@
     if (profile.display_name) {
       text(profile.display_name, X(left), 0.25 * S, { size: 22, weight: 700, color: c.header, va: "top" });
     }
-    text(`${profile.year} Swing Kinematics, as ${profile.handedness}HB`, X(left), 0.6 * S, { size: 14, color: c.subheader, va: "top" });
+    text(`${profile.year} Swing Kinematics, as ${profile.handedness}HB`, X(left), 0.7 * S, { size: 14, color: c.subheader, va: "top" });
 
     const note = breakAfterFirstSentence(
       "Derived from Baseball Savant images and data. Duration imputed as swing " +
