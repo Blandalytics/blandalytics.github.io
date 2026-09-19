@@ -235,7 +235,7 @@
       line(p, t, v, sx, sy, c.velocity);
       marker(sx(t[n - 1]), sy(v[n - 1]), c.velocity);
       // Sit the label just above the point, but never push it past the ceiling.
-      text(`${fmt1(v[n - 1])} mph at impact`,
+      text(`${fmt1(v[n - 1])} mph at Impact`,
         sx(t[n - 1] - 0.01 * span), sy(Math.min(v[n - 1] + 0.03 * speedYlim, 0.93 * speedYlim)),
         { size: 10, ha: "right", va: "bottom" });
       yLabel(p, "Bat speed (mph)", tickWidth);
@@ -256,7 +256,7 @@
       line(p, t.slice(lo, hi), a.slice(lo, hi), sx, sy, c.accel);
       marker(sx(t[peak]), sy(a[peak]), c.accel);
       const [ha, xa] = labelSide(t[peak]);
-      text(`peak ${fmt0(a[peak])} g at ${fmt0(t[peak])} ms`,
+      text(`Peak: ${fmt0(a[peak])} g at ${fmt0(t[peak])} ms`,
         sx(xa), sy(Math.min(a[peak] + 0.02 * accelYlim, 0.93 * accelYlim)),
         { size: 10, ha, va: "bottom" });
       yLabel(p, "Acceleration (g)", tickWidth);
