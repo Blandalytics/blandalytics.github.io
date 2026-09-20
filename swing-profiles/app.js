@@ -151,10 +151,24 @@
     if (i >= 0) el.suggest.children[i].scrollIntoView({ block: "nearest" });
   }
 
+  // Once a profile is drawn the field holds its name. Clicking or tabbing into the
+  // field then clears it, so the list opens on everyone and the first keystroke
+  // starts a new search; the drawn profile stays. A click while mid-search (to move
+  // the caret) leaves the text alone, and leaving the field empty puts the name back.
+  let committed = false;
+  function setPlayer(name) {
+    el.player.value = name;
+    committed = true;
+  }
+  function startSearch() {
+    if (committed) { el.player.value = ""; committed = false; }
+    showSuggestions();
+  }
+
   // A pick is unambiguous, so it runs by id rather than back through the name match.
   function pick(h) {
     hideSuggestions();
-    el.player.value = h.name;
+    setPlayer(h.name);
     run(String(h.id), Number(el.season.value), setSides(h, preferredFor(h)));
   }
 
@@ -183,7 +197,7 @@
       await render();
       const key = `${p.mlbam_id}-${p.year}-${p.handedness}`;
       history.replaceState(null, "", `#${key}`);
-      el.player.value = p.display_name || String(p.mlbam_id);
+      setPlayer(p.display_name || String(p.mlbam_id));
       setSides(hitterById(p.mlbam_id), p.handedness);
       const sides = leaderboard.filter((r) => r.id === p.mlbam_id).map((r) => r.bat_side);
       const other = sides.find((s) => s !== p.handedness);
@@ -268,9 +282,13 @@
     run(player, Number(el.season.value), el.hand.value);
   });
   el.season.addEventListener("change", () => loadLeaderboard(Number(el.season.value)));
-  el.player.addEventListener("input", () => { showSuggestions(); const h = exactHitter(); setSides(h, preferredFor(h)); });
-  el.player.addEventListener("focus", showSuggestions);
-  el.player.addEventListener("blur", () => setTimeout(hideSuggestions, 150));
+  el.player.addEventListener("input", () => { committed = false; showSuggestions(); const h = exactHitter(); setSides(h, preferredFor(h)); });
+  el.player.addEventListener("focus", startSearch);
+  el.player.addEventListener("click", startSearch);  // the field keeps focus after a pick
+  el.player.addEventListener("blur", () => setTimeout(() => {
+    hideSuggestions();
+    if (!el.player.value.trim() && profile) setPlayer(profile.display_name || String(profile.mlbam_id));
+  }, 150));
   el.player.addEventListener("keydown", (e) => {
     if (el.suggest.hidden) {
       if (e.key === "ArrowDown") { e.preventDefault(); showSuggestions(); if (shown.length) setActive(0); }
