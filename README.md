@@ -140,6 +140,40 @@ from tools.pitcher_card.card import pitcher_card
 html = pitcher_card(822845, 543243)
 ```
 
+## Swing Profiles
+
+[blandalytics.com/swing-profiles/](https://blandalytics.com/swing-profiles/) — Bat Speed,
+Acceleration, and Jerk through an MLB hitter's swing. Pick a season and a player; the page
+fetches the player's Baseball Savant swing-path card, digitizes the Bat Speed chart out of its
+pixels, imputes the swing's real duration from the bat-tracking leaderboard (swing length /
+mean bat speed), and differentiates. The player list shows ten names and scrolls through
+everyone on that season's leaderboard, regulars first; *Bats* offers only the sides the hitter
+actually has there, so a switch hitter gets two and everyone else one. Junior Caminero's latest
+season loads on arrival. The figure downloads as a PNG with the Pitcher List Stats wordmark,
+the curve as a CSV, and a profile is linkable as `swing-profiles/#<mlbam id>-<season>-<L|R>`.
+
+It is [Blandalytics/swing_profiles](https://github.com/Blandalytics/swing_profiles) ported
+to JavaScript, module for module, so it runs in the browser with nothing to install: both
+Savant endpoints allow cross-origin requests, and the browser decodes the card natively.
+The port was checked against the Python on a set of player-seasons — the digitized curves
+are bit-identical, and durations and derivatives agree to floating-point noise.
+
+| file | role |
+|---|---|
+| `swing-profiles/swing.js` | the pipeline: leaderboard fetch and name resolution (`savant_lookup`), card digitizer (`swing_path_extract`), duration (`swing_duration`), Savitzky–Golay derivatives (`swing_profile`) |
+| `swing-profiles/plot.js` | the figure, on a canvas at 200 dpi with the same geometry and theme as `swing_plot.py` |
+| `swing-profiles/index.html`, `app.js` | the page: season, player and bat-side controls, the stats strip, downloads |
+
+### Updating
+
+Nothing is stored: every profile is fetched and computed on request. If Savant changes the
+card template, the pixel anchors at the top of `swing.js` (`WIN_*`, `X_START`, `X_IMPACT`,
+`Y_ZERO`, `PX_PER_MPH`, `AXIS_*`) need rechecking, exactly as in the Python. The chart's
+vertical position is measured per card from its y-axis line, because a player name that
+wraps onto two lines pushes the whole Bat Speed panel down a line. After any change to the
+JavaScript, bump the `?v=` query on the three script tags in `index.html` so browsers fetch
+the new files.
+
 ## NHL Draft Tool
 
 [blandalytics.com/nhl-draft/](https://blandalytics.com/nhl-draft/) — a draft tool for a 12-team
