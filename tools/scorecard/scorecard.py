@@ -88,20 +88,33 @@ def scorecard(game_pk, path=None, session=None):
     return html
 
 
-def scorecards_for_date(date, session=None, game_type="R,P"):
-    """Every completed game on a date, scraped once: yields (game_pk, html, data).
+def scorecards_for_date(date, session=None, game_type="R,P", skip=None, only=None):
+    """Every completed game on a date, scraped once.
 
-    Regular season and postseason by default. Games with no tracked pitches
-    (rare, but they happen) are skipped rather than rendered empty.
+    Yields (game_pk, html, data, error). A game listed in `skip` yields with
+    html None and no error, without fetching its feed, so a rebuild only pays
+    for what is new. A game that fails to build yields with the exception in
+    `error` and the day carries on; nothing here raises for a single game.
+    `only` restricts the day to those game keys. Regular season and
+    postseason by default.
     """
     s = session or statfast._session()
     df_all = statfast.mlb_day(date, game_type=game_type, session=s)
     for pk in sorted(int(x) for x in df_all.game_pk.unique()):
+        if only is not None and str(pk) not in only:
+            continue
+        if skip is not None and str(pk) in skip:
+            yield pk, None, None, None
+            continue
         df = df_all[df_all.game_pk == pk].copy()
         if df.empty:
             continue
-        html, data = render_game(pk, fetch_feed(pk, s), df)
-        yield pk, html, data
+        try:
+            html, data = render_game(pk, fetch_feed(pk, s), df)
+        except Exception as exc:                     # one bad game must not end the day
+            yield pk, None, None, exc
+            continue
+        yield pk, html, data, None
 
 
 def main(argv=None):

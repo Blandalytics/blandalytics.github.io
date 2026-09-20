@@ -4,7 +4,8 @@ import json
 import sys
 from html import escape
 
-# the scorecard dict the helpers below read; render_html() sets it per game
+# the scorecard dict the helpers below read; render_html() sets it per game,
+# along with the innings the grid needs: nine, or however many the game ran
 d = None
 INN = list(range(1, 10))
 
@@ -333,6 +334,11 @@ def batting_table(side):
             % (head_inn, head_agg, runrow, len(AGG), "".join(rows), foot))
 
 
+def velo(v):
+    """A pitcher listed in the box with no tracked pitches has no velocity."""
+    return "%.1f" % v if v is not None else "—"
+
+
 def pitching_table(side):
     rows = []
     for p in d[side]["pitchers"]:
@@ -346,11 +352,11 @@ def pitching_table(side):
             '<td class="st">%d</td><td class="st">%d</td><td class="st">%d</td>'
             '<td class="st">%d</td><td class="st">%d</td>'
             '<td class="st">%d<span class="sub-n">/%d</span></td>'
-            '<td class="st">%.1f</td><td class="st">%.1f</td>'
+            '<td class="st">%s</td><td class="st">%s</td>'
             '<td class="mix">%s</td></tr>'
             % (escape(p["name"]), note, p["ip"], p["h"], p["r"], p["er"], p["bb"],
                p["k"], p["hr"], p["bf"], p["strikes"], p["pitches"],
-               p["avg_velo"], p["max_velo"], mix))
+               velo(p["avg_velo"]), velo(p["max_velo"]), mix))
     return ('<div class="scroll"><table class="pitch">'
             '<thead><tr><th class="who">Pitcher</th>'
             '<th class="st">IP</th><th class="st">H</th><th class="st">R</th>'
@@ -835,8 +841,12 @@ var INNINGS = %s;
 
 def render_html(data):
     """Build the standalone scorecard page for one game, as a string."""
-    global d
+    global d, INN
     d = data
+    # the grid runs as long as the game did: extra innings get their own columns
+    played = max([i["num"] for i in d["linescore"]["innings"]] +
+                 [p["inning"] for p in d["pas"]] + [9])
+    INN = list(range(1, played + 1))
     PITCHES = {p["abi"]: p["seq"] for p in d["pas"] if p.get("seq")}
     PANEL_HEX = {"1B": OUTCOME_COLOUR["single"], "2B": OUTCOME_COLOUR["double"],
                  "3B": OUTCOME_COLOUR["triple"], "HR": OUTCOME_COLOUR["home_run"],

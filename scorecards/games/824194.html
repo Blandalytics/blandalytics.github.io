@@ -1,0 +1,488 @@
+<title>Astros 2, Rangers 0</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
+    <style>
+:root{
+  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
+  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684;
+  --rule:#242c37; --rule-soft:#1e252f;
+  --away:#5e7eaa; --home:#637f9f;
+  --band-away:#003278; --band-home:#002d62;
+  --hard:#ec9094;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px; margin:0 auto; padding:36px 20px 0; display:flex; flex-direction:column; gap:34px}
+.scroll{overflow-x:auto; -webkit-overflow-scrolling:touch}
+
+/* ---------- masthead ---------- */
+.mast{display:flex; flex-direction:column; gap:18px}
+.eyebrow{
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:11px;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--muted);
+  display:flex; flex-wrap:wrap; gap:6px 14px;
+}
+.eyebrow span{white-space:nowrap}
+.score{display:flex; flex-wrap:wrap; align-items:baseline; gap:10px 18px}
+.score h1{
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-weight:600;
+  font-size:clamp(30px,5.2vw,48px); line-height:1.02; margin:0;
+  letter-spacing:-.005em; text-wrap:balance;
+}
+.score h1 .at{color:var(--faint); font-weight:500; padding:0 .12em}
+.score h1 em{font-style:normal; font-variant-numeric:tabular-nums}
+.score h1 .away{color:var(--away)}
+.score h1 .home{color:var(--home)}
+.blurb{max-width:62ch; color:var(--muted); margin:0; font-size:15px}
+
+table{border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums}
+.cnt,.bbq,.ev,.rbi,.rbi-s,.note,.pl-row,.chip{font-variant-numeric:tabular-nums}
+.line{font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:13px; min-width:560px}
+.line th,.line td{border-bottom:1px solid var(--rule-soft); padding:7px 0; text-align:center; font-weight:500}
+.line thead th{color:var(--faint); font-size:11px; letter-spacing:.08em; font-weight:500}
+.line tbody th{
+  text-align:left; font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-weight:500; font-size:15px;
+  padding-right:20px; white-space:nowrap;
+}
+.line tbody tr.team--away th{color:var(--away)}
+.line tbody tr.team--home th{color:var(--home)}
+.line td{color:var(--faint); width:38px}
+.line td.got{color:var(--ink); font-weight:600}
+.line .tt{color:var(--ink); font-weight:600; border-left:1px solid var(--rule-soft)}
+.line tbody tr:last-child th,.line tbody tr:last-child td{border-bottom:none}
+
+/* ---------- team blocks ---------- */
+.team{display:flex; flex-direction:column; gap:0}
+.team--away{--band:var(--band-away)}
+.team--home{--band:var(--band-home)}
+.band{
+  display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between;
+  gap:10px 20px; padding:12px 16px;
+  background:var(--band); color:#fff; border-radius:7px 7px 0 0;
+}
+.band-id{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap}
+.club{font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-weight:600; font-size:23px; letter-spacing:.01em}
+.band .meta{
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:11px; letter-spacing:.1em;
+  text-transform:uppercase; opacity:.82;
+}
+.band-line{display:flex; align-items:baseline; gap:16px; font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:11px; letter-spacing:.1em}
+.ls b{font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:20px; letter-spacing:0; margin-right:3px}
+.verdict{
+  text-transform:uppercase; border:1px solid rgba(255,255,255,.55);
+  border-radius:3px; padding:2px 7px; font-size:10px;
+}
+
+/* ---------- batting grid ---------- */
+.grid,.pitch,.pitch-title{background:var(--surface)}
+.grid{min-width:1050px}
+.grid thead th{
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-weight:500; font-size:11px;
+  letter-spacing:.1em; color:var(--muted); text-transform:uppercase;
+  padding:9px 6px; border-bottom:1px solid var(--rule);
+}
+.grid thead th.in{color:var(--ink); font-size:13px; letter-spacing:0}
+.grid thead th.wide{text-transform:none; letter-spacing:.04em}
+.grid th.slot{
+  width:30px; text-align:center; font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:14px; color:var(--faint); font-weight:500;
+}
+.grid th.who{width:190px; text-align:left; padding-left:14px}
+.grid tbody th.who{border-right:1px solid var(--rule)}
+.nm{display:block; font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-weight:500; font-size:15px; letter-spacing:.005em; white-space:nowrap}
+.pos{
+  display:block; font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:10px;
+  letter-spacing:.1em; color:var(--faint); text-transform:uppercase;
+}
+.grid tbody tr{border-bottom:1px solid var(--rule-soft)}
+.grid tbody tr.sub th.slot{font-size:15px}
+.grid tbody th{font-weight:400; padding:0 6px}
+.grid td.st,.grid th.st{
+  width:38px; text-align:center; font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:13px; color:var(--muted);
+}
+.grid td.st.wide,.grid th.st.wide{width:54px}
+.grid tbody td.st{border-left:1px solid var(--rule-soft); color:var(--ink)}
+.grid tbody td.st:first-of-type{border-left:1px solid var(--rule)}
+.grid td.pa{padding:0; border-left:1px solid var(--rule-soft); vertical-align:top}
+
+/* runs by inning, directly under the inning numbers */
+.grid tr.runs th.who{
+  text-align:right; padding:0 12px 0 6px; font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--muted); border-right:1px solid var(--rule);
+}
+.grid tr.runs td{
+  text-align:center; font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:13px;
+  padding:5px 0; border-bottom:1px solid var(--rule);
+  border-left:1px solid var(--rule-soft); color:var(--faint);
+}
+.grid tr.runs td.got{color:var(--ink); font-weight:600; font-size:15px}
+.grid td.blank{border-bottom:1px solid var(--rule)}
+
+.box{
+  position:relative; width:84px; height:74px; margin:0 auto; overflow:visible;
+  display:flex; align-items:center; justify-content:center;
+}
+/* innings the batter did not come up */
+.box.empty{background:rgba(102,102,102,.1)}
+/* square viewBox filling the cell, so the diamond centre is the cell centre
+   and the notation lands dead centre of the basepaths */
+.dia{position:absolute; inset:0; width:100%; height:100%; overflow:visible}
+.dia-leg{stroke-width:5; stroke-linecap:round}
+/* bases taken after the plate appearance itself */
+.dia-leg.adv{stroke-opacity:.25}
+.dia-s .dia-leg{stroke-width:8}
+.note{
+  position:relative; z-index:2; font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-weight:600; font-size:12.5px; letter-spacing:-.01em; white-space:nowrap;
+  line-height:1; text-align:center;
+}
+.flip{display:inline-block; transform:scaleX(-1); font-style:normal}
+/* the pitch clock, not a pitch, ended this plate appearance */
+.note.rot{display:inline-block; transform:rotate(90deg)}
+.dp{display:block; font-style:normal; font-size:9px; letter-spacing:.1em;
+    text-align:center; margin-top:1px}
+.pre{display:block; font-style:normal}
+.bbq,.ev,.rbi,.cnt{position:absolute; z-index:2}
+.bbq,.ev,.rbi{font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:9.5px; line-height:1}
+.ev{right:6px; bottom:5px; color:var(--muted)}
+.ev.hard{color:var(--hard); font-weight:600}
+.rbi{left:5px; top:4px; color:var(--ink); font-weight:600; letter-spacing:.02em}
+/* batted ball class, brightest for the best contact */
+.bbq{right:5px; top:4px; font-size:9px; letter-spacing:.04em; font-weight:500}
+.bbq.t1{color:var(--ink); font-weight:600}
+.bbq.t2{color:var(--muted)}
+.bbq.t3{color:var(--faint)}
+/* the deciding pitch's count: balls stacked left, strikes right, bottom up */
+.cnt{left:5px; bottom:5px; display:flex; gap:3px; align-items:flex-end}
+.cnt .col{display:flex; flex-direction:column-reverse; gap:2px}
+.cnt i{display:block; width:5px; height:5px}
+.cnt .b i{background:#60c27f}
+.cnt .s i{background:#ce6664}
+/* half-inning boundaries: a bracket over a quarter of the cell's width and height */
+.mark-start,.mark-end{position:absolute; width:25%; height:25%; z-index:3; pointer-events:none}
+.mark-start{left:0; top:0; border-top:2px solid #666; border-left:2px solid #666}
+.mark-end{right:0; bottom:0; border-bottom:2px solid #666; border-right:2px solid #666}
+
+/* two trips to the plate in one inning: a diagonal divide, first PA upper left */
+.box.split{display:block}
+.divider{position:absolute; inset:0; width:100%; height:100%; z-index:1}
+.divider line{stroke:var(--muted); stroke-width:1; vector-effect:non-scaling-stroke}
+.half{position:absolute; inset:0; z-index:2}
+.half.h1{clip-path:polygon(0 0, 100% 0, 0 100%)}
+.half.h2{clip-path:polygon(100% 0, 100% 100%, 0 100%)}
+.half:hover{background:rgba(255,255,255,.07)}
+.half:focus-visible{outline:2px solid var(--ink); outline-offset:-3px}
+.mini{
+  position:absolute; width:36px; height:30px; transform:translate(-50%,-50%);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+}
+.rbi-s{
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:9px; line-height:1.1;
+  color:var(--ink); font-weight:600; letter-spacing:.02em; white-space:nowrap;
+}
+.half.h1 .mini{left:33.3%; top:33.3%}
+.half.h2 .mini{left:66.7%; top:66.7%}
+.dia-s{position:absolute; inset:0; width:100%; height:100%; overflow:visible}
+.mini .note{font-size:10.5px}
+.more{
+  position:absolute; left:3px; bottom:3px; z-index:3;
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:9px; color:var(--faint);
+}
+
+.box[tabindex]{cursor:default}
+.box[tabindex]:hover{box-shadow:inset 0 0 0 1px var(--muted)}
+.box[tabindex]:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
+
+.grid tfoot .tot th{
+  text-align:right; padding:8px 14px 8px 6px; font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  border-top:1px solid var(--rule); border-right:1px solid var(--rule);
+}
+.grid tfoot td{
+  border-top:1px solid var(--rule); text-align:center;
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:13px; padding:8px 0;
+}
+.grid tfoot td.st{color:var(--ink); font-weight:600; border-left:1px solid var(--rule-soft)}
+
+/* ---------- pitching ---------- */
+.pitch-title{
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:10.5px; font-weight:500;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
+  margin:0; padding:16px 14px 0; border-top:1px solid var(--rule);
+}
+.pitch{min-width:940px; border-radius:0 0 7px 7px}
+.pitch thead th{
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-weight:500; font-size:11px;
+  letter-spacing:.08em; color:var(--muted); text-transform:uppercase;
+  padding:8px 4px; border-bottom:1px solid var(--rule); text-align:center;
+}
+.pitch th.who{text-align:left; padding-left:14px; width:200px}
+.pitch tbody tr{border-bottom:1px solid var(--rule-soft)}
+.pitch tbody tr:last-child{border-bottom:none}
+.pitch tbody th{font-weight:400; padding:9px 6px 9px 14px; text-align:left}
+.pitch td.st{
+  width:44px; text-align:center; font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:13px; color:var(--ink);
+}
+.sub-n{color:var(--faint)}
+.dec{
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:9.5px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); border:1px solid var(--rule);
+  border-radius:3px; padding:1px 4px; margin-left:7px; white-space:nowrap;
+}
+td.mix,th.mix{padding:6px 14px 6px 10px; text-align:left !important; white-space:nowrap}
+.chip{
+  display:inline-flex; align-items:baseline; gap:4px; margin-right:5px;
+  border:1px solid var(--rule); border-radius:3px; padding:2px 6px;
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:10.5px; color:var(--muted);
+}
+.chip b{color:var(--ink); font-weight:600; letter-spacing:.04em}
+.chip i{font-style:normal; color:var(--faint)}
+
+/* ---------- readout + legend ---------- */
+/* pitch-by-pitch panel, fixed so the table's scroll container cannot clip it */
+.pitchlist{
+  position:fixed; z-index:50; display:none;
+  min-width:252px; max-width:340px;
+  background:var(--raise); border:1px solid var(--rule); border-radius:6px;
+  box-shadow:var(--shadow); padding:8px 0 7px;
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:11px;
+}
+.pl-head{
+  padding:0 12px 7px; margin-bottom:5px; border-bottom:1px solid var(--rule);
+  color:var(--muted); font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+}
+.pl-head.desc{
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:12px;
+  letter-spacing:0; text-transform:none; color:var(--ink); line-height:1.35;
+}
+.pl-row{
+  display:grid; grid-template-columns:12px 74px 40px 1fr; gap:8px;
+  padding:2.5px 12px; align-items:baseline;
+}
+.pl-n{color:var(--faint); text-align:right}
+/* pitch numbers link to the pitch's video */
+a.pl-n{color:var(--muted); text-decoration:underline; text-underline-offset:2px;
+       text-decoration-color:var(--rule)}
+a.pl-n:hover{color:var(--ink); text-decoration-color:var(--ink)}
+a.pl-n:focus-visible{outline:2px solid var(--ink); outline-offset:1px; border-radius:2px}
+.pl-t{color:var(--ink)}
+.pl-v{color:var(--muted); text-align:right; font-variant-numeric:tabular-nums}
+.pl-r{font-size:10.5px; white-space:nowrap}
+/* the pitch that ended the plate appearance */
+.pl-r.last{font-weight:600}
+/* an automatic ball or strike: no number, no pitch to report */
+.pl-row.auto{grid-template-columns:12px 1fr}
+.pl-auto{font-size:10.5px; line-height:1.3}
+.pl-auto.last{font-weight:600}
+
+.il-row{
+  display:grid; grid-template-columns:1fr auto; gap:14px;
+  padding:2.5px 12px; align-items:baseline;
+}
+.il-name{color:var(--ink); font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:12px; white-space:nowrap}
+.il-note{font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-weight:600; font-size:11px}
+[data-inn]{cursor:default}
+.grid tr.runs td[data-inn]:hover,.line td[data-inn]:hover{background:var(--raise)}
+[data-inn]:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
+
+.readout{
+  position:sticky; bottom:0; z-index:6; margin-top:6px;
+  background:var(--surface); border-top:1px solid var(--rule);
+  box-shadow:var(--shadow); padding:11px 16px;
+  display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 16px; min-height:44px;
+}
+.d-play{font-size:14px; font-weight:500}
+.d-meta{font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:11.5px; color:var(--muted)}
+.legend{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:14px 34px; padding:0 0 40px; font-size:13.5px; color:var(--muted);
+}
+.legend b{color:var(--ink); font-weight:600}
+.legend p{margin:0; max-width:60ch; line-height:1.65}
+.legend code{
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:12px; font-weight:600;
+  color:var(--ink); background:var(--raise); border:1px solid var(--rule);
+  border-radius:3px; padding:0 4px;
+}
+.legend a{color:var(--ink); text-underline-offset:2px}
+.key{display:inline-flex; align-items:center; gap:5px; white-space:nowrap; margin-right:4px}
+.key .sw{width:11px; height:11px; display:inline-block}
+.key .bar{width:16px; height:3px; border-radius:2px; display:inline-block}
+.key b{font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:11.5px; color:var(--ink)}
+
+@media (max-width:640px){
+  .wrap{padding:24px 12px 0}
+  .band{border-radius:6px 6px 0 0}
+}
+@media print{.readout{display:none} .team{break-inside:avoid}}
+</style>
+    <main class="wrap">
+      <header class="mast">
+        <div class="eyebrow">
+          <span>May 15, 2026</span><span>Daikin Park</span><span>Game 824194</span>
+          <span>Roof Closed, 73&deg;F</span><span>Wind 0 mph, None</span><span>241 pitches tracked</span>
+        </div>
+        <div class="score">
+          <h1><span class="away">Rangers <em>0</em></span><span class="at">/</span><span class="home">Astros <em>2</em></span></h1>
+        </div>
+        <p class="blurb">Every plate appearance of a one-run Astros eighth, scored the long way. Each box draws only the bases that batter actually reached, coloured by what the outcome was worth, with the count on the deciding pitch and the exit velocity in the corners. Hover any box for the full play.</p>
+        <div class="scroll"><table class="line"><thead><tr><th></th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th class="tt">R</th><th class="tt">H</th><th class="tt">E</th></tr></thead><tbody><tr class="team--away"><th>Texas Rangers</th><td class="" tabindex="0" data-inn="away|1">0</td><td class="" tabindex="0" data-inn="away|2">0</td><td class="" tabindex="0" data-inn="away|3">0</td><td class="" tabindex="0" data-inn="away|4">0</td><td class="" tabindex="0" data-inn="away|5">0</td><td class="" tabindex="0" data-inn="away|6">0</td><td class="" tabindex="0" data-inn="away|7">0</td><td class="" tabindex="0" data-inn="away|8">0</td><td class="" tabindex="0" data-inn="away|9">0</td><td class="tt">0</td><td class="tt">1</td><td class="tt">0</td></tr><tr class="team--home"><th>Houston Astros</th><td class="" tabindex="0" data-inn="home|1">0</td><td class="" tabindex="0" data-inn="home|2">0</td><td class="got" tabindex="0" data-inn="home|3">1</td><td class="" tabindex="0" data-inn="home|4">0</td><td class="" tabindex="0" data-inn="home|5">0</td><td class="" tabindex="0" data-inn="home|6">0</td><td class="" tabindex="0" data-inn="home|7">0</td><td class="got" tabindex="0" data-inn="home|8">1</td><td class="" tabindex="0" data-inn="home|9">–</td><td class="tt">2</td><td class="tt">5</td><td class="tt">1</td></tr></tbody></table></div>
+      </header>
+
+      <section class="team team--away"><header class="band"><div class="band-id"><span class="club">Texas Rangers</span><span class="meta">Away · 21-23</span></div><div class="band-line"><span class="ls"><b>0</b>R</span><span class="ls"><b>1</b>H</span><span class="ls"><b>0</b>E</span><span class="verdict">Loss</span></div></header><div class="scroll"><table class="grid"><thead><tr><th class="slot"></th><th class="who">Batter</th><th class="in">1</th><th class="in">2</th><th class="in">3</th><th class="in">4</th><th class="in">5</th><th class="in">6</th><th class="in">7</th><th class="in">8</th><th class="in">9</th><th class="st">PA</th><th class="st">K</th><th class="st">BB</th><th class="st">HR</th><th class="st">SB</th><th class="st wide">wOBA</th></tr><tr class="runs"><th class="slot"></th><th class="who">Runs</th><td class="rn" tabindex="0" data-inn="away|1">—</td><td class="rn" tabindex="0" data-inn="away|2">—</td><td class="rn" tabindex="0" data-inn="away|3">—</td><td class="rn" tabindex="0" data-inn="away|4">—</td><td class="rn" tabindex="0" data-inn="away|5">—</td><td class="rn" tabindex="0" data-inn="away|6">—</td><td class="rn" tabindex="0" data-inn="away|7">—</td><td class="rn" tabindex="0" data-inn="away|8">—</td><td class="rn" tabindex="0" data-inn="away|9">—</td><td class="blank" colspan="6"></td></tr></thead><tbody><tr class="starter"><th class="slot">1</th><th class="who"><span class="nm">Joc Pederson</span><span class="pos">DH</span></th><td class="pa"><div class="box" tabindex="0" data-abi="0" data-desc="Joc Pederson called out on strikes." data-meta="2-2 count on the last pitch · 7 pitches · ended on CU at 77.2 mph"><span class="note" style="color:#ffffff"><i class="flip">K</i></span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="17" data-desc="Joc Pederson strikes out swinging." data-meta="2-2 count on the last pitch · 6 pitches · ended on FF at 92.6 mph"><span class="note" style="color:#ffffff">K</span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="38" data-desc="Joc Pederson walks." data-meta="3-1 count on the last pitch · 5 pitches · ended on FF at 93.3 mph"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#93cde6"/></svg><span class="note" style="color:#93cde6">BB</span><span class="cnt"><span class="col b"><i></i><i></i><i></i></span><span class="col s"><i></i></span></span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="st">3</td><td class="st">2</td><td class="st">1</td><td class="st">0</td><td class="st">0</td><td class="st wide">.233</td></tr><tr class="sub"><th class="slot">&#8627;</th><th class="who"><span class="nm">Andrew McCutchen</span><span class="pos">PH/DH</span></th><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="54" data-desc="Andrew McCutchen flies out to right fielder Cam Smith." data-meta="0-1 count on the last pitch · 2 pitches · ended on FF at 91.6 mph · 95.0 mph off the bat, 48° launch, 293 ft · poorly under"><span class="note" style="color:#ffffff">F9</span><span class="bbq t3">UND</span><span class="cnt"><span class="col b"></span><span class="col s"><i></i></span></span><span class="ev hard">95</span></div></td><td class="pa"><div class="box empty"></div></td><td class="st">1</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st wide">.000</td></tr><tr class="starter"><th class="slot">2</th><th class="who"><span class="nm">Ezequiel Duran</span><span class="pos">SS</span></th><td class="pa"><div class="box" tabindex="0" data-abi="1" data-desc="Ezequiel Duran strikes out swinging." data-meta="0-2 count on the last pitch · 3 pitches · ended on ST at 80.7 mph"><span class="note" style="color:#ffffff">K</span><span class="cnt"><span class="col b"></span><span class="col s"><i></i><i></i></span></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="22" data-desc="Ezequiel Duran strikes out swinging." data-meta="1-2 count on the last pitch · 4 pitches · ended on FF at 92.2 mph"><span class="note" style="color:#ffffff">K</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="39" data-desc="Ezequiel Duran flies out to left fielder Zach Dezenzo." data-meta="0-0 count on the last pitch · 1 pitches · ended on CU at 74.7 mph · 93.7 mph off the bat, 50° launch, 269 ft · poorly under"><span class="note" style="color:#ffffff">F7</span><span class="bbq t3">UND</span><span class="cnt"><span class="col b"></span><span class="col s"></span></span><span class="ev">94</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="55" data-desc="Catcher Christian Vázquez picks off Justin Foscue at 1st on throw to first baseman Christian Walker." data-meta="1-0 count on the last pitch · 2 pitches · ended on FF at 90.7 mph"><span class="note" style="color:#ffffff">2-3</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"></span></span><span class="mark-end"></span></div></td><td class="pa"><div class="box" tabindex="0" data-abi="62" data-desc="Ezequiel Duran called out on strikes." data-meta="1-2 count on the last pitch · 4 pitches · ended on FF at 93.5 mph"><span class="note" style="color:#ffffff"><i class="flip">K</i></span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span><span class="mark-start"></span></div></td><td class="st">4</td><td class="st">3</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st wide">.000</td></tr><tr class="starter"><th class="slot">3</th><th class="who"><span class="nm">Brandon Nimmo</span><span class="pos">RF</span></th><td class="pa"><div class="box" tabindex="0" data-abi="2" data-desc="Brandon Nimmo walks." data-meta="3-2 count on the last pitch · 7 pitches · ended on CU at 77.5 mph"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#93cde6"/></svg><span class="note" style="color:#93cde6">BB</span><span class="cnt"><span class="col b"><i></i><i></i><i></i></span><span class="col s"><i></i><i></i></span></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="23" data-desc="Brandon Nimmo grounds out to first baseman Christian Walker." data-meta="0-0 count on the last pitch · 1 pitches · ended on FF at 92.7 mph · 85.1 mph off the bat, 1° launch, 52 ft · poorly topped"><span class="note" style="color:#ffffff">3U</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"></span><span class="col s"></span></span><span class="ev">85</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="40" data-desc="Brandon Nimmo grounds into a double play, first baseman Christian Walker to shortstop Braden Shewmake. Joc Pederson out at 2nd. Brandon Nimmo out at 1st." data-meta="1-0 count on the last pitch · 2 pitches · ended on CU at 74.8 mph · 77.8 mph off the bat, 6° launch, 78 ft · poorly topped"><span class="note" style="color:#ffffff">3-3-6<i class="dp">DP</i></span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"></span></span><span class="ev">78</span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="63" data-desc="Brandon Nimmo grounds out, shortstop Nick Allen to first baseman Christian Walker." data-meta="2-2 count on the last pitch · 5 pitches · ended on FF at 93.7 mph · 97.1 mph off the bat, -32° launch, 5 ft · poorly topped"><span class="note" style="color:#ffffff">6-3</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev hard">97</span></div></td><td class="st">4</td><td class="st">0</td><td class="st">1</td><td class="st">0</td><td class="st">0</td><td class="st wide">.175</td></tr><tr class="starter"><th class="slot">4</th><th class="who"><span class="nm">Josh Jung</span><span class="pos">3B</span></th><td class="pa"><div class="box" tabindex="0" data-abi="3" data-desc="Josh Jung grounds into a force out, third baseman Isaac Paredes to second baseman Brice Matthews. Brandon Nimmo out at 2nd." data-meta="1-1 count on the last pitch · 3 pitches · ended on CU at 79.4 mph · 70.6 mph off the bat, -3° launch, 30 ft · poorly topped"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#ffffff"/></svg><span class="note" style="color:#ffffff">5-4</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i></span></span><span class="ev">71</span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="24" data-desc="Josh Jung flies out to left fielder Zach Dezenzo." data-meta="1-2 count on the last pitch · 4 pitches · ended on CU at 78.8 mph · 78.6 mph off the bat, 41° launch, 275 ft · poorly under"><span class="note" style="color:#ffffff">F7</span><span class="bbq t3">UND</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev">79</span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="45" data-desc="Josh Jung grounds out, shortstop Braden Shewmake to first baseman Christian Walker." data-meta="0-1 count on the last pitch · 2 pitches · ended on FF at 91.7 mph · 88.3 mph off the bat, -5° launch, 24 ft · poorly topped"><span class="note" style="color:#ffffff">6-3</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"></span><span class="col s"><i></i></span></span><span class="ev">88</span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="64" data-desc="Josh Jung grounds out, third baseman Braden Shewmake to first baseman Christian Walker." data-meta="1-2 count on the last pitch · 4 pitches · ended on ST at 83.0 mph · 88.5 mph off the bat, -3° launch, 29 ft · poorly topped"><span class="note" style="color:#ffffff">5-3</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev">88</span><span class="mark-end"></span></div></td><td class="st">4</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st wide">.000</td></tr><tr class="starter"><th class="slot">5</th><th class="who"><span class="nm">Evan Carter</span><span class="pos">CF</span></th><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="9" data-desc="Evan Carter flies out to center fielder Zach Cole." data-meta="3-2 count on the last pitch · 6 pitches · ended on FF at 94.0 mph · 94.2 mph off the bat, 32° launch, 344 ft · poorly under"><span class="note" style="color:#ffffff">F8</span><span class="bbq t3">UND</span><span class="cnt"><span class="col b"><i></i><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev">94</span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="29" data-desc="Evan Carter flies out sharply to center fielder Zach Cole." data-meta="0-0 count on the last pitch · 1 pitches · ended on FF at 92.8 mph · 103.0 mph off the bat, 34° launch, 389 ft · barrel"><span class="note" style="color:#ffffff">F8</span><span class="bbq t1">BRL</span><span class="cnt"><span class="col b"></span><span class="col s"></span></span><span class="ev hard">103</span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="46" data-desc="Evan Carter flies out to right fielder Cam Smith." data-meta="2-2 count on the last pitch · 5 pitches · ended on CU at 76.5 mph · 84.0 mph off the bat, 30° launch, 312 ft · poorly under"><span class="note" style="color:#ffffff">F9</span><span class="bbq t3">UND</span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev">84</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="st">3</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st wide">.000</td></tr><tr class="starter"><th class="slot">6</th><th class="who"><span class="nm">Jake Burger</span><span class="pos">1B</span></th><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="10" data-desc="Jake Burger strikes out swinging." data-meta="1-2 count on the last pitch · 4 pitches · ended on CU at 78.6 mph"><span class="note" style="color:#ffffff">K</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="30" data-desc="Jake Burger walks." data-meta="3-1 count on the last pitch · 5 pitches · ended on ST at 80.1 mph"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#93cde6"/><line class="dia-leg adv" x1="82" y1="50" x2="50" y2="18" stroke="#93cde6"/><line class="dia-leg adv" x1="50" y1="18" x2="18" y2="50" stroke="#93cde6"/></svg><span class="note" style="color:#93cde6">BB</span><span class="cnt"><span class="col b"><i></i><i></i><i></i></span><span class="col s"><i></i></span></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="47" data-desc="Rangers challenged (play at 1st), call on the field was upheld: Jake Burger grounds out, second baseman Brice Matthews to first baseman Christian Walker." data-meta="1-2 count on the last pitch · 6 pitches · ended on FF at 93.9 mph · 91.4 mph off the bat, -7° launch, 20 ft · poorly topped"><span class="note" style="color:#ffffff">4-3</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev">91</span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="st">3</td><td class="st">1</td><td class="st">1</td><td class="st">0</td><td class="st">1</td><td class="st wide">.233</td></tr><tr class="starter"><th class="slot">7</th><th class="who"><span class="nm">Alejandro Osuna</span><span class="pos">LF</span></th><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="11" data-desc="Alejandro Osuna grounds out, second baseman Brice Matthews to first baseman Christian Walker." data-meta="1-1 count on the last pitch · 3 pitches · ended on FF at 93.5 mph · 69.5 mph off the bat, -11° launch, 13 ft · poorly topped"><span class="note" style="color:#ffffff">4-3</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i></span></span><span class="ev">70</span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="31" data-desc="Alejandro Osuna lines out sharply to left fielder Zach Dezenzo." data-meta="1-1 count on the last pitch · 3 pitches · ended on FF at 91.8 mph · 101.0 mph off the bat, 18° launch, 328 ft · solid contact"><span class="note" style="color:#ffffff">L7</span><span class="bbq t1">SLD</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i></span></span><span class="ev hard">101</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="51" data-desc="Alejandro Osuna walks." data-meta="3-1 count on the last pitch · 5 pitches · ended on FF at 91.9 mph"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#93cde6"/><line class="dia-leg adv" x1="82" y1="50" x2="50" y2="18" stroke="#93cde6"/></svg><span class="note" style="color:#93cde6">BB</span><span class="cnt"><span class="col b"><i></i><i></i><i></i></span><span class="col s"><i></i></span></span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="st">3</td><td class="st">0</td><td class="st">1</td><td class="st">0</td><td class="st">0</td><td class="st wide">.233</td></tr><tr class="starter"><th class="slot">8</th><th class="who"><span class="nm">Kyle Higashioka</span><span class="pos">C</span></th><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="15" data-desc="Kyle Higashioka flies out to center fielder Zach Cole." data-meta="2-2 count on the last pitch · 5 pitches · ended on FF at 93.8 mph · 96.2 mph off the bat, 25° launch, 350 ft · solid contact"><span class="note" style="color:#ffffff">F8</span><span class="bbq t1">SLD</span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev hard">96</span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="32" data-desc="Kyle Higashioka reaches on a fielding error by third baseman Isaac Paredes. Jake Burger to 3rd." data-meta="2-1 count on the last pitch · 4 pitches · ended on ST at 80.3 mph · 93.7 mph off the bat, -8° launch, 15 ft · poorly topped"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#ffffff"/></svg><span class="note" style="color:#ffffff">E</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i></span></span><span class="ev">94</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="52" data-desc="Kyle Higashioka flies out to left fielder Zach Dezenzo." data-meta="0-1 count on the last pitch · 2 pitches · ended on CU at 74.5 mph · 94.5 mph off the bat, 42° launch, 322 ft · poorly under"><span class="note" style="color:#ffffff">F7</span><span class="bbq t3">UND</span><span class="cnt"><span class="col b"></span><span class="col s"><i></i></span></span><span class="ev">94</span></div></td><td class="pa"><div class="box empty"></div></td><td class="st">3</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st wide">.000</td></tr><tr class="starter"><th class="slot">9</th><th class="who"><span class="nm">Justin Foscue</span><span class="pos">2B</span></th><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="16" data-desc="Justin Foscue grounds out, shortstop Braden Shewmake to first baseman Christian Walker." data-meta="3-2 count on the last pitch · 6 pitches · ended on FF at 94.4 mph · 102.4 mph off the bat, 2° launch, 76 ft · burner"><span class="note" style="color:#ffffff">6-3</span><span class="bbq t2">BRN</span><span class="cnt"><span class="col b"><i></i><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev hard">102</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="33" data-desc="Justin Foscue grounds out, third baseman Isaac Paredes to first baseman Christian Walker." data-meta="0-0 count on the last pitch · 1 pitches · ended on ST at 75.9 mph · 80.6 mph off the bat, -13° launch, 14 ft · poorly topped"><span class="note" style="color:#ffffff">5-3</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"></span><span class="col s"></span></span><span class="ev">81</span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="53" data-desc="Justin Foscue singles on a line drive to left fielder Zach Dezenzo. Alejandro Osuna to 2nd." data-meta="0-0 count on the last pitch · 1 pitches · ended on ST at 79.2 mph · 80.1 mph off the bat, 14° launch, 161 ft · burner"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#2d99c8"/></svg><span class="note" style="color:#2d99c8">1B</span><span class="bbq t2">BRN</span><span class="cnt"><span class="col b"></span><span class="col s"></span></span><span class="ev">80</span></div></td><td class="pa"><div class="box empty"></div></td><td class="st">3</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st wide">.300</td></tr></tbody><tfoot><tr class="tot"><th colspan="2">Team</th><td class="blank" colspan="9"></td><td class="st">31</td><td class="st">6</td><td class="st">4</td><td class="st">0</td><td class="st">1</td><td class="st wide">.119</td></tr></tfoot></table></div><h3 class="pitch-title">Rangers pitching</h3><div class="scroll"><table class="pitch"><thead><tr><th class="who">Pitcher</th><th class="st">IP</th><th class="st">H</th><th class="st">R</th><th class="st">ER</th><th class="st">BB</th><th class="st">K</th><th class="st">HR</th><th class="st">BF</th><th class="st">Str<span class="sub-n">/P</span></th><th class="st">Avg</th><th class="st">Max</th><th class="mix">Pitch mix (share, avg mph)</th></tr></thead><tbody><tr><th class="who"><span class="nm">Jack Leiter</span> <span class="dec">L, 1-4</span></th><td class="st">7.0</td><td class="st">3</td><td class="st">1</td><td class="st">1</td><td class="st">3</td><td class="st">6</td><td class="st">1</td><td class="st">27</td><td class="st">59<span class="sub-n">/98</span></td><td class="st">92.4</td><td class="st">97.9</td><td class="mix"><span class="chip"><b>FF</b>29%<i>96.5</i></span><span class="chip"><b>SI</b>19%<i>95.8</i></span><span class="chip"><b>FC</b>15%<i>93.4</i></span><span class="chip"><b>SL</b>14%<i>87.3</i></span></td></tr><tr><th class="who"><span class="nm">Cole Winn</span></th><td class="st">1.0</td><td class="st">2</td><td class="st">1</td><td class="st">1</td><td class="st">0</td><td class="st">3</td><td class="st">0</td><td class="st">6</td><td class="st">16<span class="sub-n">/24</span></td><td class="st">91.7</td><td class="st">96.9</td><td class="mix"><span class="chip"><b>FF</b>38%<i>96.3</i></span><span class="chip"><b>SL</b>33%<i>87.1</i></span><span class="chip"><b>FC</b>25%<i>91.8</i></span><span class="chip"><b>FS</b>4%<i>86.7</i></span></td></tr></tbody></table></div></section>
+      <section class="team team--home"><header class="band"><div class="band-id"><span class="club">Houston Astros</span><span class="meta">Home · 18-28</span></div><div class="band-line"><span class="ls"><b>2</b>R</span><span class="ls"><b>5</b>H</span><span class="ls"><b>1</b>E</span><span class="verdict">Win</span></div></header><div class="scroll"><table class="grid"><thead><tr><th class="slot"></th><th class="who">Batter</th><th class="in">1</th><th class="in">2</th><th class="in">3</th><th class="in">4</th><th class="in">5</th><th class="in">6</th><th class="in">7</th><th class="in">8</th><th class="in">9</th><th class="st">PA</th><th class="st">K</th><th class="st">BB</th><th class="st">HR</th><th class="st">SB</th><th class="st wide">wOBA</th></tr><tr class="runs"><th class="slot"></th><th class="who">Runs</th><td class="rn" tabindex="0" data-inn="home|1">—</td><td class="rn" tabindex="0" data-inn="home|2">—</td><td class="rn got" tabindex="0" data-inn="home|3">1</td><td class="rn" tabindex="0" data-inn="home|4">—</td><td class="rn" tabindex="0" data-inn="home|5">—</td><td class="rn" tabindex="0" data-inn="home|6">—</td><td class="rn" tabindex="0" data-inn="home|7">—</td><td class="rn got" tabindex="0" data-inn="home|8">1</td><td class="rn" tabindex="0" data-inn="home|9"></td><td class="blank" colspan="6"></td></tr></thead><tbody><tr class="starter"><th class="slot">1</th><th class="who"><span class="nm">Brice Matthews</span><span class="pos">2B</span></th><td class="pa"><div class="box" tabindex="0" data-abi="4" data-desc="Brice Matthews singles on a ground ball to second baseman Justin Foscue." data-meta="0-0 count on the last pitch · 1 pitches · ended on FF at 94.9 mph · 97.9 mph off the bat, -5° launch, 21 ft · poorly topped"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#2d99c8"/><line class="dia-leg adv" x1="82" y1="50" x2="50" y2="18" stroke="#2d99c8"/></svg><span class="note" style="color:#2d99c8">1B</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"></span><span class="col s"></span></span><span class="ev hard">98</span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="19" data-desc="Brice Matthews pops out softly to pitcher Jack Leiter." data-meta="1-1 count on the last pitch · 3 pitches · ended on SI at 96.0 mph · 40.6 mph off the bat, 71° launch, 49 ft · poorly weak"><span class="note" style="color:#ffffff">P1</span><span class="bbq t3">WEAK</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i></span></span><span class="ev">41</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="36" data-desc="Brice Matthews singles on a sharp line drive to center fielder Evan Carter." data-meta="3-2 count on the last pitch · 6 pitches · ended on FC at 94.6 mph · 101.9 mph off the bat, 10° launch, 195 ft · burner"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#2d99c8"/></svg><span class="note" style="color:#2d99c8">1B</span><span class="bbq t2">BRN</span><span class="cnt"><span class="col b"><i></i><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev hard">102</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="56" data-desc="Brice Matthews called out on strikes." data-meta="2-2 count on the last pitch · 5 pitches · ended on FF at 96.8 mph"><span class="note" style="color:#ffffff"><i class="flip">K</i></span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="st">4</td><td class="st">1</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st wide">.450</td></tr><tr class="starter"><th class="slot">2</th><th class="who"><span class="nm">Isaac Paredes</span><span class="pos">3B</span></th><td class="pa"><div class="box" tabindex="0" data-abi="5" data-desc="Isaac Paredes pops out to third baseman Josh Jung." data-meta="2-2 count on the last pitch · 5 pitches · ended on FF at 97.3 mph · 43.5 mph off the bat, 43° launch, 110 ft · poorly weak"><span class="note" style="color:#ffffff">P5</span><span class="bbq t3">WEAK</span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev">44</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="20" data-desc="Isaac Paredes homers (4) on a fly ball to left field." data-meta="3-2 count on the last pitch · 6 pitches · ended on FF at 97.4 mph · 99.1 mph off the bat, 29° launch, 355 ft · barrel"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#f04542"/><line class="dia-leg" x1="82" y1="50" x2="50" y2="18" stroke="#f04542"/><line class="dia-leg" x1="50" y1="18" x2="18" y2="50" stroke="#f04542"/><line class="dia-leg" x1="18" y1="50" x2="50" y2="82" stroke="#f04542"/></svg><span class="note" style="color:#f04542">HR</span><span class="bbq t1">BRL</span><span class="cnt"><span class="col b"><i></i><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev hard">99</span><span class="rbi">1 RBI</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="37" data-desc="Isaac Paredes lines out to right fielder Brandon Nimmo." data-meta="0-2 count on the last pitch · 3 pitches · ended on CH at 88.4 mph · 92.5 mph off the bat, 18° launch, 264 ft · burner"><span class="note" style="color:#ffffff">L9</span><span class="bbq t2">BRN</span><span class="cnt"><span class="col b"></span><span class="col s"><i></i><i></i></span></span><span class="ev">92</span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="57" data-desc="Isaac Paredes hit by pitch." data-meta="2-1 count on the last pitch · 4 pitches · ended on FC at 91.3 mph"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#93cde6"/></svg><span class="note" style="color:#93cde6">HBP</span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i></span></span></div></td><td class="pa"><div class="box empty"></div></td><td class="st">4</td><td class="st">0</td><td class="st">0</td><td class="st">1</td><td class="st">0</td><td class="st wide">.675</td></tr><tr class="sub"><th class="slot">&#8627;</th><th class="who"><span class="nm">Nick Allen</span><span class="pos">PR/SS</span></th><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st wide">.000</td></tr><tr class="starter"><th class="slot">3</th><th class="who"><span class="nm">Yordan Alvarez</span><span class="pos">DH</span></th><td class="pa"><div class="box" tabindex="0" data-abi="6" data-desc="Yordan Alvarez flies out to center fielder Evan Carter." data-meta="1-1 count on the last pitch · 3 pitches · ended on FC at 92.4 mph · 98.0 mph off the bat, 33° launch, 360 ft · solid contact"><span class="note" style="color:#ffffff">F8</span><span class="bbq t1">SLD</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i></span></span><span class="ev hard">98</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="21" data-desc="Yordan Alvarez lines out to left fielder Alejandro Osuna." data-meta="2-1 count on the last pitch · 4 pitches · ended on FC at 95.2 mph · 89.4 mph off the bat, 21° launch, 286 ft · poorly under"><span class="note" style="color:#ffffff">L7</span><span class="bbq t3">UND</span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i></span></span><span class="ev">89</span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="41" data-desc="Yordan Alvarez walks." data-meta="3-0 count on the last pitch · 4 pitches · ended on SI at 95.1 mph"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#93cde6"/></svg><span class="note" style="color:#93cde6">BB</span><span class="cnt"><span class="col b"><i></i><i></i><i></i></span><span class="col s"></span></span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="58" data-desc="Yordan Alvarez singles on a line drive to center fielder Evan Carter. Nick Allen to 2nd." data-meta="1-2 count on the last pitch · 4 pitches · ended on FF at 96.8 mph · 110.0 mph off the bat, 11° launch, 281 ft · solid contact"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#2d99c8"/><line class="dia-leg adv" x1="82" y1="50" x2="50" y2="18" stroke="#2d99c8"/></svg><span class="note" style="color:#2d99c8">1B</span><span class="bbq t1">SLD</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev hard">110</span></div></td><td class="pa"><div class="box empty"></div></td><td class="st">4</td><td class="st">0</td><td class="st">1</td><td class="st">0</td><td class="st">0</td><td class="st wide">.400</td></tr><tr class="starter"><th class="slot">4</th><th class="who"><span class="nm">Christian Walker</span><span class="pos">1B</span></th><td class="pa"><div class="box" tabindex="0" data-abi="7" data-desc="Christian Walker walks. Brice Matthews to 2nd." data-meta="3-0 count on the last pitch · 4 pitches · ended on FF at 96.6 mph"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#93cde6"/></svg><span class="note" style="color:#93cde6">BB</span><span class="cnt"><span class="col b"><i></i><i></i><i></i></span><span class="col s"></span></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="25" data-desc="Christian Walker called out on strikes." data-meta="2-2 count on the last pitch · 6 pitches · ended on CU at 84.3 mph"><span class="note" style="color:#ffffff"><i class="flip">K</i></span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="42" data-desc="Christian Walker flies out to right fielder Brandon Nimmo." data-meta="0-1 count on the last pitch · 2 pitches · ended on SI at 95.1 mph · 93.6 mph off the bat, 41° launch, 312 ft · poorly under"><span class="note" style="color:#ffffff">F9</span><span class="bbq t3">UND</span><span class="cnt"><span class="col b"></span><span class="col s"><i></i></span></span><span class="ev">94</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="59" data-desc="Christian Walker strikes out swinging. Nick Allen to 3rd. Wild pitch by pitcher Cole Winn." data-meta="0-2 count on the last pitch · 3 pitches · ended on SL at 87.1 mph"><span class="note" style="color:#ffffff">K</span><span class="cnt"><span class="col b"></span><span class="col s"><i></i><i></i></span></span></div></td><td class="pa"><div class="box empty"></div></td><td class="st">4</td><td class="st">2</td><td class="st">1</td><td class="st">0</td><td class="st">0</td><td class="st wide">.175</td></tr><tr class="starter"><th class="slot">5</th><th class="who"><span class="nm">Braden Shewmake</span><span class="pos">SS/3B</span></th><td class="pa"><div class="box" tabindex="0" data-abi="8" data-desc="Braden Shewmake grounds out, third baseman Josh Jung to first baseman Jake Burger." data-meta="1-1 count on the last pitch · 3 pitches · ended on FC at 94.4 mph · 84.4 mph off the bat, -8° launch, 19 ft · poorly topped"><span class="note" style="color:#ffffff">5-3</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i></span></span><span class="ev">84</span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="26" data-desc="Braden Shewmake lines out to first baseman Jake Burger." data-meta="1-2 count on the last pitch · 4 pitches · ended on FF at 97.1 mph · 97.0 mph off the bat, 11° launch, 161 ft · burner"><span class="note" style="color:#ffffff">L3</span><span class="bbq t2">BRN</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev hard">97</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="43" data-desc="Braden Shewmake grounds into a force out, second baseman Justin Foscue to shortstop Ezequiel Duran. Yordan Alvarez out at 2nd. Braden Shewmake to 1st." data-meta="0-1 count on the last pitch · 2 pitches · ended on SL at 86.3 mph · 96.1 mph off the bat, -19° launch, 4 ft · poorly topped"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#ffffff"/></svg><span class="note" style="color:#ffffff">4-6</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"></span><span class="col s"><i></i></span></span><span class="ev hard">96</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="60" data-desc="Braden Shewmake singles on a line drive to left fielder Alejandro Osuna. Nick Allen scores. Yordan Alvarez to 2nd." data-meta="1-1 count on the last pitch · 3 pitches · ended on FC at 91.9 mph · 95.9 mph off the bat, 13° launch, 214 ft · burner"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#2d99c8"/></svg><span class="note" style="color:#2d99c8">1B</span><span class="bbq t2">BRN</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i></span></span><span class="ev hard">96</span><span class="rbi">1 RBI</span></div></td><td class="pa"><div class="box empty"></div></td><td class="st">4</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st wide">.225</td></tr><tr class="starter"><th class="slot">6</th><th class="who"><span class="nm">Zach Dezenzo</span><span class="pos">LF</span></th><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="12" data-desc="Zach Dezenzo grounds out, shortstop Ezequiel Duran to first baseman Jake Burger." data-meta="1-0 count on the last pitch · 2 pitches · ended on FF at 95.8 mph · 85.5 mph off the bat, -7° launch, 22 ft · poorly topped"><span class="note" style="color:#ffffff">6-3</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"></span></span><span class="ev">86</span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="27" data-desc="Zach Dezenzo walks." data-meta="3-1 count on the last pitch · 5 pitches · ended on FC at 92.6 mph"><svg class="dia" viewBox="0 0 100 100" aria-hidden="true"><line class="dia-leg" x1="50" y1="82" x2="82" y2="50" stroke="#93cde6"/></svg><span class="note" style="color:#93cde6">BB</span><span class="cnt"><span class="col b"><i></i><i></i><i></i></span><span class="col s"><i></i></span></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="44" data-desc="Zach Dezenzo strikes out swinging." data-meta="2-2 count on the last pitch · 5 pitches · ended on SL at 87.9 mph"><span class="note" style="color:#ffffff">K</span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="61" data-desc="Zach Dezenzo strikes out swinging." data-meta="1-2 count on the last pitch · 5 pitches · ended on FF at 95.7 mph"><span class="note" style="color:#ffffff">K</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="st">4</td><td class="st">2</td><td class="st">1</td><td class="st">0</td><td class="st">0</td><td class="st wide">.175</td></tr><tr class="starter"><th class="slot">7</th><th class="who"><span class="nm">Zach Cole</span><span class="pos">CF</span></th><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="13" data-desc="Zach Cole called out on strikes." data-meta="1-2 count on the last pitch · 4 pitches · ended on FF at 97.9 mph"><span class="note" style="color:#ffffff"><i class="flip">K</i></span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="28" data-desc="Zach Cole flies out sharply to center fielder Evan Carter." data-meta="1-1 count on the last pitch · 3 pitches · ended on FF at 95.2 mph · 101.1 mph off the bat, 29° launch, 390 ft · barrel"><span class="note" style="color:#ffffff">F8</span><span class="bbq t1">BRL</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i></span></span><span class="ev hard">101</span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="48" data-desc="Zach Cole flies out sharply to center fielder Evan Carter." data-meta="1-2 count on the last pitch · 4 pitches · ended on SL at 87.2 mph · 101.8 mph off the bat, 24° launch, 363 ft · barrel"><span class="note" style="color:#ffffff">F8</span><span class="bbq t1">BRL</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span><span class="ev hard">102</span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="st">3</td><td class="st">1</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st wide">.000</td></tr><tr class="starter"><th class="slot">8</th><th class="who"><span class="nm">Cam Smith</span><span class="pos">RF</span></th><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="14" data-desc="Cam Smith flies out to right fielder Brandon Nimmo." data-meta="0-0 count on the last pitch · 1 pitches · ended on FC at 94.3 mph · 88.3 mph off the bat, 57° launch, 212 ft · poorly under"><span class="note" style="color:#ffffff">F9</span><span class="bbq t3">UND</span><span class="cnt"><span class="col b"></span><span class="col s"></span></span><span class="ev">88</span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="34" data-desc="Cam Smith strikes out swinging." data-meta="1-2 count on the last pitch · 4 pitches · ended on CH at 91.6 mph"><span class="note" style="color:#ffffff">K</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="49" data-desc="Cam Smith called out on strikes." data-meta="1-2 count on the last pitch · 5 pitches · ended on CH at 90.5 mph"><span class="note" style="color:#ffffff"><i class="flip">K</i></span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i><i></i></span></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="st">3</td><td class="st">2</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st wide">.000</td></tr><tr class="starter"><th class="slot">9</th><th class="who"><span class="nm">Christian Vázquez</span><span class="pos">C</span></th><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="18" data-desc="Christian Vázquez grounds out, third baseman Josh Jung to first baseman Jake Burger." data-meta="1-1 count on the last pitch · 3 pitches · ended on SI at 95.8 mph · 53.5 mph off the bat, -42° launch, 5 ft · poorly weak"><span class="note" style="color:#ffffff">5-3</span><span class="bbq t3">WEAK</span><span class="cnt"><span class="col b"><i></i></span><span class="col s"><i></i></span></span><span class="ev">54</span><span class="mark-start"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="35" data-desc="Christian Vázquez grounds out, shortstop Ezequiel Duran to first baseman Jake Burger." data-meta="0-0 count on the last pitch · 1 pitches · ended on FF at 97.5 mph · 94.5 mph off the bat, -13° launch, 9 ft · poorly topped"><span class="note" style="color:#ffffff">6-3</span><span class="bbq t3">TOP</span><span class="cnt"><span class="col b"></span><span class="col s"></span></span><span class="ev">94</span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box" tabindex="0" data-abi="50" data-desc="Christian Vázquez challenged (pitch result), call on the field was confirmed: Christian Vázquez called out on strikes." data-meta="2-2 count on the last pitch · 5 pitches · ended on SI at 96.3 mph"><span class="note" style="color:#ffffff"><i class="flip">K</i></span><span class="cnt"><span class="col b"><i></i><i></i></span><span class="col s"><i></i><i></i></span></span><span class="mark-end"></span></div></td><td class="pa"><div class="box empty"></div></td><td class="pa"><div class="box empty"></div></td><td class="st">3</td><td class="st">1</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st wide">.000</td></tr></tbody><tfoot><tr class="tot"><th colspan="2">Team</th><td class="blank" colspan="9"></td><td class="st">33</td><td class="st">9</td><td class="st">3</td><td class="st">1</td><td class="st">0</td><td class="st wide">.255</td></tr></tfoot></table></div><h3 class="pitch-title">Astros pitching</h3><div class="scroll"><table class="pitch"><thead><tr><th class="who">Pitcher</th><th class="st">IP</th><th class="st">H</th><th class="st">R</th><th class="st">ER</th><th class="st">BB</th><th class="st">K</th><th class="st">HR</th><th class="st">BF</th><th class="st">Str<span class="sub-n">/P</span></th><th class="st">Avg</th><th class="st">Max</th><th class="mix">Pitch mix (share, avg mph)</th></tr></thead><tbody><tr><th class="who"><span class="nm">Spencer Arrighetti</span> <span class="dec">W, 5-1</span></th><td class="st">7.1</td><td class="st">1</td><td class="st">0</td><td class="st">0</td><td class="st">4</td><td class="st">5</td><td class="st">0</td><td class="st">27</td><td class="st">62<span class="sub-n">/102</span></td><td class="st">85.7</td><td class="st">94.8</td><td class="mix"><span class="chip"><b>FF</b>43%<i>93.0</i></span><span class="chip"><b>CU</b>33%<i>77.2</i></span><span class="chip"><b>ST</b>12%<i>79.8</i></span><span class="chip"><b>CH</b>6%<i>85.5</i></span></td></tr><tr><th class="who"><span class="nm">Bryan King</span> <span class="dec">S, 4</span></th><td class="st">1.2</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st">0</td><td class="st">1</td><td class="st">0</td><td class="st">4</td><td class="st">11<span class="sub-n">/17</span></td><td class="st">91.0</td><td class="st">94.2</td><td class="mix"><span class="chip"><b>FF</b>82%<i>92.4</i></span><span class="chip"><b>ST</b>12%<i>80.9</i></span><span class="chip"><b>SI</b>6%<i>91.6</i></span></td></tr></tbody></table></div></section>
+
+      <div class="pitchlist" id="pitchlist" role="tooltip" aria-hidden="true"></div>
+
+      <div class="readout" id="readout">
+        <span class="d-play">Hover or tab through any box to read the play.</span>
+        <span class="d-meta">Counts, exit velocity and pitch types come from Statcast tracking.</span>
+      </div>
+
+      <div class="legend">
+        <p><b>Reading a box.</b> The basepaths are drawn only as far as the batter got, so a batter
+          who made an out draws none at all and a closed diamond is a run scored. The legs earned on the plate appearance itself are full strength; bases taken later are faded. Their colour
+          is the outcome: <span class="key"><span class="bar" style="background:#93cde6"></span><b>BB</b></span> <span class="key"><span class="bar" style="background:#2d99c8"></span><b>1B</b></span> <span class="key"><span class="bar" style="background:#54d29b"></span><b>2B</b></span> <span class="key"><span class="bar" style="background:#ffe066"></span><b>3B</b></span> <span class="key"><span class="bar" style="background:#f04542"></span><b>HR</b></span>, and white for an out.
+          Bottom left is the count facing the last pitch, one box per pitch of it:
+          <span class="key"><span class="sw" style="background:#60c27f"></span>balls</span>
+          <span class="key"><span class="sw" style="background:#ce6664"></span>strikes</span>,
+          filling upward. A bracket on the upper-left corner marks the plate appearance that opened
+          the half inning, and one on the bottom-right the plate appearance that closed it. Bottom right is exit velocity in mph, flagged at 95+.</p>
+
+        <p><b>Contact quality.</b> Top right of each box is how the ball was struck, from its exit
+          velocity and launch angle, using Tango&rsquo;s
+          <a href="https://tangotiger.com/index.php/site/comments/statcast-lab-barrels#37">barrel
+          classification</a>: <code>BRL</code> barrel, <code>SLD</code> solid contact,
+          <code>FLR</code> flare, <code>BRN</code> burner, <code>UND</code> poorly under,
+          <code>TOP</code> poorly topped, <code>WEAK</code> poorly weak, <code>UNC</code>
+          unclassified. Flares and burners are the same class in the original; burners are the flat
+          ones, at 20&deg; or less. Strikeouts and walks have no batted ball, so no label.</p>
+        <p><b>Notation.</b> <code>K</code> swinging, <code class="flip">K</code> called,
+          <code>6-3</code> shortstop to first, <code>F8</code> fly to center,
+          <code>L7</code> line out to left, <code>P6</code> pop to short,
+          <code>3U</code> unassisted at first, <code>FC</code> fielder&rsquo;s choice.
+          wOBA uses the same weights as the basepath colour, over plate appearances.</p>
+        <p><b>Source.</b> Pitch-level data pulled with
+          <a href="https://github.com/Blandalytics/statcast_scraper">Blandalytics/statcast_scraper</a>
+          (<code>mlb_day("2026-05-15")</code>, game_pk 824194) and joined to the MLB Stats API play-by-play.
+          All 241 tracked pitches reconcile with the official pitches-strikes line. Winning pitcher
+          Spencer Arrighetti; losing pitcher Jack Leiter.</p>
+      </div>
+    </main>
+    <script>
+var PITCH_NAME = {"FF":"Four-Seam","SI":"Sinker","FT":"Two-Seam","FC":"Cutter","SL":"Slider","ST":"Sweeper","SV":"Slurve","CU":"Curveball","KC":"Knuckle Cv","CS":"Slow Curve","CH":"Changeup","FS":"Splitter","FO":"Forkball","SC":"Screwball","KN":"Knuckler","EP":"Eephus","PO":"Pitchout"};
+var VIDEO = "https://baseballsavant.mlb.com/sporty-videos?playId=";
+var RESULT_NAME = {"Swinging Strike (Blocked)":"Swinging Strike",
+  "In play, out(s)":"In play, out", "In play, no out":"In play",
+  "In play, run(s)":"In play, run", "Ball In Dirt":"Ball in dirt"};
+var PA_COLOUR = {"1B":"#2d99c8","2B":"#54d29b","3B":"#ffe066","HR":"#f04542","Out":"#ffffff"};
+var PITCHES = {"4":[[1,"FF",94.9,"In play, no out","1392d89b-33c7-36f8-ac2c-3dbbfe693e67","1B",97.9,-5]],"5":[[1,"FF",95.9,"Called Strike","7d6c3a63-5f72-317e-b5ec-da35c4d77e7d"],[2,"SI",94.0,"Foul","f6fdf8c3-5bb5-3042-8148-b69029a3bddd"],[3,"SL",87.7,"Ball","e9e7f064-4493-3eef-bec9-ba93de061080"],[4,"SL",87.9,"Ball","a6ae1be8-2aef-3fe9-a553-797181cc7cf5"],[5,"FF",97.3,"In play, out(s)","0131c95e-67fa-35f8-96ca-0f836bc32d29","Out",43.5,43]],"6":[[1,"CU",79.9,"Swinging Strike (Blocked)","0e0b2206-d8a6-32f2-ac46-b8d3280cda48"],[2,"CH",88.3,"Ball","568d6def-716d-3193-adbf-e23e3de20bbc"],[3,"FC",92.4,"In play, out(s)","d8563dd9-f329-33a0-8429-9c106bcc9e1c","Out",98.0,33]],"7":[[1,"FF",96.9,"Ball","b7e2b8f9-4c04-3dd6-842f-f9b8259a9902"],[2,"SL",87.9,"Ball In Dirt","0f4ecb62-2e3a-3a5f-9044-ada901d6ece9"],[3,"CH",87.6,"Ball","a8f12f86-5ac5-3917-986e-efe5c4e2bca1"],[4,"FF",96.6,"Ball","bf74260d-9399-303c-8875-8e0dbfeeaabf"]],"8":[[1,"FF",94.8,"Ball","9043491a-8d0f-34d7-beb8-ceb04ab7c237"],[2,"FC",93.6,"Swinging Strike","7e55c630-00f8-3774-859a-ed1ecb7a05de"],[3,"FC",94.4,"In play, out(s)","3ad6301f-7196-32a8-9a97-893358199987","Out",84.4,-8]],"0":[[1,"CU",75.8,"Ball","0f4b0559-fffb-36e9-96e2-27bb50113394"],[2,"FF",93.9,"Called Strike","941c3be8-2377-3193-8a18-2f61c1268d3a"],[3,"CU",77.4,"Swinging Strike","14d4e192-3b6d-3ce7-bf41-5d5ddaf78344"],[4,"CU",78.7,"Foul","d8e1df50-e713-3521-9d68-a7d8ef6c56c9"],[5,"FF",94.0,"Ball","b8913892-30c0-317a-804f-4e655023ff81"],[6,"FF",94.7,"Foul","d40c6d6c-9761-39c6-afc2-6f58d41af379"],[7,"CU",77.2,"Called Strike","7bc8858e-c263-3889-81bc-c6ef92697f43"]],"1":[[1,"ST",80.1,"Called Strike","bd552cf3-3174-3662-9127-c0c71c09a8c2"],[2,"CU",78.6,"Swinging Strike","fc4ceaa0-5605-3034-a21a-a2e628428aec"],[3,"ST",80.7,"Swinging Strike","eeb3f6b4-d7e5-39ea-8640-f11fd8416c0b"]],"2":[[1,"FF",94.0,"Ball","93847770-ea6d-3d76-b24b-33821ea93123"],[2,"CU",77.5,"Called Strike","6296ede9-153a-3ff6-9975-0c1dea1a7c47"],[3,"CU",78.3,"Called Strike","f3e3dd46-759a-3dfa-acd8-17017376dfd7"],[4,"CU",78.7,"Ball","bb9a01de-e3c6-332c-9218-39ee56c365b6"],[5,"FF",94.8,"Foul","f2c838df-8aaa-3b82-957d-d3e0427e2359"],[6,"CU",78.3,"Ball","05e3684b-439c-3971-a7e1-8d33c8310e8c"],[7,"CU",77.5,"Ball In Dirt","7e721979-c4f0-39ac-a4de-f5e19b6095a4"]],"3":[[1,"SI",94.3,"Called Strike","d7f7509e-e6cf-3edf-b050-bb46bdacd4f1"],[2,"SI",92.5,"Ball","7d48a60a-3cf1-3144-ac42-55657009b04e"],[3,"CU",79.4,"In play, out(s)","bc5f7abb-09e9-3d56-b8b8-089a4004c1b7","Out",70.6,-3]],"12":[[1,"SI",95.6,"Ball","732a6bb8-64d3-3a5d-b078-8f8c2de7b71b"],[2,"FF",95.8,"In play, out(s)","1b99b296-e07e-3527-8374-166b730b467e","Out",85.5,-7]],"13":[[1,"CU",81.5,"Ball","01b1ae9d-3640-35d8-b7e9-49be8d03844c"],[2,"FF",96.3,"Swinging Strike","0d1a4ee0-201f-33a8-96dc-c54596a2c280"],[3,"CH",90.3,"Swinging Strike","377234b4-46f6-3852-97be-92f7a3851e73"],[4,"FF",97.9,"Called Strike","c2c3ce75-7430-3ce0-afa5-4c3176562766"]],"14":[[1,"FC",94.3,"In play, out(s)","bd47473c-78ed-390f-8653-76e036087aa7","Out",88.3,57]],"9":[[1,"FF",93.1,"Ball","38e669c5-7382-3f07-bc86-062daf7babf2"],[2,"FF",93.0,"Called Strike","60897c58-f2db-38e6-829d-c89b2ff3c0f3"],[3,"CH",84.6,"Ball","ac6bb804-4bc3-39b3-923f-8eddf95272ac"],[4,"FF",93.2,"Swinging Strike","b8ceb4aa-d664-343f-b92a-15d7af429788"],[5,"ST",79.0,"Ball","eb26b5c1-5add-3b30-883c-a4339f2fd41b"],[6,"FF",94.0,"In play, out(s)","2f00a6a3-e6fd-3964-9c60-077083beec2a","Out",94.2,32]],"10":[[1,"ST",80.6,"Swinging Strike","e9f7dd10-6286-331a-bcee-1424981504c5"],[2,"ST",80.5,"Called Strike","2a32d1f0-e1d4-3055-8aa3-44eb2dbf677d"],[3,"CU",79.3,"Ball","09e0c8a1-08fa-3a99-83c0-c36a9fca7b77"],[4,"CU",78.6,"Swinging Strike","76e06655-cff8-3f82-9738-324e862492fb"]],"11":[[1,"FF",92.8,"Ball","ec28f6d8-7538-3003-9994-7679a303d329"],[2,"FF",93.5,"Called Strike","fd5d0576-9d7f-3369-b29a-4ccd50dff0b2"],[3,"FF",93.5,"In play, out(s)","134cf564-216b-36e7-9668-af126d746ef6","Out",69.5,-11]],"18":[[1,"FF",96.1,"Ball","05b72e86-f86c-393c-af2c-ad10c95f6841"],[2,"FC",93.4,"Called Strike","c67f8329-b913-30ae-8633-4a0928a52582"],[3,"SI",95.8,"In play, out(s)","0640fd90-faa8-3276-b6a9-b5963ace457c","Out",53.5,-42]],"19":[[1,"SL",87.3,"Ball","1a1d13bf-e7cc-387e-b900-fbd738b370e6"],[2,"SL",87.4,"Called Strike","78692475-16e0-3f51-b86e-3651bc5004b9"],[3,"SI",96.0,"In play, out(s)","0c72e879-a24f-3e65-af69-728a69a8cf29","Out",40.6,71]],"20":[[1,"CU",83.0,"Ball","1a30e390-ee68-3f02-addc-7af2e6b4b3f5"],[2,"CH",91.0,"Ball","6be29bae-dd01-385a-bcd6-c9c375b60e3d"],[3,"SI",95.8,"Foul","4589a493-2ede-3b7a-bbec-6c9da9e1081f"],[4,"FF",96.9,"Called Strike","ca97d24c-fe9d-3b97-8821-2c025a8f15dd"],[5,"CH",91.5,"Ball","d166fa4b-c1c2-3513-85c1-b1d952af6924"],[6,"FF",97.4,"In play, run(s)","9266ca5c-2fde-3028-89bb-1bf05b5c7275","HR",99.1,29]],"21":[[1,"FF",97.3,"Foul","a1f75742-90a0-37bb-81c1-1f682d10716f"],[2,"CH",90.8,"Ball","b43dcdd5-fe3e-3b31-ae99-a96484fc7edb"],[3,"CH",90.9,"Ball","edcd679e-5f2a-39e2-ae75-4997339e51a7"],[4,"FC",95.2,"In play, out(s)","931630c0-e472-3d9e-bce7-d5e206ad22d0","Out",89.4,21]],"15":[[1,"FF",92.0,"Called Strike","4c99dc47-f929-3bb2-873c-4d340d0f9c92"],[2,"CU",77.3,"Ball","6222e86c-233a-3288-a77a-f5ef2a4fcf2f"],[3,"FF",92.6,"Ball","74cfd110-5922-3292-b71f-aa610f9cbc22"],[4,"FF",92.8,"Swinging Strike","8a93b85f-99c6-33da-b041-204bba417555"],[5,"FF",93.8,"In play, out(s)","b808c4f7-a1b5-34a0-a903-11aaa8003af0","Out",96.2,25]],"16":[[1,"FF",93.0,"Called Strike","07f00601-a5da-3223-9198-1ae3bf08d0a3"],[2,"FF",94.0,"Ball","5faa0f4d-2503-36a5-a822-685b3e53ab66"],[3,"CU",77.9,"Ball","12dd3ae6-268c-3880-84fe-686fe6c77cce"],[4,"FF",93.9,"Foul","90371758-57ca-3a22-92bd-46c48324a498"],[5,"FF",93.9,"Ball","4400f09c-19ab-372e-a0e2-28922e8e0790"],[6,"FF",94.4,"In play, out(s)","cf9aaf4e-6ab3-3ee3-ad94-c729c848df04","Out",102.4,2]],"17":[[1,"CH",86.4,"Ball","298a92b4-e40d-3ebc-8546-04b7cfeec101"],[2,"CU",77.4,"Ball","2d905698-d5e8-36b7-833b-789c4f7f4d38"],[3,"CU",78.1,"Swinging Strike","601adfdb-7782-3000-b8c5-d57c538925bb"],[4,"FF",93.2,"Called Strike","fc0e55bb-bd54-3754-b80f-6803360b4659"],[5,"CU",79.0,"Foul","b45f4c6c-eef0-3222-8959-769314c4bab8"],[6,"FF",92.6,"Swinging Strike","d3a34894-77fe-3f01-8915-49fe83c34c1f"]],"25":[[1,"FC",95.0,"Foul","dd42e31f-8e96-388a-94ce-30b210898093"],[2,"SL",88.4,"Ball","150dbd2f-51ab-3c19-a0c3-3e1dc6513050"],[3,"SI",97.0,"Foul","e1aa41e9-ba76-36e1-8984-c24acefb096c"],[4,"CU",83.8,"Ball","5e3f0e56-b372-3677-bf53-53989e6046ab"],[5,"FF",97.8,"Foul","3e9fcfd2-6729-3fbb-91b3-9d8a24789d23"],[6,"CU",84.3,"Called Strike","d9a142d8-10ec-3bcd-aac0-cac408d46689"]],"26":[[1,"FF",97.1,"Foul","b3ace67f-d2f5-30f5-a377-7ec356b9ecf9"],[2,"FC",93.9,"Ball","47051e0b-9b58-3827-b0d1-c3704b35e345"],[3,"CU",82.3,"Called Strike","f9fa9a0b-f5f0-37e3-bf25-4cc36c5bee10"],[4,"FF",97.1,"In play, out(s)","15b90ca9-3e75-3e85-99a2-5948439271ae","Out",97.0,11]],"27":[[1,"FC",94.0,"Ball","c2f4843e-f502-3ce0-970f-5ba2c69ac79c"],[2,"SI",96.3,"Ball","5fb28dac-7470-38b0-a939-279a56defec4"],[3,"FF",96.3,"Ball","da75f8a6-5739-3ecd-b939-e9dadc754245"],[4,"FF",95.5,"Called Strike","3e94f051-c047-386d-9017-6aabf99d64b9"],[5,"FC",92.6,"Ball","050e2838-700b-35fb-9dbf-f176b6a3cb2b"]],"28":[[1,"CU",81.0,"Ball","90342035-0ac1-3c7f-8874-f224ab69906e"],[2,"FF",96.2,"Called Strike","a75db146-8b07-3c32-baf1-8fff7e7cace5"],[3,"FF",95.2,"In play, out(s)","f1b4113d-5824-3d05-a0da-36bd48a8e4f1","Out",101.1,29]],"22":[[1,"CU",76.0,"Ball","36bc7f52-3b31-3188-a802-88af9568fac4"],[2,"SI",92.6,"Called Strike","4f524bb4-09bc-304e-9487-03c952bccb34"],[3,"CU",77.3,"Swinging Strike","1c9bff20-e2e1-3ca2-a9d7-f762cac1fc89"],[4,"FF",92.2,"Swinging Strike","275f02c9-7e47-35cb-afcb-2e48bb4db61a"]],"23":[[1,"FF",92.7,"In play, out(s)","962b8a9f-85e1-34e8-a917-381dc3cadb15","Out",85.1,1]],"24":[[1,"FF",92.9,"Ball","c75459ba-5a03-3cc1-bedf-5902c6cda659"],[2,"SI",92.4,"Foul","6a09d969-6a18-38c4-a016-ed51e83fd49b"],[3,"SI",93.2,"Foul","d40a6192-6077-38f2-8026-50a3a2a41235"],[4,"CU",78.8,"In play, out(s)","fce23949-f5de-3f4f-b88a-999a3984c591","Out",78.6,41]],"34":[[1,"SL",86.3,"Ball","24422d1d-4eb5-38cb-8a0f-5429711beeee"],[2,"FC",92.9,"Foul","61c13296-7433-33fc-889f-32d047e76e00"],[3,"SI",96.1,"Called Strike","01dbe2c4-ece8-39a6-a460-163f61b07d78"],[4,"CH",91.6,"Swinging Strike","547e1bd0-9c1c-343a-b12b-2c997bd18225"]],"35":[[1,"FF",97.5,"In play, out(s)","b6a51833-8fbd-312b-9039-3a618d86ea2e","Out",94.5,-13]],"36":[[1,"SI",96.5,"Foul","44495d68-5aa6-3119-be40-26b740cfbf83"],[2,"CU",83.9,"Ball","2bdd4b67-2f38-3909-be35-9bfe6d9dbacd"],[3,"FC",93.1,"Ball","bfffbb84-d4d3-3a9d-8b00-b30155d20999"],[4,"SI",95.5,"Called Strike","7b1254be-625f-3654-a4ec-9e67210b68fe"],[5,"CH",91.5,"Ball","7c40c173-d951-3674-856b-5bff5118b604"],[6,"FC",94.6,"In play, no out","a1e144d0-c381-3456-9d69-df3713618705","1B",101.9,10]],"37":[[1,"SI",95.4,"Called Strike","dceab2d3-9bfd-3b8c-8c84-768a3dc4d65a"],[2,"SI",95.8,"Foul","fab4d971-a312-33a6-940e-14e7f171f7bb"],[3,"CH",88.4,"In play, out(s)","5f9ff219-af6f-3c13-9c65-103b45db3c38","Out",92.5,18]],"29":[[1,"FF",92.8,"In play, out(s)","ddcabb0b-09fa-3b72-9e46-26086602c376","Out",103.0,34]],"30":[[1,"ST",79.8,"Ball","46a941c6-5a06-3494-852f-94a6e7e6ee9f"],[2,"ST",82.1,"Called Strike","0c79e9dc-7cdc-38db-9edc-837373348532"],[3,"CU",77.8,"Ball","fc8016e1-0f76-33fe-a722-f4b08554b504"],[4,"FF",92.3,"Ball","b8f4c7ff-ea71-324a-a565-0210c4730b7a"],[5,"ST",80.1,"Ball","8e06fb5a-0936-326e-8d82-2790050b2a33"]],"31":[[1,"FF",93.1,"Ball","e7d968e9-5de8-35e0-8e1a-e00521864724"],[2,"FF",92.0,"Called Strike","7780e7e9-9216-3dfc-9994-e6b8958f49bb"],[3,"FF",91.8,"In play, out(s)","5a1e9525-42d1-3d74-9603-63860ed5ab0d","Out",101.0,18]],"32":[[1,"ST",79.5,"Ball","eadd54f7-25ed-3688-8621-7e07f9672e7e"],[2,"FF",92.2,"Called Strike","a3568e62-f7d3-3a50-9c81-aaafecaf8b78"],[3,"CU",78.3,"Ball","a7dd07a5-005e-3ea4-8f86-f14056946824"],[4,"ST",80.3,"In play, no out","26a26811-f36b-3dec-83fc-fd6719c25933","Out",93.7,-8]],"33":[[1,"ST",75.9,"In play, out(s)","3446f0cd-8aaf-36bf-ae82-c3b3225a4205","Out",80.6,-13]],"41":[[1,"SI",95.8,"Ball","05b08bf2-5f68-3960-ab7c-33071df120d9"],[2,"FF",96.5,"Ball","1d632474-6f49-3e59-8dd2-8a5e9dec80d5"],[3,"CH",89.1,"Ball","4af11080-f679-369b-b476-58ab395139dd"],[4,"SI",95.1,"Ball","5affa183-e2c8-3501-b2db-d2ab06e0844b"]],"42":[[1,"SL",86.9,"Foul","5668a19a-a188-30e3-89fb-e97eb281c02d"],[2,"SI",95.1,"In play, out(s)","fcf37cd8-cf68-3ea0-a30c-1a8e700a23c8","Out",93.6,41]],"43":[[1,"FC",92.5,"Foul","a1cdb662-ae79-3279-a268-ac5de9cfea72"],[2,"SL",86.3,"In play, out(s)","20e39a7a-7c47-3ed8-865e-b1ff67b075d2","Out",96.1,-19]],"44":[[1,"FF",96.5,"Ball","5e2b1cd6-4176-3dab-a699-b0930b5912b9"],[2,"FC",89.7,"Called Strike","b0357f73-3bb4-3fb0-a69c-c2877736b619"],[3,"SI",94.8,"Called Strike","23ae3e09-cf5c-31fc-b8e5-a01afdc036cf"],[4,"FF",96.2,"Ball","ef42dd08-f08c-369e-aab3-880f62d7ccbd"],[5,"SL",87.9,"Swinging Strike","bd2b2a55-242b-39b7-b184-d1527b691ef5"]],"38":[[1,"CH",84.9,"Ball","c85909e9-8ea9-31ce-95f1-bdc69b94b209"],[2,"FF",92.5,"Ball","bbdd7721-f32f-3de9-b88b-74ae317cc77f"],[3,"CH",85.3,"Ball","42064813-2905-304a-8f6d-acb4563e97a3"],[4,"FF",93.0,"Foul","1a0b89dc-600a-33df-a07a-324970f4e1d7"],[5,"FF",93.3,"Ball","ffb4f080-acbb-3dc8-856c-1e494f1b4119"]],"39":[[1,"CU",74.7,"In play, out(s)","ce80dcf4-e6da-3845-bad5-fb1562650c18","Out",93.7,50]],"40":[[1,"FF",92.3,"Ball","dbeb9018-b371-3450-a104-6b635be80978"],[2,"CU",74.8,"In play, out(s)","6d6d994e-9484-39a4-adaf-fce69be3da2a","Out",77.8,6]],"48":[[1,"CU",80.5,"Foul","70361455-c331-3edb-a6d6-9b1ec23d6c86"],[2,"CH",90.6,"Ball","67c499e0-9fdc-33b3-a860-bf8ba3819f2f"],[3,"FF",97.4,"Foul","9c0755fb-12a4-35b0-9a13-8b15249f3f07"],[4,"SL",87.2,"In play, out(s)","d13d5c0b-322f-3f81-9390-67ce88074e72","Out",101.8,24]],"49":[[1,"SI",96.2,"Foul","bce2e829-af23-3e9f-987e-ba783de03f26"],[2,"SL",86.6,"Called Strike","f58ba7ad-b4cf-3c67-a8ba-058c17e80b8d"],[3,"FF",96.6,"Ball","26e8d921-f106-31d0-913b-b1f3d542a4d5"],[4,"FF",95.9,"Foul","e9cb16e5-1f51-39a4-a76d-9150c0a5abc9"],[5,"CH",90.5,"Called Strike","be08bfc9-e8f0-37f8-a6ff-8529c11e4d5d"]],"50":[[1,"SI",96.6,"Called Strike","83405a91-3464-3281-855b-6faecce23a35"],[2,"SL",87.9,"Ball","ba1dc2ca-b062-3f9b-913d-29e964d087e2"],[3,"SL",87.0,"Swinging Strike","ba63c4d8-0dcb-3c7c-9dde-bdce4d4dd872"],[4,"FF",97.3,"Ball","515f7dc2-6231-3870-84b9-42a23d9884db"],[5,"SI",96.3,"Called Strike","721b818c-a68d-39cd-94bd-0430bde23246"]],"45":[[1,"CU",75.4,"Called Strike","14bf34fc-ebe2-3489-b68d-98a17fffcef5"],[2,"FF",91.7,"In play, out(s)","c23a531f-2208-3c03-9323-9f76e7053962","Out",88.3,-5]],"46":[[1,"CU",75.4,"Called Strike","0654fe01-5fbb-3145-b88e-5620afd653ef"],[2,"CH",86.0,"Ball","a0d5ba25-6fcf-37eb-b901-9e9d18e1c3a8"],[3,"CH",85.5,"Ball","f2377bbb-4eca-312e-9f66-e41d6493d5ab"],[4,"CU",76.1,"Swinging Strike","9d49454a-b7be-3762-9880-263c5e25220c"],[5,"CU",76.5,"In play, out(s)","4d56d745-b6db-3a36-88c3-a16557d88b5f","Out",84.0,30]],"47":[[1,"FF",93.3,"Called Strike","1081edb4-1530-3dde-98b7-5f28a2d3e44d"],[2,"SI",92.4,"Foul","495a28fe-ffd7-3834-be46-7415224d12ae"],[3,"FF",93.1,"Ball","db013cae-004b-36b3-ae80-5501af0de336"],[4,"CU",76.8,"Foul","464eb338-e126-380e-9aba-f804ff51ef15"],[5,"CU",77.3,"Foul","da6b5539-5438-3afe-aa38-acb8e3828487"],[6,"FF",93.9,"In play, out(s)","a9dd1901-ba6a-3719-b370-8f23e9194860","Out",91.4,-7]],"56":[[1,"FC",91.8,"Foul Bunt","bb012606-a191-376a-8c44-d12d8e7acd53"],[2,"FF",96.7,"Ball","5807729a-ccdc-3518-8739-feac3bcaab07"],[3,"SL",88.0,"Swinging Strike","394e2e47-a718-3af3-95f2-262e962a44ec"],[4,"SL",87.8,"Ball","f3f2c4a5-943d-3ac2-80c9-0386ac76808c"],[5,"FF",96.8,"Called Strike","4a239768-9fd6-3bdc-97d8-b8f4026f6ba2"]],"57":[[1,"FC",92.6,"Foul","a4bdc6a5-7a5c-38ee-8968-12a0cb9c0e3e"],[2,"SL",86.4,"Ball","2fe14252-3ec6-373a-9f25-84f06a2de86a"],[3,"FF",96.5,"Ball","876c9765-77a1-3d33-9dc7-601498363f2f"],[4,"FC",91.3,"Hit By Pitch","b2da6879-d356-3f99-93ab-2bd717250efc"]],"58":[[1,"FF",96.9,"Ball","c37ad925-4428-3b92-b6d0-151abce7844f"],[2,"FS",86.7,"Called Strike","f3599638-6a77-3869-97ed-d3e8f22d68b4"],[3,"FC",92.3,"Called Strike","3680fb05-c24c-39d0-98e6-988e555267a6"],[4,"FF",96.8,"In play, no out","211a2688-9837-31a6-9047-c96f13b16c52","1B",110.0,11]],"59":[[1,"SL",87.2,"Swinging Strike","7c068ba1-d9a3-3bac-8f53-52d588c2acaa"],[2,"FF",95.9,"Foul","3643b3e9-5ca7-3366-90a1-b70344fbdba4"],[3,"SL",87.1,"Swinging Strike","14fed71b-9460-3b1a-8568-e48e225a773f"]],"60":[[1,"FC",90.6,"Ball","1dc9a8e4-7289-30c2-8867-e25f3c53d2f0"],[2,"SL",86.1,"Foul","bd6fb124-b8f5-39b0-9e68-c915acf32322"],[3,"FC",91.9,"In play, run(s)","949241df-423e-32bb-a319-18191fea5e80","1B",95.9,13]],"61":[[1,"FF",95.5,"Swinging Strike","3c9a5b90-4763-3903-87fe-db1d4cfb4a9a"],[2,"FF",96.0,"Foul","86c35ca2-8adc-310d-b9e1-4e212a16bc6f"],[3,"SL",87.2,"Ball","8dbaeb71-0bca-3cb0-882e-574d71118223"],[4,"SL",87.3,"Foul","20fe6275-e12b-3ba1-8801-fdf0e27394ac"],[5,"FF",95.7,"Swinging Strike","b058b231-e933-3bdf-95ba-85146a7f5211"]],"51":[[1,"CU",74.4,"Ball","813b94c5-761c-30d3-b0ed-9a9e085e47d9"],[2,"CU",75.6,"Ball","203d561b-e63e-340b-aa00-ba17eabdfdf0"],[3,"FF",91.1,"Called Strike","1d2704bb-86b5-3e1d-96cc-234351e0ad5e"],[4,"FF",92.5,"Ball","3bee9d61-dea7-3b51-afda-922234aaba48"],[5,"FF",91.9,"Ball","ff8d6ce2-c5f3-30ea-9aa6-6df4263b6519"]],"52":[[1,"FF",90.8,"Foul Bunt","7b84742d-a94b-35b0-a8df-ca9c3cd910ca"],[2,"CU",74.5,"In play, out(s)","ee64de0a-f94b-31bd-b633-5e4cdfaa0ffc","Out",94.5,42]],"53":[[1,"ST",79.2,"In play, no out","692d459c-cbf1-35c1-812a-92c24ae5f2d1","1B",80.1,14]],"54":[[1,"FF",91.3,"Called Strike","8ece8fbc-3792-3373-a95c-a7fb4ad54dc0"],[2,"FF",91.6,"In play, out(s)","72325b81-2375-3e8e-b973-e1fc5190ab2a","Out",95.0,48]],"55":[[1,"FF",91.3,"Ball","2ada12bb-67e2-3bd5-9ef8-c57bc5ff017a"],[2,"FF",90.7,"Ball","3d40f661-1a9c-3cbc-905d-27a3f22ec293"]],"62":[[1,"ST",78.9,"Called Strike","ee1cfc53-de49-3641-ac6f-406701b6dea5"],[2,"FF",90.9,"Swinging Strike","abfb95b8-47eb-34af-b7a9-f0e709deaa10"],[3,"FF",91.7,"Ball","249574a6-6e41-33e6-85aa-5de83282ce70"],[4,"FF",93.5,"Called Strike","087b8e59-8f68-3f72-96bc-15e1f1b670dc"]],"63":[[1,"FF",92.5,"Foul","00cfb37e-dc2a-3c3d-8c65-4f83994d2414"],[2,"FF",92.7,"Ball","3d7cce56-befe-3a3a-bc7f-3d69c4b7bc24"],[3,"SI",91.6,"Called Strike","8dd13753-657a-3655-9781-41635b87e8ae"],[4,"FF",94.2,"Ball","da66f293-0152-3941-84c4-ab914a53d59a"],[5,"FF",93.7,"In play, out(s)","28b9922f-fae2-36b7-98a1-c69dcae76b7e","Out",97.1,-32]],"64":[[1,"FF",92.5,"Ball","e79b37c9-9669-3c6f-93e3-4ad41103eb4c"],[2,"FF",93.5,"Foul","d359cad6-f8cf-303f-a074-1d3cf607896e"],[3,"FF",93.4,"Foul","d18ebae0-5728-3965-b35a-a70ddf69537e"],[4,"ST",83.0,"In play, out(s)","9e8679c7-d54f-379d-9c95-b8d6e9405752","Out",88.5,-3]]};
+var INNINGS = {"away|1":{"team":"Rangers","inn":"1st","runs":0,"pas":[["Joc Pederson","K","#ffffff",1],["Ezequiel Duran","K","#ffffff",0],["Brandon Nimmo","BB","#93cde6",0],["Josh Jung","5-4","#ffffff",0]]},"away|2":{"team":"Rangers","inn":"2nd","runs":0,"pas":[["Evan Carter","F8","#ffffff",0],["Jake Burger","K","#ffffff",0],["Alejandro Osuna","4-3","#ffffff",0]]},"away|3":{"team":"Rangers","inn":"3rd","runs":0,"pas":[["Kyle Higashioka","F8","#ffffff",0],["Justin Foscue","6-3","#ffffff",0],["Joc Pederson","K","#ffffff",0]]},"away|4":{"team":"Rangers","inn":"4th","runs":0,"pas":[["Ezequiel Duran","K","#ffffff",0],["Brandon Nimmo","3U","#ffffff",0],["Josh Jung","F7","#ffffff",0]]},"away|5":{"team":"Rangers","inn":"5th","runs":0,"pas":[["Evan Carter","F8","#ffffff",0],["Jake Burger","BB","#93cde6",0],["Alejandro Osuna","L7","#ffffff",0],["Kyle Higashioka","E","#ffffff",0],["Justin Foscue","5-3","#ffffff",0]]},"away|6":{"team":"Rangers","inn":"6th","runs":0,"pas":[["Joc Pederson","BB","#93cde6",0],["Ezequiel Duran","F7","#ffffff",0],["Brandon Nimmo","3-3-6","#ffffff",0]]},"away|7":{"team":"Rangers","inn":"7th","runs":0,"pas":[["Josh Jung","6-3","#ffffff",0],["Evan Carter","F9","#ffffff",0],["Jake Burger","4-3","#ffffff",0]]},"away|8":{"team":"Rangers","inn":"8th","runs":0,"pas":[["Alejandro Osuna","BB","#93cde6",0],["Kyle Higashioka","F7","#ffffff",0],["Justin Foscue","1B","#2d99c8",0],["Andrew McCutchen","F9","#ffffff",0],["Ezequiel Duran","2-3","#ffffff",0]]},"away|9":{"team":"Rangers","inn":"9th","runs":0,"pas":[["Ezequiel Duran","K","#ffffff",1],["Brandon Nimmo","6-3","#ffffff",0],["Josh Jung","5-3","#ffffff",0]]},"home|1":{"team":"Astros","inn":"1st","runs":0,"pas":[["Brice Matthews","1B","#2d99c8",0],["Isaac Paredes","P5","#ffffff",0],["Yordan Alvarez","F8","#ffffff",0],["Christian Walker","BB","#93cde6",0],["Braden Shewmake","5-3","#ffffff",0]]},"home|2":{"team":"Astros","inn":"2nd","runs":0,"pas":[["Zach Dezenzo","6-3","#ffffff",0],["Zach Cole","K","#ffffff",1],["Cam Smith","F9","#ffffff",0]]},"home|3":{"team":"Astros","inn":"3rd","runs":1,"pas":[["Christian Vázquez","5-3","#ffffff",0],["Brice Matthews","P1","#ffffff",0],["Isaac Paredes","HR","#f04542",0],["Yordan Alvarez","L7","#ffffff",0]]},"home|4":{"team":"Astros","inn":"4th","runs":0,"pas":[["Christian Walker","K","#ffffff",1],["Braden Shewmake","L3","#ffffff",0],["Zach Dezenzo","BB","#93cde6",0],["Zach Cole","F8","#ffffff",0]]},"home|5":{"team":"Astros","inn":"5th","runs":0,"pas":[["Cam Smith","K","#ffffff",0],["Christian Vázquez","6-3","#ffffff",0],["Brice Matthews","1B","#2d99c8",0],["Isaac Paredes","L9","#ffffff",0]]},"home|6":{"team":"Astros","inn":"6th","runs":0,"pas":[["Yordan Alvarez","BB","#93cde6",0],["Christian Walker","F9","#ffffff",0],["Braden Shewmake","4-6","#ffffff",0],["Zach Dezenzo","K","#ffffff",0]]},"home|7":{"team":"Astros","inn":"7th","runs":0,"pas":[["Zach Cole","F8","#ffffff",0],["Cam Smith","K","#ffffff",1],["Christian Vázquez","K","#ffffff",1]]},"home|8":{"team":"Astros","inn":"8th","runs":1,"pas":[["Brice Matthews","K","#ffffff",1],["Isaac Paredes","HBP","#93cde6",0],["Yordan Alvarez","1B","#2d99c8",0],["Christian Walker","K","#ffffff",0],["Braden Shewmake","1B","#2d99c8",0],["Zach Dezenzo","K","#ffffff",0]]}};
+
+(function(){
+  var bar=document.getElementById('readout'), panel=document.getElementById('pitchlist');
+  if(!bar||!panel) return;
+  var play=bar.querySelector('.d-play'), meta=bar.querySelector('.d-meta');
+  var idle=play.textContent, idleMeta=meta.textContent;
+
+  function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+  function place(el){
+    var r=el.getBoundingClientRect(), pw=panel.offsetWidth, ph=panel.offsetHeight, pad=8;
+    var left=r.right+pad, top=r.top;
+    if(left+pw>window.innerWidth-pad) left=r.left-pw-pad;   // flip to the left edge
+    if(left<pad) left=pad;
+    if(top+ph>window.innerHeight-pad) top=window.innerHeight-ph-pad;
+    if(top<pad) top=pad;
+    panel.style.left=left+'px'; panel.style.top=top+'px';
+  }
+
+  function show(el){
+    play.textContent=el.dataset.desc; meta.textContent=el.dataset.meta;
+    var seq=PITCHES[el.dataset.abi];
+    if(!seq||!seq.length){ hide(); return; }
+    var noteEl=el.querySelector('.note');
+    var paColour=(noteEl&&noteEl.style.color)||'#ffffff';
+    var html='<div class="pl-head desc">'+esc(el.dataset.desc)+'</div>';
+    for(var i=0;i<seq.length;i++){
+      var p=seq[i], res=RESULT_NAME[p[3]]||p[3];
+      if(p.length>5){                       // put in play: show what it went for
+        res=p[5]+': '+p[6].toFixed(1)+' @ '+p[7]+'°';
+      }
+      var last=(i===seq.length-1);
+      var style=' style="color:'+(last?paColour:'#ffffff')+'"';
+      if(p[0]===null){                      // an automatic call, not a pitch
+        html+='<div class="pl-row auto"><span class="pl-n"></span>'
+            +'<span class="pl-auto'+(last?' last':'')+'"'+style+'>'+esc(p[3])+'</span></div>';
+        continue;
+      }
+      // the pitch number is the link to that pitch's video on Baseball Savant
+      var num=p[4]
+        ? '<a class="pl-n" href="'+VIDEO+encodeURIComponent(p[4])+'" target="_blank" rel="noopener">'+p[0]+'</a>'
+        : '<span class="pl-n">'+p[0]+'</span>';
+      html+='<div class="pl-row">'+num
+          +'<span class="pl-t">'+esc(PITCH_NAME[p[1]]||p[1])+'</span>'
+          +'<span class="pl-v">'+p[2].toFixed(1)+'</span>'
+          +'<span class="pl-r'+(last?' last':'')+'"'+style+'>'+esc(res)+'</span></div>';
+    }
+    panel.innerHTML=html;
+    panel.style.display='block';
+    panel.setAttribute('aria-hidden','false');
+    place(el);
+  }
+  function hide(){
+    panel.style.display='none';
+    panel.setAttribute('aria-hidden','true');
+    play.textContent=idle; meta.textContent=idleMeta;
+  }
+  // links live in the panel, so give the cursor a moment to cross the gap to it
+  var hideTimer=null;
+  function scheduleHide(){ clearTimeout(hideTimer); hideTimer=setTimeout(hide,220); }
+  function cancelHide(){ clearTimeout(hideTimer); }
+  panel.addEventListener('mouseenter',cancelHide);
+  panel.addEventListener('mouseleave',scheduleHide);
+
+  function showInning(el){
+    var g=INNINGS[el.dataset.inn];
+    if(!g||!g.pas.length){ return; }
+    var html='<div class="pl-head">'+esc(g.team)+' &middot; '+g.inn+' &middot; '
+             +g.runs+' run'+(g.runs===1?'':'s')+'</div>';
+    for(var i=0;i<g.pas.length;i++){
+      var a=g.pas[i], note=a[3]?'<i class="flip">K</i>':esc(a[1]);
+      html+='<div class="il-row"><span class="il-name">'+esc(a[0])+'</span>'
+          +'<span class="il-note" style="color:'+a[2]+'">'+note+'</span></div>';
+    }
+    panel.innerHTML=html;
+    panel.style.display='block';
+    panel.setAttribute('aria-hidden','false');
+    place(el);
+  }
+
+  function bind(sel, fn){
+    document.querySelectorAll(sel).forEach(function(el){
+      el.addEventListener('mouseenter',function(){ cancelHide(); fn(el); });
+      el.addEventListener('focus',function(){ cancelHide(); fn(el); });
+      el.addEventListener('mouseleave',scheduleHide);
+      el.addEventListener('blur',scheduleHide);
+    });
+  }
+  bind('[data-abi]', show);
+  bind('[data-inn]', showInning);
+  window.addEventListener('scroll',hide,true);
+})();
+</script>
+    

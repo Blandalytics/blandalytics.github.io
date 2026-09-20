@@ -3,6 +3,7 @@
     python build_site.py                          # yesterday and today
     python build_site.py --start 2026-08-01 --end 2026-08-31
     python build_site.py --start 2026-08-28 --force   # re-render existing games
+    python build_site.py --only 824638,823394          # re-render specific games
 
 Writes <out>/games/<gamePk>.html and <out>/games.json. The index page reads the
 manifest to drive its date / team / game selectors, so nothing here needs a
@@ -62,7 +63,23 @@ def date_range(start, end):
         d += dt.timedelta(days=1)
 
 
-def build(start, end, force=False, out=DEFAULT_OUT):
+def game_dates(pks, games, session):
+    """date -> the requested game keys on it, from the manifest or the schedule."""
+    by_date, unknown = {}, []
+    for pk in pks:
+        k = str(pk)
+        if k in games:
+            by_date.setdefault(games[k]["date"], set()).add(k)
+        else:
+            unknown.append(int(pk))
+    for pk in unknown:                       # never built: ask the schedule
+        found = statfast._schedule(session, {"gamePk": pk})
+        for _, date in found.items():
+            by_date.setdefault(date, set()).add(str(pk))
+    return by_date
+
+
+def build(start, end, force=False, out=DEFAULT_OUT, only=None):
     games_dir, manifest_path = os.path.join(out, "games"), os.path.join(out, "games.json")
     os.makedirs(games_dir, exist_ok=True)
     manifest = load_manifest(manifest_path)
@@ -71,22 +88,39 @@ def build(start, end, force=False, out=DEFAULT_OUT):
     built = skipped = 0
     t0 = time.perf_counter()
 
-    for date in date_range(start, end):
-        for pk, html, data in scorecards_for_date(date, session=session):
-            key = str(pk)
-            if key in games and not force:
-                skipped += 1
-                continue
-            with open(os.path.join(games_dir, "%d.html" % pk), "w", encoding="utf-8") as fh:
-                fh.write(html)
-            games[key] = entry(pk, data)
-            built += 1
-            print("  %s  %s" % (date, games[key]["title"]))
+    # --only names specific games: always re-rendered, on whatever dates they fall
+    targets = game_dates(only, games, session) if only else None
+    dates = sorted(targets) if targets else list(date_range(start, end))
+
+    failed = []
+    for date in dates:
+        try:
+            day = scorecards_for_date(date, session=session,
+                                      skip=None if (force or targets) else games,
+                                      only=targets.get(date) if targets else None)
+            for pk, html, data, err in day:
+                if err is not None:
+                    print("  %s  %d FAILED: %s: %s" % (date, pk, type(err).__name__, err))
+                    failed.append((date, pk, "%s: %s" % (type(err).__name__, err)))
+                    continue
+                if html is None:                       # already built, skipped upstream
+                    skipped += 1
+                    continue
+                with open(os.path.join(games_dir, "%d.html" % pk), "w", encoding="utf-8") as fh:
+                    fh.write(html)
+                games[str(pk)] = entry(pk, data)
+                built += 1
+                print("  %s  %s" % (date, games[str(pk)]["title"]))
+        except Exception as exc:                       # the whole day, e.g. schedule down
+            print("  %s  DAY FAILED: %s: %s" % (date, type(exc).__name__, exc))
+            failed.append((date, "*", "%s: %s" % (type(exc).__name__, exc)))
         # checkpoint after every date so a long backfill survives an interruption
         save_manifest(manifest_path, manifest)
 
-    print("built %d, skipped %d, %d games in manifest, %.0fs"
-          % (built, skipped, len(games), time.perf_counter() - t0))
+    print("built %d, skipped %d, failed %d, %d games in manifest, %.0fs"
+          % (built, skipped, len(failed), len(games), time.perf_counter() - t0))
+    for f in failed:
+        print("  failed:", *f)
     return built
 
 
@@ -101,8 +135,14 @@ def main(argv=None):
                     help="re-render games already in the manifest")
     ap.add_argument("--out", default=DEFAULT_OUT,
                     help="site folder to write into (default: %(default)s)")
+    ap.add_argument("--only", help="rebuild just these gamePks: comma-separated, "
+                                   "or a path to a JSON list")
     a = ap.parse_args(argv)
-    build(a.start, a.end, a.force, a.out)
+    only = None
+    if a.only:
+        only = (json.load(open(a.only)) if os.path.exists(a.only)
+                else [int(x) for x in a.only.split(",") if x.strip()])
+    build(a.start, a.end, a.force, a.out, only)
     return 0
 
 
