@@ -160,14 +160,22 @@
 
   const EXPECTED_SIZE = [1280, 720];
 
-  // Search window for the bottom-left panel, in image pixels.
+  // Search window for the bottom-left panel, in image pixels. The rows are for a
+  // one-line player name; see axisBottom for why they move.
   const WIN_X0 = 5, WIN_X1 = 230, WIN_Y0 = 545, WIN_Y1 = 680;
 
   // Axis anchors, in image pixels.
   const X_START = 19.5;    // center of the first marker  -> swing_time 0.0
   const X_IMPACT = 208.5;  // center of the impact marker -> swing_time 1.0
-  const Y_ZERO = 664.2;    // row of 0 mph
+  const Y_ZERO = 664.2;    // row of 0 mph, one-line name
   const PX_PER_MPH = 34.0 / 30.0;  // from the 30 / 60 / 90 gridlines
+
+  // The chart's y axis: a vertical line at the right edge of the chart running
+  // from 90 mph down to 0, whose bottom row is the zero line.
+  const AXIS_X0 = 208, AXIS_X1 = 212;  // columns it occupies
+  const AXIS_Y0 = 500, AXIS_Y1 = 716;  // rows to search
+  const AXIS_BOTTOM = 664;             // its bottom row on a one-line-name card
+  const AXIS_MIN_LEN = 90;             // px; the real line is ~103
 
   const MIN_TRACED_COLUMNS = 60;  // sanity floor; real cards trace 145-170 columns
 
@@ -196,6 +204,37 @@
     ctx.drawImage(bitmap, 0, 0);
     bitmap.close?.();
     return { width: canvas.width, height: canvas.height, ctx, url, blob };
+  }
+
+  // Row of the chart's zero line, found from the y axis drawn beside it.
+  //
+  // The left column's panels stack from the top, so a player name that wraps
+  // onto two lines pushes the whole Bat Speed panel -- gauge, chart and all --
+  // down by a line (24 px). The x positions and the y scale are unchanged; only
+  // the vertical origin moves. Anchoring on the axis line itself, rather than on
+  // fixed rows, keeps a two-line name from reading 20-odd mph low.
+  function axisBottom(ctx) {
+    const w = AXIS_X1 - AXIS_X0, h = AXIS_Y1 - AXIS_Y0;
+    const px = ctx.getImageData(AXIS_X0, AXIS_Y0, w, h).data;
+    const bottoms = [];
+    for (let col = 0; col < w; col++) {
+      let best = 0, run = 0, start = 0, bestStart = 0;
+      for (let row = 0; row < h; row++) {
+        const k = (row * w + col) * 4;
+        if (px[k] + px[k + 1] + px[k + 2] > 250) {
+          if (run === 0) start = row;
+          run += 1;
+          if (run > best) { best = run; bestStart = start; }
+        } else run = 0;
+      }
+      if (best >= AXIS_MIN_LEN) bottoms.push(bestStart + best - 1 + AXIS_Y0);
+    }
+    if (!bottoms.length) {
+      throw new SwingPathError("Could not find the chart's y axis on the card. The template may have changed; the pixel anchors would need rechecking.");
+    }
+    bottoms.sort((a, b) => a - b);
+    const n = bottoms.length;  // numpy's median, truncated to an int
+    return Math.trunc(n % 2 ? bottoms[(n - 1) / 2] : (bottoms[n / 2 - 1] + bottoms[n / 2]) / 2);
   }
 
   // Local linear regression over swing time; flattens pixel quantization.
@@ -257,8 +296,10 @@
     if (card.width !== EXPECTED_SIZE[0] || card.height !== EXPECTED_SIZE[1]) {
       throw new SwingPathError(`Expected a ${EXPECTED_SIZE[0]}x${EXPECTED_SIZE[1]} card, got ${card.width}x${card.height}. The template may have changed; the pixel anchors would need rechecking.`);
     }
-    const w = WIN_X1 - WIN_X0, h = WIN_Y1 - WIN_Y0;
-    const px = card.ctx.getImageData(WIN_X0, WIN_Y0, w, h).data;
+    const shift = axisBottom(card.ctx) - AXIS_BOTTOM;
+    const y0 = WIN_Y0 + shift, y1 = Math.min(WIN_Y1 + shift, card.height);
+    const w = WIN_X1 - WIN_X0, h = y1 - y0;
+    const px = card.ctx.getImageData(WIN_X0, y0, w, h).data;
 
     // Boolean mask of the teal curve markers, then the mid-row of each column.
     const cols = [], mids = [];
@@ -279,7 +320,7 @@
     }
 
     const t = cols.map((c) => (c + WIN_X0 - X_START) / (X_IMPACT - X_START));
-    let mph = mids.map((m) => (Y_ZERO - (m + WIN_Y0)) / PX_PER_MPH);
+    let mph = mids.map((m) => (Y_ZERO + shift - (m + y0)) / PX_PER_MPH);
     mph = smoothCurve(t, mph, smooth);
 
     const grid = linspace(0.0, 1.0, nPoints);
@@ -287,6 +328,7 @@
       swing_time: grid,
       bat_speed_mph: grid.map((g) => pyRound(Math.max(0, interp(g, t, mph)), 3)),
       traced_columns: cols.length,
+      axis_shift: shift,
     };
   }
 
