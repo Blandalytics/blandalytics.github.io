@@ -62,6 +62,10 @@ function build() {
   const ink = token('--ink'), muted = token('--muted'), surface = token('--surface');
   const alpha = parseFloat(token('--link-alpha')) || 0.5;
   const dim = t => focus && t !== focus;
+  // With a pitch type isolated, only the outcomes it produced stay lit
+  const endLit = new Set();
+  DATA.links.forEach(l => { if (l.terminal && !dim(l.type)) endLit.add(l.target); });
+  const nodeDimmed = i => nodes[i].type === 'END' ? (!!focus && !endLit.has(i)) : dim(nodes[i].type);
 
   // Fixed layout. Plotly's node.x / node.y are node CENTRES (0..1 of the plot area) and node heights
   // come from d3-sankey (value * ky), so we replicate that scale here to stack bands without overlap:
@@ -108,21 +112,14 @@ function build() {
       return dim(n.type) ? hexToRgba(n.color, 0.18) : n.color;
     }),
     x, y,
-    customdata: nodeIds.map(i => {
-      const n = nodes[i], tot = DATA.col_total[n.n];
-      if (n.type === 'END') return `<b>${n.cat}</b> after pitch ${n.n}<br>${n.count} of ${tot} PAs that reached pitch ${n.n}`;
-      const pct = Math.round(100 * n.count / tot);
-      const ended = n.ended ? `<br>${n.ended} ended the plate appearance` : '';
-      return `<b>${n.type}</b> ${n.name}<br>${ORD(n.n)} pitch of the PA<br>${n.count} of ${tot} ${ORD(n.n)} pitches (${pct}%)${ended}`;
-    }),
-    hovertemplate: '%{customdata}<extra></extra>',
+    hoverinfo: 'none',            // node tooltips are drawn by the page too, so they can dodge the traced paths
   };
 
   // One link per pitch-to-pitch step of each plate appearance. Links that share a `label` (the PA id)
   // are what Plotly lights up together on hover, which is how a whole PA gets traced.
   const links = DATA.links.filter(l => withEnds || !l.terminal);
   currentLinks = links;
-  currentNodes = nodeIds.map(i => nodes[i]);
+  currentNodes = nodeIds.map(i => ({ ...nodes[i], index: i, dimmed: nodeDimmed(i) }));
   const link = {
     source: links.map(l => remap.get(l.source)),
     target: links.map(l => remap.get(l.target)),
@@ -164,7 +161,7 @@ function build() {
 function paintOutlines() {
   nodeRects().forEach(el => {
     const d = el.__data__, n = d && currentNodes[d.node.pointNumber];
-    if (n && n.type === 'END') { el.style.stroke = n.outline; el.style.strokeWidth = '2.5px'; }
+    if (n && n.type === 'END') { el.style.stroke = n.outline; el.style.strokeWidth = '2.5px'; el.style.strokeOpacity = n.dimmed ? 0.18 : 1; }
   });
 }
 function render() {
@@ -233,7 +230,30 @@ function trace(paSet) {
 function untrace() {
   tip.hidden = true;
   linkPaths().forEach(el => { const d = el.__data__; if (d) el.style.fillOpacity = d.tinyColorAlpha; });
-  nodeRects().forEach(el => { const d = el.__data__; if (d) { el.style.fillOpacity = d.tinyColorAlpha; el.style.strokeOpacity = 1; } });
+  nodeRects().forEach(el => {
+    const d = el.__data__, n = d && currentNodes[d.node.pointNumber];
+    if (d) { el.style.fillOpacity = d.tinyColorAlpha; el.style.strokeOpacity = n && n.type === 'END' && n.dimmed ? 0.18 : 1; }
+  });
+}
+
+// A band's tooltip: the pitch and its share at that count. An ending's: the outcome (in its outline
+// color) and, one per plate appearance, the pitch that ended it and the actual event.
+function nodeTip(n) {
+  const tot = DATA.col_total[n.n];
+  if (n.type === 'END') {
+    const rows = DATA.pas
+      .filter(p => p.seq.length === n.n && p.cat === n.cat)
+      .map(p => {
+        const t = p.seq[p.seq.length - 1], c = (DATA.types.find(x => x.code === t) || {}).color || '#c7c7c7';
+        return `<li><span style="color:${c}">${t}</span> → <span style="color:${n.outline}">${p.result}</span></li>`;
+      });
+    return `<span class="name" style="color:${n.outline}">${n.cat}</span> &nbsp;<span class="meta">after pitch ${n.n}</span>`
+      + `<ul class="list">${rows.join('')}</ul>`;
+  }
+  const pct = Math.round(100 * n.count / tot);
+  const ended = n.ended ? `<div class="meta">${n.ended} ended the plate appearance</div>` : '';
+  return `<span class="name" style="color:${n.color}">${n.type}</span> &nbsp;<span class="meta">${n.name} · ${ORD(n.n)} pitch of the PA</span>`
+    + `<div class="seq">${n.count} of ${tot} ${ORD(n.n)} pitches (${pct}%)</div>${ended}`;
 }
 
 function wireHover() {
@@ -242,6 +262,8 @@ function wireHover() {
   chartEl.on('plotly_hover', ev => {
     const pt = ev.points && ev.points[0];
     if (!pt) return;
+    const e = ev.event || {};
+    const anchor = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
     if (pt.source === undefined) {
       // Node: every plate appearance that passes through it
       const idx = pt.pointNumber, pas = new Set();
@@ -249,7 +271,11 @@ function wireHover() {
         const d = el.__data__;
         if (d && (d.link.source.pointNumber === idx || d.link.target.pointNumber === idx)) pas.add(d.link.label);
       });
-      trace(pas);
+      const { paPaths, paRects } = trace(pas);
+      tip.innerHTML = nodeTip(currentNodes[idx]);
+      tip.hidden = false;
+      const [x, y] = placeTip(anchor, paPaths, paRects);
+      tip.style.left = x + 'px'; tip.style.top = y + 'px';
       return;
     }
     // Link: this one plate appearance, with its own tooltip placed clear of the path
@@ -264,8 +290,6 @@ function wireHover() {
     tip.innerHTML = `<span class="name">${p.batter}</span> &nbsp;<span class="meta">${ORD(p.inning)} inning</span>`
       + `<div class="seq">${seq.join(' → ')}</div>`;
     tip.hidden = false;
-    const e = ev.event || {};
-    const anchor = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
     const [x, y] = placeTip(anchor, paPaths, paRects);
     tip.style.left = x + 'px'; tip.style.top = y + 'px';
   });
