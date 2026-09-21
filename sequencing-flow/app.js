@@ -222,6 +222,36 @@ function setStatus() {
   status.textContent = 'MLB · data files through ' + (last ? niceDate(last, true) : '?') + ' · live feed after';
 }
 
+// With nothing asked for, land on the most recent day that has finished games and show its
+// longest outing: today's or yesterday's finished games from the live feed if there are any,
+// else the last settled day in the data files.
+function prevDay(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+async function defaultGame() {
+  const last = data.lastFinalized();
+  if (!last) return false;
+  for (let d = today(), tries = 0; d >= last && tries < 10; d = prevDay(d), tries++) {
+    status.textContent = 'Loading ' + niceDate(d, true) + '…';
+    let rows = [];
+    try { rows = await data.rowsFor(d); } catch (e) { rows = []; }
+    if (state.pitcher || state.date) return true;      // the user got there first
+    const finished = rows.filter(r => !r.live || r.status === 'Final' || r.status === 'Game Over');
+    const list = data.pitchersOn(finished);              // sorted by pitch count, most first
+    if (!list.length) continue;
+    state.date = d; dateIn.value = d;
+    if ([...seasonSel.options].some(o => o.value === d.slice(0, 4))) seasonSel.value = d.slice(0, 4);
+    state.dayList = list;
+    fillFromDay(`${list[0].id}|${list[0].gamePk}|${d}`);
+    setStatus();
+    onGame();
+    return true;
+  }
+  return false;
+}
+
 // a #pitcherId-YYYY-MM-DD in the URL selects that flow directly
 async function fromHash() {
   const m = /^#(\d+)-(\d{4}-\d{2}-\d{2})$/.exec(location.hash);
@@ -254,5 +284,5 @@ window.addEventListener('hashchange', fromHash);
   dateIn.min = first; dateIn.max = now;
   q.disabled = false; dateIn.disabled = false;
   setStatus();
-  if (!(await fromHash())) showEmpty('Search a pitcher, or pick a game date.');
+  if (!(await fromHash()) && !(await defaultGame())) showEmpty('Search a pitcher, or pick a game date.');
 })();
