@@ -7,8 +7,10 @@ __pycache__/
 tools/scorecard/feed_*.json
 tools/scorecard/pitches_*.parquet
 tools/scorecard/scorecard_*.json
-# the cached comparison seasons behind the pitcher cards
+# the cached data files behind the pitcher cards, and a local build of the cards
+# (they live in the bucket)
 tools/pitcher_card/cache/
+pitcher-cards/cards/
 # the live worker's local toolchain and dev-server state
 tools/live/node_modules/
 tools/live/.wrangler/

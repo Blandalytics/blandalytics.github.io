@@ -104,29 +104,33 @@ the font and logo embedded.
 
 ### How it works
 
-Like the scorecards, the pages are pre-built by a scheduled workflow:
+The pages are pre-built by a scheduled workflow, into the same R2 bucket as the data
+files rather than the repo — a season is ~22,000 cards, more than a GitHub Pages site may
+hold — and the picker in [`pitcher-cards/index.html`](pitcher-cards/index.html) reads them
+from there:
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones
   [Blandalytics/statcast_scraper](https://github.com/Blandalytics/statcast_scraper) (the
   pitches) and [Blandalytics/player_cards](https://github.com/Blandalytics/player_cards) (the
-  PLV model files), builds a card for every pitcher who threw a tracked pitch the day before,
-  and commits the result.
+  PLV model files) and builds a card for every pitcher who threw a tracked pitch the day
+  before. A backfill splits its range into months and builds them as parallel jobs; the index
+  is rebuilt from the day manifests once they have all finished.
 - [`.github/workflows/pitcher-cards-live.yml`](.github/workflows/pitcher-cards-live.yml) runs
   every 15 minutes through game hours and builds cards for the pitchers in the games in
-  progress — the same card, from the pitches thrown so far — into the R2 bucket at
-  `live/cards/`, never the repo. A card is rebuilt only when its pitcher's pitch count has
-  moved; a game gets one last build after it ends, and the nightly run then commits the
-  permanent card. The picker shows these under a **Live** entry while games are on.
-- [`pitcher-cards/cards/<gamePk>-<pitcherId>.html`](pitcher-cards/cards/) — one standalone
-  page per pitcher per game. The card is a single SVG drawn in the original figure's
-  1500 × 2000 coordinate system, so every panel keeps the matplotlib layout. Every comparison
-  season's layer is in the page, tagged `data-cmp="<year>"`; `#cmp=<year>` in the URL picks
-  one and `#cmp=0` hides them.
-- [`pitcher-cards/days/<date>.json`](pitcher-cards/days/) — that day's games and pitchers,
-  which the picker reads; [`pitcher-cards/index.json`](pitcher-cards/index.json) lists the
-  dates built and which date each game is on. A card can be linked directly as
-  `pitcher-cards/#<gamePk>-<pitcherId>`.
+  progress — the same card, from the pitches thrown so far — into `live/cards/`. A card is
+  rebuilt only when its pitcher's pitch count has moved; a game gets one last build after it
+  ends, and the nightly run then writes the permanent card. The picker shows these under a
+  **Live** entry while games are on.
+- `https://data.blandalytics.com/cards/<gamePk>-<pitcherId>.html` — one standalone page per
+  pitcher per game. The card is a single SVG drawn in the original figure's 1500 × 2000
+  coordinate system, so every panel keeps the matplotlib layout. Every comparison season's
+  layer is in the page, tagged `data-cmp="<year>"`; `#cmp=<year>` in the URL picks one and
+  `#cmp=0` hides them. The picker frames the page from the other origin and asks it, by
+  `postMessage`, to switch layers or hand back a PNG.
+- `https://data.blandalytics.com/cards/days/<date>.json` — that day's games and pitchers,
+  which the picker reads; `.../cards/index.json` lists the dates built and which date each
+  game is on. A card can be linked directly as `pitcher-cards/#<gamePk>-<pitcherId>`.
 
 The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 
@@ -141,7 +145,7 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 | `grades.py` | palette, pitch-type names and colours, benchmark bins, letter grades and both game-score formulas |
 | `build_data.py` | assembles all of that into one card dict |
 | `render.py` | renders the dict as the page |
-| `build_site.py` | builds a date range into `pitcher-cards/` and maintains the manifests |
+| `build_site.py` | builds a date range into the bucket (or a folder with `--out`) and maintains the manifests; `--reindex` rebuilds the index alone |
 
 The comparison seasons, and the pitches of any settled date, come from the completed-games
 Parquet in the bucket (see *Data files*): each file is downloaded once, narrowed to the ~40
@@ -163,8 +167,12 @@ complexity limit of 5 per function.
 Run the workflow by hand from the **Actions** tab (*Build pitcher cards → Run workflow*)
 with a `start` and `end` date; tick `force` to re-render cards that already exist, which is
 what you want after changing anything in `render.py`. A day of games is roughly 150 cards
-at about half a second each. The first run also downloads each comparison season's data
-file once (a few seconds per season), after which they come from the workflow's cache.
+at about half a second each; a whole season runs as one job per month, four at a time, in
+under an hour. Cards already in a day's manifest are skipped, so an interrupted backfill
+resumes where it stopped. The first run also downloads each comparison season's data file
+once (a few seconds per season), after which they come from the workflow's cache. Writing
+to the bucket needs the `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and
+`CLOUDFLARE_ACCOUNT_ID` secrets the data files use.
 
 Locally, from the repo root with the scraper and the models cloned alongside:
 
@@ -172,8 +180,11 @@ Locally, from the repo root with the scraper and the models cloned alongside:
 git clone --depth 1 https://github.com/Blandalytics/statcast_scraper.git
 git clone --depth 1 https://github.com/Blandalytics/player_cards.git
 pip install -r tools/pitcher_card/requirements.txt
-python tools/pitcher_card/build_site.py --start 2026-09-17 --end 2026-09-17
+python tools/pitcher_card/build_site.py --out pitcher-cards --start 2026-09-17 --end 2026-09-17
 ```
+
+`--out` writes to a folder instead of the bucket; open the picker with
+`?index=cards/index.json` to read that local build.
 
 Or one card, without the site machinery — for a finished game or one in progress:
 

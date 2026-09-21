@@ -143,7 +143,9 @@ def cards_for_game(
             yield pid, *built
 
 
-def cards_for_date(date, session=None, store=None, strict=True, skip=None) -> Iterator:
+def cards_for_date(
+    date, session=None, store=None, strict=True, skip=None, logo=render.LOGO
+) -> Iterator:
     """Every completed game on a date, scraped once: yields (game_pk, pitcher id, html,
     card). Games with no tracked pitches are skipped; see cards_for_game for ``skip``."""
     date = dt.date.fromisoformat(str(date))
@@ -153,7 +155,7 @@ def cards_for_date(date, session=None, store=None, strict=True, skip=None) -> It
     for pk in sorted(int(x) for x in df_all["game_pk"].unique()):
         feed = fetch.feed(s, pk)
         game = df_all[df_all["game_pk"] == pk]
-        for pid, html, card in cards_for_game(pk, feed, game, s, store, strict, skip):
+        for pid, html, card in cards_for_game(pk, feed, game, s, store, strict, skip, logo):
             yield pk, pid, html, card
 
 

@@ -126,8 +126,8 @@ iframe[hidden]{display:none}
 
 <footer class="note">
   Data (especially pitch types) are subject to change. Cards are built each morning for the previous
-  day's completed MLB games; while games are on, a <b>Live</b> entry carries cards for the pitchers in
-  them, refreshed every 15 minutes. Please send any feedback to Kyle Bland, on
+  day's completed MLB games, back to the start of the season; while games are on, a <b>Live</b> entry
+  carries cards for the pitchers in them, refreshed every 15 minutes. Please send any feedback to Kyle Bland, on
   <a href="https://bsky.app/profile/blandalytics.pitcherlist.com" target="_blank" rel="noopener">Bluesky</a> or
   <a href="https://x.com/blandalytics" target="_blank" rel="noopener">Twitter</a>.
 </footer>
@@ -141,10 +141,14 @@ iframe[hidden]{display:none}
   var index = {days: {}, games: {}};   // dates built, and gamePk -> date
   var day = {};                        // the selected date's games: gamePk -> {home, away, pitchers}
   var dayCache = {};
-  // cards for the games in progress, built every 15 minutes into the bucket rather than
-  // the repo; ?live=<url> points at a local copy while developing
-  var LIVE = new URLSearchParams(location.search).get('live')
-    || 'https://data.blandalytics.com/live/cards/index.json';
+  // the cards and their manifests live in the bucket, not the repo: the index, the day
+  // manifests beside it and the pages beside those. ?index=<url> points at a local build
+  // while developing (python tools/pitcher_card/build_site.py --out pitcher-cards, then
+  // ?index=cards/index.json)
+  var params = new URLSearchParams(location.search);
+  var INDEX = new URL(params.get('index') || 'https://data.blandalytics.com/cards/index.json', location.href).href;
+  // cards for the games in progress, built every 15 minutes; ?live=<url> likewise
+  var LIVE = new URL(params.get('live') || 'https://data.blandalytics.com/live/cards/index.json', location.href).href;
   var LIVE_KEY = 'live';
   var live = {games: {}};              // the live index as last fetched
   var liveTimer = null;
@@ -176,6 +180,8 @@ iframe[hidden]{display:none}
     return 'Live · ' + n + ' game' + (n === 1 ? '' : 's') + (t ? ' · ' + t : '');
   }
   function team(g, p) { return p.side === 'home' ? g.home : g.away; }
+  // a manifest's file is relative to the manifest (the live one uses full URLs; both work)
+  function cardUrl(p) { return new URL(p.file, isLive() ? LIVE : INDEX).href; }
   function opp(g, p) { return p.side === 'home' ? 'vs ' + g.away : '@ ' + g.home; }
 
   // ---- the game list for a date, and the pitcher list for a game (or the whole day) ----
@@ -237,11 +243,9 @@ iframe[hidden]{display:none}
     compareWrap.classList.toggle('off', years.length === 0);
     yearSel.disabled = years.length === 0 || !compare.checked;
     var v = p.pitches ? '?v=' + p.pitches : '';   // a rebuilt live card must reload
-    frame.src = p.file + v + '#cmp=' + cmpYear();
-    open.href = p.file;
-    // the PNG is drawn inside the frame; a live card comes from the bucket, another
-    // origin, so the button can't reach it
-    frame.hidden = false; empty.hidden = true; open.hidden = false; png.hidden = isLive();
+    frame.src = cardUrl(p) + v + '#cmp=' + cmpYear();
+    open.href = cardUrl(p);
+    frame.hidden = false; empty.hidden = true; open.hidden = false; png.hidden = false;
     document.title = p.name + ' — ' + p.line.split(' - ')[0] + ' — PLV Pitcher Game Card';
     var hash = '#' + sel.pk + '-' + p.id;
     if (location.hash !== hash) history.replaceState(null, '', hash);
@@ -250,8 +254,8 @@ iframe[hidden]{display:none}
     var sel = selected();
     if (!sel) return;
     yearSel.disabled = compare.disabled || !compare.checked;
-    try { frame.contentWindow.location.hash = '#cmp=' + cmpYear(); }
-    catch (e) { frame.src = sel.pitcher.file + '#cmp=' + cmpYear(); }
+    // the card comes from the bucket, another origin, so it is asked by message
+    frame.contentWindow.postMessage({type: 'cmp', year: cmpYear()}, '*');
   }
 
   // ---- loading a date ----
@@ -263,7 +267,7 @@ iframe[hidden]{display:none}
   function loadDay(date) {
     if (date === LIVE_KEY) return loadLive();
     if (dayCache[date]) return Promise.resolve(dayCache[date]);
-    return fetch('days/' + date + '.json', {cache: 'no-cache'})
+    return fetch(new URL('days/' + date + '.json', INDEX).href, {cache: 'no-cache'})
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (d) { dayCache[date] = d; return d; });
   }
@@ -307,9 +311,20 @@ iframe[hidden]{display:none}
   pitcherSel.addEventListener('change', onPitcher);
   compare.addEventListener('change', onCompare);
   yearSel.addEventListener('change', onCompare);
+  // the PNG is drawn inside the frame and handed back as a blob; saving it from here
+  // keeps the download on this page's click
   png.addEventListener('click', function () {
-    try { png.disabled = true; frame.contentWindow.savePng().then(function () { png.disabled = false; }); }
-    catch (e) { png.disabled = false; }
+    png.disabled = true;
+    frame.contentWindow.postMessage({type: 'png'}, '*');
+    setTimeout(function () { png.disabled = false; }, 15000);
+  });
+  window.addEventListener('message', function (e) {
+    var d = e.data || {};
+    if (d.type !== 'png' || !d.blob) return;
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(d.blob); a.download = d.filename || 'card.png'; a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+    png.disabled = false;
   });
 
   // a #gamePk-pitcherId in the URL selects that card directly
@@ -332,7 +347,7 @@ iframe[hidden]{display:none}
   window.addEventListener('hashchange', selectFromHash);
 
   Promise.all([
-    fetch('index.json', {cache: 'no-cache'})
+    fetch(INDEX, {cache: 'no-cache'})
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }),
     loadLive().catch(function () { return {}; })
   ])
@@ -352,8 +367,8 @@ iframe[hidden]{display:none}
       if (!selectFromHash()) { dateSel.value = items[0][0]; onDate(); }
     })
     .catch(function () {
-      status.textContent = 'Could not load index.json';
-      empty.textContent = 'The card manifest is missing. Run tools/pitcher_card/build_site.py to create it.';
+      status.textContent = 'Could not load the card index';
+      empty.textContent = 'The card index is missing from the bucket. Run tools/pitcher_card/build_site.py to create it.';
     });
 })();
 </script>

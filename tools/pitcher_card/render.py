@@ -638,7 +638,8 @@ svg{display:block;width:100%%;max-width:1500px;height:auto}
         }).catch(function () { im.remove(); });
     }));
   }
-  window.savePng = function () {
+  // the card as a PNG blob, with the layer that is showing
+  window.renderPng = function () {
     var svg = document.getElementById('card').cloneNode(true);
     svg.querySelectorAll('[data-cmp]').forEach(function (el) {
       if (el.style.display === 'none') el.remove();
@@ -658,18 +659,35 @@ svg{display:block;width:100%%;max-width:1500px;height:auto}
           c.width = 3000; c.height = 4000;
           c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
           URL.revokeObjectURL(url);
-          c.toBlob(function (blob) {
-            var a = document.createElement('a');
-            a.href = URL.createObjectURL(blob); a.download = filename; a.click();
-            setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
-            resolve();
-          }, 'image/png');
+          c.toBlob(function (blob) { resolve({blob: blob, filename: filename}); }, 'image/png');
         };
         img.onerror = reject;
         img.src = url;
       });
     });
   };
+  window.savePng = function () {
+    return window.renderPng().then(function (png) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(png.blob); a.download = png.filename; a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+    });
+  };
+  // the picker page frames this one from another origin, so it asks by message: a
+  // {type: 'cmp', year} switches the comparison layer, a {type: 'png'} is answered with
+  // {type: 'png', blob, filename} for the picker to save (a download started here, in a
+  // cross-origin frame without its own click, would be blocked)
+  window.addEventListener('message', function (e) {
+    var d = e.data || {};
+    if (d.type === 'cmp') {
+      location.hash = '#cmp=' + d.year;
+    } else if (d.type === 'png' && e.source) {
+      window.renderPng().then(function (png) {
+        var reply = {type: 'png', blob: png.blob, filename: png.filename};
+        e.source.postMessage(reply, e.origin || '*');
+      });
+    }
+  });
   var btn = document.getElementById('png');
   btn.hidden = window.self !== window.top;   // the picker page has its own button
   btn.addEventListener('click', function () { window.savePng(); });
