@@ -139,10 +139,21 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
 .note a{color:var(--ink)}
 
 @media (max-width:760px){
-  .bar{padding:12px 12px 10px; gap:10px 12px}
-  .brand{flex-basis:100%; margin:0}
-  .field{flex:1; min-width:0}
-  #q,#game{min-width:0; flex-basis:100%}
+  .bar{padding:8px 12px 8px; gap:6px 8px}
+  .brand{flex-basis:100%; margin:0; flex-direction:row; align-items:baseline; gap:10px; min-width:0}
+  .brand h1{font-size:15px; white-space:nowrap}
+  .brand .sub{font-size:9.5px; letter-spacing:.1em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .field{flex:1; min-width:0; gap:3px}
+  .field label{font-size:9.5px; letter-spacing:.1em}
+  select,input[type=text],input[type=search],input[type=date]{font-size:13px; padding:5px 9px; min-height:32px}
+  select{padding-right:26px; background-position:right 9px center}
+  .btn{font-size:11.5px; padding:5px 10px; min-height:32px}
+  #q,#game{min-width:0; width:100%}
+  .field:has(#q),.field:has(#game){flex-basis:100%}
+  .field:has(#game){order:2}
+  .btn{order:1; flex:0 0 auto}
+  .who h2{font-size:22px}
+  .stat .v{font-size:20px}
   .stage{padding:12px}
   #chart{height:500px}
   .note{padding:4px 12px 6px; font-size:11px}
