@@ -126,7 +126,8 @@ iframe[hidden]{display:none}
 
 <footer class="note">
   Data (especially pitch types) are subject to change. Cards are built each morning for the previous
-  day's completed MLB games. Please send any feedback to Kyle Bland, on
+  day's completed MLB games; while games are on, a <b>Live</b> entry carries cards for the pitchers in
+  them, refreshed every 15 minutes. Please send any feedback to Kyle Bland, on
   <a href="https://bsky.app/profile/blandalytics.pitcherlist.com" target="_blank" rel="noopener">Bluesky</a> or
   <a href="https://x.com/blandalytics" target="_blank" rel="noopener">Twitter</a>.
 </footer>
@@ -140,6 +141,13 @@ iframe[hidden]{display:none}
   var index = {days: {}, games: {}};   // dates built, and gamePk -> date
   var day = {};                        // the selected date's games: gamePk -> {home, away, pitchers}
   var dayCache = {};
+  // cards for the games in progress, built every 15 minutes into the bucket rather than
+  // the repo; ?live=<url> points at a local copy while developing
+  var LIVE = new URLSearchParams(location.search).get('live')
+    || 'https://data.blandalytics.com/live/cards/index.json';
+  var LIVE_KEY = 'live';
+  var live = {games: {}};              // the live index as last fetched
+  var liveTimer = null;
 
   var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   function niceDate(iso) {              // 2026-09-17 -> Thu, Sep 17 2026
@@ -161,6 +169,12 @@ iframe[hidden]{display:none}
     sel.disabled = items.length === 0;
   }
   function lastName(name) { return name.split(' ').slice(-1)[0].toLowerCase(); }
+  function isLive() { return dateSel.value === LIVE_KEY; }
+  function liveCount() { return Object.keys(live.games || {}).length; }
+  function liveLabel() {
+    var n = liveCount(), t = live.updated ? live.updated.slice(11, 16) + ' UTC' : '';
+    return 'Live · ' + n + ' game' + (n === 1 ? '' : 's') + (t ? ' · ' + t : '');
+  }
   function team(g, p) { return p.side === 'home' ? g.home : g.away; }
   function opp(g, p) { return p.side === 'home' ? 'vs ' + g.away : '@ ' + g.home; }
 
@@ -173,7 +187,7 @@ iframe[hidden]{display:none}
   function fillGames() {
     fill(gameSel, [['', 'All games']].concat(pks().map(function (pk) {
       var g = day[pk];
-      return [pk, g.away + ' @ ' + g.home];
+      return [pk, g.away + ' @ ' + g.home + (g.status && isLive() ? '  ·  ' + g.status : '')];
     })), true);
   }
   function pitcherItems() {
@@ -222,9 +236,12 @@ iframe[hidden]{display:none}
     compare.disabled = years.length === 0;
     compareWrap.classList.toggle('off', years.length === 0);
     yearSel.disabled = years.length === 0 || !compare.checked;
-    frame.src = p.file + '#cmp=' + cmpYear();
+    var v = p.pitches ? '?v=' + p.pitches : '';   // a rebuilt live card must reload
+    frame.src = p.file + v + '#cmp=' + cmpYear();
     open.href = p.file;
-    frame.hidden = false; empty.hidden = true; open.hidden = false; png.hidden = false;
+    // the PNG is drawn inside the frame; a live card comes from the bucket, another
+    // origin, so the button can't reach it
+    frame.hidden = false; empty.hidden = true; open.hidden = false; png.hidden = isLive();
     document.title = p.name + ' — ' + p.line.split(' - ')[0] + ' — PLV Pitcher Game Card';
     var hash = '#' + sel.pk + '-' + p.id;
     if (location.hash !== hash) history.replaceState(null, '', hash);
@@ -238,7 +255,13 @@ iframe[hidden]{display:none}
   }
 
   // ---- loading a date ----
+  function loadLive() {
+    return fetch(LIVE, {cache: 'no-cache'})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) { live = d; return d.games || {}; });
+  }
   function loadDay(date) {
+    if (date === LIVE_KEY) return loadLive();
     if (dayCache[date]) return Promise.resolve(dayCache[date]);
     return fetch('days/' + date + '.json', {cache: 'no-cache'})
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
@@ -251,11 +274,32 @@ iframe[hidden]{display:none}
       day = d;
       fillGames();
       fillPitchers();
+      watchLive();
     }).catch(function () {
       day = {};
       fillGames(); fillPitchers();
-      empty.textContent = 'Could not load the cards for ' + niceDate(date) + '.';
+      empty.textContent = date === LIVE_KEY ? 'No live cards right now.'
+        : 'Could not load the cards for ' + niceDate(date) + '.';
     });
+  }
+  // while the live entry is showing, pick up new pitchers and rebuilt cards every minute
+  function watchLive() {
+    if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+    if (!isLive()) return;
+    liveTimer = setInterval(function () {
+      if (document.hidden || !isLive()) return;
+      var before = selected(), had = before ? before.pitcher.pitches : null;
+      loadLive().then(function (d) {
+        if (!isLive()) return;
+        day = d;
+        dateSel.options[0].textContent = liveLabel();
+        fillGames();
+        fill(pitcherSel, pitcherItems(), true);
+        var now = selected();
+        if (!now) { onPitcher(); return; }
+        if (!before || now.pitcher.id !== before.pitcher.id || now.pitcher.pitches !== had) onPitcher();
+      }).catch(function () {});
+    }, 60000);
   }
 
   dateSel.addEventListener('change', function () { gameSel.value = ''; onDate(); });
@@ -271,8 +315,9 @@ iframe[hidden]{display:none}
   // a #gamePk-pitcherId in the URL selects that card directly
   function selectFromHash() {
     var m = /^#(\d+)-(\d+)$/.exec(location.hash);
-    if (!m || !index.games[m[1]]) return false;
-    var date = index.games[m[1]];
+    if (!m) return false;
+    var date = index.games[m[1]] || (live.games && live.games[m[1]] ? LIVE_KEY : null);
+    if (!date) return false;
     dateSel.value = date;
     loadDay(date).then(function (d) {
       day = d;
@@ -286,18 +331,25 @@ iframe[hidden]{display:none}
   }
   window.addEventListener('hashchange', selectFromHash);
 
-  fetch('index.json', {cache: 'no-cache'})
-    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(function (m) {
+  Promise.all([
+    fetch('index.json', {cache: 'no-cache'})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }),
+    loadLive().catch(function () { return {}; })
+  ])
+    .then(function (both) {
+      var m = both[0];
       index = m;
       var dates = Object.keys(m.days || {}).sort().reverse();
-      fill(dateSel, dates.map(function (d) { return [d, niceDate(d)]; }));
+      var items = dates.map(function (d) { return [d, niceDate(d)]; });
+      if (liveCount()) items.unshift([LIVE_KEY, liveLabel()]);
+      fill(dateSel, items);
       var n = 0; dates.forEach(function (d) { n += m.days[d]; });
       status.textContent = n + ' card' + (n === 1 ? '' : 's') + ' across ' + dates.length
-        + ' date' + (dates.length === 1 ? '' : 's') + (m.built ? ' · updated ' + m.built.slice(0, 10) : '');
-      if (!dates.length) { empty.textContent = 'No cards built yet.'; return; }
-      // land on the most recent day rather than the whole archive
-      if (!selectFromHash()) { dateSel.value = dates[0]; onDate(); }
+        + ' date' + (dates.length === 1 ? '' : 's') + (m.built ? ' · updated ' + m.built.slice(0, 10) : '')
+        + (liveCount() ? ' · ' + liveCount() + ' live' : '');
+      if (!items.length) { empty.textContent = 'No cards built yet.'; return; }
+      // land on the games in progress if there are any, else the most recent day
+      if (!selectFromHash()) { dateSel.value = items[0][0]; onDate(); }
     })
     .catch(function () {
       status.textContent = 'Could not load index.json';

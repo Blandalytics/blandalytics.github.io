@@ -187,7 +187,7 @@ def logo(href: str = LOGO) -> str:
     )
 
 
-def header(card: dict) -> list[str]:
+def header(card: dict, logo_href: str = LOGO) -> list[str]:
     """Name, bio line, the game and its box-score line, and the Pitcher List mark."""
     size = min(150.0, 1230 / len(card["name"]))  # the original sized the name by length
     return [
@@ -197,7 +197,7 @@ def header(card: dict) -> list[str]:
         text(fx(0.5), fy(0.896), card["title"], 24),
         rect(fx(0.01), fy(0.883), fx(0.98), 86, BACKGROUND, TEXT, 3, LINE_ALPHA, rx=15),
         text(fx(0.5), fy(0.8425 + 0.037 / 2), card["line"], 30, LINE_TEXT),
-        logo(),
+        logo(logo_href),
     ]
 
 
@@ -538,11 +538,11 @@ def metrics(card: dict) -> list[str]:
 
 
 # ---- the page -----------------------------------------------------------------------
-def svg(card: dict) -> str:
+def svg(card: dict, logo_href: str = LOGO) -> str:
     """The whole card as one SVG."""
     body = [
         rect(0, 0, W, H, BACKGROUND),
-        *header(card),
+        *header(card, logo_href),
         *skills(card),
         *fastball(card),
         *usage(card),
@@ -685,14 +685,15 @@ def page_title(card: dict) -> str:
     return f"{card['name']} — {card['date']} {at} {card['opp']} — PLV Pitcher Game Card"
 
 
-def render_html(card: dict) -> str:
-    """The standalone page for one card."""
+def render_html(card: dict, logo_href: str = LOGO) -> str:
+    """The standalone page for one card. ``logo_href`` is the Pitcher List mark as the
+    page will see it: relative from pitcher-cards/cards/, absolute from the bucket."""
     stem = f"{card['name'].replace(' ', '_')}_{card['date']}_{card['team']}_{card['opp']}"
     return _PAGE % {
         "title": esc(page_title(card)),
         "bg": BACKGROUND,
         "icon": ICON,
-        "svg": svg(card),
+        "svg": svg(card, logo_href),
         "years": json.dumps([c["year"] for c in card["comparisons"]]),
         "filename": json.dumps(f"{stem}_PLV_card.png"),
     }

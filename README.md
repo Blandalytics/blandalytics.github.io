@@ -112,6 +112,12 @@ Like the scorecards, the pages are pre-built by a scheduled workflow:
   pitches) and [Blandalytics/player_cards](https://github.com/Blandalytics/player_cards) (the
   PLV model files), builds a card for every pitcher who threw a tracked pitch the day before,
   and commits the result.
+- [`.github/workflows/pitcher-cards-live.yml`](.github/workflows/pitcher-cards-live.yml) runs
+  every 15 minutes through game hours and builds cards for the pitchers in the games in
+  progress — the same card, from the pitches thrown so far — into the R2 bucket at
+  `live/cards/`, never the repo. A card is rebuilt only when its pitcher's pitch count has
+  moved; a game gets one last build after it ends, and the nightly run then commits the
+  permanent card. The picker shows these under a **Live** entry while games are on.
 - [`pitcher-cards/cards/<gamePk>-<pitcherId>.html`](pitcher-cards/cards/) — one standalone
   page per pitcher per game. The card is a single SVG drawn in the original figure's
   1500 × 2000 coordinate system, so every panel keeps the matplotlib layout. Every comparison
@@ -126,8 +132,9 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 
 | file | role |
 |---|---|
-| `card.py` | `pitcher_card(game_pk, pitcher_id)` → HTML string; `cards_for_date(date)` → every pitcher that day from one scrape |
-| `fetch.py` | the statsapi live feed (box score, bio, teams), Baseball Savant's arm angles, and `SeasonStore`: regular-season pitches by year, cached as parquet and topped up a day at a time |
+| `card.py` | `pitcher_card(game_pk, pitcher_id)` → HTML string, for a finished game or one in progress; `cards_for_date(date)` → every pitcher that day |
+| `fetch.py` | the statsapi live feed (box score, bio, teams), Baseball Savant's arm angles, and `DataStore`: pitches by date from the data files in the bucket, topped up through the scraper for the days the files don't reach yet |
+| `live_cards.py` | the cards for the games in progress, published to the bucket; what `pitcher-cards-live.yml` runs |
 | `prep.py` | per-pitch metrics from the scraper's columns: counts before the pitch, approach angles, break as acceleration, fastball differences, the per-type tables |
 | `models.py` | the stuff / location / PLV model chains and the xSLG model, from the `player_cards` checkout |
 | `shapes.py` | the comparison season's movement regions (seaborn's 90%-mass KDE contours) as SVG paths |
@@ -136,10 +143,13 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 | `render.py` | renders the dict as the page |
 | `build_site.py` | builds a date range into `pitcher-cards/` and maintains the manifests |
 
-Data comes from statsapi.mlb.com through the scraper wherever it can: the game's pitches
-(`statfast.mlb_day`) and the comparison seasons (`statfast.mlb_season`). The only other
-sources are the game's live feed (box score, bio, team names — one request per game) and
-Baseball Savant's arm-angle leaderboard, which the scraper does not cover. The card is MLB
+The comparison seasons, and the pitches of any settled date, come from the completed-games
+Parquet in the bucket (see *Data files*): each file is downloaded once, narrowed to the ~40
+columns a card reads and cached, so a cold build of a card is under a minute rather than
+four. The days the files don't reach yet — the two most recent — are pulled through the
+scraper, as is a game in progress (one game at a time, so a card can be built mid-game). The
+only other sources are the game's live feed (box score, bio, team names — one request per
+game) and Baseball Savant's arm-angle leaderboard, which the scraper does not cover. The card is MLB
 only, because the scraper is; the minor-league and international levels the app offered
 are not built. Comparison seasons go back to 2023, as in the app; a season is offered once
 the pitcher has three appearances in it before the game.
@@ -153,8 +163,8 @@ complexity limit of 5 per function.
 Run the workflow by hand from the **Actions** tab (*Build pitcher cards → Run workflow*)
 with a `start` and `end` date; tick `force` to re-render cards that already exist, which is
 what you want after changing anything in `render.py`. A day of games is roughly 150 cards
-at about half a second each. The first run also pulls each comparison season once (about a
-minute per season), after which they come from the workflow's cache.
+at about half a second each. The first run also downloads each comparison season's data
+file once (a few seconds per season), after which they come from the workflow's cache.
 
 Locally, from the repo root with the scraper and the models cloned alongside:
 
@@ -165,12 +175,15 @@ pip install -r tools/pitcher_card/requirements.txt
 python tools/pitcher_card/build_site.py --start 2026-09-17 --end 2026-09-17
 ```
 
-Or one card, without the site machinery:
+Or one card, without the site machinery — for a finished game or one in progress:
 
 ```python
 from tools.pitcher_card.card import pitcher_card
 html = pitcher_card(822845, 543243)
 ```
+
+The live cards can be run by hand too: `python tools/pitcher_card/live_cards.py --game <gamePk>`
+builds every pitcher in that game into the bucket, or into a folder with `--out`.
 
 ## Swing Profiles
 

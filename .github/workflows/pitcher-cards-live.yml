@@ -1,0 +1,83 @@
+name: Live pitcher cards
+
+# Cards for the MLB games in progress, written to the bucket (live/cards/) rather than
+# the repo, every 15 minutes through game hours. A pitcher's card is rebuilt only when
+# his pitch count has moved; a game gets one last build after it goes final, and the
+# nightly pitcher-cards run then commits the permanent card.
+on:
+  schedule:
+    - cron: "*/15 16-23,0-6 * * *"
+  workflow_dispatch:
+    inputs:
+      game:
+        description: "One gamePk to build, whatever its state (default: every live game)"
+        required: false
+
+concurrency:
+  group: pitcher-cards-live
+  cancel-in-progress: false
+
+jobs:
+  # a cheap look before the full setup: is anything on, or waiting for its final build?
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      live: ${{ steps.q.outputs.live }}
+    steps:
+      - id: q
+        run: |
+          n=$(curl -sf https://data.blandalytics.com/live/today.json | python3 -c \
+            "import sys,json; g=json.load(sys.stdin)['games']; print(sum(1 for x in g if x['sport']['id']==1 and x['status']['abstract']=='Live'))" || echo 0)
+          f=$(curl -sf https://data.blandalytics.com/live/cards/index.json | python3 -c \
+            "import sys,json; g=json.load(sys.stdin).get('games',{}); print(sum(1 for x in g.values() if not x.get('final')))" || echo 0)
+          echo "$n live, $f awaiting a final build"
+          if [ "$n" -gt 0 ] || [ "$f" -gt 0 ]; then echo "live=true" >> "$GITHUB_OUTPUT"; else echo "live=false" >> "$GITHUB_OUTPUT"; fi
+
+  build:
+    needs: check
+    if: needs.check.outputs.live == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/pitcher_card/requirements.txt
+
+      - name: Fetch the scraper and the models
+        run: |
+          git clone --depth 1 https://github.com/Blandalytics/statcast_scraper.git
+          git clone --depth 1 https://github.com/Blandalytics/player_cards.git
+
+      - name: Install
+        run: pip install -r tools/pitcher_card/requirements.txt
+
+      # the same comparison-season cache the nightly build keeps; this job only saves
+      # one when there was none to restore, so a run every 15 minutes doesn't churn it
+      - name: Restore the season cache
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: tools/pitcher_card/cache
+          key: pitcher-seasons-${{ github.run_id }}
+          restore-keys: pitcher-seasons-
+
+      - name: Build
+        run: |
+          ARGS=""
+          [ -n "${{ inputs.game }}" ] && ARGS="--game ${{ inputs.game }}"
+          python tools/pitcher_card/live_cards.py $ARGS
+
+      - name: Save the season cache
+        if: steps.restore.outputs.cache-matched-key == ''
+        uses: actions/cache/save@v4
+        with:
+          path: tools/pitcher_card/cache
+          key: pitcher-seasons-${{ github.run_id }}
