@@ -129,7 +129,19 @@ function build(opts = {}) {
 
   // One link per pitch-to-pitch step of each plate appearance. Links that share a `label` (the PA id)
   // are what Plotly lights up together on hover, which is how a whole PA gets traced.
-  const links = DATA.links.filter(l => withEnds || !l.terminal);
+  let links = DATA.links.filter(l => withEnds || !l.terminal);
+  if (exp) {
+    // The image needs no per-plate-appearance links (nothing to hover), and stacking dozens of
+    // translucent ribbons leaves antialiasing seams between them, so merge each band-to-band step
+    // into one ribbon worth its count.
+    const merged = new Map();
+    links.forEach(l => {
+      const key = l.source + '|' + l.target;
+      if (!merged.has(key)) merged.set(key, { ...l, n: 0 });
+      merged.get(key).n += 1;
+    });
+    links = [...merged.values()];
+  }
   // the invisible feeds: one per first-pitch band, worth its whole count
   const feeds = feed ? nodeIds.filter(i => nodes[i].n === 1 && nodes[i].type !== 'END')
     .map(i => ({ source: -1, target: i, feed: true, count: nodes[i].count })) : [];
@@ -140,7 +152,7 @@ function build(opts = {}) {
   const link = {
     source: links.map(l => remap.get(l.source)).concat(feeds.map(() => feedIdx)),
     target: links.map(l => remap.get(l.target)).concat(feeds.map(f => remap.get(f.target))),
-    value: links.map(() => 1).concat(feeds.map(f => f.count)),
+    value: links.map(l => l.n || 1).concat(feeds.map(f => f.count)),
     label: links.map(l => String(l.pa)).concat(feeds.map(() => '')),
     color: links.map(l => hexToRgba(DATA.nodes[l.source].color, dim(l.type) ? 0.06 : alpha)).concat(feeds.map(() => NONE)),
     hovercolor: links.map(l => hexToRgba(DATA.nodes[l.source].color, dim(l.type) ? 0.06 : 0.95)).concat(feeds.map(() => NONE)),
