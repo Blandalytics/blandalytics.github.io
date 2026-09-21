@@ -59,18 +59,18 @@ function build(opts = {}) {
   const exp = opts.export || null;
   const withEnds = exp ? false : showEnds.checked;
   const nodes = DATA.nodes;
-  // d3 value = max(inflow, outflow). Column 1 has no inflow; every later real node's inflow is its count.
-  const val = i => {
-    const n = nodes[i];
-    if (n.type === 'END') return n.count;
-    return n.n === 1 ? (withEnds ? n.count : n.count - n.ended) : n.count;
-  };
-  // Ending nodes only when asked for, and never a node with no links (a first pitch whose every
-  // plate appearance ended there, with endings hidden): Plotly drops such nodes and reindexes
-  // the rest, which would shift every later node's position by one.
-  const keep = nodes.map((n, i) => (withEnds || n.type !== 'END') && val(i) > 0);
+  // Every band is sized by all the pitches thrown at that count, whether or not they ended the
+  // plate appearance. d3 sizes a node by max(inflow, outflow), and a first pitch has no inflow,
+  // so with the ending nodes hidden an invisible source node feeds each first-pitch band a link
+  // worth its full count (with endings shown, the terminal links already make up the difference).
+  const val = i => nodes[i].count;
+  const feed = !withEnds;
+  // Ending nodes only when asked for. (Every drawn node has a link, so Plotly never drops one and
+  // reindexes the rest, which would shift every later node's position.)
+  const keep = nodes.map(n => withEnds || n.type !== 'END');
   const remap = new Map(); let k = 0;
   nodes.forEach((n, i) => { if (keep[i]) remap.set(i, k++); });
+  const feedIdx = feed ? k : -1;                  // the invisible source's index in the trace
 
   const ink = token('--ink'), muted = token('--muted'), surface = token('--surface');
   const alpha = parseFloat(token('--link-alpha')) || 0.5;
@@ -111,14 +111,16 @@ function build(opts = {}) {
     ids.forEach(i => { y[remap.get(i)] = cur + h(i) / 2; cur += h(i) + pad; });
   });
   const nodeIds = nodes.map((n, i) => i).filter(i => keep[i]);
+  const NONE = 'rgba(0,0,0,0)';
+  if (feed) { x[feedIdx] = xs(0); y[feedIdx] = 0.5; }   // sits under the first column, unseen
   const node = {
     pad: PAD, thickness: THICK, align: 'left', line: { color: surface, width: 1 },
-    label: nodeIds.map(() => ''),
+    label: nodeIds.map(() => '').concat(feed ? [''] : []),
     color: nodeIds.map(i => {
       const n = nodes[i];
       if (n.type === 'END') return surface;                 // ending faces match the chart background
       return dim(n.type) ? hexToRgba(n.color, 0.18) : n.color;
-    }),
+    }).concat(feed ? [NONE] : []),
     x, y,
     hoverinfo: 'none',            // node tooltips are drawn by the page too, so they can dodge the traced paths
   };
@@ -126,17 +128,20 @@ function build(opts = {}) {
   // One link per pitch-to-pitch step of each plate appearance. Links that share a `label` (the PA id)
   // are what Plotly lights up together on hover, which is how a whole PA gets traced.
   const links = DATA.links.filter(l => withEnds || !l.terminal);
+  // the invisible feeds: one per first-pitch band, worth its whole count
+  const feeds = feed ? nodeIds.filter(i => nodes[i].n === 1 && nodes[i].type !== 'END')
+    .map(i => ({ source: -1, target: i, feed: true, count: nodes[i].count })) : [];
   if (!exp) {
-    currentLinks = links;
-    currentNodes = nodeIds.map(i => ({ ...nodes[i], index: i, dimmed: nodeDimmed(i) }));
+    currentLinks = links.concat(feeds);
+    currentNodes = nodeIds.map(i => ({ ...nodes[i], index: i, dimmed: nodeDimmed(i) })).concat(feed ? [{ feed: true }] : []);
   }
   const link = {
-    source: links.map(l => remap.get(l.source)),
-    target: links.map(l => remap.get(l.target)),
-    value: links.map(() => 1),
-    label: links.map(l => String(l.pa)),
-    color: links.map(l => hexToRgba(DATA.nodes[l.source].color, dim(l.type) ? 0.06 : alpha)),
-    hovercolor: links.map(l => hexToRgba(DATA.nodes[l.source].color, dim(l.type) ? 0.06 : 0.95)),
+    source: links.map(l => remap.get(l.source)).concat(feeds.map(() => feedIdx)),
+    target: links.map(l => remap.get(l.target)).concat(feeds.map(f => remap.get(f.target))),
+    value: links.map(() => 1).concat(feeds.map(f => f.count)),
+    label: links.map(l => String(l.pa)).concat(feeds.map(() => '')),
+    color: links.map(l => hexToRgba(DATA.nodes[l.source].color, dim(l.type) ? 0.06 : alpha)).concat(feeds.map(() => NONE)),
+    hovercolor: links.map(l => hexToRgba(DATA.nodes[l.source].color, dim(l.type) ? 0.06 : 0.95)).concat(feeds.map(() => NONE)),
     hoverinfo: 'none',            // link tooltips are drawn by the page so they can dodge the traced path
     line: { width: 0 },
   };
@@ -183,6 +188,12 @@ function paintOutlines() {
   nodeRects().forEach(el => {
     const d = el.__data__, n = d && currentNodes[d.node.pointNumber];
     if (n && n.type === 'END') { el.style.stroke = n.outline; el.style.strokeWidth = '2.5px'; el.style.strokeOpacity = n.dimmed ? 0.18 : 1; }
+    // the invisible feed node is drawn last, over the first column: keep it from taking the hover
+    if (n && n.feed) el.parentNode.style.pointerEvents = 'none';
+  });
+  linkPaths().forEach(el => {
+    const d = el.__data__, l = d && currentLinks[d.link.pointNumber];
+    if (l && l.feed) el.style.pointerEvents = 'none';
   });
 }
 function render() {
@@ -284,6 +295,7 @@ function focusPoint(pt, anchor) {
   if (pt.source === undefined) {
     // Node: every plate appearance that passes through it
     const idx = pt.pointNumber, pas = new Set();
+    if (!currentNodes[idx] || currentNodes[idx].feed) return;
     linkPaths().forEach(el => {
       const d = el.__data__;
       if (d && (d.link.source.pointNumber === idx || d.link.target.pointNumber === idx)) pas.add(d.link.label);
@@ -296,9 +308,9 @@ function focusPoint(pt, anchor) {
     return;
   }
   // Link: this one plate appearance, with its own tooltip placed clear of the path
-  const { paPaths, paRects } = trace(new Set([pt.label]));
-  const l = currentLinks[pt.pointNumber], p = paById.get(l.pa);
+  const l = currentLinks[pt.pointNumber], p = l && !l.feed ? paById.get(l.pa) : null;
   if (!p) return;
+  const { paPaths, paRects } = trace(new Set([pt.label]));
   // Pitch chain ending in the actual event, colored by its outcome group's outline; the hovered step is bold.
   const hot = k => k === l.step || k === l.step + 1;
   const seq = p.seq.map((c, k) => hot(k) ? `<b>${c}</b>` : `<span class="off">${c}</span>`);
