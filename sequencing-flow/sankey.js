@@ -59,7 +59,16 @@ function build(opts = {}) {
   const exp = opts.export || null;
   const withEnds = exp ? false : showEnds.checked;
   const nodes = DATA.nodes;
-  const keep = nodes.map(n => withEnds || n.type !== 'END');
+  // d3 value = max(inflow, outflow). Column 1 has no inflow; every later real node's inflow is its count.
+  const val = i => {
+    const n = nodes[i];
+    if (n.type === 'END') return n.count;
+    return n.n === 1 ? (withEnds ? n.count : n.count - n.ended) : n.count;
+  };
+  // Ending nodes only when asked for, and never a node with no links (a first pitch whose every
+  // plate appearance ended there, with endings hidden): Plotly drops such nodes and reindexes
+  // the rest, which would shift every later node's position by one.
+  const keep = nodes.map((n, i) => (withEnds || n.type !== 'END') && val(i) > 0);
   const remap = new Map(); let k = 0;
   nodes.forEach((n, i) => { if (keep[i]) remap.set(i, k++); });
 
@@ -78,12 +87,6 @@ function build(opts = {}) {
   const PAD = 14, THICK = 22, MARGIN_T = 14, MARGIN_B = 14;
   const MARGIN_L = 48, MARGIN_R = 24;
   const H = Math.max(200, (exp ? exp.H : chartEl.clientHeight) - MARGIN_T - MARGIN_B);
-  // d3 value = max(inflow, outflow). Column 1 has no inflow; every later real node's inflow is its count.
-  const val = i => {
-    const n = nodes[i];
-    if (n.type === 'END') return n.count;
-    return n.n === 1 ? (withEnds ? n.count : n.count - n.ended) : n.count;
-  };
   // d3 columns (by depth): real nodes at depth n-1, END nodes at depth n.
   const depth = i => nodes[i].type === 'END' ? nodes[i].n : nodes[i].n - 1;
   const cols = {};
@@ -142,7 +145,7 @@ function build(opts = {}) {
   // thrown first in a plate appearance gets its label inside the first band it does appear in,
   // so every type is named somewhere.
   const firstCol = new Map();
-  nodes.forEach(n => { if (n.type !== 'END' && !(firstCol.has(n.type) && firstCol.get(n.type) <= n.n)) firstCol.set(n.type, n.n); });
+  nodeIds.forEach(i => { const n = nodes[i]; if (n.type !== 'END' && !(firstCol.has(n.type) && firstCol.get(n.type) <= n.n)) firstCol.set(n.type, n.n); });
   const labels = [];
   nodeIds.forEach(i => {
     const n = nodes[i];
