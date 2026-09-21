@@ -141,6 +141,18 @@ function build() {
       font: { family: token('--body'), size: 12.5, color: dim(nodes[i].type) ? muted : ink },
     }));
 
+  // A pitch type never thrown first in a plate appearance gets its label inside the first band it does
+  // appear in, so every type is named somewhere.
+  const firstCol = new Map();
+  nodes.forEach(n => { if (n.type !== 'END' && !(firstCol.has(n.type) && firstCol.get(n.type) <= n.n)) firstCol.set(n.type, n.n); });
+  nodeIds
+    .filter(i => nodes[i].type !== 'END' && nodes[i].n > 1 && firstCol.get(nodes[i].type) === nodes[i].n && val(i) * ky >= 11)
+    .forEach(i => annotations.push({
+      x: x[remap.get(i)], y: 1 - y[remap.get(i)], xref: 'paper', yref: 'paper',
+      xanchor: 'center', yanchor: 'middle', showarrow: false, text: `<b>${nodes[i].label}</b>`,
+      font: { family: token('--body'), size: 10.5, color: dim(nodes[i].type) ? muted : '#0d1117' },
+    }));
+
   const trace = {
     type: 'sankey', orientation: 'h', arrangement: 'fixed', valueformat: 'd',
     node, link, textfont: { family: token('--body'), size: 12, color: ink },
