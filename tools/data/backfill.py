@@ -128,7 +128,9 @@ def pull(s: requests.Session, sport_id: int, games: dict[int, dict], workers: in
     if sport_id != 1:
         abbr = team_abbrs(s, sport_id, {g["date"][:4] for g in games.values()})
         for c in ("home_team", "away_team", "bat_team", "field_team"):
-            df[c] = df[c].cat.rename_categories(lambda v: abbr.get(v, v))
+            # mapped value by value rather than renaming categories: two college
+            # programs can share an abbreviation, which a rename would reject
+            df[c] = df[c].astype("string").map(lambda v: abbr.get(v, v)).astype("category")
 
     df["sport_id"] = pd.Series(sport_id, index=df.index, dtype="UInt16")
     types = pd.Series(df["game_pk"].map({pk: g["game_type"] for pk, g in games.items()}))
