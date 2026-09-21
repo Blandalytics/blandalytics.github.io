@@ -1,5 +1,6 @@
 # the scraper and the model files are cloned at build time, not vendored
 statcast_scraper/
+/swing_profiles/
 player_cards/
 __pycache__/
 *.pyc

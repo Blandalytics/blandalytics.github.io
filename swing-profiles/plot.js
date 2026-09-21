@@ -319,5 +319,5 @@
     return { canvas: cv, peak, trough, warnings };
   }
 
-  window.SwingPlot = { plotSwingKinematics, THEMES, SPEED_YLIM, ACCEL_YLIM_G, JERK_YLIM, DPI, fmt0, fmt1, fmtComma0 };
+  window.SwingPlot = { plotSwingKinematics, tickValues, THEMES, SPEED_YLIM, ACCEL_YLIM_G, JERK_YLIM, DPI, fmt0, fmt1, fmtComma0 };
 })();
