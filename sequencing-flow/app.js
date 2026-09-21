@@ -7,7 +7,7 @@
 // as #<pitcherId>-<YYYY-MM-DD>.
 
 import * as data from './data.js?v=1';
-import * as sankey from './sankey.js?v=3';
+import * as sankey from './sankey.js?v=4';
 
 const $ = id => document.getElementById(id);
 const q = $('q'), hits = $('hits'), seasonSel = $('season'), dateIn = $('date'), gameSel = $('game'), gameLabel = $('gameLabel');
@@ -111,7 +111,14 @@ async function loadLog() {
   const want = state.date ? state.log.find(g => g.date === state.date) : null;
   const first = state.log.find(g => availability(g.date) !== 'future');
   fillFromLog(want ? `${p.id}|${want.gamePk}|${want.date}` : first ? `${p.id}|${first.gamePk}|${first.date}` : undefined);
-  if (!state.log.length) { showEmpty(`${p.name} has no MLB appearances in ${season}.`); return; }
+  if (!state.log.length) {
+    // nothing this season and no date asked for: fall back to their latest season that has games
+    const opts = [...seasonSel.options].map(o => o.value);
+    const next = opts[opts.indexOf(season) + 1];
+    if (!state.date && next) { seasonSel.value = next; loadLog(); return; }
+    showEmpty(`${p.name} has no MLB appearances in ${season}.`);
+    return;
+  }
   if (state.date && !want) {
     // both chosen, but the log doesn't show that date — try the day anyway (the log can lag)
     draw(state.date, p.id, null);
@@ -173,7 +180,8 @@ function choosePitcher(p) {
   state.pitcher = { id: p.id, name: p.name };
   q.value = p.name;
   renderHits([]);
-  if (state.date && state.date.slice(0, 4) !== seasonSel.value) seasonSel.value = state.date.slice(0, 4);
+  // a newly chosen pitcher opens on their most recent appearance, whatever date was showing
+  state.date = null; dateIn.value = '';
   loadLog();
 }
 q.addEventListener('input', () => {
