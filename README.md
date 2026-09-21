@@ -200,17 +200,33 @@ builds every pitcher in that game into the bucket, or into a folder with `--out`
 
 [blandalytics.com/sequencing-flow/](https://blandalytics.com/sequencing-flow/) — one pitcher's game as
 a Sankey diagram. Each column is the pitch's number within the plate appearance, each band a pitch
-type (stacked by how often it was thrown that game), and each link one plate appearance's step from
-a pitch to the next, so the ribbons show what followed what. Hover a link to trace that plate
-appearance across the columns (its tooltip gives the batter, inning and the full chain ending in the
-event, and is placed clear of the traced path); hover a band to trace every plate appearance through
-it; click a legend chip to isolate a pitch type. *Show where plate appearances end* adds outcome
-nodes (strikeout, batted-ball out, walk/HBP, hit, other) after the pitch that ended each PA, so every
-pitch is drawn. A flow is linkable as `sequencing-flow/#<pitcherId>-<YYYY-MM-DD>`.
+type (stacked top to bottom by how often it was thrown that game, sized by every pitch of that type
+at that count), and each link one plate appearance's step from a pitch to the next, so the ribbons
+show what followed what. A pitch that ended its plate appearance has no link after its band. Pitch
+types are labelled left of the first column; a type never thrown as a first pitch is labelled inside
+the first band it appears in.
 
-Search a pitcher to list their appearances in a season, or pick a game date to list everyone who
-threw a tracked pitch that day; with both set the page goes straight to that game. On arrival it
-shows the longest outing of the most recent day with finished games.
+- **Hover a link** to trace that plate appearance across the columns. Its tooltip gives the batter,
+  the inning and the full pitch chain ending in the actual event (colored by outcome group, home runs
+  in pink), and is placed clear of the traced path.
+- **Hover a band** to trace every plate appearance through it; the tooltip gives the pitch's share
+  of pitches at that count and how many ended a plate appearance there.
+- **Click a legend chip** to isolate a pitch type; only the outcome nodes it produced stay lit.
+- **Show where plate appearances end** adds hollow outcome nodes (strikeout, batted-ball out,
+  walk/HBP, hit, other — told apart by outline color) after the pitch that ended each plate
+  appearance. Hovering one lists each plate appearance that ended there as the pitch that ended it
+  and the event.
+- On a phone, where there is no hover, a tap pins a tooltip and a second tap (or a tap elsewhere in
+  the chart) clears it.
+- **Save PNG** writes a square 2000 × 2000 image: the box-score line, the pitch-type key, the flow
+  without the ending nodes, and the Pitcher List Stats wordmark.
+
+A flow is linkable as `sequencing-flow/#<pitcherId>-<YYYY-MM-DD>`.
+
+Search a pitcher to open their most recent appearance (falling back to their latest season that
+has one) and list the rest of that season; or pick a game date to list everyone who threw a tracked
+pitch that day, longest outing first. With both set the page goes straight to that game. On arrival
+with nothing asked for, it shows the longest outing of the most recent day with finished games.
 
 ### How it works
 
@@ -224,13 +240,30 @@ Nothing is built ahead of time; the page queries the data in the browser:
 - Dates after the manifest's `last_finalized` come from the live feed's `live/games/<gamePk>.json`
   while those objects exist (the schedule for the day comes from the Stats API); a game in progress
   draws what has been thrown so far.
-- Pitcher search and game logs come from the MLB Stats API directly, which allows cross-origin
-  requests. The page is MLB only.
+- Pitcher search, game logs and team abbreviations come from the MLB Stats API directly, which
+  allows cross-origin requests. The page is MLB only.
+
+The chart is Plotly's sankey trace in a *fixed* layout the page computes itself, so that every
+column is exactly one pitch number and the bands stack in usage order: node positions are the
+centres Plotly expects and the heights are recomputed on d3-sankey's own scale (`value × ky`), with
+`node.align = 'left'` so d3's columns match. Two quirks worth knowing before touching `sankey.js`:
+
+- d3 sizes a node by max(inflow, outflow) and a first pitch has no inflow, so with the ending nodes
+  hidden an invisible source node feeds each first-pitch band a link worth its full count. It is
+  transparent, unoutlined, ignores the pointer and is skipped by the hover handlers.
+- Plotly drops a node that has no links and reindexes the rest, which shifts every later node's
+  position by one — so every node handed to Plotly must carry a link (the feed guarantees it).
+
+Each link is one plate appearance's step (value 1) labelled with the plate appearance's id; that is
+what lets a hover trace a whole plate appearance. Tooltips are drawn by the page rather than Plotly
+so they can be placed away from the traced ribbons (sampled along each ribbon's outline plus
+`isPointInFill` probes) and use the page's font. Save PNG rebuilds the layout at the export size,
+lets Plotly rasterise the sankey, and draws the text and labels on the canvas.
 
 | file | role |
 |---|---|
 | `sequencing-flow/data.js` | manifest, Parquet queries, the live-feed fallback, Stats API lookups, and `buildFlow`: pitches → nodes, links and plate appearances |
-| `sequencing-flow/sankey.js` | the chart: Plotly's sankey trace in a fixed layout computed to match d3-sankey's scale, hover tracing, the path-dodging tooltip |
+| `sequencing-flow/sankey.js` | the chart: the fixed layout, hover / tap tracing, the tooltips, Save PNG |
 | `sequencing-flow/index.html`, `app.js` | the page and its pitcher / season / date / game controls |
 
 After any change to the JavaScript, bump the `?v=` query on the module imports in `index.html` and

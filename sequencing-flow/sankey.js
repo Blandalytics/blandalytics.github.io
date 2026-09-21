@@ -361,7 +361,7 @@ function wireHover() {
 
 /**
  * Save the diagram as a square PNG (2000 x 2000): the pitcher's line above, the pitch-type key,
- * the flow without ending nodes, and a credit. Plotly rasterises the sankey itself; the text is
+ * the flow without ending nodes, and the Pitcher List wordmark. Plotly rasterises the sankey itself; the text is
  * drawn on the canvas so it uses the page's font.
  */
 const WORDMARK_URL = '../pitcher-cards/PitcherList_Stats_watermark_with_logo.webp';
@@ -447,11 +447,10 @@ export async function savePng(meta) {
     if (l.inside) { ctx.font = `700 15px ${family}`; ctx.fillStyle = '#0d1117'; ctx.textAlign = 'center'; ctx.fillText(l.text, px, py); }
     else { ctx.font = `500 15px ${family}`; ctx.fillStyle = ink; ctx.textAlign = 'right'; ctx.fillText(l.text, px - thick / 2 - 8, py); }
   });
-  // Footer: the credit and reading key on the left, the Pitcher List wordmark on the right.
+  // Footer: the reading key on the left, the Pitcher List wordmark on the right.
   ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   ctx.fillStyle = muted; ctx.font = `500 13px ${family}`;
-  ctx.fillText('blandalytics.com/sequencing-flow', PADX, S - 40);
-  ctx.fillText('Columns: pitch number in the plate appearance · bands: pitch type · links: one plate appearance each', PADX, S - 20);
+  ctx.fillText('Columns: pitch number in the plate appearance · bands: pitch type · links: one plate appearance each', PADX, S - 22);
   if (mark) {
     const mw = 230, mh = mw * mark.height / mark.width;
     ctx.drawImage(mark, S - PADX - mw, S - 22 - mh, mw, mh);
