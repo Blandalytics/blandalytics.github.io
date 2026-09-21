@@ -219,7 +219,7 @@ the first band it appears in.
 - On a phone, where there is no hover, a tap pins a tooltip and a second tap (or a tap elsewhere in
   the chart) clears it.
 - **Save PNG** writes a square 2000 × 2000 image: the box-score line, the pitch-type key, the flow
-  without the ending nodes, and the Pitcher List Stats wordmark.
+  as shown (with the ending nodes and their key if they are on), and the Pitcher List Stats wordmark.
 
 A flow is linkable as `sequencing-flow/#<pitcherId>-<YYYY-MM-DD>`.
 
