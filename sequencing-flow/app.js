@@ -7,7 +7,7 @@
 // as #<pitcherId>-<YYYY-MM-DD>.
 
 import * as data from './data.js?v=1';
-import * as sankey from './sankey.js?v=8';
+import * as sankey from './sankey.js?v=9';
 
 const $ = id => document.getElementById(id);
 const q = $('q'), hits = $('hits'), seasonSel = $('season'), dateIn = $('date'), gameSel = $('game'), gameLabel = $('gameLabel');
