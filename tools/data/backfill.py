@@ -17,7 +17,7 @@ pitch in it was measured, so an untracked park contributes nothing and a file ho
 exactly the games with Statcast data.
 
     build --sport mlb --unit day --start 2026-09-18 [--end ...]   one or more units
-    roll  --sport mlb,aaa                                          what the nightly job runs
+    roll                                                           what the nightly job runs
 """
 from __future__ import annotations
 
@@ -57,6 +57,13 @@ def sports(s: requests.Session) -> dict[str, int]:
     r = s.get(f"{API}/sports", params={"fields": "sports,id,code"}, timeout=30)
     r.raise_for_status()
     return {x["code"]: x["id"] for x in r.json()["sports"]}
+
+
+def resolve_sports(s: requests.Session, names: str) -> list[tuple[str, int]]:
+    """'mlb,aaa' or '1,11' -> [(code, id), ...]; 'all' is every league the API lists."""
+    if names.strip() == "all":
+        return sorted(sports(s).items(), key=lambda x: x[1])
+    return [resolve_sport(s, n.strip()) for n in names.split(",") if n.strip()]
 
 
 def resolve_sport(s: requests.Session, name: str) -> tuple[str, int]:
@@ -325,8 +332,7 @@ def tidy(store, manifest) -> None:
 
 def cmd_build(a, s, store):
     manifest = load_manifest(store)
-    for name in a.sport.split(","):
-        sport, sport_id = resolve_sport(s, name.strip())
+    for sport, sport_id in resolve_sports(s, a.sport):
         print(f"{sport} ({sport_id}) {a.unit}s {a.start}..{a.end or a.start}")
         for key in unit_keys(a.unit, a.start, a.end):
             build_unit(s, store, manifest, sport, sport_id, a.unit, key, a.workers, a.force, a.prune)
@@ -335,14 +341,17 @@ def cmd_build(a, s, store):
 def cmd_roll(a, s, store):
     """The nightly step: the day that has just settled, then any month whose last day
     has settled (this month if it just ended, and the one before in case a night was
-    missed). Seasons are closed by hand, after the World Series."""
+    missed). Seasons are closed by hand, after the World Series.
+
+    Runs over every league by default: only games with measured pitches are written,
+    so the untracked leagues cost a schedule call and a few wasted fetches, and a park
+    that gains tracking shows up on its own."""
     today = dt.date.fromisoformat(a.today) if a.today else dt.datetime.now(ET).date()
     settled = today - dt.timedelta(days=SETTLE_DAYS)
     manifest = load_manifest(store)
     this_month = settled.replace(day=1)
     prev_month = (this_month - dt.timedelta(days=1)).replace(day=1)
-    for name in a.sport.split(","):
-        sport, sport_id = resolve_sport(s, name.strip())
+    for sport, sport_id in resolve_sports(s, a.sport):
         print(f"{sport} ({sport_id}): settled through {settled}")
         for m in (prev_month, this_month):
             last = m.replace(day=calendar.monthrange(m.year, m.month)[1])
@@ -362,7 +371,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     b = sub.add_parser("build", help="one or more units of one or more sports")
-    b.add_argument("--sport", default="mlb", help="codes or ids, comma-separated (mlb, aaa, 11...)")
+    b.add_argument("--sport", default="mlb", help="codes or ids, comma-separated (mlb, aaa, 11...), or all")
     b.add_argument("--unit", choices=("day", "month", "season"), required=True)
     b.add_argument("--start", required=True, help="YYYY-MM-DD, YYYY-MM or YYYY to match --unit")
     b.add_argument("--end", help="last unit, inclusive (default: --start)")
@@ -371,7 +380,7 @@ def main(argv=None):
     b.set_defaults(run=cmd_build)
 
     r = sub.add_parser("roll", help="the nightly step: settled day + closed month")
-    r.add_argument("--sport", default="mlb,aaa")
+    r.add_argument("--sport", default="all", help="codes, ids, or all (default)")
     r.add_argument("--today", help="pretend it is this date (YYYY-MM-DD)")
     r.set_defaults(run=cmd_roll)
 
