@@ -62,10 +62,13 @@ html = scorecard(824638)
 The scorecards are built the morning after; for games in progress a Cloudflare
 Worker in [`tools/live/`](tools/live/) polls the Stats API live feed every ~30s
 during game hours and writes trimmed JSON to an R2 bucket, which the site reads
-directly:
+directly. It watches every league the API carries and probes each game for pitch
+tracking (all of MLB and Triple-A have it, plus the odd lower-level park):
 
-- `live/today.json` — yesterday's and today's schedule with status, score and inning
+- `live/today.json` — yesterday's and today's schedule for every league with status,
+  score, inning, sport, venue and a `tracked` flag
 - `live/games/<gamePk>.json` — plays and pitches (type, velocity, location, spin, EV/LA)
+  for tracked games
 
 Nothing is committed to the repo; the objects expire after a week and the nightly
 scorecard build remains the record for finished games.
