@@ -348,9 +348,23 @@ function wireHover() {
  * the flow without ending nodes, and a credit. Plotly rasterises the sankey itself; the text is
  * drawn on the canvas so it uses the page's font.
  */
+const WORDMARK_URL = '../pitcher-cards/PitcherList_Stats_watermark_with_logo.webp';
+let wordmarkPromise = null;
+function loadWordmark() {
+  if (!wordmarkPromise) {
+    wordmarkPromise = new Promise(ok => {
+      const im = new Image();
+      im.onload = () => ok(im); im.onerror = () => ok(null);
+      im.src = WORDMARK_URL;
+    });
+  }
+  return wordmarkPromise;
+}
+
 export async function savePng(meta) {
   if (!DATA) return;
   const S = 1000, SCALE = 2, PADX = 44;
+  const mark = await loadWordmark();
   const ground = token('--ground') || '#0d1117', ink = token('--ink'), muted = token('--muted');
   const family = (token('--body') || 'sans-serif');
   await document.fonts.ready;
@@ -392,7 +406,8 @@ export async function savePng(meta) {
   yCur += 22;
 
   // The flow, rasterised by Plotly at the remaining size.
-  const W = S - 2 * PADX, H = S - yCur - 56;
+  const FOOT = 74;                                       // room for the credit line and the wordmark
+  const W = S - 2 * PADX, H = S - yCur - FOOT;
   const { trace, layout, labels, margin, thick } = build({ export: { W, H } });
   const box = document.createElement('div');
   box.style.cssText = `position:fixed;left:-20000px;top:0;width:${W}px;height:${H}px;`;
@@ -416,11 +431,15 @@ export async function savePng(meta) {
     if (l.inside) { ctx.font = `700 15px ${family}`; ctx.fillStyle = '#0d1117'; ctx.textAlign = 'center'; ctx.fillText(l.text, px, py); }
     else { ctx.font = `500 15px ${family}`; ctx.fillStyle = ink; ctx.textAlign = 'right'; ctx.fillText(l.text, px - thick / 2 - 8, py); }
   });
-  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'right';
+  // Footer: the credit and reading key on the left, the Pitcher List wordmark on the right.
+  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   ctx.fillStyle = muted; ctx.font = `500 13px ${family}`;
-  ctx.fillText('blandalytics.com/sequencing-flow', S - PADX, S - 24);
-  ctx.textAlign = 'left';
-  ctx.fillText('Columns: pitch number in the plate appearance · bands: pitch type · links: one plate appearance each', PADX, S - 24);
+  ctx.fillText('blandalytics.com/sequencing-flow', PADX, S - 40);
+  ctx.fillText('Columns: pitch number in the plate appearance · bands: pitch type · links: one plate appearance each', PADX, S - 20);
+  if (mark) {
+    const mw = 230, mh = mw * mark.height / mark.width;
+    ctx.drawImage(mark, S - PADX - mw, S - 22 - mh, mw, mh);
+  }
 
   const a = document.createElement('a');
   const slug = `${meta.pitcher}_${meta.date}`.toLowerCase().replace(/[^a-z0-9]+/g, '_');
