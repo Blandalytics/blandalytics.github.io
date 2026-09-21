@@ -113,10 +113,11 @@
   // figure's own: bat speed in the velocity blue, acceleration in the gold, and
   // duration in the jerk white.
   function kdeSvg(values, x, color, decimals = 0) {
-    const W = 260, H = 66, top = 6, bottom = 16, left = 4, right = 4;
-    const atX = kde(values, [x]);  // the bandwidth, and the curve's height at this hitter
-    const bw = atX.bw, dx = atX.density[0];
-    const lo = Math.min(Math.min(...values) - 2 * bw, x), hi = Math.max(Math.max(...values) + 2 * bw, x);
+    const W = 260, H = 66, top = 7, bottom = 16, left = 7, right = 7;
+    const dx = kde(values, [x]).density[0];  // the curve's height at this hitter
+    // The curve spans the observed data and no further: the league's extremes,
+    // or this hitter's own value where it lies beyond them.
+    const lo = Math.min(Math.min(...values), x), hi = Math.max(Math.max(...values), x);
     const N = 121;
     const grid = Array.from({ length: N }, (_, i) => lo + (i * (hi - lo)) / (N - 1));
     const dens = kde(values, grid).density;
@@ -142,7 +143,7 @@
     }
     add("path", { class: "curve", stroke: color, d: `M${pts.join(" L")}` });
     add("line", { class: "mark", stroke: color, x1: sx(x), x2: sx(x), y1: y0, y2: yx });
-    add("circle", { class: "dot", fill: color, cx: sx(x), cy: yx, r: 3.2 });
+    add("circle", { class: "dot", fill: color, cx: sx(x), cy: yx, r: 5 });
     const pct = Math.round((100 * values.filter((v) => v < x).length) / values.length);
     svg.setAttribute("aria-label", `${pct}th percentile of ${values.length} hitters`);
     return svg;
