@@ -56,12 +56,24 @@ button.primary:hover:not(:disabled){background:#8cc6ff}
 .suggest-list li{display:flex; justify-content:space-between; gap:12px; padding:6px 9px; border-radius:4px; cursor:pointer; font-size:14px; line-height:20px; color:var(--ink)}
 .suggest-list li small{color:var(--muted); font-size:12px; white-space:nowrap}
 .suggest-list li.active{background:#222b36}
-.stats{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px 16px; margin-top:14px}
-.stat{display:flex; flex-direction:column; gap:2px}
+/* the three summary metrics share the width; they stack when it runs out */
+.stats{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px 20px; margin-top:14px}
+@media (max-width:640px){.stats{grid-template-columns:1fr}}
+.stat{display:flex; flex-direction:column; gap:2px; min-width:0}
 .stat span{color:var(--muted); font-size:12.5px}
 .stat b{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-size:17px; font-weight:600}
 .stat small{color:var(--faint); font-size:12px}
 .stat.warn b{color:var(--warn)}
+/* where this hitter sits among the season's hitters: a KDE with their value marked */
+.stat svg.kde{display:block; width:100%; height:auto; margin-top:8px; overflow:visible}
+.kde text{fill:var(--faint); font-size:10px; font-family:"DM Sans",system-ui,sans-serif}
+.kde .base{stroke:var(--rule); stroke-width:1}
+.kde .tick{stroke:var(--rule); stroke-width:1}
+.kde .curve{fill:none; stroke-width:1.6; stroke-linejoin:round; stroke-linecap:round}
+.kde .below{opacity:.18}
+.kde .mark{stroke-width:1.2; stroke-dasharray:2 2}
+.kde .dot{stroke:var(--surface); stroke-width:1.5}
+.dist-note{color:var(--faint); font-size:12px; margin-top:6px}
 .actions{margin-top:14px}
 .note{color:var(--faint); font-size:12.5px; margin-top:8px}
 .method{color:var(--muted); font-size:14px}
@@ -132,8 +144,8 @@ details[open] summary{margin-bottom:10px}
     </details>
   </section>
 </main>
-<script src="swing.js?v=6"></script>
-<script src="plot.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="swing.js?v=7"></script>
+<script src="plot.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

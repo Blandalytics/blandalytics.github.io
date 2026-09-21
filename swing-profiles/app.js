@@ -17,6 +17,7 @@
   };
 
   let leaderboard = null;   // rows for the selected season
+  let distribution = null;  // the season's swing-profiles/data/<year>.json, or null
   let hitters = [];         // one entry per player, for the suggestion list
   let profile = null;       // the profile on screen
   let cardObjectUrl = null;
@@ -40,7 +41,7 @@
     leaderboard = null;
     status(`loading the ${year} leaderboard…`);
     try {
-      leaderboard = await Swing.fetchBatTracking(year);
+      [leaderboard, distribution] = await Promise.all([Swing.fetchBatTracking(year), loadDistribution(year)]);
     } catch (e) {
       status(`could not load the ${year} bat-tracking leaderboard: ${e.message}`, "err");
       return false;
@@ -70,6 +71,81 @@
     status(`${hitters.length} hitters, ${leaderboard.length} player-sides · ${year}`);
     el.go.disabled = false;
     return true;
+  }
+
+  // ---- the season's distributions ----------------------------------------------
+
+  // swing-profiles/data/<year>.json: the page's three numbers for every hitter
+  // and bat side with a card that season, built nightly by
+  // .github/workflows/swing-profiles.yml. Missing (not built yet) is fine.
+  const distributionCache = new Map();
+  async function loadDistribution(year) {
+    if (distributionCache.has(year)) return distributionCache.get(year);
+    let dist = null;
+    try {
+      const resp = await fetch(`data/${year}.json`);
+      if (resp.ok) {
+        const raw = await resp.json();
+        const col = Object.fromEntries(raw.columns.map((c, i) => [c, i]));
+        dist = { season: raw.season, built: raw.built, rows: raw.rows.map((r) => ({
+          id: r[col.id], hand: r[col.hand], impact_mph: r[col.impact_mph], duration_ms: r[col.duration_ms], peak_accel_g: r[col.peak_accel_g],
+        })) };
+      }
+    } catch (e) { dist = null; }
+    distributionCache.set(year, dist);
+    return dist;
+  }
+
+  // Gaussian KDE with Scott's bandwidth -- scipy's gaussian_kde default, which
+  // swing_plot.plot_peak_time_kde uses too.
+  function kde(values, grid) {
+    const n = values.length;
+    const mean = values.reduce((a, b) => a + b, 0) / n;
+    const sd = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1));
+    const bw = sd * n ** (-1 / 5);
+    const norm = n * bw * Math.sqrt(2 * Math.PI);
+    return { bw, density: grid.map((x) => values.reduce((a, v) => a + Math.exp(-0.5 * ((x - v) / bw) ** 2), 0) / norm) };
+  }
+
+  // The KDE of one metric over everyone else that season, with this hitter's
+  // value marked: a dashed drop line, a dot on the curve, and the area up to it
+  // tinted so the eye reads how much of the league sits below. Colours are the
+  // figure's own: bat speed in the velocity blue, acceleration in the gold, and
+  // duration in the jerk white.
+  function kdeSvg(values, x, color, decimals = 0) {
+    const W = 260, H = 66, top = 6, bottom = 16, left = 4, right = 4;
+    const atX = kde(values, [x]);  // the bandwidth, and the curve's height at this hitter
+    const bw = atX.bw, dx = atX.density[0];
+    const lo = Math.min(Math.min(...values) - 2 * bw, x), hi = Math.max(Math.max(...values) + 2 * bw, x);
+    const N = 121;
+    const grid = Array.from({ length: N }, (_, i) => lo + (i * (hi - lo)) / (N - 1));
+    const dens = kde(values, grid).density;
+    const ymax = Math.max(...dens, dx);
+    const sx = (v) => left + ((v - lo) / (hi - lo)) * (W - left - right);
+    const sy = (d) => top + (1 - d / ymax) * (H - top - bottom);
+    const pts = grid.map((g, i) => `${sx(g).toFixed(1)},${sy(dens[i]).toFixed(1)}`);
+    const upTo = grid.findIndex((g) => g > x);
+    const y0 = sy(0), yx = sy(dx);
+    const belowPts = (upTo < 0 ? pts : pts.slice(0, upTo)).concat([`${sx(x).toFixed(1)},${yx.toFixed(1)}`]);
+    const ticks = SwingPlot.tickValues(lo, hi, 5).ticks;
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("class", "kde");
+    svg.setAttribute("role", "img");
+    const add = (tag, attrs, text) => { const e = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; svg.appendChild(e); return e; };
+    add("path", { class: "below", fill: color, d: `M${sx(lo).toFixed(1)},${y0.toFixed(1)} L${belowPts.join(" L")} L${sx(x).toFixed(1)},${y0.toFixed(1)} Z` });
+    add("line", { class: "base", x1: left, x2: W - right, y1: y0, y2: y0 });
+    for (const t of ticks) {
+      add("line", { class: "tick", x1: sx(t), x2: sx(t), y1: y0, y2: y0 + 3 });
+      add("text", { x: sx(t), y: H - 3, "text-anchor": "middle" }, t.toFixed(decimals));
+    }
+    add("path", { class: "curve", stroke: color, d: `M${pts.join(" L")}` });
+    add("line", { class: "mark", stroke: color, x1: sx(x), x2: sx(x), y1: y0, y2: yx });
+    add("circle", { class: "dot", fill: color, cx: sx(x), cy: yx, r: 3.2 });
+    const pct = Math.round((100 * values.filter((v) => v < x).length) / values.length);
+    svg.setAttribute("aria-label", `${pct}th percentile of ${values.length} hitters`);
+    return svg;
   }
 
   // ---- the Bats control ------------------------------------------------------
@@ -228,25 +304,27 @@
     const t = p.timing, d = p.data;
     const f = (x, n = 1) => x.toFixed(n);
     const signed = (x, n) => { const s = Math.abs(x).toFixed(n); return Number(s) === 0 ? s : (x < 0 ? "−" : "+") + s; };
+    const theme = SwingPlot.THEMES.pitcherlist;
+    // Everyone else that season -- this hitter's own row is left out.
+    const others = distribution && distribution.rows.filter((r) => !(r.id === p.mlbam_id && r.hand === p.handedness));
     const stats = [
-      ["Bat speed at contact", `${f(p.impact_mph)} mph`, `Statcast: ${f(t.leaderboard_bat_speed_mph, 2)} (${signed(t.speed_check_mph, 2)})`, !t.speed_check_ok],
-      ["Imputed swing duration", `~${f(p.duration_ms, 0)} ms`, `${f(t.swing_length_ft, 2)} ft / ${f(t.mean_bat_speed_mph)} mph mean`],
-      ["Peak acceleration", `~${f(d.acceleration[peak])} g`, `at ${f(d.swing_time[peak], 0)} ms`],
-    //  ["Mean / impact speed", f(t.shape_ratio, 3), "shape of the curve"],
+      ["Bat speed at contact", `${f(p.impact_mph)} mph`, `Statcast: ${f(t.leaderboard_bat_speed_mph, 2)} (${signed(t.speed_check_mph, 2)})`, !t.speed_check_ok, "impact_mph", p.impact_mph, theme.velocity],
+      ["Imputed swing duration", `~${f(p.duration_ms, 0)} ms`, `${f(t.swing_length_ft, 2)} ft / ${f(t.mean_bat_speed_mph)} mph mean`, false, "duration_ms", p.duration_ms, theme.jerk],
+      ["Peak acceleration", `~${f(d.acceleration[peak])} g`, `at ${f(d.swing_time[peak], 0)} ms`, false, "peak_accel_g", d.acceleration[peak], theme.accel],
     ];
-    if (trough !== null) stats.push(["Let-off jerk", `~${SwingPlot.fmtComma0(d.jerk[trough])} g/s`, `at ${f(d.swing_time[trough], 0)} ms`]);
-    stats.push(["Competitive swings", String(t.swings_competitive), `${p.year} leaderboard`]);
-    el.stats.replaceChildren(...stats.map(([label, value, sub, warn]) => {
+    el.stats.replaceChildren(...stats.map(([label, value, sub, warn, key, x, color]) => {
       const div = document.createElement("div");
       div.className = warn ? "stat warn" : "stat";
       const s = document.createElement("span"); s.textContent = label;
       const b = document.createElement("b"); b.textContent = value;
       const sm = document.createElement("span"); sm.textContent = sub;
       div.append(s, b, sm);
+      if (others && others.length >= 2) div.appendChild(kdeSvg(others.map((r) => r[key]), x, color));
       return div;
     }));
 
     const notes = [];
+    if (!others) notes.push(`The ${p.year} league distributions haven't been built yet, so the charts under the numbers are missing.`);
     if (!t.speed_check_ok) {
       notes.push(`The card's impact speed and the leaderboard's average bat speed differ by ${f(Math.abs(t.speed_check_mph))} mph, more than the ${Swing.SPEED_CHECK_TOLERANCE} mph tolerance: the two sources may not describe the same swings, so the imputed duration is suspect.`);
     }

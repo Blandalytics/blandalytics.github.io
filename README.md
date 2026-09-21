@@ -259,10 +259,21 @@ are bit-identical, and durations and derivatives agree to floating-point noise.
 | `swing-profiles/swing.js` | the pipeline: leaderboard fetch and name resolution (`savant_lookup`), card digitizer (`swing_path_extract`), duration (`swing_duration`), Savitzky–Golay derivatives (`swing_profile`) |
 | `swing-profiles/plot.js` | the figure, on a canvas at 200 dpi with the same geometry and theme as `swing_plot.py` |
 | `swing-profiles/index.html`, `app.js` | the page: season, player and bat-side controls, the stats strip, downloads |
+| `swing-profiles/data/<season>.json` | every hitter and bat side with a card that season: bat speed at contact, imputed duration, peak acceleration — what the small distribution charts under the numbers draw |
+| `tools/swing_profiles/build_data.py` | builds those files by running the Python pipeline over the whole leaderboard (~500 cards, about a minute) |
+
+Under each of the three numbers the page draws where that hitter sits among everyone else
+that season: a KDE of the metric over every other hitter with a card, in the figure's own
+colour, with the hitter's value marked and the share of the league below it tinted.
+[`.github/workflows/swing-profiles.yml`](.github/workflows/swing-profiles.yml) rebuilds the
+current season's file every morning at 11:00 UTC (a hitter's duration moves a little as the
+leaderboard's swing length does) and takes a `seasons` input for backfills; it clones
+[Blandalytics/swing_profiles](https://github.com/Blandalytics/swing_profiles) alongside,
+as the scorecards clone the scraper.
 
 ### Updating
 
-Nothing is stored: every profile is fetched and computed on request. If Savant changes the
+Nothing is stored for a profile: it is fetched and computed on request. If Savant changes the
 card template, the pixel anchors at the top of `swing.js` (`WIN_*`, `X_START`, `X_IMPACT`,
 `Y_ZERO`, `PX_PER_MPH`, `AXIS_*`) need rechecking, exactly as in the Python. The chart's
 vertical position is measured per card from its y-axis line, because a player name that
