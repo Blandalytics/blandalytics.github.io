@@ -18,8 +18,9 @@
  * The nightly scorecards workflow is still the source of truth for finished
  * games; these files only need to be good enough to render "right now".
  *
- * `scheduled` is the cron entry point. `fetch` serves live/ read-only, for
- * `wrangler dev` and as a *.workers.dev fallback if no custom domain is attached.
+ * `scheduled` is the cron entry point. `fetch` serves live/ and data/ (the
+ * completed-games Parquet from tools/data) read-only, for `wrangler dev` and as a
+ * *.workers.dev fallback beside the bucket's own domain.
  */
 
 const API = "https://statsapi.mlb.com/api/v1";
@@ -79,7 +80,9 @@ export default {
       return new Response("method not allowed", { status: 405, headers: CORS });
     }
     const key = new URL(request.url).pathname.replace(/^\/+/, "");
-    if (!key.startsWith("live/")) return new Response("not found", { status: 404, headers: CORS });
+    if (!key.startsWith("live/") && !key.startsWith("data/")) {
+      return new Response("not found", { status: 404, headers: CORS });
+    }
 
     const obj = await env.BUCKET.get(key, {
       onlyIf: request.headers,   // honours If-None-Match -> 304
