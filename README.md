@@ -185,6 +185,45 @@ html = pitcher_card(822845, 543243)
 The live cards can be run by hand too: `python tools/pitcher_card/live_cards.py --game <gamePk>`
 builds every pitcher in that game into the bucket, or into a folder with `--out`.
 
+## Sequencing Flow
+
+[blandalytics.com/sequencing-flow/](https://blandalytics.com/sequencing-flow/) — one pitcher's game as
+a Sankey diagram. Each column is the pitch's number within the plate appearance, each band a pitch
+type (stacked by how often it was thrown that game), and each link one plate appearance's step from
+a pitch to the next, so the ribbons show what followed what. Hover a link to trace that plate
+appearance across the columns (its tooltip gives the batter, inning and the full chain ending in the
+event, and is placed clear of the traced path); hover a band to trace every plate appearance through
+it; click a legend chip to isolate a pitch type. *Show where plate appearances end* adds outcome
+nodes (strikeout, batted-ball out, walk/HBP, hit, other) after the pitch that ended each PA, so every
+pitch is drawn. A flow is linkable as `sequencing-flow/#<pitcherId>-<YYYY-MM-DD>`.
+
+Search a pitcher to list their appearances in a season, or pick a game date to list everyone who
+threw a tracked pitch that day; with both set the page goes straight to that game.
+
+### How it works
+
+Nothing is built ahead of time; the page queries the data in the browser:
+
+- Settled dates come from the completed-games Parquet in the bucket (see *Data files*). The page
+  reads the manifest, picks the finest file covering the date (day, month or season) and queries it
+  with [hyparquet](https://github.com/hyparam/hyparquet) over HTTP range requests, narrowed to the
+  date and ~20 columns — a few hundred KB and under a second even out of a 130 MB season file, since
+  the files are sorted by date and the row-group statistics rule most of them out.
+- Dates after the manifest's `last_finalized` come from the live feed's `live/games/<gamePk>.json`
+  while those objects exist (the schedule for the day comes from the Stats API); a game in progress
+  draws what has been thrown so far.
+- Pitcher search and game logs come from the MLB Stats API directly, which allows cross-origin
+  requests. The page is MLB only.
+
+| file | role |
+|---|---|
+| `sequencing-flow/data.js` | manifest, Parquet queries, the live-feed fallback, Stats API lookups, and `buildFlow`: pitches → nodes, links and plate appearances |
+| `sequencing-flow/sankey.js` | the chart: Plotly's sankey trace in a fixed layout computed to match d3-sankey's scale, hover tracing, the path-dodging tooltip |
+| `sequencing-flow/index.html`, `app.js` | the page and its pitcher / season / date / game controls |
+
+After any change to the JavaScript, bump the `?v=` query on the module imports in `index.html` and
+`app.js` so browsers fetch the new files.
+
 ## Swing Profiles
 
 [blandalytics.com/swing-profiles/](https://blandalytics.com/swing-profiles/) — Bat Speed,

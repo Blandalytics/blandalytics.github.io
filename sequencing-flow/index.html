@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Sequencing Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
+  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684;
+  --rule:#242c37; --rule-soft:#1e252f;
+  --link-alpha:.5;
+  --body:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{height:100%}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--body);
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  display:flex; flex-direction:column;
+}
+
+/* ---------- picker bar ---------- */
+.bar{
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 18px;
+  padding:16px 20px 14px; border-bottom:1px solid var(--rule); background:var(--surface);
+}
+.brand{margin-right:auto; display:flex; flex-direction:column; gap:2px}
+.brand h1{margin:0; font-size:19px; font-weight:700; letter-spacing:-.01em}
+.brand .sub{
+  font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
+  font-variant-numeric:tabular-nums;
+}
+.field{display:flex; flex-direction:column; gap:5px; min-width:150px; position:relative}
+.field label{
+  font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
+  font-weight:600;
+}
+select,input[type=text],input[type=search],input[type=date]{
+  font:inherit; font-size:14px; font-weight:500; color:var(--ink);
+  background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:8px 11px;
+  font-variant-numeric:tabular-nums; min-height:38px;
+}
+select{
+  appearance:none; -webkit-appearance:none; cursor:pointer; padding-right:30px;
+  background:var(--raise) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238a96a6' stroke-width='1.5'/></svg>") no-repeat right 11px center;
+}
+input[type=date]{color-scheme:dark}
+select:hover,input:hover{border-color:var(--faint)}
+select:focus-visible,input:focus-visible{outline:2px solid var(--ink); outline-offset:1px}
+select:disabled,input:disabled{opacity:.45; cursor:default}
+#q{min-width:240px}
+#game{min-width:300px}
+.hits{
+  position:absolute; top:100%; left:0; right:0; z-index:30; margin-top:4px;
+  background:var(--raise); border:1px solid var(--rule); border-radius:6px; overflow:hidden;
+  box-shadow:0 8px 24px -8px rgba(0,0,0,.7);
+}
+.hits[hidden]{display:none}
+.hits button{
+  display:flex; justify-content:space-between; gap:12px; width:100%; text-align:left;
+  font:inherit; font-size:14px; color:var(--ink); background:none; border:0; padding:8px 11px; cursor:pointer;
+}
+.hits button:hover,.hits button.active{background:var(--surface)}
+.hits button span{color:var(--muted); font-size:12px}
+.hits .none{padding:8px 11px; color:var(--muted); font-size:13px}
+.btn{
+  font:inherit; font-size:12.5px; font-weight:600; color:var(--muted);
+  background:none; border:1px solid var(--rule); border-radius:6px; padding:8px 12px;
+  white-space:nowrap; cursor:pointer; align-self:flex-end; min-height:38px;
+}
+.btn:hover{color:var(--ink); border-color:var(--faint)}
+
+/* ---------- the flow ---------- */
+.stage{flex:1; min-height:0; overflow:auto; padding:16px 20px 20px; display:flex; flex-direction:column; gap:14px}
+.head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:10px 28px}
+.who{display:flex; flex-direction:column; gap:2px}
+.who h2{margin:0; font-size:26px; font-weight:700; letter-spacing:-.01em; line-height:1.1}
+.matchup{color:var(--muted); font-size:14px}
+.matchup b{color:var(--ink); font-weight:600}
+.matchup .live{color:#65FF9C; font-weight:600}
+.line{display:flex; gap:20px; flex-wrap:wrap}
+.stat{display:flex; flex-direction:column; align-items:flex-start; min-width:32px}
+.stat .v{font-size:24px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums}
+.stat .k{font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-top:3px}
+.controls{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px 20px}
+.legend{display:flex; flex-wrap:wrap; gap:8px}
+.chip{
+  display:inline-flex; align-items:center; gap:8px; padding:5px 11px 5px 8px; border-radius:999px;
+  background:var(--raise); border:1px solid transparent; color:var(--ink); font:inherit; cursor:pointer;
+  font-size:13px; transition:background .12s,opacity .12s;
+}
+.chip:hover{background:var(--rule)}
+.chip:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+.chip .sw{width:12px; height:12px; border-radius:3px; flex:none}
+.chip .code{font-weight:600}
+.chip .nm{color:var(--muted)}
+.chip .ct{color:var(--faint); font-variant-numeric:tabular-nums}
+.legend.has-focus .chip:not(.on){opacity:.45}
+.chip.on{border-color:var(--ink)}
+.ends{display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px}
+.key{display:flex; flex-wrap:wrap; gap:6px 12px; font-size:12px; color:var(--muted)}
+.key span{display:inline-flex; align-items:center; gap:6px}
+.key i{width:10px; height:14px; border-radius:2px; background:var(--surface); border:2px solid var(--k); box-sizing:border-box}
+.toggle{display:inline-flex; align-items:center; gap:8px; color:var(--muted); cursor:pointer; user-select:none; font-size:14px}
+.toggle input{width:16px; height:16px; margin:0; accent-color:var(--ink)}
+.chart-wrap{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:10px 6px 4px; overflow-x:auto; position:relative}
+#chart{min-width:720px; height:560px}
+.empty{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  color:var(--muted); font-size:15px; text-align:center; padding:0 20px;
+}
+.empty[hidden]{display:none}
+#tip{
+  position:fixed; z-index:20; pointer-events:none; max-width:360px;
+  background:var(--raise); color:var(--ink); border:1px solid var(--rule); border-radius:8px;
+  padding:8px 11px; font-size:12.5px; line-height:1.4;
+  box-shadow:0 6px 20px rgba(0,0,0,.45);
+}
+#tip[hidden]{display:none}
+/* Plotly forces sankey hover labels to 65% opacity; keep the node tooltips solid too. */
+#chart .hoverlayer .hovertext path,#chart .hoverlayer .hovertext rect{fill-opacity:1 !important}
+#tip .name{font-weight:600}
+#tip .meta{color:var(--muted)}
+#tip .seq{margin-top:3px}
+#tip .seq .off{color:var(--muted)}
+#tip .seq b{color:var(--ink)}
+#tip .seq .ev b{color:inherit}
+.flow[hidden]{display:none}
+.note{padding:6px 20px 10px; color:var(--muted); font-size:12px; border-top:1px solid var(--rule); background:var(--surface)}
+.note a{color:var(--ink)}
+
+@media (max-width:760px){
+  .bar{padding:12px 12px 10px; gap:10px 12px}
+  .brand{flex-basis:100%; margin:0}
+  .field{flex:1; min-width:0}
+  #q,#game{min-width:0; flex-basis:100%}
+  .stage{padding:12px}
+  #chart{height:500px}
+}
+@media (prefers-reduced-motion:reduce){.chip{transition:none}}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <h1>Sequencing Flow</h1>
+    <span class="sub" id="status">Loading…</span>
+  </div>
+  <div class="field">
+    <label for="q">Pitcher</label>
+    <input type="search" id="q" placeholder="Search a pitcher…" autocomplete="off" spellcheck="false" disabled>
+    <div class="hits" id="hits" hidden></div>
+  </div>
+  <div class="field">
+    <label for="season">Season</label>
+    <select id="season" disabled></select>
+  </div>
+  <div class="field">
+    <label for="date">Game date</label>
+    <input type="date" id="date" disabled>
+  </div>
+  <div class="field">
+    <label for="game" id="gameLabel">Game</label>
+    <select id="game" disabled></select>
+  </div>
+  <button class="btn" id="reset" type="button">Clear</button>
+</header>
+
+<main class="stage">
+  <div class="flow" id="flow" hidden>
+    <div class="head">
+      <div class="who">
+        <h2 id="name">—</h2>
+        <div class="matchup" id="matchup"></div>
+      </div>
+      <div class="line" id="line"></div>
+    </div>
+  </div>
+  <div class="controls flow" id="controls" hidden>
+    <div class="legend" id="legend" role="group" aria-label="Pitch types — click to isolate"></div>
+    <div class="ends">
+      <label class="toggle" for="show-ends">
+        <input type="checkbox" id="show-ends">
+        Show where plate appearances end
+      </label>
+      <div class="key" id="end-key" hidden aria-label="Plate appearance outcomes"></div>
+    </div>
+  </div>
+  <div class="chart-wrap">
+    <div id="chart"></div>
+    <div class="empty" id="empty">Search a pitcher, or pick a game date.</div>
+  </div>
+  <div id="tip" hidden role="tooltip"></div>
+</main>
+
+<footer class="note">
+  Each column is the pitch's number within the plate appearance; each band is a pitch type, stacked by how
+  often it was thrown in the game. Each link is one plate appearance's step from a pitch to the next.
+  <b>Hover a link</b> to trace that plate appearance; <b>hover a band</b> to trace every plate appearance
+  through it. Node height counts the pitches that continued or arrived — turn on plate-appearance endings
+  to see every pitch. Settled games come from the completed-games data files; the last couple of days come
+  from the live feed while it holds them. Pitch types are subject to change. Feedback to Kyle Bland, on
+  <a href="https://bsky.app/profile/blandalytics.pitcherlist.com" target="_blank" rel="noopener">Bluesky</a> or
+  <a href="https://x.com/blandalytics" target="_blank" rel="noopener">Twitter</a>.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.3/plotly.min.js"></script>
+<script type="module" src="app.js?v=1"></script>
+</body>
+</html>
