@@ -7,13 +7,13 @@
 // as #<pitcherId>-<YYYY-MM-DD>.
 
 import * as data from './data.js?v=1';
-import * as sankey from './sankey.js?v=5';
+import * as sankey from './sankey.js?v=6';
 
 const $ = id => document.getElementById(id);
 const q = $('q'), hits = $('hits'), seasonSel = $('season'), dateIn = $('date'), gameSel = $('game'), gameLabel = $('gameLabel');
-const status = $('status'), empty = $('empty'), flow = $('flow'), controls = $('controls'), reset = $('reset');
+const status = $('status'), empty = $('empty'), flow = $('flow'), controls = $('controls'), reset = $('reset'), png = $('png');
 
-const state = { pitcher: null, date: null, log: [], dayList: [], loading: 0 };
+const state = { pitcher: null, date: null, log: [], dayList: [], loading: 0, meta: null };
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function niceDate(iso, year) {
   const d = new Date(iso + 'T12:00:00');
@@ -35,6 +35,7 @@ function fill(sel, items, value) {     // items: [[value, label, disabled?], ...
 }
 function showEmpty(text) {
   sankey.clear();
+  state.meta = null; png.hidden = true;
   flow.hidden = true; controls.hidden = true;
   empty.textContent = text; empty.hidden = false;
   document.title = 'Sequencing Flow';
@@ -65,8 +66,10 @@ async function draw(date, pitcherId, gamePk) {
       return;
     }
     header(f.meta);
+    state.meta = f.meta;
     flow.hidden = false; controls.hidden = false; empty.hidden = true;
     await sankey.show(f);
+    png.hidden = false;
     const hash = `#${pitcherId}-${date}`;
     if (location.hash !== hash) history.replaceState(null, '', hash);
   } catch (e) {
@@ -217,6 +220,12 @@ dateIn.addEventListener('change', () => {
   if (state.pitcher) loadLog(); else loadDay();
 });
 gameSel.addEventListener('change', onGame);
+png.addEventListener('click', async () => {
+  if (!state.meta) return;
+  png.disabled = true;
+  try { await sankey.savePng(state.meta); } catch (e) { console.error(e); }
+  png.disabled = false;
+});
 reset.addEventListener('click', () => {
   state.pitcher = null; state.date = null; state.log = []; state.dayList = [];
   q.value = ''; dateIn.value = ''; fill(gameSel, []); gameLabel.textContent = 'Game';

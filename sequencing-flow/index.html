@@ -75,6 +75,7 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
   white-space:nowrap; cursor:pointer; align-self:flex-end; min-height:38px;
 }
 .btn:hover{color:var(--ink); border-color:var(--faint)}
+.btn:disabled{opacity:.45; cursor:default}
 
 /* ---------- the flow ---------- */
 /* the page scrolls as a whole (when it needs to); only a wide chart scrolls sideways inside its box */
@@ -185,6 +186,7 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
     <label for="game" id="gameLabel">Game</label>
     <select id="game" disabled></select>
   </div>
+  <button class="btn" id="png" type="button" hidden>Save PNG</button>
   <button class="btn" id="reset" type="button">Clear</button>
 </header>
 
@@ -222,6 +224,6 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.3/plotly.min.js"></script>
-<script type="module" src="app.js?v=6"></script>
+<script type="module" src="app.js?v=7"></script>
 </body>
 </html>

@@ -52,8 +52,12 @@ function fillLegend() {
   endKey.hidden = !showEnds.checked;
 }
 
-function build() {
-  const withEnds = showEnds.checked;
+// opts.export = { W, H } builds the trace for a PNG at that size instead of the live chart: no
+// ending nodes, no isolation, and the labels come back as geometry (drawn onto the canvas, where
+// the page's font is available) rather than Plotly annotations.
+function build(opts = {}) {
+  const exp = opts.export || null;
+  const withEnds = exp ? false : showEnds.checked;
   const nodes = DATA.nodes;
   const keep = nodes.map(n => withEnds || n.type !== 'END');
   const remap = new Map(); let k = 0;
@@ -61,7 +65,7 @@ function build() {
 
   const ink = token('--ink'), muted = token('--muted'), surface = token('--surface');
   const alpha = parseFloat(token('--link-alpha')) || 0.5;
-  const dim = t => focus && t !== focus;
+  const dim = t => !exp && focus && t !== focus;
   // With a pitch type isolated, only the outcomes it produced stay lit
   const endLit = new Set();
   DATA.links.forEach(l => { if (l.terminal && !dim(l.type)) endLit.add(l.target); });
@@ -72,7 +76,8 @@ function build() {
   // one column per pitch number, bands in game-usage order (most-thrown type on top), vertically centred.
   // node.align = 'left' keeps d3's depth = pitch number - 1, so its ky columns match ours.
   const PAD = 14, THICK = 22, MARGIN_T = 14, MARGIN_B = 14;
-  const H = Math.max(200, chartEl.clientHeight - MARGIN_T - MARGIN_B);
+  const MARGIN_L = 48, MARGIN_R = 24;
+  const H = Math.max(200, (exp ? exp.H : chartEl.clientHeight) - MARGIN_T - MARGIN_B);
   // d3 value = max(inflow, outflow). Column 1 has no inflow; every later real node's inflow is its count.
   const val = i => {
     const n = nodes[i];
@@ -118,8 +123,10 @@ function build() {
   // One link per pitch-to-pitch step of each plate appearance. Links that share a `label` (the PA id)
   // are what Plotly lights up together on hover, which is how a whole PA gets traced.
   const links = DATA.links.filter(l => withEnds || !l.terminal);
-  currentLinks = links;
-  currentNodes = nodeIds.map(i => ({ ...nodes[i], index: i, dimmed: nodeDimmed(i) }));
+  if (!exp) {
+    currentLinks = links;
+    currentNodes = nodeIds.map(i => ({ ...nodes[i], index: i, dimmed: nodeDimmed(i) }));
+  }
   const link = {
     source: links.map(l => remap.get(l.source)),
     target: links.map(l => remap.get(l.target)),
@@ -131,27 +138,25 @@ function build() {
     line: { width: 0 },
   };
 
-  // Pitch-type labels sit to the left of the first column, centred on each band.
-  const annotations = nodeIds
-    .filter(i => nodes[i].n === 1 && nodes[i].type !== 'END' && val(i) > 0)
-    .map(i => ({
-      x: x[remap.get(i)], y: 1 - y[remap.get(i)], xref: 'paper', yref: 'paper',
-      xanchor: 'right', yanchor: 'middle', xshift: -(THICK / 2 + 8), showarrow: false,
-      text: nodes[i].label,
-      font: { family: token('--body'), size: 12.5, color: dim(nodes[i].type) ? muted : ink },
-    }));
-
-  // A pitch type never thrown first in a plate appearance gets its label inside the first band it does
-  // appear in, so every type is named somewhere.
+  // Pitch-type labels sit to the left of the first column, centred on each band. A type never
+  // thrown first in a plate appearance gets its label inside the first band it does appear in,
+  // so every type is named somewhere.
   const firstCol = new Map();
   nodes.forEach(n => { if (n.type !== 'END' && !(firstCol.has(n.type) && firstCol.get(n.type) <= n.n)) firstCol.set(n.type, n.n); });
-  nodeIds
-    .filter(i => nodes[i].type !== 'END' && nodes[i].n > 1 && firstCol.get(nodes[i].type) === nodes[i].n && val(i) * ky >= 11)
-    .forEach(i => annotations.push({
-      x: x[remap.get(i)], y: 1 - y[remap.get(i)], xref: 'paper', yref: 'paper',
-      xanchor: 'center', yanchor: 'middle', showarrow: false, text: `<b>${nodes[i].label}</b>`,
-      font: { family: token('--body'), size: 10.5, color: dim(nodes[i].type) ? muted : '#0d1117' },
-    }));
+  const labels = [];
+  nodeIds.forEach(i => {
+    const n = nodes[i];
+    if (n.type === 'END' || val(i) <= 0) return;
+    const at = { x: x[remap.get(i)], y: y[remap.get(i)], text: n.label, type: n.type, dimmed: dim(n.type) };
+    if (n.n === 1) labels.push({ ...at, inside: false });
+    else if (firstCol.get(n.type) === n.n && val(i) * ky >= 11) labels.push({ ...at, inside: true });
+  });
+  const annotations = exp ? [] : labels.map(l => ({
+    x: l.x, y: 1 - l.y, xref: 'paper', yref: 'paper', yanchor: 'middle', showarrow: false,
+    xanchor: l.inside ? 'center' : 'right', xshift: l.inside ? 0 : -(THICK / 2 + 8),
+    text: l.inside ? `<b>${l.text}</b>` : l.text,
+    font: { family: token('--body'), size: 12.5, color: l.dimmed ? muted : (l.inside ? '#0d1117' : ink) },
+  }));
 
   const trace = {
     type: 'sankey', orientation: 'h', arrangement: 'fixed', valueformat: 'd',
@@ -159,13 +164,14 @@ function build() {
   };
   const layout = {
     paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
-    margin: { l: 48, r: 24, t: MARGIN_T, b: MARGIN_B }, autosize: true,
+    margin: { l: MARGIN_L, r: MARGIN_R, t: MARGIN_T, b: MARGIN_B }, autosize: !exp,
     font: { family: token('--body'), color: ink },
     hovermode: 'closest',
     annotations,
     hoverlabel: { bgcolor: surface, bordercolor: token('--rule'), font: { family: token('--body'), size: 12.5, color: ink } },
   };
-  return { trace, layout };
+  if (exp) Object.assign(layout, { width: exp.W, height: exp.H });
+  return { trace, layout, labels, margin: { l: MARGIN_L, r: MARGIN_R, t: MARGIN_T, b: MARGIN_B }, thick: THICK };
 }
 
 // Ending nodes share one face and are told apart by outline color. Plotly only takes a single
@@ -335,6 +341,92 @@ function wireHover() {
     if (ev.target.closest && ev.target.closest('.sankey-link, .sankey-node')) return;
     if (pinned) { pinned = null; untrace(); }
   });
+}
+
+/**
+ * Save the diagram as a square PNG (2000 x 2000): the pitcher's line above, the pitch-type key,
+ * the flow without ending nodes, and a credit. Plotly rasterises the sankey itself; the text is
+ * drawn on the canvas so it uses the page's font.
+ */
+export async function savePng(meta) {
+  if (!DATA) return;
+  const S = 1000, SCALE = 2, PADX = 44;
+  const ground = token('--ground') || '#0d1117', ink = token('--ink'), muted = token('--muted');
+  const family = (token('--body') || 'sans-serif');
+  await document.fonts.ready;
+
+  // Header and key, laid out first so the flow gets whatever height is left.
+  const cv = document.createElement('canvas');
+  cv.width = S * SCALE; cv.height = S * SCALE;
+  const ctx = cv.getContext('2d');
+  ctx.scale(SCALE, SCALE);
+  ctx.fillStyle = ground; ctx.fillRect(0, 0, S, S);
+  ctx.textBaseline = 'alphabetic';
+  let yCur = 70;
+  ctx.fillStyle = ink; ctx.font = `700 34px ${family}`;
+  ctx.fillText(meta.pitcher, PADX, yCur);
+  const L = meta.line || {};
+  const lineTxt = `${L.ip} IP · ${L.h} H · ${L.bb} BB · ${L.k} K · ${L.pitches} pitches`;
+  ctx.font = `600 17px ${family}`; ctx.textAlign = 'right';
+  ctx.fillText(lineTxt, S - PADX, yCur); ctx.textAlign = 'left';
+  yCur += 28;
+  ctx.fillStyle = muted; ctx.font = `500 17px ${family}`;
+  const d = new Date(meta.date + 'T12:00:00');
+  const dateStr = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  ctx.fillText(`${meta.away} @ ${meta.home} · ${dateStr} · vs ${meta.opponent}`, PADX, yCur);
+  yCur += 34;
+  // key: swatch, code, name, count
+  let kx = PADX;
+  DATA.types.forEach(t => {
+    const code = t.code, name = t.name, count = String(t.count);
+    ctx.font = `600 14px ${family}`; const wCode = ctx.measureText(code).width;
+    ctx.font = `400 14px ${family}`; const wName = ctx.measureText(name).width, wCount = ctx.measureText(count).width;
+    const w = 14 + 8 + wCode + 6 + wName + 6 + wCount;
+    if (kx + w > S - PADX) { kx = PADX; yCur += 26; }
+    ctx.fillStyle = t.color; ctx.beginPath(); ctx.roundRect(kx, yCur - 12, 14, 14, 3); ctx.fill();
+    ctx.fillStyle = ink; ctx.font = `600 14px ${family}`; ctx.fillText(code, kx + 22, yCur);
+    ctx.fillStyle = muted; ctx.font = `400 14px ${family}`; ctx.fillText(name, kx + 22 + wCode + 6, yCur);
+    ctx.fillText(count, kx + 22 + wCode + 6 + wName + 6, yCur);
+    kx += w + 26;
+  });
+  yCur += 22;
+
+  // The flow, rasterised by Plotly at the remaining size.
+  const W = S - 2 * PADX, H = S - yCur - 56;
+  const { trace, layout, labels, margin, thick } = build({ export: { W, H } });
+  const box = document.createElement('div');
+  box.style.cssText = `position:fixed;left:-20000px;top:0;width:${W}px;height:${H}px;`;
+  document.body.appendChild(box);
+  let url;
+  try {
+    await Plotly.newPlot(box, [trace], layout, { staticPlot: true, displayModeBar: false });
+    url = await Plotly.toImage(box, { format: 'png', width: W, height: H, scale: SCALE });
+  } finally {
+    Plotly.purge(box); box.remove();
+  }
+  const img = new Image();
+  await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = url; });
+  ctx.drawImage(img, PADX, yCur, W, H);
+
+  // Labels, at the same places the page puts them.
+  const plotW = W - margin.l - margin.r, plotH = H - margin.t - margin.b;
+  labels.forEach(l => {
+    const px = PADX + margin.l + l.x * plotW, py = yCur + margin.t + l.y * plotH;
+    ctx.textBaseline = 'middle';
+    if (l.inside) { ctx.font = `700 15px ${family}`; ctx.fillStyle = '#0d1117'; ctx.textAlign = 'center'; ctx.fillText(l.text, px, py); }
+    else { ctx.font = `500 15px ${family}`; ctx.fillStyle = ink; ctx.textAlign = 'right'; ctx.fillText(l.text, px - thick / 2 - 8, py); }
+  });
+  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'right';
+  ctx.fillStyle = muted; ctx.font = `500 13px ${family}`;
+  ctx.fillText('blandalytics.com/sequencing-flow', S - PADX, S - 24);
+  ctx.textAlign = 'left';
+  ctx.fillText('Columns: pitch number in the plate appearance · bands: pitch type · links: one plate appearance each', PADX, S - 24);
+
+  const a = document.createElement('a');
+  const slug = `${meta.pitcher}_${meta.date}`.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  a.download = `${slug}_sequencing_flow.png`;
+  a.href = cv.toDataURL('image/png');
+  a.click();
 }
 
 /** Draw a flow. Resolves once Plotly has painted it. */
