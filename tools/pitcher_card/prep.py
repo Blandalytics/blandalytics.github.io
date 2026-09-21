@@ -48,7 +48,8 @@ def base(df: pd.DataFrame) -> pd.DataFrame:
     out = df.rename(columns=RENAME)
     out = out[[c for c in [*KEEP, *RENAME.values()] if c in out.columns]].copy()
     out["raw_type"] = _obj(df["pitch_type"])
-    out["pitchType"] = out["raw_type"].map(PITCH_TYPE_MAP)
+    # a pitch the feed never classified is an Unknown, as the app labelled UN, not a hole
+    out["pitchType"] = out["raw_type"].map(PITCH_TYPE_MAP).fillna("UN")
     out["desc"] = _obj(df["det_code"]).map(DESC_MAP)
     pre = df.groupby(["game_pk", "at_bat_index"])[["balls", "strikes"]].shift(1).fillna(0)
     out["balls"] = pre["balls"].clip(0, 3).astype(int)
