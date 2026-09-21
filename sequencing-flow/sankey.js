@@ -114,7 +114,9 @@ function build(opts = {}) {
   const NONE = 'rgba(0,0,0,0)';
   if (feed) { x[feedIdx] = xs(0); y[feedIdx] = 0.5; }   // sits under the first column, unseen
   const node = {
-    pad: PAD, thickness: THICK, align: 'left', line: { color: surface, width: 1 },
+    // toImage re-renders from the trace, so the export can't hide the feed node's outline per node:
+    // it goes without node outlines altogether (the endings, the only ones that matter, aren't exported)
+    pad: PAD, thickness: THICK, align: 'left', line: { color: surface, width: exp ? 0 : 1 },
     label: nodeIds.map(() => '').concat(feed ? [''] : []),
     color: nodeIds.map(i => {
       const n = nodes[i];
@@ -256,7 +258,7 @@ function trace(paSet) {
     const d = el.__data__;
     if (!d) return;
     if (onPath.has(d.node.pointNumber)) paRects.push(el.getBoundingClientRect());
-    else { el.style.fillOpacity = 0.18; el.style.strokeOpacity = 0.18; }
+    else { const n = currentNodes[d.node.pointNumber]; el.style.fillOpacity = 0.18; el.style.strokeOpacity = n && n.feed ? 0 : 0.18; }
   });
   return { paPaths, paRects };
 }
@@ -265,7 +267,9 @@ function untrace() {
   linkPaths().forEach(el => { const d = el.__data__; if (d) el.style.fillOpacity = d.tinyColorAlpha; });
   nodeRects().forEach(el => {
     const d = el.__data__, n = d && currentNodes[d.node.pointNumber];
-    if (d) { el.style.fillOpacity = d.tinyColorAlpha; el.style.strokeOpacity = n && n.type === 'END' && n.dimmed ? 0.18 : 1; }
+    if (!d) return;
+    el.style.fillOpacity = d.tinyColorAlpha;
+    el.style.strokeOpacity = n && n.feed ? 0 : (n && n.type === 'END' && n.dimmed ? 0.18 : 1);
   });
 }
 
