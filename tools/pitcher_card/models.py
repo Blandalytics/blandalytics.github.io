@@ -128,13 +128,15 @@ class Models:
         return pd.DataFrame(probs, index=X.index)
 
     def _probs(self, kind: str, df: pd.DataFrame, X: pd.DataFrame) -> pd.DataFrame:
-        """Outcome probabilities for every pitch; NaN for buckets the models do not cover."""
+        """Outcome probabilities for every pitch; NaN for buckets the models do not cover
+        (a position player's eephus pitches, say), which leaves those grades blank."""
         frames = [
             self._chain(kind, b, X[df["bucket"] == b]) for b in BUCKETS if (df["bucket"] == b).any()
         ]
         if not frames:
+            takes = () if kind == "stuff" else TAKE  # the stuff model knows no take outcomes
             return pd.DataFrame(
-                index=df.index, columns=[*TAKE, "swinging_strike", "foul_strike", *BIP]
+                index=df.index, columns=[*takes, "swinging_strike", "foul_strike", *BIP]
             )
         return pd.concat(frames).reindex(df.index)
 
