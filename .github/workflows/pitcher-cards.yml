@@ -1,9 +1,13 @@
 name: Build pitcher cards
 
+# Cards for every pitcher in every finished MLB game, written to the bucket (cards/) by
+# tools/pitcher_card/build_site.py; nothing is committed. The nightly run does yesterday
+# and today. A backfill splits its range into months and builds them in parallel, each
+# job checkpointing its day manifests in the bucket, and the index is rebuilt from the
+# manifests once every job has finished.
 on:
   schedule:
-    # 10:30 UTC is 6:30am Eastern: every game from the night before is final, and the
-    # scorecards run at 10:00 has had its turn at pushing
+    # 10:30 UTC is 6:30am Eastern: every game from the night before is final
     - cron: "30 10 * * *"
   workflow_dispatch:
     inputs:
@@ -18,16 +22,92 @@ on:
         type: boolean
         default: false
 
-# the job commits the generated pages back to the repo
-permissions:
-  contents: write
-
 concurrency:
   group: pitcher-cards
   cancel-in-progress: false
 
+env:
+  R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
 jobs:
+  # the range as month-sized chunks, so a season backfill runs as parallel jobs
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      chunks: ${{ steps.split.outputs.chunks }}
+    steps:
+      - id: split
+        shell: python
+        run: |
+          import datetime as dt, json, os
+          today = dt.date.today()
+          start = dt.date.fromisoformat("${{ inputs.start }}" or (today - dt.timedelta(days=1)).isoformat())
+          end = dt.date.fromisoformat("${{ inputs.end }}" or today.isoformat())
+          chunks, d = [], start
+          while d <= end:
+              last = min(end, (d.replace(day=28) + dt.timedelta(days=4)).replace(day=1) - dt.timedelta(days=1))
+              chunks.append({"start": d.isoformat(), "end": last.isoformat()})
+              d = last + dt.timedelta(days=1)
+          print(chunks)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write("chunks=" + json.dumps(chunks) + "\n")
+
   build:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        chunk: ${{ fromJson(needs.plan.outputs.chunks) }}
+    name: build ${{ matrix.chunk.start }} to ${{ matrix.chunk.end }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/pitcher_card/requirements.txt
+
+      - name: Fetch the scraper and the models
+        run: |
+          git clone --depth 1 https://github.com/Blandalytics/statcast_scraper.git
+          git clone --depth 1 https://github.com/Blandalytics/player_cards.git
+
+      - name: Install
+        run: pip install -r tools/pitcher_card/requirements.txt
+
+      # the data files behind the comparison seasons, narrowed and cached; only the first
+      # job of a run saves a copy, so a backfill's parallel jobs don't churn it
+      - name: Restore the data cache
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: tools/pitcher_card/cache
+          key: pitcher-seasons-${{ github.run_id }}
+          restore-keys: pitcher-seasons-
+
+      - name: Build
+        run: |
+          ARGS="--start ${{ matrix.chunk.start }} --end ${{ matrix.chunk.end }}"
+          [ "${{ inputs.force }}" = "true" ] && ARGS="$ARGS --force"
+          python tools/pitcher_card/build_site.py $ARGS
+
+      - name: Save the data cache
+        if: strategy.job-index == 0
+        uses: actions/cache/save@v4
+        with:
+          path: tools/pitcher_card/cache
+          key: pitcher-seasons-${{ github.run_id }}
+
+  # the index is rebuilt from every day manifest, so it is right however the jobs ended
+  reindex:
+    needs: build
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,33 +126,5 @@ jobs:
       - name: Install
         run: pip install -r tools/pitcher_card/requirements.txt
 
-      # the comparison seasons: finished seasons are pulled once, the current one is
-      # topped up by a day each run. Every run saves a fresh copy; restore-keys picks
-      # up the newest.
-      - name: Restore the season cache
-        uses: actions/cache@v4
-        with:
-          path: tools/pitcher_card/cache
-          key: pitcher-seasons-${{ github.run_id }}
-          restore-keys: pitcher-seasons-
-
-      - name: Build
-        run: |
-          ARGS=""
-          [ -n "${{ inputs.start }}" ] && ARGS="$ARGS --start ${{ inputs.start }}"
-          [ -n "${{ inputs.end }}" ]   && ARGS="$ARGS --end ${{ inputs.end }}"
-          [ "${{ inputs.force }}" = "true" ] && ARGS="$ARGS --force"
-          python tools/pitcher_card/build_site.py --out pitcher-cards $ARGS
-
-      - name: Commit
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pitcher-cards
-          if git diff --cached --quiet; then
-            echo "nothing new"
-          else
-            git commit -m "Pitcher cards: $(date -u +%Y-%m-%d)"
-            git pull --rebase origin main
-            git push
-          fi
+      - name: Reindex
+        run: python tools/pitcher_card/build_site.py --reindex

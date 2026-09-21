@@ -218,6 +218,11 @@ class LocalStore:
     def get(self, key): p = self.root / key; return p.read_bytes() if p.exists() else None
     def delete(self, key): (self.root / key).unlink(missing_ok=True)
 
+    def keys(self, prefix):
+        base = self.root / prefix
+        return sorted(str(p.relative_to(self.root)).replace("\\", "/")
+                      for p in base.rglob("*") if p.is_file()) if base.is_dir() else []
+
     def put(self, key, data: bytes, content_type: str, cache_control: str):
         p = self.root / key
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -257,6 +262,10 @@ class R2Store:
 
     def delete(self, key):
         self.s3.delete_object(Bucket=self.bucket, Key=key)
+
+    def keys(self, prefix):
+        pages = self.s3.get_paginator("list_objects_v2").paginate(Bucket=self.bucket, Prefix=prefix)
+        return sorted(o["Key"] for page in pages for o in page.get("Contents", []))
 
 
 MANIFEST = "data/manifest.json"
