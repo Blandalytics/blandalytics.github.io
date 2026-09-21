@@ -216,7 +216,7 @@ table{border-collapse:collapse; font-variant-numeric:tabular-nums}
   </div>
   <div class="field">
     <label for="league">League</label>
-    <select id="league"><option value="">All leagues</option></select>
+    <select id="league"></select>
   </div>
 </header>
 
@@ -353,16 +353,23 @@ table{border-collapse:collapse; font-variant-numeric:tabular-nums}
     if (b) select(b.dataset.pk);
   });
 
+  // one league at a time, MLB by default; the others only appear while they have games
   function renderLeagues() {
     var seen = {}, prev = leagueSel.value;
     today.games.forEach(function (g) { seen[g.sport.id] = g.sport.name; });
     var ids = Object.keys(seen).map(Number).sort(function (a, b) { return a - b; });
-    leagueSel.innerHTML = '<option value="">All leagues</option>' + ids.map(function (id) {
+    leagueSel.innerHTML = ids.map(function (id) {
       return '<option value="' + id + '">' + esc(seen[id]) + '</option>';
     }).join('');
-    if (seen[prev]) leagueSel.value = prev;
+    leagueSel.value = seen[prev] ? prev : seen[1] ? '1' : (ids[0] || '');
   }
-  leagueSel.addEventListener('change', renderList);
+  leagueSel.addEventListener('change', function () {
+    renderList();
+    var gs = visibleGames();
+    if (!games[selected] || String(games[selected].sport.id) !== leagueSel.value) {
+      if (gs.length) select(gs[0].gamePk);
+    }
+  });
 
   // ---- the selected game --------------------------------------------------
   function select(pk) {
@@ -598,6 +605,7 @@ table{border-collapse:collapse; font-variant-numeric:tabular-nums}
 
   fetchToday().then(function () {
     var pk = location.hash.replace('#', '');
+    if (games[pk]) leagueSel.value = games[pk].sport.id;   // a deep link wins over the default
     if (!games[pk]) {
       var gs = visibleGames();
       pk = gs.length ? gs[0].gamePk : null;   // first in-progress game, else the next up

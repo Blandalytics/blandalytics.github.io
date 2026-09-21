@@ -1,0 +1,78 @@
+name: Build data files
+
+# Completed games -> Parquet in R2 (tools/data/backfill.py). The nightly run writes
+# the day that has just settled and closes a month once its last day has; anything
+# bigger (a season, a backfill of prior years, a re-render) is run by hand.
+on:
+  schedule:
+    # 10:30 UTC: after the scorecards build, and two days after the games it writes
+    - cron: "30 10 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "roll (the nightly step) or build (explicit units)"
+        type: choice
+        options: [roll, build]
+        default: roll
+      sport:
+        description: "Sport codes or ids, comma-separated"
+        default: "mlb,aaa"
+      unit:
+        description: "build only: day, month or season"
+        type: choice
+        options: [day, month, season]
+        default: season
+      start:
+        description: "build only: first unit (YYYY-MM-DD, YYYY-MM or YYYY)"
+        required: false
+      end:
+        description: "build only: last unit, inclusive"
+        required: false
+      force:
+        description: "build only: rewrite units that already exist"
+        type: boolean
+        default: false
+      prune:
+        description: "build only: drop the finer files a unit supersedes"
+        type: boolean
+        default: true
+
+concurrency:
+  group: data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/data/requirements.txt
+
+      - name: Fetch the scraper
+        run: git clone --depth 1 https://github.com/Blandalytics/statcast_scraper.git
+
+      - name: Install
+        run: pip install -r tools/data/requirements.txt
+
+      - name: Roll
+        if: github.event_name == 'schedule' || inputs.mode == 'roll'
+        run: python tools/data/backfill.py roll --sport "${{ inputs.sport || 'mlb,aaa' }}"
+
+      - name: Build
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
+        run: |
+          ARGS="--sport ${{ inputs.sport }} --unit ${{ inputs.unit }} --start ${{ inputs.start }}"
+          [ -n "${{ inputs.end }}" ] && ARGS="$ARGS --end ${{ inputs.end }}"
+          [ "${{ inputs.force }}" = "true" ] && ARGS="$ARGS --force"
+          [ "${{ inputs.prune }}" = "true" ] && ARGS="$ARGS --prune"
+          python tools/data/backfill.py build $ARGS

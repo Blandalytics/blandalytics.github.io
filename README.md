@@ -75,6 +75,16 @@ tracking (all of MLB and Triple-A have it, plus the odd lower-level park):
 
 Nothing is committed to the repo; the objects expire after a week and the nightly
 scorecard build remains the record for finished games.
+
+## Data files
+
+Completed games as pitch-level Parquet, in the same bucket under
+`https://data.blandalytics.com/data/`: one immutable file per settled day, closed
+month or closed season, per league, with a manifest saying what exists. Built by
+[`tools/data/backfill.py`](tools/data/backfill.py) on top of the scraper;
+[`.github/workflows/data.yml`](.github/workflows/data.yml) rolls the settled day
+(and any month that has just closed) in every night and takes inputs for backfills.
+Details in [`tools/data/README.md`](tools/data/README.md).
 [`.github/workflows/live-worker.yml`](.github/workflows/live-worker.yml) deploys
 the Worker on any push that touches `tools/live/`. Setup and local testing are in
 [`tools/live/README.md`](tools/live/README.md).
