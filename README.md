@@ -198,7 +198,8 @@ nodes (strikeout, batted-ball out, walk/HBP, hit, other) after the pitch that en
 pitch is drawn. A flow is linkable as `sequencing-flow/#<pitcherId>-<YYYY-MM-DD>`.
 
 Search a pitcher to list their appearances in a season, or pick a game date to list everyone who
-threw a tracked pitch that day; with both set the page goes straight to that game.
+threw a tracked pitch that day; with both set the page goes straight to that game. On arrival it
+shows the longest outing of the most recent day with finished games.
 
 ### How it works
 
