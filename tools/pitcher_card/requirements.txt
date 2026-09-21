@@ -7,3 +7,4 @@ pyarrow>=15
 requests>=2.32
 orjson>=3.10
 urllib3>=2.2
+boto3

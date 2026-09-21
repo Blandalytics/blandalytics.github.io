@@ -4,9 +4,10 @@
     html = pitcher_card(822845, 641302)                  # the page as a string
     pitcher_card(822845, 641302, path="alexander.html")  # ...and written to disk
 
-The game's pitches come from Blandalytics/statcast_scraper, the box score and bio from
-the MLB Stats API live feed, arm angles from Baseball Savant's leaderboard and the
-comparison seasons through the scraper again. Every pitch is scored with the PLV models
+The game's pitches come from Blandalytics/statcast_scraper (one game at a time, so a
+game in progress works too), the box score and bio from the MLB Stats API live feed, arm
+angles from Baseball Savant's leaderboard, and the comparison seasons from the data files
+in the bucket, topped up through the scraper. Every pitch is scored with the PLV models
 from Blandalytics/player_cards, and the card is rendered as a standalone page."""
 
 from __future__ import annotations
@@ -49,6 +50,7 @@ import render  # noqa: E402
 from models import Models  # noqa: E402
 
 GAME_TYPES = "R,P"  # regular season and postseason
+SCHEDULE = "https://statsapi.mlb.com/api/v1/schedule"
 _models: Models | None = None
 
 
@@ -63,9 +65,27 @@ def models() -> Models:
     return _models
 
 
-def day_pitches(date: dt.date, session, game_type: str = GAME_TYPES) -> pd.DataFrame:
-    """Every tracked pitch on a date, in one pull."""
+def day_pitches(date: dt.date, session, store=None, game_type: str = GAME_TYPES) -> pd.DataFrame:
+    """Every tracked pitch on a date: from the data files once the date has settled,
+    otherwise scraped in one pull."""
+    stored = store.day(date) if store is not None else None
+    if stored is not None:
+        return stored
     return statfast.mlb_day(date, game_type=game_type, session=session)
+
+
+def game_pitches(game_pk: int, session) -> pd.DataFrame:
+    """One game's tracked pitches so far, whatever state the game is in."""
+    r = session.get(SCHEDULE, params={"gamePk": int(game_pk), "sportId": 1}, timeout=30)
+    r.raise_for_status()
+    days = r.json().get("dates", [])
+    found = [g for d in days for g in d["games"] if g["gamePk"] == int(game_pk)]
+    if not found:
+        raise GameNotFound(f"no game with gamePk {game_pk}")
+    g = found[0]
+    teams = g["teams"]["home"]["team"]["id"], g["teams"]["away"]["team"]["id"]
+    game = statfast._Game(g["officialDate"], *teams)
+    return statfast._collect(session, {int(game_pk): game}, None, 4)
 
 
 def seasons_for(pitcher_id: int, date: dt.date, store: fetch.SeasonStore) -> dict:
@@ -86,19 +106,20 @@ def pitcher_order(feed: dict) -> list[int]:
     return [*home[:1], *away[:1], *home[1:], *away[1:]]
 
 
-def build_card(game_pk: int, pitcher_id: int, feed: dict, df: pd.DataFrame, session, store):
-    """(html, card dict) for one pitcher whose feed and pitches are in hand."""
+def build_card(game_pk, pitcher_id, feed, df, session, store, logo=render.LOGO):
+    """(html, card dict) for one pitcher whose feed and pitches are in hand. ``logo`` is
+    the Pitcher List mark's URL as the page will see it."""
     date = dt.date.fromisoformat(feed["gameData"]["datetime"]["officialDate"])
     arm = fetch.arm_angles(session, date).get(pitcher_id, {})
     seasons = seasons_for(pitcher_id, date, store)
     card = build_data.build(game_pk, pitcher_id, feed, df, seasons, arm, models())
-    return render.render_html(card), card
+    return render.render_html(card, logo), card
 
 
-def _try_card(game_pk: int, pid: int, feed: dict, pitches, session, store, strict: bool):
+def _try_card(game_pk, pid, feed, pitches, session, store, strict, logo=render.LOGO):
     """build_card, or None with the failure logged when ``strict`` is off."""
     try:
-        return build_card(game_pk, pid, feed, pitches, session, store)
+        return build_card(game_pk, pid, feed, pitches, session, store, logo)
     except Exception:  # noqa: BLE001 - a site build carries on past one bad card
         if strict:
             raise
@@ -107,7 +128,9 @@ def _try_card(game_pk: int, pid: int, feed: dict, pitches, session, store, stric
         return None
 
 
-def cards_for_game(game_pk, feed, df, session, store, strict=True, skip=None) -> Iterator:
+def cards_for_game(
+    game_pk, feed, df, session, store, strict=True, skip=None, logo=render.LOGO
+) -> Iterator:
     """Yields (pitcher id, html, card) for every pitcher with tracked pitches in a game.
     With ``strict`` off a pitcher whose card fails is logged and skipped; ``skip(game_pk,
     pitcher_id)`` can decline a card before it is built."""
@@ -115,7 +138,7 @@ def cards_for_game(game_pk, feed, df, session, store, strict=True, skip=None) ->
         pitches = df[df["pitcher"] == pid]
         if pitches.empty or (skip is not None and skip(game_pk, pid)):
             continue
-        built = _try_card(game_pk, pid, feed, pitches, session, store, strict)
+        built = _try_card(game_pk, pid, feed, pitches, session, store, strict, logo)
         if built is not None:
             yield pid, *built
 
@@ -125,8 +148,8 @@ def cards_for_date(date, session=None, store=None, strict=True, skip=None) -> It
     card). Games with no tracked pitches are skipped; see cards_for_game for ``skip``."""
     date = dt.date.fromisoformat(str(date))
     s = session or fetch.session()
-    store = store or fetch.SeasonStore(DEFAULT_CACHE, s)
-    df_all = day_pitches(date, s)
+    store = store or fetch.DataStore(DEFAULT_CACHE, s)
+    df_all = day_pitches(date, s, store)
     for pk in sorted(int(x) for x in df_all["game_pk"].unique()):
         feed = fetch.feed(s, pk)
         game = df_all[df_all["game_pk"] == pk]
@@ -137,7 +160,7 @@ def cards_for_date(date, session=None, store=None, strict=True, skip=None) -> It
 def pitcher_card(game_pk: int, pitcher_id: int, path=None, session=None, cache_dir=None) -> str:
     """Build the card page for one pitcher's game and return it as an HTML string.
 
-    game_pk    : MLBAM gamePk of a completed game.
+    game_pk    : MLBAM gamePk of a game, finished or in progress.
     pitcher_id : the pitcher's MLBAM id.
     path       : optional file to write the page to as well.
     session    : optional requests.Session to reuse across calls.
@@ -145,13 +168,11 @@ def pitcher_card(game_pk: int, pitcher_id: int, path=None, session=None, cache_d
     """
     s = session or fetch.session()
     feed = fetch.feed(s, int(game_pk))
-    game = feed["gameData"]
-    date = dt.date.fromisoformat(game["datetime"]["officialDate"])
-    df = day_pitches(date, s, game["game"]["type"])
-    df = df[(df["game_pk"] == int(game_pk)) & (df["pitcher"] == int(pitcher_id))]
+    df = game_pitches(int(game_pk), s)
+    df = df[df["pitcher"] == int(pitcher_id)]
     if df.empty:
         raise GameNotFound(f"no tracked pitches for pitcher {pitcher_id} in game {game_pk}")
-    store = fetch.SeasonStore(cache_dir or DEFAULT_CACHE, s)
+    store = fetch.DataStore(cache_dir or DEFAULT_CACHE, s)
     html, _ = build_card(int(game_pk), int(pitcher_id), feed, df, s, store)
     if path:
         with open(path, "w", encoding="utf-8") as fh:
