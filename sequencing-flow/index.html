@@ -135,7 +135,7 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
 #tip .list{margin:4px 0 0; padding-left:16px}
 #tip .list li{margin:1px 0}
 .flow[hidden]{display:none}
-.note{padding:6px 20px 10px; color:var(--muted); font-size:12px; border-top:1px solid var(--rule); background:var(--surface)}
+.note{padding:5px 20px 7px; color:var(--muted); font-size:11.5px; line-height:1.4; border-top:1px solid var(--rule); background:var(--surface)}
 .note a{color:var(--ink)}
 
 @media (max-width:760px){
@@ -145,6 +145,7 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
   #q,#game{min-width:0; flex-basis:100%}
   .stage{padding:12px}
   #chart{height:500px}
+  .note{padding:4px 12px 6px; font-size:11px}
 }
 @media (prefers-reduced-motion:reduce){.chip{transition:none}}
 </style>
@@ -204,14 +205,9 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
 </main>
 
 <footer class="note">
-  Each column is the pitch's number within the plate appearance; each band is a pitch type, stacked by how
-  often it was thrown in the game. Each link is one plate appearance's step from a pitch to the next.
-  <b>Hover a link</b> to trace that plate appearance; <b>hover a band</b> to trace every plate appearance
-  through it. Node height counts the pitches that continued or arrived — turn on plate-appearance endings
-  to see every pitch. Settled games come from the completed-games data files; the last couple of days come
-  from the live feed while it holds them. Pitch types are subject to change. Feedback to Kyle Bland, on
-  <a href="https://bsky.app/profile/blandalytics.pitcherlist.com" target="_blank" rel="noopener">Bluesky</a> or
-  <a href="https://x.com/blandalytics" target="_blank" rel="noopener">Twitter</a>.
+  Hover a link to trace a plate appearance, a band to trace every one through it. Pitch types are subject to change.
+  Feedback: <a href="https://bsky.app/profile/blandalytics.pitcherlist.com" target="_blank" rel="noopener">Bluesky</a> ·
+  <a href="https://x.com/blandalytics" target="_blank" rel="noopener">Twitter</a>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.3/plotly.min.js"></script>
