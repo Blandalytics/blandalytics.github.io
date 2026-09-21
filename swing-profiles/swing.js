@@ -179,8 +179,74 @@
 
   const MIN_TRACED_COLUMNS = 60;  // sanity floor; real cards trace 145-170 columns
 
-  // Download the card, decoded as raw RGBA pixels with no color management, so
-  // the bytes match what PIL hands the Python.
+  // A minimal PNG decoder: 8-bit greyscale, RGB and RGBA, not interlaced -- which
+  // is what the cards are. Returns {width, height, data} with RGBA bytes, or null
+  // for anything it does not handle (the caller then uses the browser's decoder).
+  //
+  // Browsers colour-manage the images they decode, and this PNG's cICP chunk
+  // declares a BT.709 transfer curve, so a managed decode lands every pixel a
+  // little darker than the bytes in the file -- the axis line drops from 288 to
+  // 260 in R+G+B, against a threshold of 250. Chromium can be told not to convert
+  // (createImageBitmap's colorSpaceConversion: "none"); WebKit cannot, and on an
+  // iPhone the round trip through the display's colour space moves the values
+  // further. Inflating the file ourselves hands every browser the same bytes PIL
+  // gives the Python.
+  async function decodePng(buf) {
+    const b = new Uint8Array(buf);
+    const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (b.length < 8 || sig.some((v, i) => b[i] !== v) || typeof DecompressionStream === "undefined") return null;
+    const dv = new DataView(buf);
+    let pos = 8, width = 0, height = 0, depth = 0, ctype = 0, interlace = 0;
+    const idat = [];
+    while (pos + 8 <= b.length) {
+      const len = dv.getUint32(pos);
+      const type = String.fromCharCode(b[pos + 4], b[pos + 5], b[pos + 6], b[pos + 7]);
+      if (type === "IHDR") {
+        width = dv.getUint32(pos + 8); height = dv.getUint32(pos + 12);
+        depth = b[pos + 16]; ctype = b[pos + 17]; interlace = b[pos + 20];
+      } else if (type === "IDAT") idat.push(b.subarray(pos + 8, pos + 8 + len));
+      else if (type === "IEND") break;
+      pos += 12 + len;
+    }
+    const channels = { 0: 1, 2: 3, 4: 2, 6: 4 }[ctype];
+    if (!width || !height || depth !== 8 || !channels || interlace !== 0 || !idat.length) return null;
+    const stream = new Blob(idat).stream().pipeThrough(new DecompressionStream("deflate"));
+    const raw = new Uint8Array(await new Response(stream).arrayBuffer());
+    const stride = width * channels;
+    if (raw.length < height * (stride + 1)) return null;
+
+    const data = new Uint8ClampedArray(width * height * 4);
+    let prev = new Uint8Array(stride), cur = new Uint8Array(stride);
+    for (let y = 0; y < height; y++) {
+      const off = y * (stride + 1), filter = raw[off];
+      for (let i = 0; i < stride; i++) {
+        const x = raw[off + 1 + i];
+        const a = i >= channels ? cur[i - channels] : 0, up = prev[i], c = i >= channels ? prev[i - channels] : 0;
+        let v;
+        if (filter === 0) v = x;
+        else if (filter === 1) v = x + a;
+        else if (filter === 2) v = x + up;
+        else if (filter === 3) v = x + ((a + up) >> 1);
+        else if (filter === 4) {
+          const pp = a + up - c, pa = Math.abs(pp - a), pb = Math.abs(pp - up), pc = Math.abs(pp - c);
+          v = x + (pa <= pb && pa <= pc ? a : pb <= pc ? up : c);
+        } else return null;
+        cur[i] = v;  // Uint8Array wraps mod 256
+      }
+      for (let px = 0, o = y * width * 4; px < width; px++, o += 4) {
+        const k = px * channels;
+        if (channels >= 3) { data[o] = cur[k]; data[o + 1] = cur[k + 1]; data[o + 2] = cur[k + 2]; data[o + 3] = channels === 4 ? cur[k + 3] : 255; }
+        else { data[o] = data[o + 1] = data[o + 2] = cur[k]; data[o + 3] = channels === 2 ? cur[k + 1] : 255; }
+      }
+      [prev, cur] = [cur, prev];
+    }
+    return { width, height, data };
+  }
+
+  // Download the card as raw RGBA pixels -- the file's own bytes when decodePng
+  // can read it, otherwise the browser's decode with colour management turned off
+  // where the browser allows. The result answers getPixels(x, y, w, h) like
+  // getImageData, and says which decoder produced it.
   async function fetchCard(mlbamId, year, handedness) {
     const url = CARD_URL(mlbamId, year, handedness);
     const missing = () => new SwingPathError(`No swing-path card for ${mlbamId}-${year}-${String(handedness).toUpperCase()}. Most hitters with fewer than ~100 competitive swings have none. Check the MLBAM id, season, and batting handedness.`);
@@ -196,6 +262,17 @@
     if (resp.status === 404) throw missing();
     if (!resp.ok) throw new SwingPathError(`card ${mlbamId}-${year}-${handedness}: HTTP ${resp.status}`);
     const blob = await resp.blob();
+    let raw = null;
+    try { raw = await decodePng(await blob.arrayBuffer()); } catch (e) { raw = null; }
+    if (raw) {
+      const { width, height, data } = raw;
+      const getPixels = (x, y, w, h) => {
+        const out = new Uint8ClampedArray(w * h * 4);
+        for (let row = 0; row < h; row++) out.set(data.subarray(((y + row) * width + x) * 4, ((y + row) * width + x + w) * 4), row * w * 4);
+        return out;
+      };
+      return { width, height, url, blob, decoder: "png", getPixels };
+    }
     const bitmap = await createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
     const canvas = typeof OffscreenCanvas !== "undefined"
       ? new OffscreenCanvas(bitmap.width, bitmap.height)
@@ -203,7 +280,7 @@
     const ctx = canvas.getContext("2d", { willReadFrequently: true, colorSpace: "srgb" });
     ctx.drawImage(bitmap, 0, 0);
     bitmap.close?.();
-    return { width: canvas.width, height: canvas.height, ctx, url, blob };
+    return { width: canvas.width, height: canvas.height, url, blob, decoder: "browser", getPixels: (x, y, w, h) => ctx.getImageData(x, y, w, h).data };
   }
 
   // Row of the chart's zero line, found from the y axis drawn beside it.
@@ -213,24 +290,36 @@
   // down by a line (24 px). The x positions and the y scale are unchanged; only
   // the vertical origin moves. Anchoring on the axis line itself, rather than on
   // fixed rows, keeps a two-line name from reading 20-odd mph low.
-  function axisBottom(ctx) {
+  //
+  // A pixel is on the line when its R+G+B clears 250, as in the Python, which
+  // reads the file's own bytes. When the browser decoded the card instead (see
+  // decodePng) the levels are colour-managed and sit lower, so the bar is set
+  // the same distance above the card's own background -- the strip's median --
+  // as 250 sits above the background in the raw bytes (130).
+  function axisBottom(card) {
     const w = AXIS_X1 - AXIS_X0, h = AXIS_Y1 - AXIS_Y0;
-    const px = ctx.getImageData(AXIS_X0, AXIS_Y0, w, h).data;
+    const px = card.getPixels(AXIS_X0, AXIS_Y0, w, h);
+    const sum = new Uint16Array(w * h);
+    for (let i = 0; i < w * h; i++) sum[i] = px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2];
+    const sorted = sum.slice().sort();
+    const background = sorted[sorted.length >> 1];
+    const bar = card.decoder === "png" ? 250 : background + 120;
     const bottoms = [];
+    let longest = 0;
     for (let col = 0; col < w; col++) {
       let best = 0, run = 0, start = 0, bestStart = 0;
       for (let row = 0; row < h; row++) {
-        const k = (row * w + col) * 4;
-        if (px[k] + px[k + 1] + px[k + 2] > 250) {
+        if (sum[row * w + col] > bar) {
           if (run === 0) start = row;
           run += 1;
           if (run > best) { best = run; bestStart = start; }
         } else run = 0;
       }
+      longest = Math.max(longest, best);
       if (best >= AXIS_MIN_LEN) bottoms.push(bestStart + best - 1 + AXIS_Y0);
     }
     if (!bottoms.length) {
-      throw new SwingPathError("Could not find the chart's y axis on the card. The template may have changed; the pixel anchors would need rechecking.");
+      throw new SwingPathError(`Could not find the chart's y axis on the card (${card.decoder} decode, background ${background}, longest run ${longest} px). The template may have changed; the pixel anchors would need rechecking.`);
     }
     bottoms.sort((a, b) => a - b);
     const n = bottoms.length;  // numpy's median, truncated to an int
@@ -296,10 +385,10 @@
     if (card.width !== EXPECTED_SIZE[0] || card.height !== EXPECTED_SIZE[1]) {
       throw new SwingPathError(`Expected a ${EXPECTED_SIZE[0]}x${EXPECTED_SIZE[1]} card, got ${card.width}x${card.height}. The template may have changed; the pixel anchors would need rechecking.`);
     }
-    const shift = axisBottom(card.ctx) - AXIS_BOTTOM;
+    const shift = axisBottom(card) - AXIS_BOTTOM;
     const y0 = WIN_Y0 + shift, y1 = Math.min(WIN_Y1 + shift, card.height);
     const w = WIN_X1 - WIN_X0, h = y1 - y0;
-    const px = card.ctx.getImageData(WIN_X0, y0, w, h).data;
+    const px = card.getPixels(WIN_X0, y0, w, h);
 
     // Boolean mask of the teal curve markers, then the mid-row of each column.
     const cols = [], mids = [];
@@ -329,6 +418,7 @@
       bat_speed_mph: grid.map((g) => pyRound(Math.max(0, interp(g, t, mph)), 3)),
       traced_columns: cols.length,
       axis_shift: shift,
+      decoder: card.decoder,
     };
   }
 
@@ -562,7 +652,7 @@
     SavantError, AmbiguousPlayerError, SwingPathError,
     LEADERBOARD_URL, CARD_URL,
     parseCsv, displayName, fetchBatTracking, normalize, nameKeys, resolvePlayer,
-    fetchCard, extractSwingCurve, smoothCurve, interp, pyRound,
+    decodePng, fetchCard, extractSwingCurve, smoothCurve, interp, pyRound,
     meanBatSpeed, imputeSwingDuration,
     savgolFilter, addKinematics, figureFilename, getSwingProfile, profileCsv,
   };
