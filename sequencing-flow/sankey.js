@@ -257,50 +257,79 @@ function nodeTip(n) {
     + `<div class="seq">${n.count} of ${tot} ${ORD(n.n)} pitches (${pct}%)</div>${ended}`;
 }
 
-function wireHover() {
-  if (wired) return;
-  wired = true;
-  chartEl.on('plotly_hover', ev => {
-    const pt = ev.points && ev.points[0];
-    if (!pt) return;
-    const e = ev.event || {};
-    const anchor = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
-    if (pt.source === undefined) {
-      // Node: every plate appearance that passes through it
-      const idx = pt.pointNumber, pas = new Set();
-      linkPaths().forEach(el => {
-        const d = el.__data__;
-        if (d && (d.link.source.pointNumber === idx || d.link.target.pointNumber === idx)) pas.add(d.link.label);
-      });
-      const { paPaths, paRects } = trace(pas);
-      tip.innerHTML = nodeTip(currentNodes[idx]);
-      tip.hidden = false;
-      const [x, y] = placeTip(anchor, paPaths, paRects);
-      tip.style.left = x + 'px'; tip.style.top = y + 'px';
-      return;
-    }
-    // Link: this one plate appearance, with its own tooltip placed clear of the path
-    const { paPaths, paRects } = trace(new Set([pt.label]));
-    const l = currentLinks[pt.pointNumber], p = paById.get(l.pa);
-    if (!p) return;
-    // Pitch chain ending in the actual event, colored by its outcome group's outline; the hovered step is bold.
-    const hot = k => k === l.step || k === l.step + 1;
-    const seq = p.seq.map((c, k) => hot(k) ? `<b>${c}</b>` : `<span class="off">${c}</span>`);
-    const evColor = DATA.end_outlines[p.cat];
-    seq.push(`<span class="ev" style="color:${evColor}">${l.terminal ? `<b>${p.result}</b>` : p.result}</span>`);
-    tip.innerHTML = `<span class="name">${p.batter}</span> &nbsp;<span class="meta">${ORD(p.inning)} inning</span>`
-      + `<div class="seq">${seq.join(' → ')}</div>`;
+// Show a link's or node's tooltip and trace its plate appearances.
+function focusPoint(pt, anchor) {
+  untrace();
+  if (pt.source === undefined) {
+    // Node: every plate appearance that passes through it
+    const idx = pt.pointNumber, pas = new Set();
+    linkPaths().forEach(el => {
+      const d = el.__data__;
+      if (d && (d.link.source.pointNumber === idx || d.link.target.pointNumber === idx)) pas.add(d.link.label);
+    });
+    const { paPaths, paRects } = trace(pas);
+    tip.innerHTML = nodeTip(currentNodes[idx]);
     tip.hidden = false;
     const [x, y] = placeTip(anchor, paPaths, paRects);
     tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    return;
+  }
+  // Link: this one plate appearance, with its own tooltip placed clear of the path
+  const { paPaths, paRects } = trace(new Set([pt.label]));
+  const l = currentLinks[pt.pointNumber], p = paById.get(l.pa);
+  if (!p) return;
+  // Pitch chain ending in the actual event, colored by its outcome group's outline; the hovered step is bold.
+  const hot = k => k === l.step || k === l.step + 1;
+  const seq = p.seq.map((c, k) => hot(k) ? `<b>${c}</b>` : `<span class="off">${c}</span>`);
+  const evColor = DATA.end_outlines[p.cat];
+  seq.push(`<span class="ev" style="color:${evColor}">${l.terminal ? `<b>${p.result}</b>` : p.result}</span>`);
+  tip.innerHTML = `<span class="name">${p.batter}</span> &nbsp;<span class="meta">${ORD(p.inning)} inning</span>`
+    + `<div class="seq">${seq.join(' → ')}</div>`;
+  tip.hidden = false;
+  const [x, y] = placeTip(anchor, paPaths, paRects);
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+function anchorOf(e) { return { x: e?.clientX ?? 0, y: e?.clientY ?? 0 }; }
+function pointKey(pt) { return (pt.source === undefined ? 'n' : 'l') + pt.pointNumber; }
+
+// Without a real hover (phones), a tap pins a link's or node's tooltip and a second tap on it,
+// or a tap anywhere else in the chart, clears it.
+const TOUCH = window.matchMedia('(hover: none)').matches;
+let pinned = null;
+
+function wireHover() {
+  if (wired) return;
+  wired = true;
+  if (!TOUCH) {
+    chartEl.on('plotly_hover', ev => {
+      const pt = ev.points && ev.points[0];
+      if (pt) focusPoint(pt, anchorOf(ev.event));
+    });
+    chartEl.on('plotly_unhover', untrace);
+    return;
+  }
+  chartEl.on('plotly_click', ev => {
+    const pt = ev.points && ev.points[0];
+    if (!pt) return;
+    const key = pointKey(pt);
+    if (pinned === key) { pinned = null; untrace(); return; }
+    pinned = key;
+    // Plotly's sankey click carries no coordinates of its own; the original tap does
+    const e = pt.originalEvent || ev.event;
+    const ce = e && e.changedTouches ? e.changedTouches[0] : e;
+    focusPoint(pt, anchorOf(ce));
   });
-  chartEl.on('plotly_unhover', untrace);
+  chartEl.addEventListener('click', ev => {
+    if (ev.target.closest && ev.target.closest('.sankey-link, .sankey-node')) return;
+    if (pinned) { pinned = null; untrace(); }
+  });
 }
 
 /** Draw a flow. Resolves once Plotly has painted it. */
 export function show(data) {
   DATA = data;
   focus = null;
+  pinned = null;
   paById = new Map(DATA.pas.map(p => [p.id, p]));
   tip.hidden = true;
   fillLegend();
@@ -310,6 +339,7 @@ export function show(data) {
 /** Clear the chart (between selections). */
 export function clear() {
   DATA = null;
+  pinned = null;
   legendEl.innerHTML = '';
   endKey.hidden = true;
   tip.hidden = true;
