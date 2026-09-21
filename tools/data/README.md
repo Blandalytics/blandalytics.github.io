@@ -11,8 +11,8 @@ season; the manifest says which files exist and what each covers.
 | `data/<sport>/<YYYY>/<YYYY-MM>.parquet` | a closed month of the current season (~20 MB) |
 | `data/<sport>/<YYYY>/days/<YYYY-MM-DD>.parquet` | a settled day of the current month (~0.8 MB) |
 
-`<sport>` is the Stats API code: `mlb`, `aaa`, `aax`, `afa`, `afx`, `win` (Arizona
-Fall League) and so on. The schema is `statfast.COLUMNS` plus `sport_id` and
+`<sport>` is the Stats API code: `mlb`, `aaa`, `afx` (Single-A), `rok`, `win`
+(Arizona Fall League), `int` (WBC), `bbc` (college) and so on. The schema is `statfast.COLUMNS` plus `sport_id` and
 `game_type`, identical across sports and seasons; sorted by game, at-bat, pitch;
 zstd-compressed with 100k-row groups, so a Parquet reader can range-request one
 game or one pitcher out of a season file.
@@ -28,19 +28,25 @@ game or one pitcher out of a season file.
 - A game is kept only if some pitch in it was measured. That is what makes Double-A
   contribute nothing and lets one tracked Single-A park show up on its own.
 
+Which leagues carry tracking, from a sample of 40 recent games each (Sept 2026):
+all of MLB, Triple-A and the WBC; some Single-A parks, some Rookie complex games,
+the Arizona Fall League's MLB-park games, most sampled college games and the one
+high-school showcase; none of Double-A, High-A or the independents. The nightly
+roll runs over `all` leagues so this list never needs maintaining.
+
 Data before the manifest's `last_finalized` date comes from here; anything after
 it, from the live feed in `live/`.
 
 ## Running
 
-`.github/workflows/data.yml` runs `roll` nightly at 10:30 UTC for `mlb,aaa` and takes
-`workflow_dispatch` inputs for everything else. It needs `R2_ACCESS_KEY_ID` and
+`.github/workflows/data.yml` runs `roll` nightly at 10:30 UTC over every league and
+takes `workflow_dispatch` inputs for everything else. It needs `R2_ACCESS_KEY_ID` and
 `R2_SECRET_ACCESS_KEY` (an R2 API token with object read/write on the bucket) plus
 the existing `CLOUDFLARE_ACCOUNT_ID`.
 
 ```bash
 # the nightly step: the settled day, and any month whose last day has settled
-python tools/data/backfill.py roll --sport mlb,aaa
+python tools/data/backfill.py roll                 # every league; --sport mlb,aaa to narrow
 
 # explicit units; --prune drops the finer files a unit supersedes
 python tools/data/backfill.py build --sport mlb --unit season --start 2015 --end 2025
