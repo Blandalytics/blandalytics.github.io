@@ -1,0 +1,16 @@
+// Live game poller. Deployed by .github/workflows/live-worker.yml; see README.md.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "blandalytics-live",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+
+  // Game hours only, in UTC: 16:00 (noon ET first pitch) through 06:59
+  // (a 10:10pm ET West Coast game runs past 5:00 UTC). Each tick polls twice,
+  // 30s apart, and exits early when nothing is live.
+  "triggers": { "crons": ["* 0-6,16-23 * * *"] },
+
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "blandalytics-live" }],
+
+  "observability": { "enabled": true }
+}

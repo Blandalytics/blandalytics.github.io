@@ -9,3 +9,6 @@ tools/scorecard/pitches_*.parquet
 tools/scorecard/scorecard_*.json
 # the cached comparison seasons behind the pitcher cards
 tools/pitcher_card/cache/
+# the live worker's local toolchain and dev-server state
+tools/live/node_modules/
+tools/live/.wrangler/

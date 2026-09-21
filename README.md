@@ -57,6 +57,22 @@ from tools.scorecard.scorecard import scorecard
 html = scorecard(824638)
 ```
 
+## Live games
+
+The scorecards are built the morning after; for games in progress a Cloudflare
+Worker in [`tools/live/`](tools/live/) polls the Stats API live feed every ~30s
+during game hours and writes trimmed JSON to an R2 bucket, which the site reads
+directly:
+
+- `live/today.json` — yesterday's and today's schedule with status, score and inning
+- `live/games/<gamePk>.json` — plays and pitches (type, velocity, location, spin, EV/LA)
+
+Nothing is committed to the repo; the objects expire after a week and the nightly
+scorecard build remains the record for finished games.
+[`.github/workflows/live-worker.yml`](.github/workflows/live-worker.yml) deploys
+the Worker on any push that touches `tools/live/`. Setup and local testing are in
+[`tools/live/README.md`](tools/live/README.md).
+
 ## PLV Pitcher Game Cards
 
 [blandalytics.com/pitcher-cards/](https://blandalytics.com/pitcher-cards/) — the Pitcher List

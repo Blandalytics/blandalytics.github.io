@@ -1,0 +1,28 @@
+name: Deploy live worker
+
+# The Worker in tools/live polls in-progress games and writes them to R2.
+# Deploying also (re)registers its cron trigger, so a config change is a push.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/live/**"
+      - ".github/workflows/live-worker.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: live-worker
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: tools/live
+          command: deploy
