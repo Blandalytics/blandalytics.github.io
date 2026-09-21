@@ -188,8 +188,9 @@ function paintOutlines() {
   nodeRects().forEach(el => {
     const d = el.__data__, n = d && currentNodes[d.node.pointNumber];
     if (n && n.type === 'END') { el.style.stroke = n.outline; el.style.strokeWidth = '2.5px'; el.style.strokeOpacity = n.dimmed ? 0.18 : 1; }
-    // the invisible feed node is drawn last, over the first column: keep it from taking the hover
-    if (n && n.feed) el.parentNode.style.pointerEvents = 'none';
+    // the invisible feed node is drawn last, over the first column: no outline (its 1px surface-colored
+    // edge would cut across the first-column bands), and it must not take the hover
+    if (n && n.feed) { el.style.strokeOpacity = 0; el.parentNode.style.pointerEvents = 'none'; }
   });
   linkPaths().forEach(el => {
     const d = el.__data__, l = d && currentLinks[d.link.pointNumber];
