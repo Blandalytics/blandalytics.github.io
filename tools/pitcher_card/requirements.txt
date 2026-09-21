@@ -3,6 +3,7 @@ numpy>=1.26
 scipy>=1.12
 contourpy>=1.2
 xgboost>=2.0
+scikit-learn>=1.4  # xgboost's sklearn wrapper needs it present
 pyarrow>=15
 requests>=2.32
 orjson>=3.10
