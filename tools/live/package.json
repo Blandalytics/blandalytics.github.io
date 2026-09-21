@@ -1,10 +1,12 @@
 {
   "name": "blandalytics-live",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev --test-scheduled",
     "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "test": "node test/harness.mjs"
   },
   "devDependencies": {
     "wrangler": "^4"
