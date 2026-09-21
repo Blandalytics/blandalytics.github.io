@@ -57,7 +57,7 @@ function fillLegend() {
 // the page's font is available) rather than Plotly annotations.
 function build(opts = {}) {
   const exp = opts.export || null;
-  const withEnds = exp ? false : showEnds.checked;
+  const withEnds = showEnds.checked;
   const nodes = DATA.nodes;
   // Every band is sized by all the pitches thrown at that count, whether or not they ended the
   // plate appearance. d3 sizes a node by max(inflow, outflow), and a first pitch has no inflow,
@@ -120,7 +120,7 @@ function build(opts = {}) {
     label: nodeIds.map(() => '').concat(feed ? [''] : []),
     color: nodeIds.map(i => {
       const n = nodes[i];
-      if (n.type === 'END') return surface;                 // ending faces match the chart background
+      if (n.type === 'END') return exp ? (token('--ground') || surface) : surface;   // ending faces match the background
       return dim(n.type) ? hexToRgba(n.color, 0.18) : n.color;
     }).concat(feed ? [NONE] : []),
     x, y,
@@ -173,6 +173,11 @@ function build(opts = {}) {
     if (n.n === 1) labels.push({ ...at, inside: false });
     else if (firstCol.get(n.type) === n.n && val(i) * ky >= 11) labels.push({ ...at, inside: true });
   });
+  // The ending nodes' outlines, for the export to draw (toImage re-renders from the trace, so the
+  // per-node outlines painted onto the page's rects never reach the image).
+  const ends = nodeIds.filter(i => nodes[i].type === 'END').map(i => ({
+    x: x[remap.get(i)], y: y[remap.get(i)], h: val(i) * ky / H, outline: nodes[i].outline,
+  }));
   const annotations = exp ? [] : labels.map(l => ({
     x: l.x, y: 1 - l.y, xref: 'paper', yref: 'paper', yanchor: 'middle', showarrow: false,
     xanchor: l.inside ? 'center' : 'right', xshift: l.inside ? 0 : -(THICK / 2 + 8),
@@ -193,7 +198,7 @@ function build(opts = {}) {
     hoverlabel: { bgcolor: surface, bordercolor: token('--rule'), font: { family: token('--body'), size: 12.5, color: ink } },
   };
   if (exp) Object.assign(layout, { width: exp.W, height: exp.H });
-  return { trace, layout, labels, margin: { l: MARGIN_L, r: MARGIN_R, t: MARGIN_T, b: MARGIN_B }, thick: THICK };
+  return { trace, layout, labels, ends, withEnds, margin: { l: MARGIN_L, r: MARGIN_R, t: MARGIN_T, b: MARGIN_B }, thick: THICK };
 }
 
 // Ending nodes share one face and are told apart by outline color. Plotly only takes a single
@@ -377,7 +382,7 @@ function wireHover() {
 
 /**
  * Save the diagram as a square PNG (2000 x 2000): the pitcher's line above, the pitch-type key,
- * the flow without ending nodes, and the Pitcher List wordmark. Plotly rasterises the sankey itself; the text is
+ * the flow (with the ending nodes if they are shown), and the Pitcher List wordmark. Plotly rasterises the sankey itself; the text is
  * drawn on the canvas so it uses the page's font.
  */
 const WORDMARK_URL = '../pitcher-cards/PitcherList_Stats_watermark_with_logo.webp';
@@ -435,12 +440,25 @@ export async function savePng(meta) {
     ctx.fillText(count, kx + 22 + wCode + 6 + wName + 6, yCur);
     kx += w + 26;
   });
+  if (showEnds.checked) {
+    // outcome key: hollow swatches in the outline colors
+    yCur += 26; kx = PADX;
+    ctx.font = `400 14px ${family}`;
+    DATA.end_cats.forEach(cat => {
+      const w = 12 + 8 + ctx.measureText(cat).width;
+      if (kx + w > S - PADX) { kx = PADX; yCur += 26; }
+      ctx.strokeStyle = DATA.end_outlines[cat]; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(kx + 1, yCur - 12, 11, 15, 2); ctx.stroke();
+      ctx.fillStyle = muted; ctx.fillText(cat, kx + 20, yCur);
+      kx += w + 24;
+    });
+  }
   yCur += 22;
 
   // The flow, rasterised by Plotly at the remaining size.
   const FOOT = 74;                                       // room for the credit line and the wordmark
   const W = S - 2 * PADX, H = S - yCur - FOOT;
-  const { trace, layout, labels, margin, thick } = build({ export: { W, H } });
+  const { trace, layout, labels, ends, margin, thick } = build({ export: { W, H } });
   const box = document.createElement('div');
   box.style.cssText = `position:fixed;left:-20000px;top:0;width:${W}px;height:${H}px;`;
   document.body.appendChild(box);
@@ -455,8 +473,14 @@ export async function savePng(meta) {
   await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = url; });
   ctx.drawImage(img, PADX, yCur, W, H);
 
-  // Labels, at the same places the page puts them.
   const plotW = W - margin.l - margin.r, plotH = H - margin.t - margin.b;
+  // Ending nodes' outlines, where Plotly drew their (background-colored) faces.
+  ends.forEach(e => {
+    const cx = PADX + margin.l + e.x * plotW, cy = yCur + margin.t + e.y * plotH, hp = e.h * plotH;
+    ctx.strokeStyle = e.outline; ctx.lineWidth = 2.5;
+    ctx.strokeRect(cx - thick / 2, cy - hp / 2, thick, hp);
+  });
+  // Labels, at the same places the page puts them.
   labels.forEach(l => {
     const px = PADX + margin.l + l.x * plotW, py = yCur + margin.t + l.y * plotH;
     ctx.textBaseline = 'middle';
