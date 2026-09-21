@@ -1,0 +1,14 @@
+{
+  "rules": [
+    {
+      "id": "site",
+      "allowed": {
+        "origins": ["https://blandalytics.com", "http://localhost:8000"],
+        "methods": ["GET", "HEAD"],
+        "headers": ["Range", "If-None-Match"]
+      },
+      "exposeHeaders": ["ETag", "Content-Length", "Content-Range"],
+      "maxAgeSeconds": 3600
+    }
+  ]
+}
