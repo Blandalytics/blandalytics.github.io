@@ -245,7 +245,8 @@ function nodeTip(n) {
       .filter(p => p.seq.length === n.n && p.cat === n.cat)
       .map(p => {
         const t = p.seq[p.seq.length - 1], c = (DATA.types.find(x => x.code === t) || {}).color || '#c7c7c7';
-        return `<li><span style="color:${c}">${t}</span> → <span style="color:${n.outline}">${p.result}</span></li>`;
+        const ev = `<span style="color:${p.result === 'Home Run' ? '#FF5EDC' : '#fff'}">${p.result}</span>`;
+        return `<li><span style="color:${c}">${t}</span> → ${ev}</li>`;
       });
     return `<span class="name" style="color:${n.outline}">${n.cat}</span> &nbsp;<span class="meta">after pitch ${n.n}</span>`
       + `<ul class="list">${rows.join('')}</ul>`;
