@@ -18,9 +18,8 @@
 }
 *{box-sizing:border-box}
 [hidden]{display:none !important}
-html,body{height:100%}
 body{
-  margin:0; background:var(--ground); color:var(--ink);
+  margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
   font-family:var(--body);
   font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
   display:flex; flex-direction:column;
@@ -78,7 +77,8 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
 .btn:hover{color:var(--ink); border-color:var(--faint)}
 
 /* ---------- the flow ---------- */
-.stage{flex:1; min-height:0; overflow:auto; padding:16px 20px 20px; display:flex; flex-direction:column; gap:14px}
+/* the page scrolls as a whole (when it needs to); only a wide chart scrolls sideways inside its box */
+.stage{flex:1; padding:16px 20px 20px; display:flex; flex-direction:column; gap:14px}
 .head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:10px 28px}
 .who{display:flex; flex-direction:column; gap:2px}
 .who h2{margin:0; font-size:26px; font-weight:700; letter-spacing:-.01em; line-height:1.1}
