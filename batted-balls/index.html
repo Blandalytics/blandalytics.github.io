@@ -117,7 +117,7 @@ details[open] summary{margin-bottom:10px}
         <p>Every batted ball is a point at its spray angle (-45° at the pull-side foul line, 0° dead centre, 45° at the opposite line, for either hand) and launch angle. A Gaussian kernel density of the hitter's points is created for the player, and the league's density over every MLB batted ball that season is subtracted. Red is where this hitter's batted balls land more often than the league's, blue less. The lines split into Pull / Center / Oppo (-15 & 15° spray angle) and Ground Ball / Line Drive / Fly Ball / Pop Up (10°, 25° & 50° launch angle, <a href="https://www.mlb.com/glossary/statcast/launch-angle">per MLB guidelines</a>).</p>
         <p><b>Self (prior year)</b> subtracts the hitter's own density from the season before, instead of the league's.</p>
         <p><b>Team-wide</b> pools every batted ball hit for a team (a traded hitter only counts batted balls for that team).</p>
-        <p><b>Data:</b> regular-season balls in play with a measured launch angle and landing coordinates, via MLB's Statcast API.</p>
+        <p><b>Data:</b> regular-season balls in play with a measured launch angle and stringer-based hit location coordinates, via MLB's Statcast API. Spray angle is calculated from the hit coordinates, not directly measured.</p>
       </div>
     </details>
   </section>
