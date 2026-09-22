@@ -319,18 +319,17 @@ the new files.
 [blandalytics.com/batted-balls/](https://blandalytics.com/batted-balls/) — where a hitter's batted
 balls go, spray angle against launch angle, as a density compared to every MLB batted ball that
 season or to the hitter's own prior season. Pick a season and a hitter (or tick *Team-wide* and
-pick a team); *Discrete* draws the difference as filled contours, *Continuous* shades every grid
-cell; *Self (prior year)* subtracts the hitter's previous season instead of the league. The
+pick a team); *Self (prior year)* subtracts the hitter's previous season instead of the league. The
 boxed numbers are the hitter's share of batted balls in each pull / centre / oppo by ground ball
 / line drive / fly ball / pop up cell, with the row and column shares along the axes (as changes
 from the prior season in the self comparison). Isaac Paredes' current season loads on arrival; a
-chart is linkable as `batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, with
-`-continuous` and `-self` suffixes. **Download PNG** saves the figure at 2x.
+chart is linkable as `batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, with a
+`-self` suffix. **Download PNG** saves the figure at 2x.
 
 It is the chart [batted-ball-charts.streamlit.app](https://batted-ball-charts.streamlit.app/)
 draws ([PLV_viz `batted_ball_charts.py`](https://github.com/Blandalytics/PLV_viz/blob/main/hitter_app/pages/batted_ball_charts.py)),
-rebuilt for the browser with the same geometry, palette (seaborn's `vlag` bands, the blue–white–red
-heatmap) and layout: a Gaussian KDE of the hitter's balls on a 91 × 91 grid over 0–90° of spray by
+in its discrete colour scale, rebuilt for the browser with the same geometry, palette (seaborn's
+`vlag` bands) and layout, and the Pitcher List Stats wordmark the other pages carry: a Gaussian KDE of the hitter's balls on a 91 × 91 grid over 0–90° of spray by
 −30–60° of launch angle, scaled to sum to 100, minus the league's. The hitter's density is
 computed in the page exactly as `scipy.stats.gaussian_kde` would (Scott's factor on the full
 sample covariance; checked against scipy to floating-point noise); the league's is built ahead of
@@ -354,8 +353,8 @@ app's own files, and is reduced to two small JSON files there that the page read
 | file | role |
 |---|---|
 | `tools/batted_balls/build_data.py` | reads a season's files from the bucket, keeps regular-season balls in play with a launch angle and a landing spot, writes the season file and the index |
-| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) or the heatmap, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x |
-| `batted-balls/index.html`, `app.js` | the page: season, hitter / team, colour scale and comparison controls, the link hash, the download |
+| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour), the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x |
+| `batted-balls/index.html`, `app.js` | the page: season, hitter / team and comparison controls, the link hash, the download |
 
 A traded hitter's batted balls count for each of his teams in the team-wide chart, and his
 listed team is the last he hit for. A hitter needs three batted balls (not all in a line) for a
