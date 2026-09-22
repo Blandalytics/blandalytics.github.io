@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Batted Ball Charts · Blandalytics</title>
+<meta name="description" content="Where an MLB hitter's batted balls go — spray angle against launch angle — compared to the rest of the league, or to their own prior season.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://data.blandalytics.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Alexandria:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
+  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
+  --accent:#6cb4ff; --bad:#ff8a80; --warn:#ffd166;
+}
+*{box-sizing:border-box}
+body{margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased; padding:24px 16px}
+main{max-width:860px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1{margin:0; font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
+p{margin:0}
+.tag{margin:6px 0 0; color:var(--muted); font-size:14px}
+a{color:var(--accent)}
+a.home{color:var(--muted); text-decoration:none; font-size:14px}
+a.home:hover{color:var(--ink)}
+.card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
+.controls{display:grid; grid-template-columns:100px minmax(220px,1fr) auto auto; gap:12px 18px; align-items:end}
+@media (max-width:640px){.controls{grid-template-columns:1fr 1fr} .controls .player{grid-column:1 / -1}}
+label{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
+label b{color:var(--ink); font-weight:500}
+label.check{flex-direction:row; align-items:center; gap:7px; color:var(--ink); font-size:14px}
+fieldset{border:0; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); min-width:0}
+fieldset legend{padding:0; color:var(--ink); font-weight:500; margin-bottom:4px}
+fieldset .opts{display:flex; gap:12px; flex-wrap:wrap}
+fieldset label{flex-direction:row; align-items:center; gap:5px; color:var(--ink); font-size:14px; white-space:nowrap}
+fieldset label:has(input:disabled){color:var(--faint)}
+input,select,button{font:inherit; color:var(--ink)}
+input[type=text],select{background:var(--ground); border:1px solid var(--rule); border-radius:6px; padding:7px 9px; width:100%}
+input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
+button{background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:7px 12px; cursor:pointer}
+button:hover:not(:disabled){border-color:var(--faint); background:#222b36}
+button:disabled{opacity:.45; cursor:default}
+.row{display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center}
+.status{color:var(--muted); font-size:13px}
+.status.err{color:var(--bad)}
+.status.warn{color:var(--warn)}
+.figure{display:flex; justify-content:center; background:#292C42; border-radius:8px; overflow:hidden}
+.figure canvas{display:block; width:100%; max-width:820px; height:auto}
+.suggest{position:relative}
+.suggest-list{--rows:10; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:5; margin:0; padding:4px; list-style:none;
+  background:var(--raise); border:1px solid var(--rule); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.4);
+  max-height:calc(var(--rows) * 32px + 10px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--faint) transparent}
+.suggest-list li{display:flex; justify-content:space-between; gap:12px; padding:6px 9px; border-radius:4px; cursor:pointer; font-size:14px; line-height:20px; color:var(--ink)}
+.suggest-list li small{color:var(--muted); font-size:12px; white-space:nowrap}
+.suggest-list li.active{background:#222b36}
+.actions{margin-top:14px}
+.note{color:var(--faint); font-size:12.5px; margin-top:8px}
+.method{color:var(--muted); font-size:14px}
+.method p{margin:0 0 10px}
+.method p:last-child{margin-bottom:0}
+.method b{color:var(--ink); font-weight:500}
+[hidden]{display:none!important}
+details summary{cursor:pointer; font-size:17px; font-weight:600; list-style:none}
+details summary::-webkit-details-marker{display:none}
+details[open] summary{margin-bottom:10px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <a class="home" href="/">← Blandalytics</a>
+    <h1>Batted Ball Charts</h1>
+    <p class="tag">Where a hitter's batted balls go — spray angle against launch angle — compared to the distribution of all MLB batted balls, or to the hitter's own prior season. Red is more often than the comparison, blue less.</p>
+  </header>
+
+  <section class="card">
+    <form id="form" class="controls">
+      <label><b>Season</b><select id="season"></select></label>
+      <label id="player_label" class="player"><b>Player</b>
+        <div class="suggest">
+          <input id="player" type="text" placeholder="name or MLBAM id" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest">
+          <ul id="suggest" class="suggest-list" role="listbox" hidden></ul>
+        </div>
+      </label>
+      <label id="team_label" class="player" hidden><b>Team</b><select id="team"></select></label>
+      <fieldset>
+        <legend>Color scale</legend>
+        <div class="opts">
+          <label><input type="radio" name="scale" value="discrete" checked> Discrete</label>
+          <label><input type="radio" name="scale" value="continuous"> Continuous</label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Compared to</legend>
+        <div class="opts">
+          <label><input type="radio" name="vs" value="league" checked> League</label>
+          <label><input type="radio" name="vs" value="self"> Self (prior year)</label>
+        </div>
+      </fieldset>
+    </form>
+    <div class="row" style="margin-top:12px">
+      <label class="check"><input id="team_wide" type="checkbox"> Team-wide comparison</label>
+      <span id="through" class="status"></span>
+      <span id="status" class="status"></span>
+    </div>
+  </section>
+
+  <section id="out" class="card" hidden>
+    <div class="figure"><canvas id="fig" width="2780" height="2270"></canvas></div>
+    <p id="note" class="note"></p>
+    <div class="row actions">
+      <button id="dl_png">Download PNG</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>How it works</summary>
+      <div class="method">
+        <p><b>The grid:</b> every batted ball is a point at its spray angle (0° at the pull-side foul line, 45° dead centre, 90° at the opposite line, for either hand) and launch angle. A Gaussian kernel density of the hitter's points is evaluated on a 91 × 91 grid over 0–90° by −30–60°, scaled to sum to 100, and the league's density over every MLB batted ball that season is subtracted. Red is where this hitter's batted balls land more often than the league's, blue less. The lines mark pull / centre / oppo (30° and 60°) and ground ball / line drive / fly ball / pop up (10°, 25° and 50° of launch angle); the boxed numbers are the hitter's share of batted balls in each cell, and the shares along the axes are for each column and row.</p>
+        <p><b>Discrete</b> draws the difference as filled contours in steps of 0.2% of the density; <b>Continuous</b> shades every grid cell on a scale that saturates at ±1%.</p>
+        <p><b>Self (prior year)</b> subtracts the hitter's own density from the season before instead of the league's, and the percentages become the change from that season. <b>Team-wide</b> pools every batted ball hit for a team (a traded hitter counts for each of his teams).</p>
+        <p><b>Data:</b> regular-season balls in play with a measured launch angle and landing spot, from the completed-games data files this site keeps; a season is updated each morning for the games two days before. The chart is the one <a href="https://batted-ball-charts.streamlit.app/" target="_blank" rel="noopener">batted-ball-charts.streamlit.app</a> draws, rebuilt for the browser; the hitter's density is computed as scipy's <code>gaussian_kde</code> would.</p>
+      </div>
+    </details>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/d3-array@3.2.4/dist/d3-array.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-contour@4.0.2/dist/d3-contour.min.js"></script>
+<script src="chart.js?v=1"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>

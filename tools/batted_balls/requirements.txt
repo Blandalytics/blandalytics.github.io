@@ -1,0 +1,6 @@
+numpy>=2.0
+pandas>=2.2
+pyarrow>=15
+scipy>=1.13
+requests>=2.32
+boto3
