@@ -1,7 +1,7 @@
-// The Batted Ball Charts page: season, hitter (or team), colour scale and
-// comparison controls over the chart in chart.js. The data is two JSON files per
-// visit from the bucket -- the seasons built and one season's batted balls with
-// its league grid -- produced by tools/batted_balls/build_data.py.
+// The Batted Ball Charts page: season, hitter (or team) and comparison controls
+// over the chart in chart.js. The data is two JSON files per visit from the
+// bucket -- the seasons built and one season's batted balls with its league
+// grid -- produced by tools/batted_balls/build_data.py.
 
 (() => {
   "use strict";
@@ -13,7 +13,6 @@
     status: $("status"), out: $("out"), fig: $("fig"), note: $("note"), dlPng: $("dl_png"),
     through: $("through"),
   };
-  const scaleInputs = () => [...document.querySelectorAll('input[name="scale"]')];
   const vsInputs = () => [...document.querySelectorAll('input[name="vs"]')];
   const radio = (name) => document.querySelector(`input[name="${name}"]:checked`)?.value;
   const setRadio = (name, value) => { const r = document.querySelector(`input[name="${name}"][value="${value}"]`); if (r) r.checked = true; };
@@ -26,7 +25,7 @@
 
   let index = null;             // { seasons: { "2026": {...} } }
   const seasons = new Map();    // season -> its file, once fetched
-  let current = null;           // { season, id|team, scale, vs } of the chart shown
+  let current = null;           // { season, id|team, vs } of the chart shown
   let chosen = null;            // the picked hitter, for the suggestion field
 
   function status(msg, kind = "") {
@@ -124,26 +123,20 @@
       season: year,
       team: teamWide ? el.team.value : null,
       id: teamWide ? null : chosen?.id ?? null,
-      scale: teamWide ? "continuous" : radio("scale"),
       vs: teamWide || !hasPrior(year) ? "league" : radio("vs"),
     };
   }
 
   function hash(sel) {
     const who = sel.team || sel.id;
-    return `#${sel.season}-${who}` + (sel.scale === "continuous" ? "-continuous" : "") + (sel.vs === "self" ? "-self" : "");
+    return `#${sel.season}-${who}` + (sel.vs === "self" ? "-self" : "");
   }
 
   function parseHash() {
+    // (-continuous / -discrete are accepted from older links and ignored)
     const m = /^#(\d{4})-([A-Za-z0-9]+)((?:-(?:continuous|discrete|self|league))*)$/.exec(location.hash);
     if (!m) return null;
-    const flags = m[3].split("-").filter(Boolean);
-    return {
-      season: Number(m[1]),
-      who: m[2],
-      scale: flags.includes("continuous") ? "continuous" : "discrete",
-      vs: flags.includes("self") ? "self" : "league",
-    };
+    return { season: Number(m[1]), who: m[2], vs: m[3].split("-").includes("self") ? "self" : "league" };
   }
 
   let drawing = 0;
@@ -174,7 +167,7 @@
       const result = BattedBalls.compute({ hitter, league: data.league, prior });
       if (!result) { status(`not enough batted balls to draw a density (${hitter.length})`, "warn"); el.out.hidden = true; return; }
       const opts = {
-        hand, scale: sel.scale, signed: Boolean(prior),
+        hand, signed: Boolean(prior),
         title: prior ? `${possessive(name)} Batted Ball Difference` : `${possessive(name)} ${sel.season} Batted Ball Profile`,
         subtitle: prior ? `(${sel.season}, compared to ${sel.season - 1})` : "(Compared to rest of MLB)",
       };
@@ -199,12 +192,10 @@
     const teamWide = el.teamWide.checked;
     el.playerLabel.hidden = teamWide;
     el.teamLabel.hidden = !teamWide;
-    // a team chart is always continuous against the league, as in the app
-    scaleInputs().forEach((r) => { r.disabled = teamWide; });
+    // a team chart is always against the league, as in the app
     const prior = hasPrior(Number(el.season.value));
     vsInputs().forEach((r) => { r.disabled = teamWide || (!prior && r.value === "self"); });
-    if (teamWide) { setRadio("scale", "continuous"); setRadio("vs", "league"); }
-    else if (!prior) setRadio("vs", "league");
+    if (teamWide || !prior) setRadio("vs", "league");
   }
 
   async function switchSeason(year, keep = true) {
@@ -240,7 +231,7 @@
       } else if (data.teams.includes(link.who)) {
         el.teamWide.checked = true; el.team.value = link.who;
       }
-      setRadio("scale", link.scale); setRadio("vs", link.vs);
+      setRadio("vs", link.vs);
       syncControls();
     }
     show();
@@ -249,7 +240,6 @@
   el.season.addEventListener("change", async () => { await switchSeason(Number(el.season.value)); show(); });
   el.teamWide.addEventListener("change", () => { syncControls(); show(); });
   el.team.addEventListener("change", show);
-  scaleInputs().forEach((r) => r.addEventListener("change", show));
   vsInputs().forEach((r) => r.addEventListener("change", show));
   el.form.addEventListener("submit", (e) => { e.preventDefault(); if (shown.length) pick(shown[Math.max(active, 0)]); });
 

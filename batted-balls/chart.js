@@ -1,8 +1,8 @@
 // The batted-ball chart: a hitter's density of spray angle against launch angle
 // minus the league's (or their own prior season's), drawn on a canvas. A port of
 // the figure in PLV_viz/hitter_app/pages/batted_ball_charts.py -- the same grid,
-// the same scipy density, the same vlag bands and heatmap palette, the same
-// layout -- so the PNG matches what the Streamlit app draws. Laid out in the pixels
+// the same scipy density, the same vlag contour bands, the same layout -- so the
+// PNG matches what the Streamlit app draws in its discrete colour scale. Laid out in the pixels
 // of the 200 dpi image the app serves (1390 x 1135) and rasterised at 2x.
 
 (() => {
@@ -112,20 +112,8 @@
   // the discrete colourbar: BoundaryNorm over 13 steps of vlag
   const STEPS = ["#2369bd", "#5380bc", "#7896c1", "#9aadca", "#bdc6d7", "#dfe1e8", "#faf5f5",
     "#f0dbda", "#e1b9b6", "#d49896", "#c77977", "#b95a59", "#a9373b"];
-  // seaborn's vlag, for the continuous colourbar
-  const VLAG = ["#2369bd", "#266abd", "#296cbc", "#2c6dbc", "#2f6ebc", "#316fbc", "#3470bc", "#3671bc", "#3972bc", "#3b73bc", "#3d74bc", "#3f75bc", "#4276bc", "#4477bc", "#4678bc", "#4879bc", "#4a7bbc", "#4c7cbc", "#4e7dbc", "#507ebc", "#517fbc", "#5380bc", "#5581bc", "#5782bc", "#5983bd", "#5b84bd", "#5c85bd", "#5e86bd", "#6087bd", "#6288bd", "#6489be", "#658abe", "#678bbe", "#698cbe", "#6a8dbf", "#6c8ebf", "#6e90bf", "#6f91bf", "#7192c0", "#7393c0", "#7594c0", "#7695c1", "#7896c1", "#7997c1", "#7b98c2", "#7d99c2", "#7e9ac2", "#809bc3", "#829cc3", "#839dc4", "#859ec4", "#87a0c4", "#88a1c5", "#8aa2c5", "#8ba3c6", "#8da4c6", "#8fa5c7", "#90a6c7", "#92a7c8", "#93a8c8", "#95a9c8", "#97abc9", "#98acc9", "#9aadca", "#9baecb", "#9dafcb", "#9fb0cc", "#a0b1cc", "#a2b2cd", "#a3b4cd", "#a5b5ce", "#a7b6ce", "#a8b7cf", "#aab8d0", "#abb9d0", "#adbbd1", "#afbcd1", "#b0bdd2", "#b2bed3", "#b3bfd3", "#b5c0d4", "#b7c2d5", "#b8c3d5", "#bac4d6", "#bbc5d7", "#bdc6d7", "#bfc8d8", "#c0c9d9", "#c2cada", "#c3cbda", "#c5cddb", "#c7cedc", "#c8cfdd", "#cad0dd", "#cbd1de", "#cdd3df", "#cfd4e0", "#d0d5e0", "#d2d7e1", "#d4d8e2", "#d5d9e3", "#d7dae4", "#d9dce5", "#dadde5", "#dcdee6", "#dde0e7", "#dfe1e8", "#e1e2e9", "#e2e3ea", "#e4e5eb", "#e6e6ec", "#e7e7ec", "#e9e9ed", "#ebeaee", "#ecebef", "#eeedf0", "#efeef1", "#f1eff2", "#f2f0f2", "#f3f1f3", "#f5f2f4", "#f6f3f4", "#f7f4f4", "#f8f4f5", "#f9f5f5", "#f9f5f5", "#faf5f5", "#faf5f5", "#faf5f4", "#faf5f4", "#faf4f3", "#faf3f3", "#faf3f2", "#faf2f1", "#faf0ef", "#f9efee", "#f9eeed", "#f8edeb", "#f7ebea", "#f7eae8", "#f6e8e7", "#f5e7e5", "#f5e5e4", "#f4e3e2", "#f3e2e0", "#f2e0df", "#f2dfdd", "#f1dddb", "#f0dbda", "#efdad8", "#efd8d6", "#eed7d5", "#edd5d3", "#ecd3d2", "#ecd2d0", "#ebd0ce", "#eacfcd", "#eacdcb", "#e9cbc9", "#e8cac8", "#e7c8c6", "#e7c7c5", "#e6c5c3", "#e5c3c1", "#e5c2c0", "#e4c0be", "#e3bfbd", "#e3bdbb", "#e2bcb9", "#e1bab8", "#e1b9b6", "#e0b7b5", "#dfb5b3", "#dfb4b2", "#deb2b0", "#deb1ae", "#ddafad", "#dcaeab", "#dcacaa", "#dbaba8", "#daa9a7", "#daa8a5", "#d9a6a4", "#d9a5a2", "#d8a3a0", "#d7a29f", "#d7a09d", "#d69f9c", "#d59d9a", "#d59c99", "#d49a97", "#d49896", "#d39794", "#d29593", "#d29491", "#d19290", "#d1918e", "#d08f8d", "#cf8e8b", "#cf8c8a", "#ce8b88", "#cd8987", "#cd8885", "#cc8784", "#cc8582", "#cb8481", "#ca827f", "#ca817e", "#c97f7d", "#c87e7b", "#c87c7a", "#c77b78", "#c77977", "#c67875", "#c57674", "#c57572", "#c47371", "#c3726f", "#c3706e", "#c26f6d", "#c16d6b", "#c16c6a", "#c06a68", "#c06967", "#bf6765", "#be6664", "#be6463", "#bd6361", "#bc6160", "#bc605e", "#bb5e5d", "#ba5d5c", "#b95b5a", "#b95a59", "#b85857", "#b75756", "#b75555", "#b65453", "#b55252", "#b55151", "#b44f4f", "#b34d4e", "#b24c4c", "#b24a4b", "#b1494a", "#b04748", "#af4647", "#af4446", "#ae4244", "#ad4143", "#ac3f42", "#ac3e40", "#ab3c3f", "#aa3a3e", "#a9393c", "#a9373b"];
   // sns.color_palette("vlag", 25)[0] and [-1]: the Less / More Often labels
   const LABEL_BLUE = "#3b73bc", LABEL_RED = "#af4647";
-  // the heatmap palette: blend kde_min -> white -> kde_max, centred on 0 at +/-0.01
-  const KDE_MIN = [0x23, 0x6a, 0xbe], KDE_MAX = [0xa9, 0x37, 0x3b], KDE_MID = [0xfe, 0xfe, 0xfe];
-  const KDE_THRESH = 0.01;
-
-  function heatColour(v) {
-    const t = Math.max(-1, Math.min(1, v / KDE_THRESH));
-    const [from, to, u] = t < 0 ? [KDE_MID, KDE_MIN, -t] : [KDE_MID, KDE_MAX, t];
-    return from.map((c, i) => Math.round(c + (to[i] - c) * u));
-  }
-
   // ---- layout, in the pixels of the app's 1390 x 1135 image ---------------------
   const W = 1390, H = 1135;
   const AX = { left: 286, top: 108.5, size: 900 };  // 10 px per degree
@@ -134,13 +122,14 @@
   const FONT = '"Alexandria", "DM Sans", "Segoe UI", sans-serif';
   const LINE_SPACING = 1.2;  // matplotlib's multi-line spacing
 
-  let logoPromise = null;
-  function loadLogo() {
-    if (!logoPromise) {
-      logoPromise = fetch("pl-text-wht.png").then((r) => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
+  const WORDMARK_URL = "../pitcher-cards/PitcherList_Stats_watermark_with_logo.webp";
+  let wordmarkPromise = null;
+  function loadWordmark() {
+    if (!wordmarkPromise) {
+      wordmarkPromise = fetch(WORDMARK_URL).then((r) => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
         .then((b) => createImageBitmap(b)).catch(() => null);
     }
-    return logoPromise;
+    return wordmarkPromise;
   }
 
   async function ensureFonts() {
@@ -152,8 +141,8 @@
 
   // Draw the chart onto `canvas`.
   //   result:   from compute()
-  //   opts:     { title, subtitle, hand: "L"|"R", scale: "discrete"|"continuous",
-  //               signed: bool (print shares as +/- differences), logo }
+  //   opts:     { title, subtitle, hand: "L"|"R",
+  //               signed: bool (print shares as +/- differences), wordmark }
   function draw(canvas, result, opts) {
     const scale = 2;
     canvas.width = W * scale; canvas.height = H * scale;
@@ -162,7 +151,6 @@
     ctx.fillStyle = BACKGROUND;
     ctx.fillRect(0, 0, W, H);
 
-    const discrete = opts.scale !== "continuous";
     const flip = opts.hand === "L";  // the pull side stays on the left for right-handers, right for lefties
     const px = (spray) => AX.left + (flip ? 90 - spray : spray) * 10;
     const py = (launch) => AX.top + (60 - launch) * 10;
@@ -193,46 +181,25 @@
     ctx.beginPath();
     ctx.rect(AX.left, AX.top, AX.size, AX.size);
     ctx.clip();
-    if (discrete) {
-      // contourf of diff x 1000: values on the grid, y-major for d3
-      const values = new Float64Array(N * N);
-      for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) values[iy * N + ix] = result.diff[ix * N + iy] * 1000;
-      ctx.fillStyle = BANDS[0];
-      ctx.fillRect(AX.left, AX.top, AX.size, AX.size);
-      const rings = d3.contours().size([N, N]).thresholds(LEVELS)(values);
-      // d3 puts sample i at coordinate i + 0.5
-      const cx = (c) => px(c - 0.5), cy = (c) => py(c - 0.5 + LAUNCH[0]);
-      rings.forEach((multi, k) => {
-        ctx.fillStyle = BANDS[k + 1];
-        ctx.beginPath();
-        for (const polygon of multi.coordinates) {
-          for (const ring of polygon) {
-            ring.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(cx(x), cy(y)); else ctx.lineTo(cx(x), cy(y)); });
-            ctx.closePath();
-          }
+    // contourf of diff x 1000: values on the grid, y-major for d3
+    const values = new Float64Array(N * N);
+    for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) values[iy * N + ix] = result.diff[ix * N + iy] * 1000;
+    ctx.fillStyle = BANDS[0];
+    ctx.fillRect(AX.left, AX.top, AX.size, AX.size);
+    const rings = d3.contours().size([N, N]).thresholds(LEVELS)(values);
+    // d3 puts sample i at coordinate i + 0.5
+    const cx = (c) => px(c - 0.5), cy = (c) => py(c - 0.5 + LAUNCH[0]);
+    rings.forEach((multi, k) => {
+      ctx.fillStyle = BANDS[k + 1];
+      ctx.beginPath();
+      for (const polygon of multi.coordinates) {
+        for (const ring of polygon) {
+          ring.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(cx(x), cy(y)); else ctx.lineTo(cx(x), cy(y)); });
+          ctx.closePath();
         }
-        ctx.fill("evenodd");
-      });
-    } else {
-      // seaborn.heatmap of the transposed grid: cell (ix, iy) spans [ix, ix+1) by
-      // [iy, iy+1) in index units, with the axes cut at 90 so the last row and
-      // column are clipped away
-      const off = document.createElement("canvas");
-      off.width = N; off.height = N;
-      const img = off.getContext("2d").createImageData(N, N);
-      for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) {
-        const [r, g, b] = heatColour(result.diff[ix * N + iy]);
-        const o = ((N - 1 - iy) * N + ix) * 4;
-        img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
       }
-      off.getContext("2d").putImageData(img, 0, 0);
-      ctx.imageSmoothingEnabled = false;
-      ctx.save();
-      if (flip) { ctx.translate(AX.left * 2 + AX.size, 0); ctx.scale(-1, 1); }
-      ctx.drawImage(off, 0, 1, N - 1, N - 1, AX.left, AX.top, AX.size, AX.size);
-      ctx.restore();
-      ctx.imageSmoothingEnabled = true;
-    }
+      ctx.fill("evenodd");
+    });
     ctx.restore();
 
     // --- the bucket lines: black at a quarter, 1 pt ----------------------------
@@ -281,34 +248,30 @@
     });
 
     // --- the colourbar ---------------------------------------------------------------
-    if (discrete) {
-      const h = CB.height / STEPS.length;
-      STEPS.forEach((c, i) => {
-        ctx.fillStyle = c;
-        ctx.fillRect(CB.left, CB.top + CB.height - (i + 1) * h, CB.width, h + 0.5);
-      });
-    } else {
-      const grad = ctx.createLinearGradient(0, CB.top + CB.height, 0, CB.top);
-      VLAG.forEach((c, i) => grad.addColorStop(i / (VLAG.length - 1), c));
-      ctx.fillStyle = grad;
-      ctx.fillRect(CB.left, CB.top, CB.width, CB.height);
-    }
+    const h = CB.height / STEPS.length;
+    STEPS.forEach((c, i) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(CB.left, CB.top + CB.height - (i + 1) * h, CB.width, h + 0.5);
+    });
     const cbx = AX.left + 1.115 * AX.size;
     [["Less\nOften", -24, LABEL_BLUE], ["Same", 15, "#000000"], ["More\nOften", 53.5, LABEL_RED]]
       .forEach(([s, la, colour]) => text(s, cbx, py(la), { size: 15, weight: 500, colour }));
 
-    // --- title, credits, logo --------------------------------------------------------
+    // --- title, credit, wordmark ------------------------------------------------------
     text(opts.title, 742, 40, { size: 16 });
     text(opts.subtitle, 742, 85, { size: 12 });
     text("Data: MLB Statcast", 27, 1085, { size: 6, ha: "left" });
-    text("@blandalytics", 1272, 1082, { size: 10 });
-    if (opts.logo) ctx.drawImage(opts.logo, 61.6, 995.8, 209.8, 87.5);
+    if (opts.wordmark) {
+      // bottom right, under the colourbar and flush with its right edge
+      const w = 230, h = w * (opts.wordmark.height / opts.wordmark.width);
+      ctx.drawImage(opts.wordmark, CB.left + CB.width - w, 1108 - h, w, h);
+    }
   }
 
   async function render(canvas, result, opts) {
     await ensureFonts();
-    const logo = await loadLogo();
-    draw(canvas, result, { ...opts, logo });
+    const wordmark = await loadWordmark();
+    draw(canvas, result, { ...opts, wordmark });
   }
 
   window.BattedBalls = { N, kdeGrid, compute, shares, render, inRange };

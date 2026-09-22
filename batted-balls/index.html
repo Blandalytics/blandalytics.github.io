@@ -28,7 +28,7 @@ a{color:var(--accent)}
 a.home{color:var(--muted); text-decoration:none; font-size:14px}
 a.home:hover{color:var(--ink)}
 .card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
-.controls{display:grid; grid-template-columns:100px minmax(220px,1fr) auto auto; gap:12px 18px; align-items:end}
+.controls{display:grid; grid-template-columns:100px minmax(220px,1fr) auto; gap:12px 18px; align-items:end}
 @media (max-width:640px){.controls{grid-template-columns:1fr 1fr} .controls .player{grid-column:1 / -1}}
 label{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
 label b{color:var(--ink); font-weight:500}
@@ -88,13 +88,6 @@ details[open] summary{margin-bottom:10px}
       </label>
       <label id="team_label" class="player" hidden><b>Team</b><select id="team"></select></label>
       <fieldset>
-        <legend>Color scale</legend>
-        <div class="opts">
-          <label><input type="radio" name="scale" value="discrete" checked> Discrete</label>
-          <label><input type="radio" name="scale" value="continuous"> Continuous</label>
-        </div>
-      </fieldset>
-      <fieldset>
         <legend>Compared to</legend>
         <div class="opts">
           <label><input type="radio" name="vs" value="league" checked> League</label>
@@ -122,8 +115,7 @@ details[open] summary{margin-bottom:10px}
       <summary>How it works</summary>
       <div class="method">
         <p><b>The grid:</b> every batted ball is a point at its spray angle (0° at the pull-side foul line, 45° dead centre, 90° at the opposite line, for either hand) and launch angle. A Gaussian kernel density of the hitter's points is evaluated on a 91 × 91 grid over 0–90° by −30–60°, scaled to sum to 100, and the league's density over every MLB batted ball that season is subtracted. Red is where this hitter's batted balls land more often than the league's, blue less. The lines mark pull / centre / oppo (30° and 60°) and ground ball / line drive / fly ball / pop up (10°, 25° and 50° of launch angle); the boxed numbers are the hitter's share of batted balls in each cell, and the shares along the axes are for each column and row.</p>
-        <p><b>Discrete</b> draws the difference as filled contours in steps of 0.2% of the density; <b>Continuous</b> shades every grid cell on a scale that saturates at ±1%.</p>
-        <p><b>Self (prior year)</b> subtracts the hitter's own density from the season before instead of the league's, and the percentages become the change from that season. <b>Team-wide</b> pools every batted ball hit for a team (a traded hitter counts for each of his teams).</p>
+        <p>The difference is drawn as filled contours in steps of 0.2% of the density. <b>Self (prior year)</b> subtracts the hitter's own density from the season before instead of the league's, and the percentages become the change from that season. <b>Team-wide</b> pools every batted ball hit for a team (a traded hitter counts for each of his teams).</p>
         <p><b>Data:</b> regular-season balls in play with a measured launch angle and landing spot, from the completed-games data files this site keeps; a season is updated each morning for the games two days before. The chart is the one <a href="https://batted-ball-charts.streamlit.app/" target="_blank" rel="noopener">batted-ball-charts.streamlit.app</a> draws, rebuilt for the browser; the hitter's density is computed as scipy's <code>gaussian_kde</code> would.</p>
       </div>
     </details>
@@ -131,7 +123,7 @@ details[open] summary{margin-bottom:10px}
 </main>
 <script src="https://cdn.jsdelivr.net/npm/d3-array@3.2.4/dist/d3-array.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-contour@4.0.2/dist/d3-contour.min.js"></script>
-<script src="chart.js?v=2"></script>
-<script src="app.js?v=1"></script>
+<script src="chart.js?v=3"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>
