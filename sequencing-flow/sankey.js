@@ -417,7 +417,7 @@ export async function savePng(meta) {
   ctx.fillStyle = ink; ctx.font = `700 34px ${family}`;
   ctx.fillText(meta.pitcher, PADX, yCur);
   const L = meta.line || {};
-  const lineTxt = `${L.ip} IP | ${L.h} H | ${L.bb} BB | ${L.k} K | ${L.pitches} pitches`;
+  const lineTxt = `${L.ip} IP  |  ${L.h} H  |  ${L.bb} BB  |  ${L.k} K  |  ${L.pitches} Pitches`;
   ctx.font = `600 17px ${family}`; ctx.textAlign = 'right';
   ctx.fillText(lineTxt, S - PADX, yCur); ctx.textAlign = 'left';
   yCur += 28;
