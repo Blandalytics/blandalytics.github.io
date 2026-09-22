@@ -17,3 +17,5 @@ tools/live/node_modules/
 tools/live/.wrangler/
 # a local build of the batted-ball data (it lives in the bucket)
 batted-balls/data/
+# the homepage tiles' full-size app exports (make_tiles.py crops them into images/)
+tools/homepage/cache/

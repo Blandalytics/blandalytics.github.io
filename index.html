@@ -1,68 +1,156 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark">
-<title>Blandalytics</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
-<style>
-:root{
-  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
-  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
-}
-*{box-sizing:border-box}
-body{
-  margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
-  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-  font-size:16px; line-height:1.5; -webkit-font-smoothing:antialiased;
-  display:flex; align-items:center; justify-content:center; padding:24px;
-}
-main{width:100%; max-width:520px; display:flex; flex-direction:column; gap:28px}
-h1{margin:0; font-size:34px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
-.tag{margin:6px 0 0; color:var(--muted); font-size:15px}
-.cards{display:flex; flex-direction:column; gap:12px}
-a.card{
-  display:flex; flex-direction:column; gap:4px; text-decoration:none; color:inherit;
-  background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px;
-}
-a.card:hover{background:var(--raise); border-color:var(--faint)}
-a.card:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
-a.card b{font-size:17px; font-weight:600}
-a.card span{color:var(--muted); font-size:14px}
-</style>
-</head>
-<body>
-<main>
-  <header>
-    <h1>blandalytics</h1>
-    <p class="pronunciation">Noun | bland·​a·​lyt·​ics</p>
-    <p class="tag">: the method of assigning numbers to things, then visualizing them.</p>
-  </header>
-  <nav class="cards">
-    <a class="card" href="/pitcher-cards/">
-      <b>PLV Pitcher Game Cards</b>
-      <span>A Pitcher List Stats card for every pitcher in every MLB game: Stuff, Location and PLV model grades, with movement, locations, and usage.</span>
-    </a>
-    <a class="card" href="/sequencing-flow/">
-      <b>Sequencing Flow</b>
-      <span>A pitcher's start as a Sankey: every plate appearance's pitch-by-pitch path, by pitch number and type.</span>
-    </a>
-    <a class="card" href="/swing-profiles/">
-      <b>Swing Profiles</b>
-      <span>Bat Speed, Acceleration, and Jerk through an MLB hitter's swing, derived from their Baseball Savant swing-path card.</span>
-    </a>
-    <a class="card" href="/batted-balls/">
-      <b>Batted Ball Charts</b>
-      <span>Where a hitter's batted balls go — spray angle against launch angle — compared to the rest of MLB, or to their own prior season.</span>
-    </a>
-    <a class="card" href="/nhl-draft/">
-      <b>NHL Draft Tool</b>
-      <span>Sit in one seat of a roto snake draft. Every option is priced by simulating the rest of the draft — roto points, category by category. Runs in your browser.</span>
-    </a>
-  </nav>
-</main>
-</body>
+<!DOCTYPE HTML>
+<!--
+	Phantom by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
+	<head>
+		<title>Blandalytics</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+		<link rel="stylesheet" href="assets/css/main.css" />
+		<link rel="stylesheet" href="assets/css/blandalytics.css?v=1" />
+		<noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
+		<meta name="color-scheme" content="dark" />
+	</head>
+	<body class="is-preload">
+		<!-- Wrapper -->
+			<div id="wrapper">
+
+				<!-- Header -->
+					<header id="header">
+						<div class="inner">
+
+							<!-- Nav -->
+								<nav>
+									<ul>
+										<li><a href="#menu">Menu</a></li>
+									</ul>
+								</nav>
+
+						</div>
+					</header>
+
+				<!-- Menu -->
+					<nav id="menu">
+						<h2>Menu</h2>
+						<ul>
+							<li><a href="/">Home</a></li>
+							<li><a href="/pitcher-cards/">PLV Pitcher Game Cards</a></li>
+							<li><a href="/sequencing-flow/">Sequencing Flow</a></li>
+							<li><a href="/swing-profiles/">Swing Profiles</a></li>
+							<li><a href="/batted-balls/">Batted Ball Charts</a></li>
+							<li><a href="/nhl-draft/">NHL Draft Tool</a></li>
+							<li><a href="#footer">About</a></li>
+						</ul>
+					</nav>
+
+				<!-- Main -->
+					<div id="main">
+						<div class="inner">
+							<header>
+								<h1>blandalytics</h1>
+								<p class="pronunciation">Noun | bland·a·lyt·ics</p>
+								<p class="definition">: the method of assigning numbers to things, then visualizing them.</p>
+							</header>
+							<section class="tiles">
+								<article class="style1">
+									<span class="image">
+										<img src="images/tile-pitcher-cards.png" alt="Jacob deGrom's PLV pitcher game card, 9/10/2026 at SEA" />
+									</span>
+									<a href="/pitcher-cards/">
+										<h2>PLV Pitcher Game Cards</h2>
+										<div class="content">
+											<p>A Pitcher List Stats card for every pitcher in every MLB game: Stuff, Location and PLV model grades, with movement, locations, and usage.</p>
+										</div>
+									</a>
+								</article>
+								<article class="style2">
+									<span class="image">
+										<img src="images/tile-sequencing-flow.png" alt="Gavin Williams' pitch sequencing Sankey, 9/20/2026 vs ATH" />
+									</span>
+									<a href="/sequencing-flow/">
+										<h2>Sequencing Flow</h2>
+										<div class="content">
+											<p>A pitcher's start as a Sankey: every plate appearance's pitch-by-pitch path, by pitch number and type.</p>
+										</div>
+									</a>
+								</article>
+								<article class="style3">
+									<span class="image">
+										<img src="images/tile-swing-profiles.png" alt="Junior Caminero's swing kinematics" />
+									</span>
+									<a href="/swing-profiles/">
+										<h2>Swing Profiles</h2>
+										<div class="content">
+											<p>Bat Speed, Acceleration, and Jerk through an MLB hitter's swing, derived from their Baseball Savant swing-path card.</p>
+										</div>
+									</a>
+								</article>
+								<article class="style4">
+									<span class="image">
+										<img src="images/tile-batted-balls.png" alt="Isaac Paredes' batted ball profile" />
+									</span>
+									<a href="/batted-balls/">
+										<h2>Batted Ball Charts</h2>
+										<div class="content">
+											<p>Where a hitter's batted balls go — spray angle against launch angle — compared to the rest of MLB, or to their own prior season.</p>
+										</div>
+									</a>
+								</article>
+								<article class="style5">
+									<span class="image">
+										<img src="images/tile-nhl-draft.png" alt="NHL draft tool options table" />
+									</span>
+									<a href="/nhl-draft/">
+										<h2>NHL Draft Tool</h2>
+										<div class="content">
+											<p>Sit in one seat of a roto snake draft. Every option is priced by simulating the rest of the draft — roto points, category by category. Runs in your browser.</p>
+										</div>
+									</a>
+								</article>
+							</section>
+						</div>
+					</div>
+
+				<!-- Footer -->
+					<footer id="footer">
+						<div class="inner">
+
+							<!-- Logo -->
+								<a href="/" class="logo">
+									<span class="symbol"><img src="images/logo.svg" alt="" /></span><span class="title">Blandalytics</span>
+								</a>
+
+							<section class="about">
+								<h2>About</h2>
+								<p>Blandalytics is a collection of baseball and hockey visualization tools: pitch-level model grades, pitch sequencing, swing mechanics, batted-ball distributions, and a draft simulator. Numbers get assigned to things, and then those things get visualized.</p>
+							</section>
+							<section class="tools">
+								<h2>Tools</h2>
+								<ul class="tool-links">
+									<li><a href="/pitcher-cards/">PLV Pitcher Game Cards</a></li>
+									<li><a href="/sequencing-flow/">Sequencing Flow</a></li>
+									<li><a href="/swing-profiles/">Swing Profiles</a></li>
+									<li><a href="/batted-balls/">Batted Ball Charts</a></li>
+									<li><a href="/nhl-draft/">NHL Draft Tool</a></li>
+								</ul>
+							</section>
+							<ul class="copyright">
+								<li>&copy; Blandalytics. All rights reserved</li><li>Design: <a href="http://html5up.net">HTML5 UP</a></li>
+							</ul>
+						</div>
+					</footer>
+
+			</div>
+
+		<!-- Scripts -->
+			<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/browser.min.js"></script>
+			<script src="assets/js/breakpoints.min.js"></script>
+			<script src="assets/js/util.js"></script>
+			<script src="assets/js/main.js"></script>
+
+	</body>
 </html>
