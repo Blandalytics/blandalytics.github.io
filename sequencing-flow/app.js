@@ -6,7 +6,7 @@
 // With both set, the page goes straight to that pitcher's game on that date. A flow is linkable
 // as #<pitcherId>-<YYYY-MM-DD>.
 
-import * as data from './data.js?v=2';
+import * as data from './data.js?v=3';
 import * as sankey from './sankey.js?v=15';
 
 const $ = id => document.getElementById(id);

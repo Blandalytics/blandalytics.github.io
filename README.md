@@ -245,6 +245,10 @@ Nothing is built ahead of time; the page queries the data in the browser:
   draws what has been thrown so far.
 - Pitcher search, game logs and team abbreviations come from the MLB Stats API directly, which
   allows cross-origin requests. The page is MLB only.
+- Innings pitched are the change in the out count while the pitcher was on the mound, not the
+  outs his plate appearances recorded: a runner picked off or caught stealing mid-plate-appearance
+  is an out on the play but not the batter's result, so counting events alone loses it. A split by
+  batter side has no continuous out count to read, so it falls back to counting events.
 
 The chart is Plotly's sankey trace in a *fixed* layout the page computes itself, so that every
 column is exactly one pitch number and the bands stack in usage order: node positions are the
