@@ -1,5 +1,5 @@
 {
- "built": "2026-09-21T16:19:28Z",
+ "built": "2026-09-22T14:27:26Z",
  "games": {
   "822680": {
    "away": "Philadelphia Phillies",
@@ -6594,6 +6594,20 @@
    "home_r": 4,
    "title": "Guardians 6, Mariners 4",
    "venue": "T-Mobile Park"
+  },
+  "823169": {
+   "away": "Minnesota Twins",
+   "away_abbr": "MIN",
+   "away_nick": "Twins",
+   "away_r": 2,
+   "date": "2026-09-21",
+   "file": "games/823169.html",
+   "home": "San Francisco Giants",
+   "home_abbr": "SF",
+   "home_nick": "Giants",
+   "home_r": 5,
+   "title": "Giants 5, Twins 2",
+   "venue": "Oracle Park"
   },
   "823170": {
    "away": "San Diego Padres",
@@ -20735,6 +20749,20 @@
    "title": "Angels 3, Astros 0",
    "venue": "Daikin Park"
   },
+  "824221": {
+   "away": "Washington Nationals",
+   "away_abbr": "WSH",
+   "away_nick": "Nationals",
+   "away_r": 2,
+   "date": "2026-09-21",
+   "file": "games/824221.html",
+   "home": "Detroit Tigers",
+   "home_abbr": "DET",
+   "home_nick": "Tigers",
+   "home_r": 9,
+   "title": "Tigers 9, Nationals 2",
+   "venue": "Comerica Park"
+  },
   "824224": {
    "away": "Colorado Rockies",
    "away_abbr": "COL",
@@ -28378,6 +28406,20 @@
    "home_r": 5,
    "title": "Red Sox 5, Padres 2",
    "venue": "Fenway Park"
+  },
+  "824787": {
+   "away": "Toronto Blue Jays",
+   "away_abbr": "TOR",
+   "away_nick": "Blue Jays",
+   "away_r": 3,
+   "date": "2026-09-21",
+   "file": "games/824787.html",
+   "home": "Baltimore Orioles",
+   "home_abbr": "BAL",
+   "home_nick": "Orioles",
+   "home_r": 4,
+   "title": "Orioles 4, Blue Jays 3",
+   "venue": "Oriole Park at Camden Yards"
   },
   "824788": {
    "away": "Milwaukee Brewers",
