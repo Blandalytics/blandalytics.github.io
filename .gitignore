@@ -15,3 +15,5 @@ pitcher-cards/cards/
 # the live worker's local toolchain and dev-server state
 tools/live/node_modules/
 tools/live/.wrangler/
+# a local build of the batted-ball data (it lives in the bucket)
+batted-balls/data/
