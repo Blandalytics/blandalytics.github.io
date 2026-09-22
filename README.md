@@ -10,7 +10,7 @@ credit) with the site's dark palette. Each tile's picture is real output from it
 
 | file | role |
 |---|---|
-| `index.html` | the page: the definition, the tiles, the menu and the footer |
+| `index.html` | the page: the definition, a section of tiles per sport (Baseball, then Hockey), the menu grouped the same way, and the footer |
 | `assets/css/main.css`, `assets/js/` | the Phantom template, unchanged |
 | `assets/css/blandalytics.css` | the site's palette and font over the template, the tile scrim, the footer wordmark |
 | `images/tile-*.png` | the tile pictures, one per tool |
