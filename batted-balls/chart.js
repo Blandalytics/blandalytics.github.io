@@ -260,11 +260,11 @@
     // --- title, credit, wordmark ------------------------------------------------------
     text(opts.title, 742, 40, { size: 16 });
     text(opts.subtitle, 742, 85, { size: 12 });
+    // bottom left: the wordmark, with the data credit under it
     text("Data: MLB Statcast", 27, 1085, { size: 6, ha: "left" });
     if (opts.wordmark) {
-      // bottom right, under the colourbar and flush with its right edge
       const w = 230, h = w * (opts.wordmark.height / opts.wordmark.width);
-      ctx.drawImage(opts.wordmark, CB.left + CB.width - w, 1108 - h, w, h);
+      ctx.drawImage(opts.wordmark, 27, 1066 - h, w, h);
     }
   }
 
