@@ -226,16 +226,15 @@
       const s = fmt(v), x = px(sprayMid[i]), y = py(launchMid[j]);
       setFont(12);
       const w = ctx.measureText(s).width + 2 * pad, h = box.asc + box.desc + 2 * pad;
-      ctx.save();
-      ctx.globalAlpha = 0.25;
-      ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "#000000";
-      ctx.lineWidth = pt(2);
+      // a grey outline as heavy as the bucket lines, over a white fill that lets
+      // the band show through a little
       ctx.beginPath();
       ctx.roundRect(x - w / 2, y - h / 2, w, h, pad);
+      ctx.fillStyle = "rgba(255,255,255,0.625)";
       ctx.fill();
+      ctx.strokeStyle = "#808080";
+      ctx.lineWidth = pt(1);
       ctx.stroke();
-      ctx.restore();
       text(s, x, y, { size: 12, colour: "#000000" });
     }));
 
