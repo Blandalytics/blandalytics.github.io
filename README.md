@@ -223,6 +223,9 @@ the first band it appears in.
 
 A flow is linkable as `sequencing-flow/#<pitcherId>-<YYYY-MM-DD>`.
 
+**Batters** filters the diagram to the pitches thrown to right- or left-handed hitters; the
+subheader then reads e.g. *June 12, 2026 @ PHI (vRHH)*, on the page and in the image.
+
 Search a pitcher to open their most recent appearance (falling back to their latest season that
 has one) and list the rest of that season; or pick a game date to list everyone who threw a tracked
 pitch that day, longest outing first. With both set the page goes straight to that game. On arrival

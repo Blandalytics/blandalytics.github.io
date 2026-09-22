@@ -113,7 +113,7 @@ export function unitFor(date) {
 
 const COLUMNS = [
   'game_pk', 'game_date', 'home_team', 'away_team', 'bat_team', 'field_team', 'at_bat_index', 'inning', 'half',
-  'pitcher', 'pitcher_name', 'p_throws', 'batter', 'batter_name', 'pitch_number', 'pitch_type', 'pitch_name',
+  'pitcher', 'pitcher_name', 'p_throws', 'batter', 'batter_name', 'stand', 'pitch_number', 'pitch_type', 'pitch_name',
   'events', 'event', 'is_strike', 'is_in_play',
 ];
 const files = new Map();   // url -> { file, metadata }
@@ -370,14 +370,26 @@ export function buildFlow(rows, meta) {
 }
 
 // The flow for one pitcher's game: rows already narrowed to the date.
-export function flowFor(rows, pitcherId, gamePk) {
-  const mine = rows.filter(r => r.pitcher === pitcherId && (!gamePk || r.game_pk === gamePk));
+// `hand` is 'R' or 'L' to keep only the pitches thrown to batters of that side.
+export function flowFor(rows, pitcherId, gamePk, hand) {
+  const his = rows.filter(r => r.pitcher === pitcherId && (!gamePk || r.game_pk === gamePk));
+  if (!his.length) return null;
+  const mine = hand ? his.filter(r => r.stand === hand) : his;
   if (!mine.length) return null;
-  const r0 = mine[0];
+  const r0 = his[0];
+  const home = r0.field_team === r0.home_team;
   const meta = {
     pitcher: r0.pitcher_name, pitcherId, date: r0.game_date, gamePk: r0.game_pk,
     home: r0.home_team, away: r0.away_team, opponent: r0.bat_team, throws: r0.p_throws,
+    home_text: home ? 'vs' : '@',     // the pitcher's side of the matchup
+    hand: hand || null,
     live: !!r0.live, status: r0.status || null,
   };
   return buildFlow(mine, meta);
+}
+
+/** Which batter sides this pitcher actually faced in a game: ['R', 'L'] in that order. */
+export function handsFor(rows, pitcherId, gamePk) {
+  const sides = new Set(rows.filter(r => r.pitcher === pitcherId && (!gamePk || r.game_pk === gamePk)).map(r => r.stand));
+  return ['R', 'L'].filter(h => sides.has(h));
 }
