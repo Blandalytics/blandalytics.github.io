@@ -416,15 +416,23 @@ export async function savePng(meta) {
   let yCur = 70;
   ctx.fillStyle = ink; ctx.font = `700 34px ${family}`;
   ctx.fillText(meta.pitcher, PADX, yCur);
+  // the line, right-aligned, with the separators in the footer's grey
   const L = meta.line || {};
-  const lineTxt = `${L.ip} IP  |  ${L.h} H  |  ${L.bb} BB  |  ${L.k} K  |  ${L.pitches} Pitches`;
-  ctx.font = `600 17px ${family}`; ctx.textAlign = 'right';
-  ctx.fillText(lineTxt, S - PADX, yCur); ctx.textAlign = 'left';
+  ctx.font = `600 17px ${family}`;
+  const parts = [`${L.ip} IP`, `${L.h} H`, `${L.bb} BB`, `${L.k} K`, `${L.pitches} Pitches`];
+  const sep = '  |  ';
+  const wSep = ctx.measureText(sep).width;
+  const total = parts.reduce((w, t) => w + ctx.measureText(t).width, 0) + wSep * (parts.length - 1);
+  let lx = S - PADX - total;
+  parts.forEach((t, i) => {
+    ctx.fillStyle = ink; ctx.fillText(t, lx, yCur); lx += ctx.measureText(t).width;
+    if (i < parts.length - 1) { ctx.fillStyle = muted; ctx.fillText(sep, lx, yCur); lx += wSep; }
+  });
   yCur += 28;
   ctx.fillStyle = muted; ctx.font = `500 17px ${family}`;
   const d = new Date(meta.date + 'T12:00:00');
   const dateStr = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  ctx.fillText(`${dateStr} vs ${meta.opponent}`, PADX, yCur);
+  ctx.fillText(`${dateStr} ${meta.home_text} ${meta.opponent}${meta.hand ? ` (v${meta.hand}HH)` : ''}`, PADX, yCur);
   yCur += 34;
   // key: swatch, code, name, count
   let kx = PADX;
@@ -497,7 +505,7 @@ export async function savePng(meta) {
   }
 
   const a = document.createElement('a');
-  const slug = `${meta.pitcher}_${meta.date}`.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  const slug = `${meta.pitcher}_${meta.date}${meta.hand ? `_v${meta.hand}hh` : ''}`.toLowerCase().replace(/[^a-z0-9]+/g, '_');
   a.download = `${slug}_sequencing_flow.png`;
   a.href = cv.toDataURL('image/png');
   a.click();

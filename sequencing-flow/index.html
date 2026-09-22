@@ -55,6 +55,7 @@ select:hover,input:hover{border-color:var(--faint)}
 select:focus-visible,input:focus-visible{outline:2px solid var(--ink); outline-offset:1px}
 select:disabled,input:disabled{opacity:.45; cursor:default}
 #q{min-width:240px}
+#hand{min-width:120px}
 #game{min-width:300px}
 .hits{
   position:absolute; top:100%; left:0; right:0; z-index:30; margin-top:4px;
@@ -86,6 +87,7 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
 .matchup{color:var(--muted); font-size:14px}
 .matchup b{color:var(--ink); font-weight:600}
 .matchup .live{color:#65FF9C; font-weight:600}
+.matchup .hand{color:var(--ink)}
 .line{display:flex; gap:20px; flex-wrap:wrap}
 .stat{display:flex; flex-direction:column; align-items:flex-start; min-width:32px}
 .stat .v{font-size:24px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums}
@@ -186,6 +188,10 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
     <label for="game" id="gameLabel">Game</label>
     <select id="game" disabled></select>
   </div>
+  <div class="field">
+    <label for="hand">Batters</label>
+    <select id="hand" disabled></select>
+  </div>
   <button class="btn" id="png" type="button" hidden>Save PNG</button>
   <button class="btn" id="reset" type="button">Clear</button>
 </header>
@@ -218,6 +224,6 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.3/plotly.min.js"></script>
-<script type="module" src="app.js?v=15"></script>
+<script type="module" src="app.js?v=16"></script>
 </body>
 </html>
