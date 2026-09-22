@@ -36,7 +36,7 @@ function fillLegend() {
     const b = document.createElement('button');
     b.className = 'chip' + (focus === t.code ? ' on' : ''); b.type = 'button'; b.dataset.code = t.code;
     b.setAttribute('aria-pressed', String(focus === t.code));
-    b.innerHTML = `<span class="sw" style="background:${t.color}"></span><span class="code">${t.code}</span><span class="nm">${t.name}</span><span class="ct">${t.count}</span>`;
+    b.innerHTML = `<span class="sw" style="background:${t.color}"></span><span class="code">${t.code}</span><span class="nm">${t.name}</span><span class="ct">(${t.count})</span>`;
     b.addEventListener('click', () => {
       focus = focus === t.code ? null : t.code;
       legendEl.classList.toggle('has-focus', !!focus);
@@ -417,14 +417,14 @@ export async function savePng(meta) {
   ctx.fillStyle = ink; ctx.font = `700 34px ${family}`;
   ctx.fillText(meta.pitcher, PADX, yCur);
   const L = meta.line || {};
-  const lineTxt = `${L.ip} IP · ${L.h} H · ${L.bb} BB · ${L.k} K · ${L.pitches} pitches`;
+  const lineTxt = `${L.ip} IP | ${L.h} H | ${L.bb} BB | ${L.k} K | ${L.pitches} pitches`;
   ctx.font = `600 17px ${family}`; ctx.textAlign = 'right';
   ctx.fillText(lineTxt, S - PADX, yCur); ctx.textAlign = 'left';
   yCur += 28;
   ctx.fillStyle = muted; ctx.font = `500 17px ${family}`;
   const d = new Date(meta.date + 'T12:00:00');
   const dateStr = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  ctx.fillText(`${meta.away} @ ${meta.home} · ${dateStr} · vs ${meta.opponent}`, PADX, yCur);
+  ctx.fillText(`${dateStr} vs ${meta.opponent}`, PADX, yCur);
   yCur += 34;
   // key: swatch, code, name, count
   let kx = PADX;
@@ -490,7 +490,7 @@ export async function savePng(meta) {
   // Footer: the reading key on the left, the Pitcher List wordmark on the right.
   ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   ctx.fillStyle = muted; ctx.font = `500 13px ${family}`;
-  ctx.fillText('Columns: pitch number in the plate appearance · bands: pitch type · links: one plate appearance each', PADX, S - 22);
+  ctx.fillText('Columns: pitch number in the plate appearance; Bands: pitch type; Links: one plate appearance each', PADX, S - 22);
   if (mark) {
     const mw = 230, mh = mw * mark.height / mark.width;
     ctx.drawImage(mark, S - PADX - mw, S - 22 - mh, mw, mh);
