@@ -1,8 +1,8 @@
 // The batted-ball chart: a hitter's density of spray angle against launch angle
 // minus the league's (or their own prior season's), drawn on a canvas. A port of
 // the figure in PLV_viz/hitter_app/pages/batted_ball_charts.py -- the same grid,
-// the same scipy density, the same vlag contour bands, the same layout -- so the
-// PNG matches what the Streamlit app draws in its discrete colour scale. Laid out in the pixels
+// the same scipy density, the same vlag contour bands (at 11 levels rather than
+// 13, and lit as Tanaka contours), the same layout. Laid out in the pixels
 // of the 200 dpi image the app serves (1390 x 1135) and rasterised at 2x.
 
 (() => {
@@ -104,14 +104,19 @@
   // ---- colours ------------------------------------------------------------------
   const BACKGROUND = "#292C42";
   const WHITE = "#FEFEFE";
-  // contourf(levels -12..10 by 2, cmap vlag, extend both): the under colour, the
-  // eleven bands, the over colour
-  const LEVELS = [-12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10];
-  const BANDS = ["#2369bd", "#3f75bc", "#6a8dbf", "#92a7c8", "#b7c2d5", "#dcdee6", "#faf5f4",
-    "#eed7d5", "#deb2b0", "#d08f8d", "#c16c6a", "#b1494a", "#a9373b"];
-  // the discrete colourbar: BoundaryNorm over 13 steps of vlag
-  const STEPS = ["#2369bd", "#5380bc", "#7896c1", "#9aadca", "#bdc6d7", "#dfe1e8", "#faf5f5",
-    "#f0dbda", "#e1b9b6", "#d49896", "#c77977", "#b95a59", "#a9373b"];
+  // contourf(levels -10..8 by 2, cmap vlag, extend both) -- the app's figure with
+  // levels=11 rather than 13: the under colour, the nine bands, the over colour
+  const LEVELS = [-10, -8, -6, -4, -2, 0, 2, 4, 6, 8];
+  const BANDS = ["#2369bd", "#4678bc", "#7896c1", "#a7b6ce", "#d4d8e2", "#faf5f4",
+    "#eacfcd", "#d8a3a0", "#c67875", "#b34d4e", "#a9373b"];
+  // the discrete colourbar: BoundaryNorm over 11 steps of vlag
+  const STEPS = ["#2369bd", "#5b84bd", "#87a0c4", "#afbcd1", "#d9dce5", "#faf5f5",
+    "#ecd3d2", "#dcacaa", "#cc8582", "#bc605e", "#a9373b"];
+  // Tanaka (illuminated) contours: the light comes from the upper left of the
+  // image; an edge whose downhill side faces it is stroked white, one facing away
+  // black, both fading and thinning as the edge turns parallel to the light
+  const LIGHT = [-Math.SQRT1_2, -Math.SQRT1_2];
+  const TANAKA = { lit: 0.7, shade: 0.45, width: 1.4, base: 0.3 };
   // sns.color_palette("vlag", 25)[0] and [-1]: the Less / More Often labels
   const LABEL_BLUE = "#3b73bc", LABEL_RED = "#af4647";
   // ---- layout, in the pixels of the app's 1390 x 1135 image ---------------------
@@ -200,6 +205,7 @@
       }
       ctx.fill("evenodd");
     });
+    tanaka(ctx, rings, values, cx, cy, flip);
     ctx.restore();
 
     // --- the bucket lines: black at a quarter, 1 pt ----------------------------
@@ -265,6 +271,43 @@
     if (opts.wordmark) {
       const w = 230, h = w * (opts.wordmark.height / opts.wordmark.width);
       ctx.drawImage(opts.wordmark, 27, 1066 - h, w, h);
+    }
+  }
+
+  // The illuminated edges over the filled bands. Each edge of each ring gets its
+  // normal pointed downhill (the field is sampled either side of it), and the
+  // stroke follows how that normal faces the light.
+  function tanaka(ctx, rings, values, cx, cy, flip) {
+    const sample = (gx, gy) => {  // bilinear, in d3's coordinates (sample i at i + 0.5)
+      const x = Math.min(Math.max(gx - 0.5, 0), N - 1), y = Math.min(Math.max(gy - 0.5, 0), N - 1);
+      const x0 = Math.floor(x), y0 = Math.floor(y), x1 = Math.min(x0 + 1, N - 1), y1 = Math.min(y0 + 1, N - 1);
+      const fx = x - x0, fy = y - y0;
+      return values[y0 * N + x0] * (1 - fx) * (1 - fy) + values[y0 * N + x1] * fx * (1 - fy)
+           + values[y1 * N + x0] * (1 - fx) * fy + values[y1 * N + x1] * fx * fy;
+    };
+    const sx = flip ? -1 : 1;  // grid x runs right unless the axis is flipped; grid y runs up
+    ctx.lineCap = "round";
+    for (const multi of rings) {
+      for (const polygon of multi.coordinates) for (const ring of polygon) {
+        for (let i = 1; i < ring.length; i++) {
+          const [ax, ay] = ring[i - 1], [bx, by] = ring[i];
+          let nx = -(by - ay), ny = bx - ax;
+          const len = Math.hypot(nx, ny);
+          if (len < 1e-9) continue;
+          nx /= len; ny /= len;
+          const mx = (ax + bx) / 2, my = (ay + by) / 2;
+          if (sample(mx + nx * 0.5, my + ny * 0.5) > sample(mx - nx * 0.5, my - ny * 0.5)) { nx = -nx; ny = -ny; }
+          const d = sx * nx * LIGHT[0] - ny * LIGHT[1];
+          const a = Math.abs(d);
+          if (a < 0.05) continue;
+          ctx.strokeStyle = d > 0 ? `rgba(255,255,255,${(TANAKA.lit * a).toFixed(3)})` : `rgba(0,0,0,${(TANAKA.shade * a).toFixed(3)})`;
+          ctx.lineWidth = TANAKA.base + TANAKA.width * a;
+          ctx.beginPath();
+          ctx.moveTo(cx(ax), cy(ay));
+          ctx.lineTo(cx(bx), cy(by));
+          ctx.stroke();
+        }
+      }
     }
   }
 

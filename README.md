@@ -329,11 +329,14 @@ chart is linkable as `batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, 
 It is the chart [batted-ball-charts.streamlit.app](https://batted-ball-charts.streamlit.app/)
 draws ([PLV_viz `batted_ball_charts.py`](https://github.com/Blandalytics/PLV_viz/blob/main/hitter_app/pages/batted_ball_charts.py)),
 in its discrete colour scale, rebuilt for the browser with the same geometry, palette (seaborn's
-`vlag` bands) and layout, and the Pitcher List Stats wordmark the other pages carry: a Gaussian KDE of the hitter's balls on a 91 × 91 grid over 0–90° of spray by
+`vlag` bands, at 11 levels rather than 13) and layout, and the Pitcher List Stats wordmark the other
+pages carry: a Gaussian KDE of the hitter's balls on a 91 × 91 grid over 0–90° of spray by
 −30–60° of launch angle, scaled to sum to 100, minus the league's. The hitter's density is
 computed in the page exactly as `scipy.stats.gaussian_kde` would (Scott's factor on the full
 sample covariance; checked against scipy to floating-point noise); the league's is built ahead of
-time.
+time. The bands are drawn as Tanaka (illuminated) contours: every contour edge is stroked white
+where its downhill side faces a light from the upper left and black where it faces away, thinning
+to nothing as the edge turns parallel to the light, so the peaks read as hills.
 
 ### How it works
 
@@ -353,7 +356,7 @@ app's own files, and is reduced to two small JSON files there that the page read
 | file | role |
 |---|---|
 | `tools/batted_balls/build_data.py` | reads a season's files from the bucket, keeps regular-season balls in play with a launch angle and a landing spot, writes the season file and the index |
-| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour), the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x |
+| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) with their edges lit as Tanaka contours, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x |
 | `batted-balls/index.html`, `app.js` | the page: season, hitter / team and comparison controls, the link hash, the download |
 
 A traded hitter's batted balls count for each of his teams in the team-wide chart, and his

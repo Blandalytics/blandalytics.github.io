@@ -115,7 +115,7 @@ details[open] summary{margin-bottom:10px}
       <summary>How it works</summary>
       <div class="method">
         <p><b>The grid:</b> every batted ball is a point at its spray angle (0° at the pull-side foul line, 45° dead centre, 90° at the opposite line, for either hand) and launch angle. A Gaussian kernel density of the hitter's points is evaluated on a 91 × 91 grid over 0–90° by −30–60°, scaled to sum to 100, and the league's density over every MLB batted ball that season is subtracted. Red is where this hitter's batted balls land more often than the league's, blue less. The lines mark pull / centre / oppo (30° and 60°) and ground ball / line drive / fly ball / pop up (10°, 25° and 50° of launch angle); the boxed numbers are the hitter's share of batted balls in each cell, and the shares along the axes are for each column and row.</p>
-        <p>The difference is drawn as filled contours in steps of 0.2% of the density. <b>Self (prior year)</b> subtracts the hitter's own density from the season before instead of the league's, and the percentages become the change from that season. <b>Team-wide</b> pools every batted ball hit for a team (a traded hitter counts for each of his teams).</p>
+        <p>The difference is drawn as filled contours in steps of 0.2% of the density, lit from the upper left (Tanaka contours): a contour edge is bright where its downhill side faces the light and dark where it faces away, so a hitter's peaks read as hills and their gaps as basins. <b>Self (prior year)</b> subtracts the hitter's own density from the season before instead of the league's, and the percentages become the change from that season. <b>Team-wide</b> pools every batted ball hit for a team (a traded hitter counts for each of his teams).</p>
         <p><b>Data:</b> regular-season balls in play with a measured launch angle and landing spot, from the completed-games data files this site keeps; a season is updated each morning for the games two days before. The chart is the one <a href="https://batted-ball-charts.streamlit.app/" target="_blank" rel="noopener">batted-ball-charts.streamlit.app</a> draws, rebuilt for the browser; the hitter's density is computed as scipy's <code>gaussian_kde</code> would.</p>
       </div>
     </details>
@@ -123,7 +123,7 @@ details[open] summary{margin-bottom:10px}
 </main>
 <script src="https://cdn.jsdelivr.net/npm/d3-array@3.2.4/dist/d3-array.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-contour@4.0.2/dist/d3-contour.min.js"></script>
-<script src="chart.js?v=4"></script>
+<script src="chart.js?v=5"></script>
 <script src="app.js?v=2"></script>
 </body>
 </html>
