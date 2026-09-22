@@ -83,11 +83,35 @@
 	}
 
 	#menu > .inner > ul > li {
-		border-top-color: var(--rule);
+		border-top: 0;
 	}
 
 	#menu > .inner > ul > li > a {
 		color: var(--ink);
+	}
+
+	/* A sport is a group: its name is a small label, its tools nested beneath. */
+	#menu > .inner > ul > li.group > a {
+		padding-bottom: 0.35em;
+		font-size: 0.75em;
+		font-weight: 700;
+		letter-spacing: 0.25em;
+		text-transform: uppercase;
+		color: var(--faint);
+	}
+
+	#menu > .inner > ul > li.group > ul {
+		list-style: none;
+		margin: 0 0 0.75em 0;
+		padding: 0 0 0 1em;
+	}
+
+	#menu > .inner > ul > li.group > ul > li {
+		padding: 0;
+	}
+
+	#menu > .inner > ul > li.group > ul > li > a {
+		padding: 0.45em 0;
 	}
 
 	#menu > .close:before {
@@ -127,6 +151,33 @@
 		#main header .definition {
 			font-size: 1.15em;
 		}
+	}
+
+/* Sports: a section per sport, each with its own tile grid. */
+
+	.sport + .sport {
+		margin-top: 3.5em;
+	}
+
+	.sport > h2 {
+		display: flex;
+		align-items: center;
+		gap: 1.25em;
+		margin: 0;
+		font-size: 0.9em;
+		color: var(--ink);
+	}
+
+	/* a rule runs from the heading to the edge */
+	.sport > h2:after {
+		content: '';
+		flex: 1;
+		border-top: solid 1px var(--rule);
+	}
+
+	/* The articles carry their own top gutter, so the grid needs no extra gap under the heading. */
+	.sport > .tiles {
+		margin-top: 0;
 	}
 
 /* Tiles: the app output shows through a dark scrim instead of Phantom's color wash. */

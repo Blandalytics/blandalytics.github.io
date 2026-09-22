@@ -10,7 +10,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
 		<link rel="stylesheet" href="assets/css/main.css" />
-		<link rel="stylesheet" href="assets/css/blandalytics.css?v=2" />
+		<link rel="stylesheet" href="assets/css/blandalytics.css?v=4" />
 		<noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
 		<meta name="color-scheme" content="dark" />
 	</head>
@@ -37,11 +37,19 @@
 						<h2>Menu</h2>
 						<ul>
 							<li><a href="/">Home</a></li>
-							<li><a href="/pitcher-cards/">PLV Pitcher Game Cards</a></li>
-							<li><a href="/sequencing-flow/">Sequencing Flow</a></li>
-							<li><a href="/swing-profiles/">Swing Profiles</a></li>
-							<li><a href="/batted-balls/">Batted Ball Charts</a></li>
-							<li><a href="/nhl-draft/">NHL Draft Tool</a></li>
+							<li class="group"><a href="#baseball">Baseball</a>
+								<ul>
+									<li><a href="/pitcher-cards/">PLV Pitcher Game Cards</a></li>
+									<li><a href="/sequencing-flow/">Sequencing Flow</a></li>
+									<li><a href="/swing-profiles/">Swing Profiles</a></li>
+									<li><a href="/batted-balls/">Batted Ball Charts</a></li>
+								</ul>
+							</li>
+							<li class="group"><a href="#hockey">Hockey</a>
+								<ul>
+									<li><a href="/nhl-draft/">NHL Draft Tool</a></li>
+								</ul>
+							</li>
 							<li><a href="#footer">About</a></li>
 						</ul>
 					</nav>
@@ -54,8 +62,10 @@
 								<p class="pronunciation">bland·a·lyt·ics  |  noun</p>
 								<p class="definition">: the method of assigning numbers to things, then visualizing them</p>
 							</header>
-							<section class="tiles">
-								<article class="style1">
+							<section id="baseball" class="sport">
+								<h2>Baseball</h2>
+								<div class="tiles">
+									<article class="style1">
 									<span class="image">
 										<img src="images/tile-pitcher-cards.png" alt="Jacob deGrom's PLV pitcher game card, 9/10/2026 at SEA" />
 									</span>
@@ -66,7 +76,7 @@
 										</div>
 									</a>
 								</article>
-								<article class="style2">
+									<article class="style2">
 									<span class="image">
 										<img src="images/tile-sequencing-flow.png" alt="Gavin Williams' pitch sequencing Sankey, 9/20/2026 vs ATH" />
 									</span>
@@ -77,7 +87,7 @@
 										</div>
 									</a>
 								</article>
-								<article class="style3">
+									<article class="style3">
 									<span class="image">
 										<img src="images/tile-swing-profiles.png" alt="Junior Caminero's swing kinematics" />
 									</span>
@@ -88,7 +98,7 @@
 										</div>
 									</a>
 								</article>
-								<article class="style4">
+									<article class="style4">
 									<span class="image">
 										<img src="images/tile-batted-balls.png" alt="Isaac Paredes' batted ball profile" />
 									</span>
@@ -99,7 +109,12 @@
 										</div>
 									</a>
 								</article>
-								<article class="style5">
+								</div>
+							</section>
+							<section id="hockey" class="sport">
+								<h2>Hockey</h2>
+								<div class="tiles">
+									<article class="style5">
 									<span class="image">
 										<img src="images/tile-nhl-draft.png" alt="NHL draft tool options table" />
 									</span>
@@ -110,6 +125,7 @@
 										</div>
 									</a>
 								</article>
+								</div>
 							</section>
 						</div>
 					</div>
