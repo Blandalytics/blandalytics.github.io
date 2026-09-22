@@ -2,6 +2,34 @@
 
 Source for [blandalytics.com](https://blandalytics.com).
 
+## Homepage
+
+[blandalytics.com](https://blandalytics.com) — a tile for each tool, built on the
+[Phantom](https://html5up.net/phantom) template by HTML5 UP (CCA 3.0; the footer carries the
+credit) with the site's dark palette. Each tile's picture is real output from its tool.
+
+| file | role |
+|---|---|
+| `index.html` | the page: the definition, the tiles, the menu and the footer |
+| `assets/css/main.css`, `assets/js/` | the Phantom template, unchanged |
+| `assets/css/blandalytics.css` | the site's palette and font over the template, the tile scrim, the footer wordmark |
+| `images/tile-*.png` | the tile pictures, one per tool |
+| `tools/homepage/grab_app_pngs.py` | runs each tool in headless Chrome and saves the PNG from its own export button (the NHL Draft Tool has none, so it screenshots the options table of a mock draft) |
+| `tools/homepage/make_tiles.py` | crops those exports into the tiles, all at the template's tile aspect ratio |
+
+### Updating the tiles
+
+`grab_app_pngs.py` pins the game each tile shows in its `APPS` list (a tool's link hash);
+the rest take whatever the tool opens on. It needs Chrome and `websocket-client`:
+
+```
+python tools/homepage/grab_app_pngs.py            # every tool, or name some: pitcher-cards sequencing-flow
+python tools/homepage/make_tiles.py
+```
+
+The full-size exports land in `tools/homepage/cache/` (not committed). After changing
+`blandalytics.css`, bump its `?v=` query in `index.html` so browsers fetch the new file.
+
 ## MLB Scorecards
 
 [blandalytics.com/scorecards/](https://blandalytics.com/scorecards/) — a pitch-by-pitch

@@ -1,0 +1,298 @@
+/*
+	Blandalytics dark theme for Phantom.
+	Loaded after main.css; the palette and font are the ones blandalytics.com uses.
+*/
+
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap");
+
+:root {
+	--ground: #0d1117;
+	--surface: #151b23;
+	--raise: #1b222c;
+	--ink: #e3e9f1;
+	--muted: #8a96a6;
+	--faint: #6b7684;
+	--rule: #242c37;
+	color-scheme: dark;
+}
+
+/* Base */
+
+	body {
+		background: var(--ground);
+	}
+
+	body, input, select, textarea {
+		color: var(--muted);
+		font-family: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+		font-weight: 400;
+	}
+
+	h1, h2, h3, h4, h5, h6, strong, b {
+		color: var(--ink);
+	}
+
+	h1 {
+		font-weight: 700;
+		letter-spacing: -0.02em;
+	}
+
+	h2, h3, h4, h5, h6 {
+		font-weight: 700;
+	}
+
+	a {
+		color: var(--ink);
+		border-bottom-color: var(--faint);
+	}
+
+	a:hover {
+		color: var(--ink) !important;
+		border-bottom-color: var(--ink);
+	}
+
+	a:focus-visible {
+		outline: 2px solid var(--ink);
+		outline-offset: 2px;
+	}
+
+	hr, blockquote, code, .box, ul.alt li, table tbody tr, table thead, table tfoot {
+		border-color: var(--rule);
+	}
+
+/* Header */
+
+	#header nav ul li a {
+		background-color: rgba(13, 17, 23, 0.6);
+	}
+
+	#header nav ul li a[href="#menu"]:before {
+		background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cstyle%3Eline %7B stroke-width: 8px%3B stroke: %23e3e9f1%3B %7D%3C/style%3E%3Cline x1='0' y1='25' x2='100' y2='25' /%3E%3Cline x1='0' y1='50' x2='100' y2='50' /%3E%3Cline x1='0' y1='75' x2='100' y2='75' /%3E%3C/svg%3E");
+	}
+
+	#header nav ul li a[href="#menu"]:after {
+		background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cstyle%3Eline %7B stroke-width: 8px%3B stroke: %238a96a6%3B %7D%3C/style%3E%3Cline x1='0' y1='25' x2='100' y2='25' /%3E%3Cline x1='0' y1='50' x2='100' y2='50' /%3E%3Cline x1='0' y1='75' x2='100' y2='75' /%3E%3C/svg%3E");
+	}
+
+/* Menu */
+
+	#menu {
+		background: var(--surface);
+		border-left: solid 1px var(--rule);
+		color: var(--ink);
+	}
+
+	#menu > .inner > ul > li {
+		border-top-color: var(--rule);
+	}
+
+	#menu > .inner > ul > li > a {
+		color: var(--ink);
+	}
+
+	#menu > .close:before {
+		background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cstyle%3Eline %7B stroke-width: 8px%3B stroke: %23e3e9f1%3B %7D%3C/style%3E%3Cline x1='15' y1='15' x2='85' y2='85' /%3E%3Cline x1='85' y1='15' x2='15' y2='85' /%3E%3C/svg%3E");
+	}
+
+	#menu > .close:after {
+		background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cstyle%3Eline %7B stroke-width: 8px%3B stroke: %238a96a6%3B %7D%3C/style%3E%3Cline x1='15' y1='15' x2='85' y2='85' /%3E%3Cline x1='85' y1='15' x2='15' y2='85' /%3E%3C/svg%3E");
+	}
+
+/* Intro */
+
+	#main header h1 {
+		font-size: 3.5em;
+		line-height: 1.1;
+		margin-bottom: 0.2em;
+	}
+
+	#main header .pronunciation {
+		margin: 0 0 0.75em 0;
+		font-style: italic;
+		letter-spacing: 0.02em;
+		color: var(--faint);
+	}
+
+	#main header .definition {
+		font-size: 1.35em;
+		line-height: 1.5;
+		margin-bottom: 1.5em;
+		color: var(--muted);
+	}
+
+	@media screen and (max-width: 736px) {
+		#main header h1 {
+			font-size: 2.5em;
+		}
+
+		#main header .definition {
+			font-size: 1.15em;
+		}
+	}
+
+/* Tiles: the app output shows through a dark scrim instead of Phantom's color wash. */
+
+	.tiles article > .image {
+		border: solid 1px var(--rule);
+		border-radius: 8px;
+		background: var(--surface);
+	}
+
+	.tiles article > .image:after {
+		display: none;
+	}
+
+	.tiles article > .image:before,
+	.tiles article.style1 > .image:before,
+	.tiles article.style2 > .image:before,
+	.tiles article.style3 > .image:before,
+	.tiles article.style4 > .image:before,
+	.tiles article.style5 > .image:before,
+	.tiles article.style6 > .image:before {
+		background-image: linear-gradient(to bottom, rgba(13, 17, 23, 0.15) 0%, rgba(13, 17, 23, 0.55) 55%, rgba(13, 17, 23, 0.92) 100%);
+		background-color: rgba(13, 17, 23, 0);
+		opacity: 1;
+	}
+
+	/* Only the solid layer under the gradient changes on hover: a gradient can't be
+	   transitioned, so swapping it out would drop the scrim for a moment. */
+	body:not(.is-touch) .tiles article:hover > .image:before {
+		background-color: rgba(13, 17, 23, 0.84);
+		opacity: 1;
+	}
+
+	/* Touch devices always show the description, so they get the heavier scrim. */
+	body.is-touch .tiles article > .image:before {
+		background: linear-gradient(to bottom, rgba(13, 17, 23, 0.45) 0%, rgba(13, 17, 23, 0.9) 45%) !important;
+	}
+
+	body:not(.is-touch) .tiles article:hover > .image {
+		transform: scale(1.04);
+	}
+
+	.tiles article > a {
+		justify-content: flex-end;
+		align-items: flex-start;
+		padding: 1.25em 1.4em;
+		border-radius: 8px;
+		text-align: left;
+		color: var(--ink);
+	}
+
+	body:not(.is-touch) .tiles article:hover > a {
+		justify-content: center;
+	}
+
+	.tiles article > a h2 {
+		font-size: 1.05em;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+	}
+
+	.tiles article > a .content p {
+		font-size: 0.9em;
+		color: var(--ink);
+	}
+
+/* Footer */
+
+	#footer {
+		background-color: var(--surface);
+		border-top: solid 1px var(--rule);
+	}
+
+	/* The wordmark sits on its own row above the About and Tools columns. */
+	#footer > .inner > .logo {
+		order: -2;
+		width: 100%;
+		margin: 0 0 2.5em 0;
+		border-bottom: 0;
+		color: var(--ink);
+		font-weight: 700;
+		letter-spacing: 0.35em;
+		text-decoration: none;
+		text-transform: uppercase;
+	}
+
+	#footer > .inner > .logo > * {
+		display: inline-block;
+		vertical-align: middle;
+	}
+
+	#footer > .inner > .logo .symbol {
+		margin-right: 0.65em;
+	}
+
+	#footer > .inner > .logo .symbol img {
+		display: block;
+		width: 2em;
+		height: 2em;
+	}
+
+	/* main.css sizes the footer sections with nth-child, which the wordmark would shift. */
+	#footer > .inner section.about {
+		order: 0;
+		width: calc(66% - 2.5em);
+		margin: 0 2.5em 0 0;
+	}
+
+	#footer > .inner section.tools {
+		order: 0;
+		width: calc(33% - 2.5em);
+		margin: 0 0 0 2.5em;
+	}
+
+	@media screen and (max-width: 1280px) {
+		#footer > .inner section.about {
+			width: calc(66% - 1.25em);
+			margin-right: 1.25em;
+		}
+
+		#footer > .inner section.tools {
+			width: calc(33% - 1.25em);
+			margin-left: 1.25em;
+		}
+	}
+
+	@media screen and (max-width: 980px) {
+		#footer > .inner section.about {
+			width: 66%;
+			margin-right: 0;
+		}
+
+		#footer > .inner section.tools {
+			width: calc(33% - 2.5em);
+			margin-left: 2.5em;
+		}
+	}
+
+	@media screen and (max-width: 736px) {
+		#footer > .inner > .logo {
+			margin-bottom: 1.5em;
+		}
+
+		#footer > .inner section.about,
+		#footer > .inner section.tools {
+			width: 100%;
+			margin: 0 0 2em 0;
+		}
+	}
+
+	#footer > .inner .copyright {
+		color: var(--faint);
+	}
+
+	#footer > .inner .copyright li {
+		border-left-color: var(--rule);
+	}
+
+	#footer ul.tool-links {
+		list-style: none;
+		padding-left: 0;
+	}
+
+	#footer ul.tool-links li {
+		padding-left: 0;
+		margin-bottom: 0.4em;
+	}
