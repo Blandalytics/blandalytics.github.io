@@ -153,7 +153,7 @@
   // Draw the chart onto `canvas`.
   //   result:   from compute()
   //   opts:     { title, subtitle, hand: "L"|"R", scale: "discrete"|"continuous",
-  //               signed: bool (print shares as +/- differences), logo, footer }
+  //               signed: bool (print shares as +/- differences), logo }
   function draw(canvas, result, opts) {
     const scale = 2;
     canvas.width = W * scale; canvas.height = H * scale;
@@ -300,8 +300,7 @@
     // --- title, credits, logo --------------------------------------------------------
     text(opts.title, 742, 40, { size: 16 });
     text(opts.subtitle, 742, 85, { size: 12 });
-    text(opts.footer || "blandalytics.com/batted-balls", 27, 1085, { size: 6, ha: "left" });
-    text("Data: MLB Statcast", 27, 1106, { size: 6, ha: "left" });
+    text("Data: MLB Statcast", 27, 1085, { size: 6, ha: "left" });
     text("@blandalytics", 1272, 1082, { size: 10 });
     if (opts.logo) ctx.drawImage(opts.logo, 61.6, 995.8, 209.8, 87.5);
   }
