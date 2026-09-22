@@ -114,7 +114,7 @@ export function unitFor(date) {
 const COLUMNS = [
   'game_pk', 'game_date', 'home_team', 'away_team', 'bat_team', 'field_team', 'at_bat_index', 'inning', 'half',
   'pitcher', 'pitcher_name', 'p_throws', 'batter', 'batter_name', 'stand', 'pitch_number', 'pitch_type', 'pitch_name',
-  'events', 'event', 'is_strike', 'is_in_play',
+  'events', 'event', 'is_strike', 'is_in_play', 'outs',
 ];
 const files = new Map();   // url -> { file, metadata }
 async function openFile(url) {
@@ -172,7 +172,7 @@ function liveRows(g, date) {
       pitch_number: p.n, pitch_type: p.type || 'UN', pitch_name: PITCH_NAMES[p.type] || p.type || 'Unknown',
       events: play.complete ? play.event : null,
       event: play.complete && play.event ? eventName(play.event, play.description) : null,
-      is_strike: STRIKE_CALLS.has(p.call), is_in_play: IN_PLAY_CALLS.has(p.call),
+      is_strike: STRIKE_CALLS.has(p.call), is_in_play: IN_PLAY_CALLS.has(p.call), outs: p.outs,
     };
   });
 }
@@ -282,17 +282,49 @@ export async function gameLog(id, season) {
 // ---------------------------------------------------------------------------
 // From pitches to the chart's nodes and links (port of sequence_sankey.py)
 // ---------------------------------------------------------------------------
-function gameLine(pas, pitches) {
+// Outs a pitcher recorded, as how far the out count moved while he was on the mound. Pitch-level
+// data cannot see every out as an event: a runner picked off or caught stealing during a plate
+// appearance is an out on that play, but the batter's result is a flyout like any other. The
+// `outs` on each pitch (the count before it) does see them.
+export function outsRecorded(gameRows, pitcherId) {
+  const rows = gameRows.slice().sort((a, b) => a.at_bat_index - b.at_bat_index || a.pitch_number - b.pitch_number);
+  const halves = [];
+  rows.forEach(r => {
+    const h = halves[halves.length - 1];
+    if (h && h.inning === r.inning && h.half === r.half) h.rows.push(r);
+    else halves.push({ inning: r.inning, half: r.half, rows: [r] });
+  });
+  let outs = 0;
+  halves.forEach((h, hi) => {
+    // a later half-inning exists, so this one reached three outs; the last one may be unfinished
+    const last = h.rows[h.rows.length - 1];
+    const end = hi < halves.length - 1 ? 3 : (last.outs ?? 0) + outsFor(last.events);
+    const stints = [];                                   // consecutive rows by the same pitcher
+    h.rows.forEach(r => {
+      const s = stints[stints.length - 1];
+      if (!s || s.pitcher !== r.pitcher) stints.push({ pitcher: r.pitcher, at: r.outs ?? 0 });
+    });
+    stints.forEach((s, i) => {
+      if (s.pitcher !== pitcherId) return;
+      const to = i + 1 < stints.length ? stints[i + 1].at : end;
+      outs += Math.max(0, to - s.at);
+    });
+  });
+  return outs;
+}
+
+function gameLine(pas, pitches, recorded) {
   let outs = 0, hits = 0, bb = 0, k = 0, hr = 0;
   pas.forEach(p => {
     const ev = (p.events || '').toLowerCase();
-    outs += outsFor(ev);
+    outs += outsFor(ev);          // only used when the out count is not available (a filtered split)
     if (HITS.has(ev)) hits += 1;
     if (ev === 'home_run') hr += 1;
     if (ev === 'walk' || ev === 'intent_walk') bb += 1;
     if (ev.includes('strikeout')) k += 1;
   });
   const strikes = pitches.filter(p => p.is_strike || p.is_in_play).length;
+  if (typeof recorded === 'number') outs = recorded;
   return { ip: `${Math.floor(outs / 3)}.${outs % 3}`, pa: pas.length, h: hits, bb, k, hr, pitches: pitches.length, strikes };
 }
 
@@ -362,7 +394,7 @@ export function buildFlow(rows, meta) {
   nodeCount.forEach((c, k) => { const n = k.split('|')[0]; colTotal[n] = (colTotal[n] || 0) + c; });
 
   return {
-    meta: { ...meta, line: gameLine(pas, pitches) },
+    meta: { ...meta, line: gameLine(pas, pitches, meta.outs) },
     nodes, links, pas, max_n: maxN, col_total: colTotal,
     types: order.map(t => ({ code: t, name: names.get(t), color: COLORS[t] || COLORS.UN, count: typeCounts.get(t) })),
     order, end_cats: END_CATS, end_outlines: END_OUTLINES,
@@ -377,11 +409,16 @@ export function flowFor(rows, pitcherId, gamePk, hand) {
   const mine = hand ? his.filter(r => r.stand === hand) : his;
   if (!mine.length) return null;
   const r0 = his[0];
+  // Innings come from the out count over the whole game; a split by batter side falls back to
+  // the outs its own plate appearances recorded.
+  const game = rows.filter(r => r.game_pk === r0.game_pk);
+  const outs = hand ? null : outsRecorded(game, pitcherId);
   const home = r0.field_team === r0.home_team;
   const meta = {
     pitcher: r0.pitcher_name, pitcherId, date: r0.game_date, gamePk: r0.game_pk,
     home: r0.home_team, away: r0.away_team, opponent: r0.bat_team, throws: r0.p_throws,
     home_text: home ? 'vs' : '@',     // the pitcher's side of the matchup
+    outs,
     hand: hand || null,
     live: !!r0.live, status: r0.status || null,
   };
