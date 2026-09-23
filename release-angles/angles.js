@@ -34,7 +34,9 @@ window.ReleaseAngles = (() => {
   const WORDMARK_URL = "../pitcher-cards/PitcherList_Stats_watermark_with_logo.webp";
   const WATERMARK_W = 0.25;
 
-  const SURFACE = "#262940", TITLE = "#72CBFD", RULE = "#4a4d63";
+  const SURFACE = "#262940", RULE = "#4a4d63";
+  // the header's colours, as Swing Profiles': the player in teal, the sub-header muted
+  const HEADER = "#00D4FF", SUBHEADER = "#8D96B3";
   const INK = "#ffffff", INK2 = INK, INK3 = INK;
   const RAMP_ENDS = ["#262940", "#ffffff"];
 
@@ -44,7 +46,6 @@ window.ReleaseAngles = (() => {
 
   const FIG_W = 11.6, FIG_ASPECT = 1.0;
   const L = 0.035, B = 0.052, W_FRAC = 0.93, TOP = 0.875;
-  const RULE_Y = 0.888;
   // The bottom row: the footer note, the scale and the word mark, each centred on this line
   // (a fraction of the figure's height) -- the Python sits the note and mark on FOOT_Y and
   // the scale up under the frame.
@@ -768,19 +769,28 @@ window.ReleaseAngles = (() => {
     T("HRA (°)", X((x0 + x1) / 2), Y(y0 - 0.060 * dh), { pt: 14, colour: INK2, ha: "center", va: "top" });
     T("VRA (°)", X(x0 - 0.048 * dw), Y((y0 + y1) / 2), { pt: 14, colour: INK2, ha: "center", va: "center", rotation: 90 });
 
-    // titles in the header band, the rule, the footer and the word mark
+    // The header, as Swing Profiles' figure has it: the pitcher in large teal type, what the
+    // chart shows in a muted line under it, and the word mark top right. Its sizes and offsets
+    // are that figure's (8 in wide) scaled to this one's width, so the two read the same at the
+    // same size on screen; a line too long to clear the word mark is set smaller.
+    const HS = FIG_W / 8, inch = (v) => v * HS * dpi;
+    const room = fx(L + W_FRAC - (mark ? WATERMARK_W : 0)) - fx(L) - (mark ? inch(0.2) : 0);
+    const fit = (s, size, weight) => {
+      ctx.font = fontSpec(size, weight, dpi);
+      const w = ctx.measureText(s).width;
+      return w > room ? (size * room) / w : size;
+    };
+    T(m.pitcher, fx(L), inch(0.25), { pt: fit(m.pitcher, 22 * HS, 700), weight: 700, colour: HEADER, va: "top" });
     TITLES.forEach(([head, line2], i) => {
       if (tw[i] <= 0) return;
-      const s = `${m.pitcher} ${m.year} ${head}\n` + [line2, m.span].filter(Boolean).join(", ");
-      T(s, fx(L), fy((1.0 + RULE_Y) / 2), { pt: 24, weight: SEMIBOLD, colour: TITLE, va: "center", alpha: tw[i] });
+      const s = [`${m.year} ${head}`, line2, m.span].filter(Boolean).join(", ");
+      T(s, fx(L), inch(0.625), { pt: fit(s, 14 * HS, 400), colour: SUBHEADER, va: "top", alpha: tw[i] });
     });
-    ctx.strokeStyle = RULE; ctx.lineWidth = pt(0.8);
-    ctx.beginPath(); ctx.moveTo(fx(L), fy(RULE_Y)); ctx.lineTo(fx(L + W_FRAC), fy(RULE_Y)); ctx.stroke();
-    T("Angles as the ball leaves the hand\nData: MLB StatsAPI", fx(L), fy(ROW_Y), { pt: 12, colour: INK3, va: "center", linespacing: 1.6 });
     if (mark) {
-      const h = (WATERMARK_W * FIG_W) / FIG_H / (mark.width / mark.height);
-      ctx.drawImage(mark, fx(L + W_FRAC - WATERMARK_W), fy(ROW_Y + h / 2), WATERMARK_W * W, h * H);
+      const w = WATERMARK_W * W, h = w * (mark.height / mark.width);
+      ctx.drawImage(mark, fx(L + W_FRAC) - w, inch(0.3), w, h);
     }
+    T("Angles as the ball leaves the hand\nData: MLB StatsAPI", fx(L), fy(ROW_Y), { pt: 12, colour: INK3, va: "center", linespacing: 1.6 });
     ctx.restore();
   }
 
