@@ -3,6 +3,39 @@
 // Messages out: status, ready, stop, progress, result, took, board, rosters, final, error.
 
 const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v0.28.3/full/";
+const PYODIDE_CACHE = "pyodide-v0.28.3";
+
+// Pyodide's files live at versioned, never-changing URLs, so they are kept in Cache Storage and
+// served from there on later visits: the runtime, the standard library and numpy (~8 MB) come
+// off disk even after the browser has evicted them from its HTTP cache. A new version gets a
+// new cache, and the old one is deleted. Files are copied in only once the tool is ready
+// (fillPyodideCache), re-read from the HTTP cache the first load just filled, so the first
+// visit never waits on the copy.
+const baseFetch = self.fetch.bind(self);
+let pyCache = null, pyCacheReady = null;
+const missed = new Set();
+async function openPyodideCache() {
+  try {
+    for (const k of await caches.keys()) if (k.startsWith("pyodide-") && k !== PYODIDE_CACHE) await caches.delete(k);
+    pyCache = await caches.open(PYODIDE_CACHE);
+  } catch (e) { pyCache = null; }   // no Cache Storage here (some private windows): plain fetch
+}
+async function fillPyodideCache() {
+  for (const url of missed) {
+    try { await pyCache.add(url); } catch (e) { /* next visit tries again */ }
+  }
+  missed.clear();
+}
+self.fetch = async (input, init) => {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  if (!url.startsWith(PYODIDE)) return baseFetch(input, init);
+  await pyCacheReady;                    // opened alongside the runtime's own start-up
+  if (!pyCache) return baseFetch(input, init);
+  const hit = await pyCache.match(url);
+  if (hit) return hit;
+  missed.add(url);
+  return baseFetch(input, init);
+};
 const PY_FILES = ["league.py", "valuation.py", "boards.py", "draft_sim.py", "pick_engine.py", "draft_tool.py", "web_api.py"];
 const DATA_FILES = ["sheet_live.csv", "merged_players.csv"];
 
@@ -17,10 +50,11 @@ let VERSION = "0";
 
 async function init() {
   status("loading Python runtime");
+  pyCacheReady = openPyodideCache();
   importScripts(PYODIDE + "pyodide.js");
   pyodide = await loadPyodide({ indexURL: PYODIDE });
-  status("loading numpy and pandas");
-  await pyodide.loadPackage(["numpy", "pandas"]);
+  status("loading numpy");
+  await pyodide.loadPackage(["numpy"]);   // the tool is numpy-only: pandas cost ~115 MB and ~1.8 s
   status("loading the draft tool");
   pyodide.FS.mkdirTree("/draft");
   for (const f of PY_FILES) {
@@ -40,6 +74,7 @@ from js import progress, pylog
 `);
   const players = JSON.parse(pyodide.runPython("web_api.players_json()"));
   postMessage({ type: "ready", players });
+  if (pyCache && missed.size) fillPyodideCache();   // in the background, while the draft is set up
 }
 
 function call(expr) {
