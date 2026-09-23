@@ -10,7 +10,7 @@
   const $ = (id) => document.getElementById(id);
   const el = {
     form: $("form"), season: $("season"), player: $("player"), hand: $("hand"), go: $("go"),
-    suggest: $("suggest"), jerk: $("jerk"), status: $("status"),
+    suggest: $("suggest"), status: $("status"),
     out: $("out"), fig: $("fig"), stats: $("stats"), notes: $("notes"),
     dlPng: $("dl_png"), dlCsv: $("dl_csv"), otherSide: $("other_side"),
     savantLink: $("savant_link"), cardLink: $("card_link"), cardImg: $("card_img"),
@@ -297,9 +297,7 @@
   async function render() {
     if (!profile) return;
     const p = profile;
-    const { peak, trough, warnings } = await SwingPlot.plotSwingKinematics(p, {
-      canvas: el.fig, showJerk: el.jerk.checked,
-    });
+    const { peak, warnings } = await SwingPlot.plotSwingKinematics(p, { canvas: el.fig });
     el.out.hidden = false;
 
     const t = p.timing, d = p.data;
@@ -390,14 +388,12 @@
     const li = e.target.closest("li");
     if (li) setActive(Number(li.dataset.index));
   });
-  el.jerk.addEventListener("change", render);
   el.otherSide.addEventListener("click", () => {
     if (profile) run(String(profile.mlbam_id), profile.year, el.otherSide.dataset.side);
   });
   el.dlPng.addEventListener("click", () => {
     if (!profile) return;
-    const suffix = el.jerk.checked ? "jerk" : "";
-    el.fig.toBlob((b) => save(b, profile.filename(suffix)), "image/png");
+    el.fig.toBlob((b) => save(b, profile.filename()), "image/png");
   });
   el.dlCsv.addEventListener("click", () => {
     if (!profile) return;

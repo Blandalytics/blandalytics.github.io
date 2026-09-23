@@ -33,7 +33,6 @@ a.home:hover{color:var(--ink)}
 @media (max-width:600px){.controls{grid-template-columns:1fr 1fr} .controls .player{grid-column:1 / -1}}
 label{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
 label b{color:var(--ink); font-weight:500}
-label.check{flex-direction:row; align-items:center; gap:7px; color:var(--ink); font-size:14px}
 input,select,button{font:inherit; color:var(--ink)}
 input[type=text],select{background:var(--ground); border:1px solid var(--rule); border-radius:6px; padding:7px 9px; width:100%}
 input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
@@ -110,7 +109,6 @@ details[open] summary{margin-bottom:10px}
       <button id="go" class="primary" type="submit" disabled>Profile</button>
     </form>
     <div class="row" style="margin-top:12px">
-      <label class="check"><input id="jerk" type="checkbox"> Show jerk</label>
       <span id="status" class="status">loading the leaderboard…</span>
     </div>
   </section>
@@ -144,8 +142,8 @@ details[open] summary{margin-bottom:10px}
     </details>
   </section>
 </main>
-<script src="swing.js?v=8"></script>
-<script src="plot.js?v=8"></script>
-<script src="app.js?v=8"></script>
+<script src="swing.js?v=9"></script>
+<script src="plot.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
