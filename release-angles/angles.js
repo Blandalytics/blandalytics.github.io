@@ -783,14 +783,22 @@ window.ReleaseAngles = (() => {
     T(m.pitcher, fx(L), inch(0.25), { pt: fit(m.pitcher, 22 * HS, 700), weight: 700, colour: HEADER, va: "top" });
     TITLES.forEach(([head, line2], i) => {
       if (tw[i] <= 0) return;
-      const s = [`${m.year} ${head}`, line2, m.span].filter(Boolean).join(", by ");
+      // "2026 Release Angle Overlap, by Pitch Concentration, 4/1 to 6/17": the view after
+      // ", by ", the date segment after a comma
+      const s = `${m.year} ${head}` + (line2 ? `, by ${line2}` : "") + (m.span ? `, ${m.span}` : "");
       T(s, fx(L), inch(0.625), { pt: fit(s, 14 * HS, 400), colour: SUBHEADER, va: "top", alpha: tw[i] });
     });
     if (mark) {
       const w = WATERMARK_W * W, h = w * (mark.height / mark.width);
       ctx.drawImage(mark, fx(L + W_FRAC) - w, inch(0.3), w, h);
     }
-    T("Angles as the ball leaves the hand\nData: MLB StatsAPI", fx(L), fy(ROW_Y), { pt: 12, colour: SUBHEADER, va: "center", linespacing: 1.2 });
+    // The footer note, as Swing Profiles' figure sets it: 10 pt regular in the muted colour,
+    // baselines 7.5 pt x 1.6 apart -- scaled like the header -- the block centred on the
+    // bottom row with the scale.
+    const noteSize = 10 * HS, notePitch = pt(7.5 * 1.6 * HS), em = pt(noteSize);
+    const noteTop = fy(ROW_Y) - (ASC * em + notePitch + DESC * em) / 2;
+    ["Angles as the ball leaves the hand", "Data: MLB StatsAPI"].forEach((s, i) =>
+      T(s, fx(L), noteTop + ASC * em + i * notePitch, { pt: noteSize, colour: SUBHEADER }));
     ctx.restore();
   }
 

@@ -444,7 +444,8 @@ places:
 - **The Swing Profiles header.** The pitcher's name in large teal type, what the chart shows
   (season, view, date segment) in a muted line under it, and the Pitcher List Stats wordmark top
   right — Swing Profiles' sizes and offsets, scaled to this figure's width. No rule under it,
-  and the footer note in the sub-header's muted colour.
+  and the footer note set as Swing Profiles sets its note: 10 pt regular in the
+  sub-header's muted colour, baselines 7.5 pt × 1.6 apart (scaled the same way).
 - **One bottom row.** The footer note and the scale share one centre line, below the chart.
 - **No spines.** The degree grid is the only frame.
 
