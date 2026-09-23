@@ -7,7 +7,7 @@
 // as #<pitcherId>-<YYYY-MM-DD>.
 
 import * as data from './data.js?v=3';
-import * as sankey from './sankey.js?v=15';
+import * as sankey from './sankey.js?v=16';
 
 const $ = id => document.getElementById(id);
 const q = $('q'), hits = $('hits'), seasonSel = $('season'), dateIn = $('date'), gameSel = $('game'), gameLabel = $('gameLabel');
@@ -271,7 +271,8 @@ async function defaultGame() {
   for (let d = today(), tries = 0; d >= last && tries < 10; d = prevDay(d), tries++) {
     status.textContent = 'Loading ' + niceDate(d, true) + '…';
     let rows = [];
-    try { rows = await data.rowsFor(d); } catch (e) { rows = []; }
+    // today's live feed was asked for alongside the manifest (see boot); today is never settled
+    try { rows = await (d === today() && todayEarly ? todayEarly : data.rowsFor(d)); } catch (e) { rows = []; }
     if (state.pitcher || state.date) return true;      // the user got there first
     const finished = rows.filter(r => !r.live || r.status === 'Final' || r.status === 'Game Over');
     const list = data.pitchersOn(finished);              // sorted by pitch count, most first
@@ -304,9 +305,17 @@ async function fromHash() {
 window.addEventListener('hashchange', fromHash);
 
 // ---- boot ---------------------------------------------------------------------------
+// The requests go out first: the manifest, and (with no game in the link) today's live feed,
+// which the default game starts from and which never waits on the manifest. Plotly is added
+// only then, so its ~400 ms of script runs while they are in flight rather than before them.
+const manifestEarly = data.loadManifest();
+const todayEarly = location.hash ? null : data.readLiveDay(today());
+todayEarly?.catch(() => {});
+sankey.loadPlotly().catch(() => {});
+
 (async function boot() {
   try {
-    await data.loadManifest();
+    await manifestEarly;
   } catch (e) {
     status.textContent = 'Could not load the data manifest';
     showEmpty('The data files at data.blandalytics.com are not reachable right now.');
