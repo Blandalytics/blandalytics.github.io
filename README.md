@@ -27,8 +27,10 @@ python tools/homepage/grab_app_pngs.py            # every tool, or name some: pi
 python tools/homepage/make_tiles.py               # same: name the tiles you re-pulled, so the rest aren't redone from older exports
 ```
 
-The full-size exports land in `tools/homepage/cache/` (not committed). After changing
-`blandalytics.css`, bump its `?v=` query in `index.html` so browsers fetch the new file.
+The full-size exports land in `tools/homepage/cache/` (not committed). Cloudflare holds images
+and stylesheets for four hours under their exact URL, so each tile's `<img>` carries a `?v=`
+query: `make_tiles.py` bumps it whenever a tile comes out different, so commit `index.html` with
+the image. After changing `blandalytics.css`, bump its `?v=` in `index.html` by hand.
 
 ## MLB Scorecards
 
