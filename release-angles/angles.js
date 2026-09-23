@@ -783,7 +783,9 @@ window.ReleaseAngles = (() => {
     T(m.pitcher, fx(L), inch(0.25), { pt: fit(m.pitcher, 22 * HS, 700), weight: 700, colour: HEADER, va: "top" });
     TITLES.forEach(([head, line2], i) => {
       if (tw[i] <= 0) return;
-      const s = [`${m.year} ${head}`, line2, m.span].filter(Boolean).join(", by ");
+      // "2026 Release Angle Overlap, by Pitch Concentration, 4/1 to 6/17": the view after
+      // ", by ", the date segment after a comma
+      const s = `${m.year} ${head}` + (line2 ? `, by ${line2}` : "") + (m.span ? `, ${m.span}` : "");
       T(s, fx(L), inch(0.625), { pt: fit(s, 14 * HS, 400), colour: SUBHEADER, va: "top", alpha: tw[i] });
     });
     if (mark) {
