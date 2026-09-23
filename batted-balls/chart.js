@@ -104,6 +104,9 @@
   // ---- colours ------------------------------------------------------------------
   const BACKGROUND = "#292C42";
   const WHITE = "#FEFEFE";
+  // the header, as the Swing Profiles figure draws it
+  const HEADER = "#00D4FF";
+  const SUBHEADER = "#8D96B3";
   // contourf(levels -10..8 by 2, cmap vlag, extend both) -- the app's figure with
   // levels=11 rather than 13: the under colour, the nine bands, the over colour
   const LEVELS = [-10, -8, -6, -4, -2, 0, 2, 4, 6, 8];
@@ -140,7 +143,8 @@
   async function ensureFonts() {
     if (!document.fonts) return;
     try {
-      await Promise.all([document.fonts.load(`400 40px ${FONT}`), document.fonts.load(`500 40px ${FONT}`)]);
+      await Promise.all([document.fonts.load(`400 40px ${FONT}`), document.fonts.load(`500 40px ${FONT}`),
+                         document.fonts.load(`700 60px ${FONT}`)]);
     } catch { /* the fallback face draws instead */ }
   }
 
@@ -262,14 +266,15 @@
     [["Less\nOften", -24, LABEL_BLUE], ["Same", 15, "#000000"], ["More\nOften", 53.5, LABEL_RED]]
       .forEach(([s, la, colour]) => text(s, cbx, py(la), { size: 15, weight: 500, colour }));
 
-    // --- title, credit, wordmark ------------------------------------------------------
-    text(opts.title, 742, 40, { size: 16 });
-    text(opts.subtitle, 742, 85, { size: 12 });
-    // bottom left: the wordmark, with the data credit under it
+    // --- header, credit, wordmark -----------------------------------------------------
+    // the title in the header colour at the left margin, the subtitle muted under
+    // it and the wordmark opposite, as the Swing Profiles figure lays them out
+    text(opts.title, 27, 14, { size: 22, weight: 700, colour: HEADER, ha: "left", va: "top" });
+    text(opts.subtitle, 27, 72, { size: 13, colour: SUBHEADER, ha: "left", va: "top" });
     text("Data: MLB Statcast", 27, 1085, { size: 6, ha: "left" });
     if (opts.wordmark) {
       const w = 230, h = w * (opts.wordmark.height / opts.wordmark.width);
-      ctx.drawImage(opts.wordmark, 27, 1066 - h, w, h);
+      ctx.drawImage(opts.wordmark, CB.left + CB.width - w, 26, w, h);
     }
   }
 
