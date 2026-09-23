@@ -45,16 +45,17 @@ window.ReleaseAngles = (() => {
   const FIG_W = 11.6, FIG_ASPECT = 1.0;
   const L = 0.035, B = 0.052, W_FRAC = 0.93, TOP = 0.875;
   const RULE_Y = 0.888;
-  const FOOT_Y = 0.016;
+  // The bottom row: the footer note, the scale and the word mark, each centred on this line
+  // (a fraction of the figure's height) -- the Python sits the note and mark on FOOT_Y and
+  // the scale up under the frame.
+  const ROW_Y = 0.07;
   const FIG_H = FIG_W / FIG_ASPECT;
   const AX_H = TOP - B;
   const AX_W = AX_H * FIG_H / FIG_W;
   const AX_L = (1 - AX_W) / 2;
   const AXES_RATIO = AX_W * FIG_W / (AX_H * FIG_H);
-  const W_INK = 5.0, W_LAP = 8.0, W_OUT = 6.0, W_TET = 1.3;
   const LABEL_PT = 18;
-  const LABEL_CLEAR = 1.13, LEADER_GAP = 0.28, LEADER_MIN = 0.30;
-  const LADDER = [1.0, 1.9, 3.0, 4.4, 6.3, 8.8, 11.9];
+  const LEADER_GAP = 0.28, LEADER_MIN = 0.30;
   const GRID_N = 1100;
   const TITLES = [
     ["Release Angles", ""],
@@ -263,70 +264,156 @@ window.ReleaseAngles = (() => {
     ctx.restore();
   }
 
-  // ---- label placement (label_places / leader) --------------------------------------------
-  function labelPlaces(ells, order, sizes, frame, depth, nx, ny, XLIM, YLIM, nAng = 72) {
-    const [fx0, fx1, fy0, fy1] = frame;
-    let dmax = 1;
-    for (let i = 0; i < depth.length; i++) if (depth[i] > dmax) dmax = depth[i];
-    const [gx0, gx1] = XLIM, [gy0, gy1] = YLIM;
-    const round = (v) => { const r = Math.round(v); return Math.abs(v % 1) === 0.5 ? 2 * Math.round(v / 2) : r; };  // numpy rounds halves to even
-    const col = (v) => Math.min(nx - 1, Math.max(0, round(((v - gx0) / (gx1 - gx0)) * (nx - 1))));
-    const row = (v) => Math.min(ny - 1, Math.max(0, round(((v - gy0) / (gy1 - gy0)) * (ny - 1))));
-    function clear(cx, cy, hw, hh) {
-      const r0 = row(cy - hh), r1 = row(cy + hh), c0 = col(cx - hw), c1 = col(cx + hw);
-      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (depth[r * nx + c] >= 1) return false;
-      return true;
+  // ---- label placement -----------------------------------------------------------------------
+  // Each name is a box of text in data units. Candidate spots ring every ellipse at a ladder of
+  // distances, and a candidate must clear every ellipse's fill. Names are then placed greedily,
+  // in many orders, under hard rules -- no name overlaps another, and no leader crosses a name
+  // or another leader -- and the arrangement kept is the one whose frame (the square round the
+  // ellipses and the names, plus a margin) is smallest, so the chart sits as tight on the
+  // ellipses as the names allow; nearness to its own ellipse, and a leader that doesn't run
+  // over other ellipses, break ties. Text is sized in points while the frame sets the scale, so
+  // frame -> name sizes -> placement is iterated until the frame settles.
+  const LABEL_GAP = 0.45;     // name to any ellipse, in name heights
+  const LABEL_SEP = 0.30;     // name to name
+  const LEADER_PAD = 0.12;    // leader to another name
+  const FRAME_MARGIN = 0.60;  // outermost name or ellipse to the frame
+  const STEPS = [0, 0.35, 0.8, 1.4, 2.2, 3.2, 4.5, 6.2, 8.4, 11.2];
+  const N_ANG = 72, N_RING = 180, N_ORDERS = 120;
+  const W_GROW = 1.0, W_DIST = 0.22, W_CROSS = 0.35, W_VIOL = 50;
+
+  const overlaps = (a, b, pad) => a[0] - pad < b[1] && b[0] - pad < a[1] && a[2] - pad < b[3] && b[2] - pad < a[3];
+  // Liang-Barsky: does segment s pass through box b grown by pad?
+  function segHitsBox(s, b, pad) {
+    if (!s) return false;
+    const [x0, y0, x1, y1] = s, dx = x1 - x0, dy = y1 - y0;
+    const P = [-dx, dx, -dy, dy], Q = [x0 - (b[0] - pad), b[1] + pad - x0, y0 - (b[2] - pad), b[3] + pad - y0];
+    let t0 = 0, t1 = 1;
+    for (let i = 0; i < 4; i++) {
+      if (P[i] === 0) { if (Q[i] < 0) return false; continue; }
+      const r = Q[i] / P[i];
+      if (P[i] < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; }
     }
-    function ink(cx, cy, hw, hh) {
-      const r0 = row(cy - hh), r1 = row(cy + hh), c0 = col(cx - hw), c1 = col(cx + hw);
-      let s = 0, n = 0;
-      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) { s += depth[r * nx + c]; n++; }
-      return s / n / dmax;
-    }
-    const outside = (cx, cy, hw, hh) =>
-      Math.max(0, fx0 + hw - cx, cx - (fx1 - hw)) / (2 * hw) + Math.max(0, fy0 + hh - cy, cy - (fy1 - hh)) / (2 * hh);
-    function lap(cx, cy, hw, hh, placed) {
-      let tot = 0;
-      for (const [qx, qy, qhw, qhh] of placed) {
-        const w = Math.min(cx + hw, qx + qhw) - Math.max(cx - hw, qx - qhw);
-        const h = Math.min(cy + hh, qy + qhh) - Math.max(cy - hh, qy - qhh);
-        if (w > 0 && h > 0) tot += w * h;
-      }
-      return tot / (4 * hw * hh);
-    }
-    const placed = [], out = {};
-    for (const p of order) {
-      const e = ells[p], [mx, my] = e.mean, [w, h] = sizes[p], hw = w / 2, hh = h / 2;
-      const gap = LABEL_CLEAR * h;
-      const [bx, by] = boundary(e, nAng);
-      const ux = new Float64Array(nAng), uy = new Float64Array(nAng);
-      for (let i = 0; i < nAng; i++) {
-        const dx = bx[i] - mx, dy = by[i] - my, nrm = Math.hypot(dx, dy);
-        ux[i] = dx / nrm; uy[i] = dy / nrm;
-      }
-      const reach = Math.hypot(...e.scale);
-      let best = null, cheapest = Infinity, stuck = [mx, my], worst = Infinity;
-      for (const step of LADDER) {
-        for (let i = 0; i < nAng; i++) {
-          const off = gap + step * h + Math.abs(ux[i]) * hw + Math.abs(uy[i]) * hh;
-          const cx = bx[i] + ux[i] * off, cy = by[i] + uy[i] * off;
-          const c = W_LAP * lap(cx, cy, hw, hh, placed) + W_OUT * outside(cx, cy, hw, hh) + (W_TET * Math.hypot(cx - mx, cy - my)) / reach;
-          if (clear(cx, cy, hw + gap, hh + gap)) {
-            if (c < cheapest) { best = [cx, cy]; cheapest = c; }
-          } else {
-            const cc = c + W_INK * ink(cx, cy, hw, hh);
-            if (cc < worst) { stuck = [cx, cy]; worst = cc; }
-          }
-        }
-      }
-      const [cx, cy] = best || stuck;
-      let k = 0, kd = Infinity;
-      for (let i = 0; i < nAng; i++) { const d = Math.hypot(bx[i] - cx, by[i] - cy); if (d < kd) { kd = d; k = i; } }
-      out[p] = { spot: [cx, cy], anchor: [bx[k], by[k]] };
-      placed.push([cx, cy, hw, hh]);
-    }
-    return out;
+    return t0 <= t1;
   }
+  function segsCross(a, b) {
+    if (!a || !b) return false;
+    const o = (ax, ay, bx, by, cx, cy) => Math.sign((bx - ax) * (cy - ay) - (by - ay) * (cx - ax));
+    return o(a[0], a[1], a[2], a[3], b[0], b[1]) !== o(a[0], a[1], a[2], a[3], b[2], b[3])
+      && o(b[0], b[1], b[2], b[3], a[0], a[1]) !== o(b[0], b[1], b[2], b[3], a[2], a[3]);
+  }
+  // an ellipse and a box meet if an outline point is in the box or a corner is in the ellipse
+  function boxHitsEllipse(e, ring, b) {
+    const [ex0, ex1, ey0, ey1] = bounds(e);
+    if (b[1] < ex0 || b[0] > ex1 || b[3] < ey0 || b[2] > ey1) return false;
+    const [rx, ry] = ring;
+    for (let i = 0; i < rx.length; i++) if (rx[i] >= b[0] && rx[i] <= b[1] && ry[i] >= b[2] && ry[i] <= b[3]) return true;
+    return contains(e, b[0], b[2]) || contains(e, b[1], b[2]) || contains(e, b[0], b[3]) || contains(e, b[1], b[3]);
+  }
+  function segHitsEllipse(s, e) {
+    for (let k = 1; k < 12; k++) { const t = k / 12; if (contains(e, s[0] + t * (s[2] - s[0]), s[1] + t * (s[3] - s[1]))) return true; }
+    return false;
+  }
+  function mulberry32(seed) {
+    return () => {
+      seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const squareSide = (b) => Math.max(b[1] - b[0], b[3] - b[2]);
+  const grown = (b, c) => [Math.min(b[0], c[0]), Math.max(b[1], c[1]), Math.min(b[2], c[2]), Math.max(b[3], c[3])];
+
+  // every spot a name may take: stepped out from its ellipse, clear of all the fills
+  function candidates(p, ells, rings, order, w, h, strict = true) {
+    const e = ells[p], [mx, my] = e.mean, hw = w / 2, hh = h / 2, gap = LABEL_GAP * h;
+    const [bx, by] = boundary(e, N_ANG), [rx, ry] = rings[p], out = [];
+    for (const step of STEPS) {
+      for (let i = 0; i < N_ANG; i++) {
+        const dx = bx[i] - mx, dy = by[i] - my, n = Math.hypot(dx, dy), ux = dx / n, uy = dy / n;
+        const off = gap + step * h + Math.abs(ux) * hw + Math.abs(uy) * hh;
+        const cx = bx[i] + ux * off, cy = by[i] + uy * off;
+        const box = [cx - hw, cx + hw, cy - hh, cy + hh];
+        if (strict && order.some((q) => boxHitsEllipse(ells[q], rings[q], [box[0] - gap, box[1] + gap, box[2] - gap, box[3] + gap]))) continue;
+        let k = 0, kd = Infinity;
+        for (let j = 0; j < rx.length; j++) { const d = Math.hypot(rx[j] - cx, ry[j] - cy); if (d < kd) { kd = d; k = j; } }
+        const anchor = [rx[k], ry[k]], leader = leaderLine([cx, cy], anchor, [w, h]);
+        let cross = 0;
+        if (leader) for (const q of order) if (q !== p && segHitsEllipse(leader, ells[q])) cross++;
+        out.push({ spot: [cx, cy], anchor, box, leader, dist: kd / h, cross });
+      }
+    }
+    return out.length || !strict ? out : candidates(p, ells, rings, order, w, h, false);
+  }
+
+  // one greedy pass in a given order; returns the placement and its score
+  function arrange(seq, cands, cluster, h) {
+    let bbox = cluster, score = 0;
+    const placed = [];
+    for (const p of seq) {
+      let best = null, bestCost = Infinity;
+      for (const c of cands[p]) {
+        let viol = 0;
+        for (const q of placed) {
+          if (overlaps(c.box, q.box, LABEL_SEP * h)) viol += 3;
+          if (segHitsBox(c.leader, q.box, LEADER_PAD * h)) viol++;
+          if (segHitsBox(q.leader, c.box, LEADER_PAD * h)) viol++;
+          if (segsCross(c.leader, q.leader)) viol++;
+        }
+        const cost = (W_GROW * (squareSide(grown(bbox, c.box)) - squareSide(bbox))) / h
+          + W_DIST * c.dist + W_CROSS * c.cross + W_VIOL * viol;
+        if (cost < bestCost) { bestCost = cost; best = { ...c, viol }; }
+      }
+      placed.push({ p, ...best });
+      bbox = grown(bbox, best.box);
+      score += W_DIST * best.dist + W_CROSS * best.cross + W_VIOL * best.viol;
+    }
+    return { placed, bbox, score: score + (W_GROW * squareSide(bbox)) / h };
+  }
+
+  // The names measured and placed, and the frame they fit in: { labels, frame }
+  function layoutLabels(ells, order, pct) {
+    const ctx = mctx(), dpi = DPI_PNG;
+    ctx.font = fontSpec(LABEL_PT, SEMIBOLD, dpi);
+    const text = {}, px = {};
+    for (const p of order) {
+      text[p] = `${NAMES[p] || p}  ${pct[p].toFixed(1)}%`;
+      const blk = textBlock(ctx, text[p], (LABEL_PT * dpi) / 72);
+      px[p] = [blk.width, blk.height];
+    }
+    // data units per pixel for a square frame of side S: the window, and so the scale, follows it
+    const unit = (S) => windowFor(0, S, 0, S).dw / (AX_W * FIG_W * dpi);
+    const rings = Object.fromEntries(order.map((p) => [p, boundary(ells[p], N_RING)]));
+    const cluster = clusterBox(ells);
+    const rand = mulberry32(20260922);
+    const orders = [order.slice()];
+    for (let i = 1; i < N_ORDERS; i++) {
+      const o = order.slice();
+      for (let j = o.length - 1; j > 0; j--) { const k = Math.floor(rand() * (j + 1)); [o[j], o[k]] = [o[k], o[j]]; }
+      orders.push(o);
+    }
+    let S = squareSide(squareFrame(...cluster)), best = null, sizes = null, h = 0;
+    for (let it = 0; it < 8; it++) {
+      const u = unit(S);
+      sizes = Object.fromEntries(order.map((p) => [p, [px[p][0] * u, px[p][1] * u]]));
+      h = Math.max(...order.map((p) => sizes[p][1]));
+      const cands = Object.fromEntries(order.map((p) => [p, candidates(p, ells, rings, order, ...sizes[p])]));
+      best = null;
+      for (const seq of orders) {
+        const r = arrange(seq, cands, cluster, h);
+        if (!best || r.score < best.score) best = r;
+      }
+      const next = squareSide(best.bbox) + 2 * FRAME_MARGIN * h;
+      if (Math.abs(next - S) <= 0.004 * S) { S = Math.max(S, next); break; }
+      S = it < 3 ? next : (S + next) / 2;
+    }
+    const b = best.bbox, cx = (b[0] + b[1]) / 2, cy = (b[2] + b[3]) / 2;
+    const side = Math.max(S, squareSide(b) + 2 * FRAME_MARGIN * h);
+    const labels = {};
+    for (const q of best.placed) labels[q.p] = { text: text[q.p], size: sizes[q.p], spot: q.spot, anchor: q.anchor, leader: q.leader };
+    return { labels, frame: [cx - side / 2, cx + side / 2, cy - side / 2, cy + side / 2] };
+  }
+
   function leaderLine(spot, anchor, size) {
     const [cx, cy] = spot, [tx, ty] = anchor;
     const hw = size[0] / 2 + LEADER_GAP * size[1], hh = size[1] / 2 + LEADER_GAP * size[1];
@@ -356,10 +443,10 @@ window.ReleaseAngles = (() => {
 
   // ---- build --------------------------------------------------------------------------------
   //   pitches: [{ t: pitch type, x: HRA, y: VRA, d: "YYYY-MM-DD" }], already cut to the segment
-  //   opts:    { pitcher, start, end, qualifier, nStd, minRows, minSegArea, limits }
+  //   opts:    { pitcher, start, end, nStd, minRows, minSegArea }
   function build(pitches, opts = {}) {
-    const { pitcher = "", start = null, end = null, qualifier = "", nStd = 1.0, minRows = 20,
-      minSegArea = 0.10, limits = null } = opts;
+    const { pitcher = "", start = null, end = null, nStd = 1.0, minRows = 20,
+      minSegArea = 0.10 } = opts;
     if (!pitches.length) throw new Error("no pitches");
     const years = new Map();
     for (const p of pitches) { const y = Number(p.d.slice(0, 4)); years.set(y, (years.get(y) || 0) + 1); }
@@ -371,7 +458,9 @@ window.ReleaseAngles = (() => {
     const kept = order.reduce((s, p) => s + counts.get(p), 0);
     const pct = Object.fromEntries(order.map((p) => [p, (counts.get(p) / kept) * 100]));
 
-    const [x0, x1, y0, y1] = limits || squareFrame(...clusterBox(ells));
+    // the names are placed first: the frame is the square they and the ellipses fit in
+    const { labels, frame } = layoutLabels(ells, order, pct);
+    const [x0, x1, y0, y1] = frame;
     const { XLIM, YLIM, dw, dh } = windowFor(x0, x1, y0, y1);
     const ratio = dw / dh;
 
@@ -431,37 +520,17 @@ window.ReleaseAngles = (() => {
     }
 
     const model = {
-      pitcher, year, start, end, qualifier, nStd, minRows, minSegArea,
+      pitcher, year, start, end, nStd, minRows, minSegArea,
       when: `${year} ${spanText(start, end)}`.trim(),
-      span: [qualifier, spanText(start, end)].filter(Boolean).join(", "),
+      span: spanText(start, end),
       tag: spanTag(start, end),
       pitches, total: pitches.length, games: new Set(pitches.map((p) => p.d)).size,
       ells, order, skipped, counts, hues, pct,
       frame: [x0, x1, y0, y1], XLIM, YLIM, dw, dh,
       nx, ny, depth, share, seg, cell, DMAX, SMAX, SMIN, KMIN, KMAX, segments, steps,
-      idxC, idxD, normC, normD,
+      idxC, idxD, normC, normD, labels,
     };
-    model.labels = placeLabels(model);
     return model;
-  }
-
-  // Names are measured, then placed, in data units -- which is what they are in the Python,
-  // so the placement does not depend on the dpi the figure is drawn at.
-  function placeLabels(m) {
-    const ctx = mctx(), dpi = DPI_PNG;
-    ctx.font = fontSpec(LABEL_PT, SEMIBOLD, dpi);
-    const pxPerX = (AX_W * FIG_W * dpi) / m.dw, pxPerY = (AX_H * FIG_H * dpi) / m.dh;
-    const sizes = {}, text = {};
-    for (const p of m.order) {
-      text[p] = `${NAMES[p] || p}  ${m.pct[p].toFixed(1)}%`;
-      const blk = textBlock(ctx, text[p], (LABEL_PT * dpi) / 72);
-      sizes[p] = [blk.width / pxPerX, blk.height / pxPerY];
-    }
-    const places = labelPlaces(m.ells, m.order, sizes, m.frame, m.depth, m.nx, m.ny, m.XLIM, m.YLIM);
-    return Object.fromEntries(m.order.map((p) => [p, {
-      text: text[p], size: sizes[p], ...places[p],
-      leader: leaderLine(places[p].spot, places[p].anchor, sizes[p]),
-    }]));
   }
 
   // ---- the loop's weights -------------------------------------------------------------------
@@ -572,7 +641,11 @@ window.ReleaseAngles = (() => {
     }
 
     // legends, centred under the frame
-    const KH = 0.035 * dh, KW = 0.25 * dw, KX = (x0 + x1) / 2 - KW / 2, KY = YLIM[0] + 0.07 * dh;
+    // the scale's title, bar and tick labels as one block, centred on the bottom row
+    const ptF = (p) => (p / 72) * (ASC + DESC) / FIG_H;   // a line of p-point text, in figure heights
+    const above = 0.018 * AX_H + ptF(16), below = 0.013 * AX_H + ptF(14);
+    const barBottom = ROW_Y - (0.035 * AX_H + above + below) / 2 + below;
+    const KH = 0.035 * dh, KW = 0.25 * dw, KX = (x0 + x1) / 2 - KW / 2, KY = YLIM[0] + ((barBottom - B) / AX_H) * dh;
     const keyTitle = (s, a) => T(s, X(KX + KW / 2), Y(KY + KH + 0.018 * dh), { pt: 16, weight: SEMIBOLD, colour: INK, ha: "center", va: "bottom", alpha: a });
     const keyBox = (a) => { ctx.globalAlpha = a; ctx.strokeStyle = RULE; ctx.lineWidth = pt(0.7); ctx.strokeRect(X(KX), Y(KY + KH), X(KX + KW) - X(KX), Y(KY) - Y(KY + KH)); ctx.globalAlpha = 1; };
     const keyTick = (s, x, a) => T(s, X(x), Y(KY - 0.013 * dh), { pt: 14, colour: INK2, ha: "center", va: "top", alpha: a });
@@ -648,10 +721,10 @@ window.ReleaseAngles = (() => {
     });
     ctx.strokeStyle = RULE; ctx.lineWidth = pt(0.8);
     ctx.beginPath(); ctx.moveTo(fx(L), fy(RULE_Y)); ctx.lineTo(fx(L + W_FRAC), fy(RULE_Y)); ctx.stroke();
-    T("Angles as the ball leaves the hand\nData: MLB StatsAPI", fx(L), fy(FOOT_Y), { pt: 12, colour: INK3, va: "bottom", linespacing: 1.6 });
+    T("Angles as the ball leaves the hand\nData: MLB StatsAPI", fx(L), fy(ROW_Y), { pt: 12, colour: INK3, va: "center", linespacing: 1.6 });
     if (mark) {
       const h = (WATERMARK_W * FIG_W) / FIG_H / (mark.width / mark.height);
-      ctx.drawImage(mark, fx(L + W_FRAC - WATERMARK_W), fy(FOOT_Y + h), WATERMARK_W * W, h * H);
+      ctx.drawImage(mark, fx(L + W_FRAC - WATERMARK_W), fy(ROW_Y + h / 2), WATERMARK_W * W, h * H);
     }
     ctx.restore();
   }

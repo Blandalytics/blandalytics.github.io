@@ -17,16 +17,12 @@ const el = {
   dlPng: $("dl_png"), dlAll: $("dl_all"), dlGif: $("dl_gif"), gifStatus: $("gif_status"),
   nStd: $("n_std"), minRows: $("min_rows"), minSeg: $("min_seg"), numbers: $("numbers"),
 };
-const radio = (name) => document.querySelector(`input[name="${name}"]:checked`)?.value;
-const setRadio = (name, value) => { const r = document.querySelector(`input[name="${name}"][value="${value}"]`); if (r) r.checked = true; };
-const gameInputs = () => [...document.querySelectorAll('input[name="games"]')];
 
 // ?data=<base> reads a local build instead of the bucket
 // (python tools/release_angles/build_data.py --out release-angles/data, then ?data=data/)
 const params = new URLSearchParams(location.search);
 const DATA = new URL(params.get("data") || "https://data.blandalytics.com/", location.href).href;
 const DEFAULT_PITCHER = "Paul Skenes";
-const POSTSEASON = new Set(["F", "D", "L", "W"]);
 
 let index = null;
 const seasons = new Map();   // season -> pitcher list file
@@ -134,15 +130,12 @@ function startSearch() {
 // ---- controls ------------------------------------------------------------------------------
 function syncControls() {
   const p = chosen;
-  const has = { R: p ? p.r > 0 : false, P: p ? p.p > 0 : false, A: p ? p.r > 0 && p.p > 0 : false };
-  gameInputs().forEach((r) => { r.disabled = !has[r.value]; });
-  if (!has[radio("games")]) setRadio("games", has.R ? "R" : "P");
   for (const d of [el.from, el.to]) { d.min = p ? p.first : ""; d.max = p ? p.last : ""; }
 }
 const numberOr = (input, dflt) => { const v = Number(input.value); return input.value !== "" && Number.isFinite(v) ? v : dflt; };
 function selection() {
   return {
-    season: Number(el.season.value), id: chosen?.id ?? null, games: radio("games") || "R",
+    season: Number(el.season.value), id: chosen?.id ?? null,
     from: el.from.value || null, to: el.to.value || null,
     nStd: Math.max(0.1, numberOr(el.nStd, 1.0)), minRows: Math.max(3, Math.round(numberOr(el.minRows, 20))),
     minSeg: Math.max(0, numberOr(el.minSeg, 0.10)),
@@ -150,7 +143,6 @@ function selection() {
 }
 function hash(sel) {
   const extra = [];
-  if (sel.games !== "R") extra.push(`games=${sel.games}`);
   if (sel.from) extra.push(`from=${sel.from}`);
   if (sel.to) extra.push(`to=${sel.to}`);
   if (sel.nStd !== 1) extra.push(`sd=${sel.nStd}`);
@@ -218,15 +210,15 @@ async function show() {
   try {
     const all = await readPitcher(sel.season, sel.id);
     if (ticket !== drawing) return;
-    let pts = all.filter((p) => (sel.games === "R" ? p.g === "R" : sel.games === "P" ? POSTSEASON.has(p.g) : p.g === "R" || POSTSEASON.has(p.g)));
+    // regular season only, as the script's default (older season files also hold the postseason)
+    let pts = all.filter((p) => p.g === "R");
     if (sel.from) pts = pts.filter((p) => p.d >= sel.from);
     if (sel.to) pts = pts.filter((p) => p.d <= sel.to);
     if (!pts.length) { status("no pitches in that selection", "warn"); return; }
     status("drawing…");
     await new Promise((r) => setTimeout(r, 0));
-    const qualifier = sel.games === "P" ? "Postseason" : sel.games === "A" ? "Incl. Postseason" : "";
     const m = RA.build(pts, {
-      pitcher: chosen.name, start: sel.from, end: sel.to, qualifier,
+      pitcher: chosen.name, start: sel.from, end: sel.to,
       nStd: sel.nStd, minRows: sel.minRows, minSegArea: sel.minSeg,
     });
     if (ticket !== drawing) return;
@@ -336,7 +328,6 @@ async function init() {
   el.season.value = String(year);
   await switchSeason(year, link?.id);
   if (link) {
-    if (link.games) setRadio("games", link.games);
     if (link.from) el.from.value = link.from;
     if (link.to) el.to.value = link.to;
     if (link.sd) el.nStd.value = link.sd;
@@ -349,7 +340,6 @@ async function init() {
 }
 
 el.season.addEventListener("change", async () => { await switchSeason(Number(el.season.value)); show(); });
-gameInputs().forEach((r) => r.addEventListener("change", show));
 for (const d of [el.from, el.to]) d.addEventListener("change", show);
 for (const d of [el.nStd, el.minRows, el.minSeg]) d.addEventListener("change", show);
 el.clearDates.addEventListener("click", () => { el.from.value = ""; el.to.value = ""; show(); });

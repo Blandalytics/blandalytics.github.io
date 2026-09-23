@@ -29,17 +29,12 @@ a{color:var(--accent)}
 a.home{color:var(--muted); text-decoration:none; font-size:14px}
 a.home:hover{color:var(--ink)}
 .card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
-.controls{display:grid; grid-template-columns:100px minmax(220px,1fr) auto; gap:12px 18px; align-items:end}
+.controls{display:grid; grid-template-columns:100px minmax(220px,1fr); gap:12px 18px; align-items:end}
 .dates{display:grid; grid-template-columns:1fr 1fr auto; gap:12px 18px; align-items:end; margin-top:12px}
 @media (max-width:640px){.controls{grid-template-columns:1fr} .controls .player{grid-column:1 / -1}
   .dates{grid-template-columns:1fr 1fr} .dates button{grid-column:1 / -1; justify-self:start}}
 label{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
 label b{color:var(--ink); font-weight:500}
-fieldset{border:0; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); min-width:0}
-fieldset legend{padding:0; color:var(--ink); font-weight:500; margin-bottom:4px}
-fieldset .opts{display:flex; gap:12px; flex-wrap:wrap}
-fieldset label{flex-direction:row; align-items:center; gap:5px; color:var(--ink); font-size:14px; white-space:nowrap}
-fieldset label:has(input:disabled){color:var(--faint)}
 input,select,button{font:inherit; color:var(--ink)}
 input[type=text],input[type=date],input[type=number],select{background:var(--ground); border:1px solid var(--rule); border-radius:6px; padding:7px 9px; width:100%}
 input[type=date]{color-scheme:dark}
@@ -109,14 +104,6 @@ tr.clip td{color:var(--muted)}
           <ul id="suggest" class="suggest-list" role="listbox" hidden></ul>
         </div>
       </label>
-      <fieldset>
-        <legend>Games</legend>
-        <div class="opts">
-          <label><input type="radio" name="games" value="R" checked> Regular</label>
-          <label><input type="radio" name="games" value="P"> Postseason</label>
-          <label><input type="radio" name="games" value="A"> Both</label>
-        </div>
-      </fieldset>
     </form>
     <div class="dates">
       <label><b>From</b><input id="from" type="date"></label>
@@ -176,7 +163,7 @@ tr.clip td{color:var(--muted)}
     </details>
   </section>
 </main>
-<script src="angles.js?v=1"></script>
-<script type="module" src="app.js?v=1"></script>
+<script src="angles.js?v=2"></script>
+<script type="module" src="app.js?v=2"></script>
 </body>
 </html>
