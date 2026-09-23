@@ -211,9 +211,14 @@
 		opacity: 1;
 	}
 
-	/* Touch devices always show the description, so they get the heavier scrim. */
+	/* Touch devices have no hover, so their tiles show just the title, over a scrim that
+	   only darkens the bottom edge behind it. */
 	body.is-touch .tiles article > .image:before {
-		background: linear-gradient(to bottom, rgba(13, 17, 23, 0.45) 0%, rgba(13, 17, 23, 0.9) 45%) !important;
+		background-image: linear-gradient(to bottom, rgba(13, 17, 23, 0) 50%, rgba(13, 17, 23, 0.8) 100%);
+	}
+
+	body.is-touch .tiles article .content {
+		display: none;
 	}
 
 	body:not(.is-touch) .tiles article:hover > .image {
