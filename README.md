@@ -417,7 +417,7 @@ season and a pitcher (regular season only, the script's default); *From* / *Thro
 season to a date segment. *Options* sets the ellipse size, the
 fewest pitches a type needs to be drawn, and the smallest segment the concentration scale
 counts. **Overlap numbers** is the script's printed report: per pitch type area, mean depth and
-mean share, and the most concentrated segments. Paul Skenes' current season loads on arrival; a
+mean share, and the most concentrated segments. Nolan McLean's current season loads on arrival; a
 chart is linkable as `release-angles/#<season>-<mlbam id>`, with
 `&from=` / `&to=` (ISO dates), `&sd=`, `&min=`, `&seg=` and `&view=type|count|share|segment`.
 

@@ -22,7 +22,7 @@ const el = {
 // (python tools/release_angles/build_data.py --out release-angles/data, then ?data=data/)
 const params = new URLSearchParams(location.search);
 const DATA = new URL(params.get("data") || "https://data.blandalytics.com/", location.href).href;
-const DEFAULT_PITCHER = "Paul Skenes";
+const DEFAULT_PITCHER = "Nolan McLean";
 
 let index = null;
 const seasons = new Map();   // season -> pitcher list file
