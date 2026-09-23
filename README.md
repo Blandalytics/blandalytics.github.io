@@ -15,7 +15,7 @@ credit) with the site's dark palette. Each tile's picture is real output from it
 | `assets/css/blandalytics.css` | the site's palette and font over the template, the tile scrim, the footer wordmark |
 | `images/tile-*.png` | the tile pictures, one per tool |
 | `tools/homepage/grab_app_pngs.py` | runs each tool in headless Chrome and saves the PNG from its own export button (the NHL Draft Tool has none, so it screenshots the options table of a mock draft) |
-| `tools/homepage/make_tiles.py` | crops those exports into the tiles, all at the template's tile aspect ratio |
+| `tools/homepage/make_tiles.py` | crops those exports into the tiles, all at the template's tile aspect ratio (a figure whose edges carry text, like Batted Ball Charts, is padded out with its background instead) |
 
 ### Updating the tiles
 
@@ -24,7 +24,7 @@ the rest take whatever the tool opens on. It needs Chrome and `websocket-client`
 
 ```
 python tools/homepage/grab_app_pngs.py            # every tool, or name some: pitcher-cards sequencing-flow
-python tools/homepage/make_tiles.py
+python tools/homepage/make_tiles.py               # same: name the tiles you re-pulled, so the rest aren't redone from older exports
 ```
 
 The full-size exports land in `tools/homepage/cache/` (not committed). After changing
