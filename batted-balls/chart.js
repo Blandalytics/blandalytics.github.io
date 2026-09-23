@@ -133,7 +133,8 @@
   const LABEL_X = 286 - 0.14 * 900;
   const LABEL_SIZE = 15;
   const PX_PER_PT = 200 / 72;
-  const FONT = '"Alexandria", "DM Sans", "Segoe UI", sans-serif';
+  // the Swing Profiles figure's font, rather than the Streamlit app's Alexandria
+  const FONT = '"DM Sans", "Segoe UI", "DejaVu Sans", sans-serif';
   const LINE_SPACING = 1.2;  // matplotlib's multi-line spacing
 
   const WORDMARK_URL = "../pitcher-cards/PitcherList_Stats_watermark_with_logo.webp";
