@@ -412,24 +412,35 @@ same chart: the outlines alone, **Overlap count** (how many ellipses cover each 
 **Concentration** (each exact set of overlapping ellipses — a segment — shaded by the pitches
 that landed in it per square degree). **Play loop** cross-fades through the four; **Download
 GIF** saves that loop (928 × 928, 17.2 s) and the PNGs are the stills at 2320 × 2320. Pick a
-season and a pitcher; *Games* switches between the regular season, the postseason or both, and
-*From* / *Through* cut the season to a date segment. *Options* sets the ellipse size, the
+season and a pitcher (regular season only, the script's default); *From* / *Through* cut the
+season to a date segment. *Options* sets the ellipse size, the
 fewest pitches a type needs to be drawn, and the smallest segment the concentration scale
 counts. **Overlap numbers** is the script's printed report: per pitch type area, mean depth and
 mean share, and the most concentrated segments. Paul Skenes' current season loads on arrival; a
-chart is linkable as `release-angles/#<season>-<mlbam id>`, with `&games=P|A`,
+chart is linkable as `release-angles/#<season>-<mlbam id>`, with
 `&from=` / `&to=` (ISO dates), `&sd=`, `&min=`, `&seg=` and `&view=type|count|share|segment`.
 
 It is [baseball_snippets `release_angles.py`](https://github.com/Blandalytics/baseball_snippets/blob/main/release_angles.py)
 (with the ellipse maths of [`ellipse_depth.py`](https://github.com/Blandalytics/baseball_snippets/blob/main/ellipse_depth.py))
-ported to the browser: the same figure geometry, window and frame, depth / share / segment
-maps on the same 1100-point grid, colour ramp (stepped through L\*a\*b\*), label search and
-leaders, titles, footer and Pitcher List Stats wordmark, and the same four-state loop. Checked
-against the Python on Paul Skenes' 2026: the overlap report agrees to every printed digit, and
-the stills match pixel for pixel apart from glyph rasterisation — which can nudge a name to the
-next-best spot, since the label search takes the cheapest of many near-tied candidates. The GIF
-merges each hold's identical frames into one long frame, as Pillow does, so it has the Python's
-57 frames and runs in the browser in a few seconds.
+ported to the browser: the same figure geometry, depth / share / segment maps on the same
+1100-point grid, colour ramp (stepped through L\*a\*b\*), leaders, titles and four-state loop,
+and an overlap report that agrees with the script's to every printed digit (checked on Paul
+Skenes' 2026). It departs from the script in three places:
+
+- **Names never collide.** Candidate spots ring each ellipse at a ladder of distances and must
+  clear every ellipse's fill; the names are placed greedily, in 120 seeded orders, under hard
+  rules — no name overlaps another, and no leader crosses a name or another leader — and the
+  arrangement with the smallest frame wins (nearness to its own ellipse, and a leader that stays
+  off other ellipses, break ties). The same chart always comes out the same.
+- **The frame is as tight as the names allow.** Rather than a fixed margin round the ellipses,
+  the frame is the square round the ellipses and the placed names plus a small margin. Text is
+  sized in points while the frame sets the degree scale, so frame, name sizes and placement are
+  iterated until the frame settles.
+- **One bottom row.** The footer note, the scale and the Pitcher List Stats wordmark share one
+  centre line, below the chart.
+
+The GIF merges each hold's identical frames into one long frame, as Pillow does, so it has the
+Python's 57 frames and runs in the browser in a few seconds.
 
 ### How it works
 
@@ -441,9 +452,9 @@ extension), and HRA / VRA are the angles it makes with the line to the plate —
 - `https://data.blandalytics.com/release-angles/index.json` — the seasons built, with what each
   covers.
 - `https://data.blandalytics.com/release-angles/<season>.json` — the pitchers: id, name, team,
-  hand, regular-season and postseason pitch counts, first and last dates. About 110 KB.
-- `https://data.blandalytics.com/release-angles/<season>.parquet` — every pitch's pitcher, date,
-  game type, pitch type, HRA and VRA, sorted by pitcher in 8,192-row groups (~8 MB a season). The
+  hand, regular-season pitch count, first and last dates. About 110 KB.
+- `https://data.blandalytics.com/release-angles/<season>.parquet` — every regular-season pitch's
+  pitcher, date, game type, pitch type, HRA and VRA, sorted by pitcher in 8,192-row groups (~8 MB a season). The
   page reads the row-group statistics on `pitcher` from the footer and range-requests only the
   one or two groups holding the chosen pitcher, with
   [hyparquet](https://github.com/hyparam/hyparquet) — a chart costs 150–200 KB.
@@ -454,7 +465,7 @@ extension), and HRA / VRA are the angles it makes with the line to the plate —
 | file | role |
 |---|---|
 | `tools/release_angles/build_data.py` | reads a season's files from the bucket, computes HRA and VRA, writes the season's Parquet, pitcher list and the index |
-| `release-angles/angles.js` | the figure: ellipses, frame and window, the three shaded maps and the segments, label placement, drawing at any dpi, the GIF (gifenc), the report |
+| `release-angles/angles.js` | the figure: ellipses, the name placement and the frame it sets, the three shaded maps and the segments, drawing at any dpi, the GIF (gifenc), the report |
 | `release-angles/index.html`, `app.js` | the page: season, pitcher, games and date controls, the views and loop, the Parquet read, downloads, the link hash |
 
 Locally, `python tools/release_angles/build_data.py --out release-angles/data --seasons 2026`

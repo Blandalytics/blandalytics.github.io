@@ -48,7 +48,6 @@ ROW_GROUP = 8192     # a pitcher's season is one or two groups
 # the columns the angles need, out of the ~140 in a file
 COLUMNS = ["game_date", "game_type", "pitcher", "pitcher_name", "p_throws", "field_team",
            "pitch_type", "vx0", "vy0", "vz0", "ax", "ay", "az", "release_extension"]
-POSTSEASON = {"F", "D", "L", "W"}
 
 
 # ---- storage (as tools/batted_balls/build_data.py) ----------------------------------------
@@ -125,8 +124,8 @@ def release_angles(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def pitches(df: pd.DataFrame) -> pd.DataFrame:
-    """Every pitch with a pitch type and both angles, games of every type."""
-    df = df.copy()
+    """Every regular-season pitch with a pitch type and both angles."""
+    df = df[df["game_type"].astype(str) == "R"].copy()
     df[["HRA", "VRA"]] = release_angles(df)
     df = df.dropna(subset=["HRA", "VRA", "pitch_type"])
     df = df[np.isfinite(df["HRA"]) & np.isfinite(df["VRA"])]
@@ -169,16 +168,14 @@ def pitcher_rows(df: pd.DataFrame) -> list[dict]:
     rows = []
     for pid, g in df.groupby("pitcher", sort=False):
         last = g.iloc[-1]  # sorted by date within a pitcher: the name and team as of the last game
-        post = g["game_type"].isin(POSTSEASON)
-        reg = g["game_type"] == "R"
         rows.append({
             "id": int(pid),
             "name": str(last["pitcher_name"]),
             "team": str(last["field_team"]),
             "throws": str(g["p_throws"].mode().iloc[0]),
             "n": int(len(g)),
-            "r": int(reg.sum()),
-            "p": int(post.sum()),
+            "r": int(len(g)),
+            "p": 0,
             "first": str(g["game_date"].min().date()),
             "last": str(g["game_date"].max().date()),
         })
