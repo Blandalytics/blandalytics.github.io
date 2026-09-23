@@ -18,7 +18,7 @@ CROPS = {
     "sequencing-flow": (0.0, 0.5),   # the Sankey body
     "swing-profiles": (0.5, 0.0),
     "batted-balls": (0.5, 0.0),
-    "release-angles": (0.5, 0.5),   # the figure, centred
+    "release-angles": (0.5, 0.0),   # the figure with its title; trims the footer
     "nhl-draft": (0.0, 0.0),         # top of the options table
 }
 

@@ -52,9 +52,9 @@ APPS = [
      "document.getElementById('fig') && document.getElementById('fig').width > 0 && document.getElementById('out') && !document.getElementById('out').hidden", "dl_png"),
     ("batted-balls", "https://blandalytics.com/batted-balls/",
      "document.getElementById('fig') && document.getElementById('fig').width > 0 && document.getElementById('out') && !document.getElementById('out').hidden", "dl_png"),
-    # Paul Skenes, 2026, the usage-weighted overlap
-    ("release-angles", "https://blandalytics.com/release-angles/#2026-694973&view=share",
-     "document.getElementById('out') && !document.getElementById('out').hidden && document.getElementById('note').textContent", "dl_png"),
+    # Nolan McLean, 2026, the concentration view
+    ("release-angles", "https://blandalytics.com/release-angles/#2026-690997&view=segment",
+     "document.getElementById('out') && !document.getElementById('out').hidden && document.getElementById('note').textContent && document.getElementById('player').value.includes('McLean')", "dl_png"),
 ]
 
 
