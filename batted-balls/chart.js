@@ -284,7 +284,8 @@
     // colour the Swing Profiles figure gives its footer note
     text("Data: MLB Statcast", LABEL_X, 1085 + HEADER_H, { size: 10, colour: SUBHEADER });
     if (opts.wordmark) {
-      const w = 230, h = w * (opts.wordmark.height / opts.wordmark.width);
+      // a quarter of the figure's width, as the Swing Profiles figure sizes it
+      const w = 0.25 * W, h = w * (opts.wordmark.height / opts.wordmark.width);
       ctx.drawImage(opts.wordmark, CB.left + CB.width - w, 76 - h / 2, w, h);
     }
   }
