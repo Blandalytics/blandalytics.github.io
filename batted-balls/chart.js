@@ -122,10 +122,16 @@
   const TANAKA = { lit: 0.7, shade: 0.45, width: 1.4, base: 0.3 };
   // sns.color_palette("vlag", 25)[0] and [-1]: the Less / More Often labels
   const LABEL_BLUE = "#3b73bc", LABEL_RED = "#af4647";
-  // ---- layout, in the pixels of the app's 1390 x 1135 image ---------------------
-  const W = 1390, H = 1135;
-  const AX = { left: 286, top: 108.5, size: 900 };  // 10 px per degree
-  const CB = { left: 1208, top: 233, width: 163, height: 652 };
+  // ---- layout, in the pixels of the app's 1390 x 1135 image, with the header band
+  // the app has no room for added above it ---------------------------------------
+  const HEADER_H = 80;  // what the plot, the colourbar and the footer move down by
+  const W = 1390, H = 1135 + HEADER_H;
+  const AX = { left: 286, top: 108.5 + HEADER_H, size: 900 };  // 10 px per degree
+  const CB = { left: 1208, top: 233 + HEADER_H, width: 163, height: 652 };
+  // the row labels' centre, and the size they are drawn at: the header and the
+  // credit line hang off them rather than off the image's edge
+  const LABEL_X = 286 - 0.14 * 900;
+  const LABEL_SIZE = 15;
   const PX_PER_PT = 200 / 72;
   const FONT = '"Alexandria", "DM Sans", "Segoe UI", sans-serif';
   const LINE_SPACING = 1.2;  // matplotlib's multi-line spacing
@@ -251,9 +257,8 @@
     const yLabels = ["Ground\nBall", "Line Drive", "Fly Ball", "Pop Up"];
     const yMid = [-10, 17.5, 37.5, 55];
     yLabels.forEach((s, j) => {
-      const x = AX.left - 0.14 * AX.size;
-      text(s, x, py(yMid[j] + 1), { size: 15 });
-      text(`(${fmt(result.shares.launch[j])})`, x, py(yMid[j] - (j === 0 ? 6 : 3.5)), { size: 10 });
+      text(s, LABEL_X, py(yMid[j] + 1), { size: LABEL_SIZE });
+      text(`(${fmt(result.shares.launch[j])})`, LABEL_X, py(yMid[j] - (j === 0 ? 6 : 3.5)), { size: 10 });
     });
 
     // --- the colourbar ---------------------------------------------------------------
@@ -267,14 +272,18 @@
       .forEach(([s, la, colour]) => text(s, cbx, py(la), { size: 15, weight: 500, colour }));
 
     // --- header, credit, wordmark -----------------------------------------------------
-    // the title in the header colour at the left margin, the subtitle muted under
-    // it and the wordmark opposite, as the Swing Profiles figure lays them out
-    text(opts.title, 27, 14, { size: 22, weight: 700, colour: HEADER, ha: "left", va: "top" });
-    text(opts.subtitle, 27, 72, { size: 13, colour: SUBHEADER, ha: "left", va: "top" });
-    text("Data: MLB Statcast", 27, 1085, { size: 6, ha: "left" });
+    // The title in the header colour with the subtitle muted under it and the
+    // wordmark opposite, as the Swing Profiles figure lays them out. Both start
+    // where the row labels do, so the header lines up with the widest of them.
+    setFont(LABEL_SIZE);
+    const textLeft = LABEL_X - ctx.measureText("Line Drive").width / 2;
+    text(opts.title, textLeft, 46, { size: 22, weight: 700, colour: HEADER, ha: "left", va: "top" });
+    text(opts.subtitle, textLeft, 116, { size: 13, colour: SUBHEADER, ha: "left", va: "top" });
+    // the credit sits under the row labels, centred on them, in the subtitle's colour
+    text("Data: MLB Statcast", LABEL_X, 1085 + HEADER_H, { size: 6, colour: SUBHEADER });
     if (opts.wordmark) {
       const w = 230, h = w * (opts.wordmark.height / opts.wordmark.width);
-      ctx.drawImage(opts.wordmark, CB.left + CB.width - w, 26, w, h);
+      ctx.drawImage(opts.wordmark, CB.left + CB.width - w, 76 - h / 2, w, h);
     }
   }
 
