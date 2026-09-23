@@ -790,7 +790,13 @@ window.ReleaseAngles = (() => {
       const w = WATERMARK_W * W, h = w * (mark.height / mark.width);
       ctx.drawImage(mark, fx(L + W_FRAC) - w, inch(0.3), w, h);
     }
-    T("Angles as the ball leaves the hand\nData: MLB StatsAPI", fx(L), fy(ROW_Y), { pt: 12, colour: SUBHEADER, va: "center", linespacing: 1.2 });
+    // The footer note, as Swing Profiles' figure sets it: 10 pt regular in the muted colour,
+    // baselines 7.5 pt x 1.6 apart -- scaled like the header -- the block centred on the
+    // bottom row with the scale.
+    const noteSize = 10 * HS, notePitch = pt(7.5 * 1.6 * HS), em = pt(noteSize);
+    const noteTop = fy(ROW_Y) - (ASC * em + notePitch + DESC * em) / 2;
+    ["Angles as the ball leaves the hand", "Data: MLB StatsAPI"].forEach((s, i) =>
+      T(s, fx(L), noteTop + ASC * em + i * notePitch, { pt: noteSize, colour: SUBHEADER }));
     ctx.restore();
   }
 
