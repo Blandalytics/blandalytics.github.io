@@ -364,8 +364,9 @@ chart is linkable as `batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, 
 It is the chart [batted-ball-charts.streamlit.app](https://batted-ball-charts.streamlit.app/)
 draws ([PLV_viz `batted_ball_charts.py`](https://github.com/Blandalytics/PLV_viz/blob/main/hitter_app/pages/batted_ball_charts.py)),
 in its discrete colour scale, rebuilt for the browser with the same geometry, palette (seaborn's
-`vlag` bands, at 11 levels rather than 13) and layout, and the Pitcher List Stats wordmark the other
-pages carry: a Gaussian KDE of the hitter's balls on a 91 × 91 grid over 0–90° of spray by
+`vlag` bands, at 11 levels rather than 13) and layout, under the header the Swing Profiles figure
+carries — the hitter in the header colour, what the chart shows muted beneath it, and the Pitcher
+List Stats wordmark opposite: a Gaussian KDE of the hitter's balls on a 91 × 91 grid over 0–90° of spray by
 −30–60° of launch angle, scaled to sum to 100, minus the league's. The hitter's density is
 computed in the page exactly as `scipy.stats.gaussian_kde` would (Scott's factor on the full
 sample covariance; checked against scipy to floating-point noise); the league's is built ahead of

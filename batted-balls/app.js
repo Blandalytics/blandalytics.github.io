@@ -114,7 +114,6 @@
   }
 
   // ---- the chart -----------------------------------------------------------------------
-  const possessive = (name) => name + (name.endsWith("s") ? "'" : "'s");
 
   function selection() {
     const year = Number(el.season.value);
@@ -166,10 +165,14 @@
       if (ticket !== drawing) return;
       const result = BattedBalls.compute({ hitter, league: data.league, prior });
       if (!result) { status(`not enough batted balls to draw a density (${hitter.length})`, "warn"); el.out.hidden = true; return; }
+      // the hitter is the title; what the chart shows goes in the subtitle, as on
+      // the Swing Profiles figure
       const opts = {
         hand, signed: Boolean(prior),
-        title: prior ? `${possessive(name)} Batted Ball Difference` : `${possessive(name)} ${sel.season} Batted Ball Profile`,
-        subtitle: prior ? `(${sel.season}, compared to ${sel.season - 1})` : "(Compared to rest of MLB)",
+        title: name,
+        subtitle: prior
+          ? `Batted Ball Difference, ${sel.season} compared to ${sel.season - 1}`
+          : `${sel.season} Batted Ball Profile, compared to the rest of MLB`,
       };
       await BattedBalls.render(el.fig, result, opts);
       if (ticket !== drawing) return;
