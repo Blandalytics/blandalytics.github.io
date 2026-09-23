@@ -35,9 +35,9 @@ window.ReleaseAngles = (() => {
   const WATERMARK_W = 0.25;
 
   const SURFACE = "#262940", RULE = "#4a4d63";
-  // the header's colours, as Swing Profiles': the player in teal, the sub-header muted
+  // the header's colours, as Swing Profiles': the player in teal, the sub-header (and the footer) muted
   const HEADER = "#00D4FF", SUBHEADER = "#8D96B3";
-  const INK = "#ffffff", INK2 = INK, INK3 = INK;
+  const INK = "#ffffff", INK2 = INK;
   const RAMP_ENDS = ["#262940", "#ffffff"];
 
   const FRAME_PAD = [0.26, 0.20];
@@ -790,7 +790,7 @@ window.ReleaseAngles = (() => {
       const w = WATERMARK_W * W, h = w * (mark.height / mark.width);
       ctx.drawImage(mark, fx(L + W_FRAC) - w, inch(0.3), w, h);
     }
-    T("Angles as the ball leaves the hand\nData: MLB StatsAPI", fx(L), fy(ROW_Y), { pt: 12, colour: INK3, va: "center", linespacing: 1.6 });
+    T("Angles as the ball leaves the hand\nData: MLB StatsAPI", fx(L), fy(ROW_Y), { pt: 12, colour: SUBHEADER, va: "center", linespacing: 1.6 });
     ctx.restore();
   }
 
