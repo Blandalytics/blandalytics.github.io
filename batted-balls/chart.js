@@ -280,8 +280,9 @@
     const textLeft = LABEL_X - ctx.measureText("Line Drive").width / 2;
     text(opts.title, textLeft, 46, { size: 22, weight: 700, colour: HEADER, ha: "left", va: "top" });
     text(opts.subtitle, textLeft, 116, { size: 13, colour: SUBHEADER, ha: "left", va: "top" });
-    // the credit sits under the row labels, centred on them, in the subtitle's colour
-    text("Data: MLB Statcast", LABEL_X, 1085 + HEADER_H, { size: 6, colour: SUBHEADER });
+    // the credit sits under the row labels, centred on them, at the size and in the
+    // colour the Swing Profiles figure gives its footer note
+    text("Data: MLB Statcast", LABEL_X, 1085 + HEADER_H, { size: 10, colour: SUBHEADER });
     if (opts.wordmark) {
       const w = 230, h = w * (opts.wordmark.height / opts.wordmark.width);
       ctx.drawImage(opts.wordmark, CB.left + CB.width - w, 76 - h / 2, w, h);
