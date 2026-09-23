@@ -13,7 +13,7 @@ credit) with the site's dark palette. Each tile's picture is real output from it
 | `index.html` | the page: the definition, a section of tiles per sport (Baseball, then Hockey), the menu grouped the same way, and the footer |
 | `assets/css/main.css`, `assets/js/` | the Phantom template, unchanged |
 | `assets/css/blandalytics.css` | the site's palette and font over the template, the tile scrim, the footer wordmark |
-| `images/tile-*.png` | the tile pictures, one per tool |
+| `images/tile-*.webp` | the tile pictures, one per tool: `tile-NAME.webp` at 900 px and `tile-NAME-720.webp`, offered through `srcset` |
 | `tools/homepage/grab_app_pngs.py` | runs each tool in headless Chrome and saves the PNG from its own export button (the NHL Draft Tool has none, so it screenshots the options table of a mock draft) |
 | `tools/homepage/make_tiles.py` | crops those exports into the tiles, all at the template's tile aspect ratio (a figure whose edges carry text, like Batted Ball Charts, is padded out with its background instead) |
 

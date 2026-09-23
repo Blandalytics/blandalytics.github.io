@@ -4,9 +4,14 @@ Phantom sizes each tile from its image's aspect ratio, so every crop shares one 
 Name tiles on the command line to redo only those (make_tiles.py batted-balls); with no
 names, every tile is redone from whatever exports are in the cache.
 
+Each tile is written as WebP twice: 900 px wide (tile-NAME.webp) and 720 px
+(tile-NAME-720.webp), which index.html offers through srcset. The tiles show at no more
+than ~440 CSS px, so 720 covers most screens and 900 the sharper ones; together they are
+about a sixth of the PNGs they replaced.
+
 Cloudflare and browsers hold images for hours under their exact URL, so each tile's <img>
 in index.html carries a ?v= number, and a tile that comes out different gets its number
-bumped here. Commit index.html along with the image.
+bumped here (on both of its URLs). Commit index.html along with the images.
 """
 import re
 import sys
@@ -19,6 +24,8 @@ IMAGES = Path(__file__).resolve().parents[2] / "images"
 INDEX = IMAGES.parent / "index.html"
 RATIO = 353 / 326  # the template's original tile aspect ratio
 WIDTH = 900
+SMALL = 720
+WEBP = {"quality": 82, "method": 6}
 
 # Where to anchor each crop: the part of the app output that reads best as a thumbnail.
 # None pads the figure out to the tile's shape with its own background colour instead.
@@ -33,17 +40,22 @@ CROPS = {
 
 
 def save(name, tile):
-    path = IMAGES / f"tile-{name}.png"
-    before = path.read_bytes() if path.exists() else None
-    tile.save(path, optimize=True)
-    if path.read_bytes() == before:
+    """Write the tile's two WebPs; bump its ?v= in index.html if either changed."""
+    small = tile.resize((SMALL, round(SMALL * tile.height / tile.width)), Image.LANCZOS)
+    changed = False
+    for path, im in ((IMAGES / f"tile-{name}.webp", tile), (IMAGES / f"tile-{name}-{SMALL}.webp", small)):
+        before = path.read_bytes() if path.exists() else None
+        im.save(path, "WEBP", **WEBP)
+        changed |= path.read_bytes() != before
+    if not changed:
         return
     html = INDEX.read_text(encoding="utf-8")
-    pattern = rf'(src="images/tile-{re.escape(name)}\.png\?v=)(\d+)(")'
-    html, n = re.subn(pattern, lambda m: f"{m[1]}{int(m[2]) + 1}{m[3]}", html)
-    if n:
+    ver = re.search(rf'images/tile-{re.escape(name)}\.webp\?v=(\d+)', html)
+    if ver:
+        new = int(ver[1]) + 1
+        html = re.sub(rf'(images/tile-{re.escape(name)}(?:-{SMALL})?\.webp\?v=)\d+', rf'\g<1>{new}', html)
         INDEX.write_text(html, encoding="utf-8")
-        print(f"  index.html: tile-{name}.png is new, its ?v= bumped")
+        print(f"  index.html: tile-{name} is new, its ?v= is now {new}")
 
 
 def crop(name, anchor):
@@ -54,7 +66,7 @@ def crop(name, anchor):
         padded = Image.new("RGB", (pw, ph), im.getpixel((0, 0)))
         padded.paste(im, ((pw - w) // 2, (ph - h) // 2))
         save(name, padded.resize((WIDTH, round(WIDTH / RATIO)), Image.LANCZOS))
-        print(f"tile-{name}.png from {w}x{h} padded to {pw}x{ph}")
+        print(f"tile-{name} from {w}x{h} padded to {pw}x{ph}")
         return
     ax, ay = anchor
     if w / h > RATIO:
@@ -65,10 +77,11 @@ def crop(name, anchor):
     y = round((h - ch) * ay)
     tile = im.crop((x, y, x + cw, y + ch)).resize((WIDTH, round(WIDTH / RATIO)), Image.LANCZOS)
     save(name, tile)
-    print(f"tile-{name}.png from {w}x{h} crop {cw}x{ch} at ({x},{y})")
+    print(f"tile-{name} from {w}x{h} crop {cw}x{ch} at ({x},{y})")
 
 
-only = set(sys.argv[1:])
-for name, anchor in CROPS.items():
-    if not only or name in only:
-        crop(name, anchor)
+if __name__ == "__main__":
+    only = set(sys.argv[1:])
+    for name, anchor in CROPS.items():
+        if not only or name in only:
+            crop(name, anchor)
