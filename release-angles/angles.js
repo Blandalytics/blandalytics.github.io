@@ -278,7 +278,7 @@ window.ReleaseAngles = (() => {
   const LEADER_PAD = 0.12;    // leader to another name
   const FRAME_MARGIN = 0.60;  // outermost name or ellipse to the frame
   const STEPS = [0, 0.35, 0.8, 1.4, 2.2, 3.2, 4.5, 6.2, 8.4, 11.2];
-  const N_ANG = 72, N_RING = 180, N_ORDERS = 120;
+  const N_ANG = 72, N_RING = 180, N_ORDERS = 120, N_COARSE = 20;
   const W_GROW = 1.0, W_DIST = 0.22, W_CROSS = 0.35, W_VIOL = 50;
 
   const overlaps = (a, b, pad) => a[0] - pad < b[1] && b[0] - pad < a[1] && a[2] - pad < b[3] && b[2] - pad < a[3];
@@ -301,13 +301,26 @@ window.ReleaseAngles = (() => {
     return o(a[0], a[1], a[2], a[3], b[0], b[1]) !== o(a[0], a[1], a[2], a[3], b[2], b[3])
       && o(b[0], b[1], b[2], b[3], a[0], a[1]) !== o(b[0], b[1], b[2], b[3], a[2], a[3]);
   }
-  // an ellipse and a box meet if an outline point is in the box or a corner is in the ellipse
-  function boxHitsEllipse(e, ring, b) {
+  // contains() as a quadratic form: Q = A u^2 + B u v + C v^2 <= 1, u = (x - mx) / sx, v = (y - my) / sy
+  function quad(e) {
+    if (!e.q) {
+      const irx = 1 / e.radii[0] ** 2, iry = 1 / e.radii[1] ** 2;
+      e.q = [CA * CA * irx + SA * SA * iry, 2 * CA * SA * (iry - irx), SA * SA * irx + CA * CA * iry];
+    }
+    return e.q;
+  }
+  // An ellipse and a box meet if Q's minimum over the box is <= 1. Q is convex: the minimum is 0
+  // with the centre inside, else on an edge, where Q is a 1-D quadratic minimised by clamping.
+  function boxHitsEllipse(e, b) {
     const [ex0, ex1, ey0, ey1] = bounds(e);
     if (b[1] < ex0 || b[0] > ex1 || b[3] < ey0 || b[2] > ey1) return false;
-    const [rx, ry] = ring;
-    for (let i = 0; i < rx.length; i++) if (rx[i] >= b[0] && rx[i] <= b[1] && ry[i] >= b[2] && ry[i] <= b[3]) return true;
-    return contains(e, b[0], b[2]) || contains(e, b[1], b[2]) || contains(e, b[0], b[3]) || contains(e, b[1], b[3]);
+    const [A, B, C] = quad(e), [mx, my] = e.mean, [sx, sy] = e.scale;
+    const u0 = (b[0] - mx) / sx, u1 = (b[1] - mx) / sx, v0 = (b[2] - my) / sy, v1 = (b[3] - my) / sy;
+    if (u0 <= 0 && u1 >= 0 && v0 <= 0 && v1 >= 0) return true;
+    const clamp = (t, lo, hi) => (t < lo ? lo : t > hi ? hi : t);
+    for (const u of [u0, u1]) { const v = clamp((-B * u) / (2 * C), v0, v1); if (A * u * u + B * u * v + C * v * v <= 1) return true; }
+    for (const v of [v0, v1]) { const u = clamp((-B * v) / (2 * A), u0, u1); if (A * u * u + B * u * v + C * v * v <= 1) return true; }
+    return false;
   }
   function segHitsEllipse(s, e) {
     for (let k = 1; k < 12; k++) { const t = k / 12; if (contains(e, s[0] + t * (s[2] - s[0]), s[1] + t * (s[3] - s[1]))) return true; }
@@ -328,15 +341,26 @@ window.ReleaseAngles = (() => {
   function candidates(p, ells, rings, order, w, h, strict = true) {
     const e = ells[p], [mx, my] = e.mean, hw = w / 2, hh = h / 2, gap = LABEL_GAP * h;
     const [bx, by] = boundary(e, N_ANG), [rx, ry] = rings[p], out = [];
+    const others = order.map((q) => ells[q]);
+    // the outward direction at each outline point, and the box's reach along it
+    const ux = new Float64Array(N_ANG), uy = new Float64Array(N_ANG), reach = new Float64Array(N_ANG);
+    for (let i = 0; i < N_ANG; i++) {
+      const dx = bx[i] - mx, dy = by[i] - my, n = Math.sqrt(dx * dx + dy * dy);
+      ux[i] = dx / n; uy[i] = dy / n; reach[i] = gap + Math.abs(ux[i]) * hw + Math.abs(uy[i]) * hh;
+    }
     for (const step of STEPS) {
       for (let i = 0; i < N_ANG; i++) {
-        const dx = bx[i] - mx, dy = by[i] - my, n = Math.hypot(dx, dy), ux = dx / n, uy = dy / n;
-        const off = gap + step * h + Math.abs(ux) * hw + Math.abs(uy) * hh;
-        const cx = bx[i] + ux * off, cy = by[i] + uy * off;
+        const off = reach[i] + step * h, cx = bx[i] + ux[i] * off, cy = by[i] + uy[i] * off;
         const box = [cx - hw, cx + hw, cy - hh, cy + hh];
-        if (strict && order.some((q) => boxHitsEllipse(ells[q], rings[q], [box[0] - gap, box[1] + gap, box[2] - gap, box[3] + gap]))) continue;
+        if (strict) {
+          const padded = [box[0] - gap, box[1] + gap, box[2] - gap, box[3] + gap];
+          let hit = false;
+          for (let q = 0; q < others.length && !hit; q++) hit = boxHitsEllipse(others[q], padded);
+          if (hit) continue;
+        }
         let k = 0, kd = Infinity;
-        for (let j = 0; j < rx.length; j++) { const d = Math.hypot(rx[j] - cx, ry[j] - cy); if (d < kd) { kd = d; k = j; } }
+        for (let j = 0; j < rx.length; j++) { const dx2 = rx[j] - cx, dy2 = ry[j] - cy, d = dx2 * dx2 + dy2 * dy2; if (d < kd) { kd = d; k = j; } }
+        kd = Math.sqrt(kd);
         const anchor = [rx[k], ry[k]], leader = leaderLine([cx, cy], anchor, [w, h]);
         let cross = 0;
         if (leader) for (const q of order) if (q !== p && segHitsEllipse(leader, ells[q])) cross++;
@@ -346,29 +370,47 @@ window.ReleaseAngles = (() => {
     return out.length || !strict ? out : candidates(p, ells, rings, order, w, h, false);
   }
 
+  // A label's candidates sorted by the part of their cost that doesn't depend on what is
+  // already placed (distance and ellipse crossings): frame growth and violations only add to
+  // it, so a pass can stop at the first candidate whose floor is above the best cost so far.
+  // Ties keep the original candidate order, so the pick is the same as a full scan's.
+  function ranked(cands) {
+    const out = cands.map((c, i) => ({ c, i, lb: W_DIST * c.dist + W_CROSS * c.cross }));
+    out.sort((a, b) => a.lb - b.lb || a.i - b.i);
+    return out;
+  }
+
   // one greedy pass in a given order; returns the placement and its score
-  function arrange(seq, cands, cluster, h) {
-    let bbox = cluster, score = 0;
-    const placed = [];
+  function arrange(seq, ranks, cluster, h) {
+    let b0 = cluster[0], b1 = cluster[1], b2 = cluster[2], b3 = cluster[3], score = 0;
+    const placed = [], sep = LABEL_SEP * h, pad = LEADER_PAD * h;
     for (const p of seq) {
-      let best = null, bestCost = Infinity;
-      for (const c of cands[p]) {
+      const side = Math.max(b1 - b0, b3 - b2);
+      let best = null, bestCost = Infinity, bestIdx = Infinity, bestViol = 0;
+      for (const { c, i, lb } of ranks[p]) {
+        if (lb > bestCost) break;
+        const bx = c.box;
+        const grow = (W_GROW * (Math.max(Math.max(b1, bx[1]) - Math.min(b0, bx[0]), Math.max(b3, bx[3]) - Math.min(b2, bx[2])) - side)) / h;
+        let cost = lb + grow;
+        if (cost > bestCost || (cost === bestCost && i > bestIdx)) continue;
         let viol = 0;
-        for (const q of placed) {
-          if (overlaps(c.box, q.box, LABEL_SEP * h)) viol += 3;
-          if (segHitsBox(c.leader, q.box, LEADER_PAD * h)) viol++;
-          if (segHitsBox(q.leader, c.box, LEADER_PAD * h)) viol++;
+        for (let k = 0; k < placed.length; k++) {
+          const q = placed[k];
+          if (overlaps(bx, q.box, sep)) viol += 3;
+          if (segHitsBox(c.leader, q.box, pad)) viol++;
+          if (segHitsBox(q.leader, bx, pad)) viol++;
           if (segsCross(c.leader, q.leader)) viol++;
         }
-        const cost = (W_GROW * (squareSide(grown(bbox, c.box)) - squareSide(bbox))) / h
-          + W_DIST * c.dist + W_CROSS * c.cross + W_VIOL * viol;
-        if (cost < bestCost) { bestCost = cost; best = { ...c, viol }; }
+        cost += W_VIOL * viol;
+        if (cost < bestCost || (cost === bestCost && i < bestIdx)) { best = c; bestCost = cost; bestIdx = i; bestViol = viol; }
       }
-      placed.push({ p, ...best });
-      bbox = grown(bbox, best.box);
-      score += W_DIST * best.dist + W_CROSS * best.cross + W_VIOL * best.viol;
+      placed.push(best);
+      b0 = Math.min(b0, best.box[0]); b1 = Math.max(b1, best.box[1]);
+      b2 = Math.min(b2, best.box[2]); b3 = Math.max(b3, best.box[3]);
+      score += W_DIST * best.dist + W_CROSS * best.cross + W_VIOL * bestViol;
     }
-    return { placed, bbox, score: score + (W_GROW * squareSide(bbox)) / h };
+    const bbox = [b0, b1, b2, b3];
+    return { placed: seq.map((p, k) => ({ p, ...placed[k] })), bbox, score: score + (W_GROW * squareSide(bbox)) / h };
   }
 
   // The names measured and placed, and the frame they fit in: { labels, frame }
@@ -392,19 +434,27 @@ window.ReleaseAngles = (() => {
       for (let j = o.length - 1; j > 0; j--) { const k = Math.floor(rand() * (j + 1)); [o[j], o[k]] = [o[k], o[j]]; }
       orders.push(o);
     }
-    let S = squareSide(squareFrame(...cluster)), best = null, sizes = null, h = 0;
-    for (let it = 0; it < 8; it++) {
+    // the frame settles with a coarse search (the first N_COARSE orders); the full search then
+    // runs at that size, and the loop only goes on if it moves the frame
+    let S = squareSide(squareFrame(...cluster)), best = null, sizes = null, h = 0, full = false;
+    for (let it = 0; it < 12; it++) {
       const u = unit(S);
       sizes = Object.fromEntries(order.map((p) => [p, [px[p][0] * u, px[p][1] * u]]));
       h = Math.max(...order.map((p) => sizes[p][1]));
-      const cands = Object.fromEntries(order.map((p) => [p, candidates(p, ells, rings, order, ...sizes[p])]));
-      best = null;
-      for (const seq of orders) {
-        const r = arrange(seq, cands, cluster, h);
-        if (!best || r.score < best.score) best = r;
+      const ranks = Object.fromEntries(order.map((p) => [p, ranked(candidates(p, ells, rings, order, ...sizes[p]))]));
+      const search = (list) => {
+        let top = null;
+        for (const seq of list) { const r = arrange(seq, ranks, cluster, h); if (!top || r.score < top.score) top = r; }
+        return top;
+      };
+      best = search(full ? orders : orders.slice(0, N_COARSE));
+      let next = squareSide(best.bbox) + 2 * FRAME_MARGIN * h;
+      if (!full && (Math.abs(next - S) <= 0.004 * S || it >= 8)) {
+        full = true;
+        best = search(orders);
+        next = squareSide(best.bbox) + 2 * FRAME_MARGIN * h;
       }
-      const next = squareSide(best.bbox) + 2 * FRAME_MARGIN * h;
-      if (Math.abs(next - S) <= 0.004 * S) { S = Math.max(S, next); break; }
+      if (full && Math.abs(next - S) <= 0.004 * S) { S = Math.max(S, next); break; }
       S = it < 3 ? next : (S + next) / 2;
     }
     const b = best.bbox, cx = (b[0] + b[1]) / 2, cy = (b[2] + b[3]) / 2;
@@ -469,17 +519,22 @@ window.ReleaseAngles = (() => {
     const gxs = linspace(XLIM[0], XLIM[1], nx), gys = linspace(YLIM[0], YLIM[1], ny);
     const cells = nx * ny;
     const depth = new Uint8Array(cells), share = new Float64Array(cells), seg = new Int32Array(cells);
+    const xstep = (XLIM[1] - XLIM[0]) / (nx - 1);
     order.forEach((p, k) => {
       const e = ells[p], w = pct[p] / 100, bit = 1 << k;
-      // only the ellipse's bounding box can be inside it
-      const [bx0, bx1, by0, by1] = bounds(e);
+      const [mx, my] = e.mean, [sx, sy] = e.scale, irx = 1 / e.radii[0] ** 2, iry = 1 / e.radii[1] ** 2;
+      // contains() as a quadratic in u = (x - mx) / sx for a row's v: A u^2 + B u + C <= 1
+      const A = CA * CA * irx + SA * SA * iry, Bv = 2 * CA * SA * (iry - irx), Cv = SA * SA * irx + CA * CA * iry;
+      const mark = (r, c) => { const i = r * nx + c; depth[i]++; share[i] += w; seg[i] |= bit; };
       for (let r = 0; r < ny; r++) {
-        const gy = gys[r];
-        if (gy < by0 - 1e-9 || gy > by1 + 1e-9) continue;
-        for (let c = 0; c < nx; c++) {
-          const gx = gxs[c];
-          if (gx < bx0 - 1e-9 || gx > bx1 + 1e-9) continue;
-          if (contains(e, gx, gy)) { const i = r * nx + c; depth[i]++; share[i] += w; seg[i] |= bit; }
+        const gy = gys[r], v = (gy - my) / sy, B = Bv * v, disc = B * B - 4 * A * (Cv * v * v - 1);
+        if (disc < 0) continue;
+        const rt = Math.sqrt(disc), xlo = mx + sx * ((-B - rt) / (2 * A)), xhi = mx + sx * ((-B + rt) / (2 * A));
+        // a cell or two either side of the solved span is tested exactly; the rest is inside
+        const c0 = Math.max(0, Math.ceil((xlo - XLIM[0]) / xstep) - 2), c1 = Math.min(nx - 1, Math.floor((xhi - XLIM[0]) / xstep) + 2);
+        for (let c = c0; c <= c1; c++) {
+          if (c >= c0 + 4 && c <= c1 - 4) mark(r, c);
+          else if (contains(e, gxs[c], gy)) mark(r, c);
         }
       }
     });
@@ -492,19 +547,21 @@ window.ReleaseAngles = (() => {
     const cell = (dw / nx) * (dh / ny);
 
     // segments: each exact set of overlapping ellipses, shaded by pitches per square degree
-    const segCells = new Map(), segHits = new Map();
-    for (let i = 0; i < cells; i++) segCells.set(seg[i], (segCells.get(seg[i]) || 0) + 1);
+    const codes = 1 << order.length, segCells = new Int32Array(codes), segHits = new Int32Array(codes);
+    for (let i = 0; i < cells; i++) segCells[seg[i]]++;
+    const ellList = order.map((t) => ells[t]);
     for (const p of pitches) {
       let code = 0;
-      order.forEach((t, k) => { if (contains(ells[t], p.x, p.y)) code |= 1 << k; });
-      segHits.set(code, (segHits.get(code) || 0) + 1);
+      for (let k = 0; k < ellList.length; k++) if (contains(ellList[k], p.x, p.y)) code |= 1 << k;
+      segHits[code]++;
     }
-    const segInfo = new Map();
-    for (const [code, n] of segCells) {
-      const a = n * cell, hits = segHits.get(code) || 0;
-      segInfo.set(code, { code, n: hits, area: a, dens: a > 0 ? hits / a : 0, solid: a >= minSegArea });
+    const segDens = new Float64Array(codes), inside = [];
+    for (let code = 1; code < codes; code++) {
+      if (!segCells[code]) continue;
+      const a = segCells[code] * cell, hits = segHits[code];
+      segDens[code] = hits / a;
+      inside.push({ code, n: hits, area: a, dens: segDens[code], solid: a >= minSegArea });
     }
-    const inside = [...segInfo.values()].filter((s) => s.code !== 0);
     const scaled = inside.some((s) => s.solid) ? inside.filter((s) => s.solid) : inside;
     const KMIN = Math.min(...scaled.map((s) => s.dens)), KMAX = Math.max(...scaled.map((s) => s.dens));
     const segments = inside.slice().sort((a, b) => b.dens - a.dens);
@@ -516,7 +573,7 @@ window.ReleaseAngles = (() => {
     for (let i = 0; i < cells; i++) {
       if (!depth[i]) continue;
       idxC[i] = lutIndex(normC(share[i]));
-      idxD[i] = lutIndex(normD(segInfo.get(seg[i]).dens));
+      idxD[i] = lutIndex(normD(segDens[seg[i]]));
     }
 
     const model = {
@@ -704,9 +761,7 @@ window.ReleaseAngles = (() => {
       T(text, X(spot[0]), Y(spot[1]), { pt: LABEL_PT, weight: SEMIBOLD, colour: m.hues[p], ha: "center", va: "center", stroke: { lw: 4.0, colour: SURFACE } });
     }
 
-    // the frame, over the names, and its ticks
-    ctx.strokeStyle = RULE; ctx.lineWidth = pt(1.0);
-    ctx.strokeRect(X(x0), Y(y1), X(x1) - X(x0), Y(y0) - Y(y1));
+    // the ticks (no spines: the degree grid is the only frame)
     const g = (v) => String(Number(v.toPrecision(6)));
     for (const v of xt) T(g(v), X(v), Y(y0 - 0.018 * dh), { pt: 14, colour: INK2, ha: "center", va: "top" });
     for (const v of yt) T(g(v), X(x0 - 0.008 * dw), Y(v), { pt: 14, colour: INK2, ha: "right", va: "center" });
@@ -759,21 +814,29 @@ window.ReleaseAngles = (() => {
 
   // ---- report() ------------------------------------------------------------------------------
   function report(m) {
-    const { order, depth, share, nx, ny, ells, pct } = m;
-    const rows = order.map((p, k) => {
-      let n = 0, sd = 0, ss = 0;
-      for (let i = 0; i < nx * ny; i++) if (m.seg[i] >> k & 1) { n++; sd += depth[i]; ss += share[i]; }
-      return {
-        type: p, pitch: NAMES[p] || p, n: m.counts.get(p), usage: pct[p], area: area(ells[p]),
-        meanDepth: sd / n, meanShare: (ss / n) * 100, exclSelf: (ss / n - pct[p] / 100) * 100,
-      };
-    });
+    const { order, depth, share, seg, nx, ny, ells, pct } = m, K = order.length, cells = nx * ny;
+    // one pass over the grid; each sum still runs in cell order, so it matches a pass per type
+    const n = new Float64Array(K), sd = new Float64Array(K), ss = new Float64Array(K), inPeak = new Float64Array(K);
     let cov = 0, sdep = 0, peak = 0;
-    for (let i = 0; i < nx * ny; i++) if (depth[i] >= 1) { cov++; sdep += depth[i]; }
+    const top = m.SMAX - 1e-9;
+    for (let i = 0; i < cells; i++) {
+      const code = seg[i];
+      if (!code) continue;
+      cov++; sdep += depth[i];
+      const atPeak = share[i] >= top;
+      if (atPeak) peak++;
+      for (let k = 0; k < K; k++) {
+        if (!(code >> k & 1)) continue;
+        n[k]++; sd[k] += depth[i]; ss[k] += share[i];
+        if (atPeak) inPeak[k]++;
+      }
+    }
+    const rows = order.map((p, k) => ({
+      type: p, pitch: NAMES[p] || p, n: m.counts.get(p), usage: pct[p], area: area(ells[p]),
+      meanDepth: sd[k] / n[k], meanShare: (ss[k] / n[k]) * 100, exclSelf: (ss[k] / n[k] - pct[p] / 100) * 100,
+    }));
     const weighted = rows.reduce((s, r) => s + (r.usage / 100) * r.meanDepth, 0);
     // the types covering (nearly) all of the peak's cells
-    const inPeak = order.map(() => 0);
-    for (let i = 0; i < nx * ny; i++) if (share[i] >= m.SMAX - 1e-9) { peak++; order.forEach((_, k) => { if (m.seg[i] >> k & 1) inPeak[k]++; }); }
     const peakTypes = order.filter((_, k) => inPeak[k] / peak > 0.99).map((p) => NAMES[p] || p);
     const segments = m.segments.map((s) => ({ ...s, members: order.filter((_, k) => s.code >> k & 1).map((p) => NAMES[p] || p) }));
     return {

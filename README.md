@@ -424,20 +424,25 @@ It is [baseball_snippets `release_angles.py`](https://github.com/Blandalytics/ba
 (with the ellipse maths of [`ellipse_depth.py`](https://github.com/Blandalytics/baseball_snippets/blob/main/ellipse_depth.py))
 ported to the browser: the same figure geometry, depth / share / segment maps on the same
 1100-point grid, colour ramp (stepped through L\*a\*b\*), leaders, titles and four-state loop,
-and an overlap report that agrees with the script's to every printed digit (checked on Paul
-Skenes' 2026). It departs from the script in three places:
+and an overlap report whose per-type table and summary agree with the script's to every
+printed digit (checked on Paul Skenes' 2026; segment densities move in the first decimal, since
+the tighter frame puts the grid's cells closer together). It departs from the script in four
+places:
 
 - **Names never collide.** Candidate spots ring each ellipse at a ladder of distances and must
   clear every ellipse's fill; the names are placed greedily, in 120 seeded orders, under hard
   rules — no name overlaps another, and no leader crosses a name or another leader — and the
   arrangement with the smallest frame wins (nearness to its own ellipse, and a leader that stays
-  off other ellipses, break ties). The same chart always comes out the same.
+  off other ellipses, break ties). The same chart always comes out the same. Each name's
+  candidates are sorted by the part of their cost that placement can't change, so a pass stops
+  at the first one that can't beat the best so far; the whole layout takes 40–90 ms.
 - **The frame is as tight as the names allow.** Rather than a fixed margin round the ellipses,
   the frame is the square round the ellipses and the placed names plus a small margin. Text is
   sized in points while the frame sets the degree scale, so frame, name sizes and placement are
-  iterated until the frame settles.
+  iterated until the frame settles — on the first 20 orders, with all 120 run once at the end.
 - **One bottom row.** The footer note, the scale and the Pitcher List Stats wordmark share one
   centre line, below the chart.
+- **No spines.** The degree grid is the only frame.
 
 The GIF merges each hold's identical frames into one long frame, as Pillow does, so it has the
 Python's 57 frames and runs in the browser in a few seconds.
@@ -457,7 +462,10 @@ extension), and HRA / VRA are the angles it makes with the line to the plate —
   pitcher, date, game type, pitch type, HRA and VRA, sorted by pitcher in 8,192-row groups (~8 MB a season). The
   page reads the row-group statistics on `pitcher` from the footer and range-requests only the
   one or two groups holding the chosen pitcher, with
-  [hyparquet](https://github.com/hyparam/hyparquet) — a chart costs 150–200 KB.
+  [hyparquet](https://github.com/hyparam/hyparquet) — a chart costs 150–200 KB. Opening a season
+  is one suffix request (the footer, and the file's length from `Content-Range`, so no HEAD), and
+  a pitcher is one request for the byte span of their row groups, which hyparquet then reads
+  from memory: a new pitcher is on screen in ~100 ms.
 - [`.github/workflows/release-angles.yml`](.github/workflows/release-angles.yml) rebuilds the
   current season every morning at 11:30 UTC, after the data files roll, and takes a `seasons`
   input for backfills; every season from 2020 builds in under half a minute.
