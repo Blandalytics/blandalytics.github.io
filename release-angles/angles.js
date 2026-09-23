@@ -783,14 +783,14 @@ window.ReleaseAngles = (() => {
     T(m.pitcher, fx(L), inch(0.25), { pt: fit(m.pitcher, 22 * HS, 700), weight: 700, colour: HEADER, va: "top" });
     TITLES.forEach(([head, line2], i) => {
       if (tw[i] <= 0) return;
-      const s = [`${m.year} ${head}`, line2, m.span].filter(Boolean).join(", ");
+      const s = [`${m.year} ${head}`, line2, m.span].filter(Boolean).join(", by ");
       T(s, fx(L), inch(0.625), { pt: fit(s, 14 * HS, 400), colour: SUBHEADER, va: "top", alpha: tw[i] });
     });
     if (mark) {
       const w = WATERMARK_W * W, h = w * (mark.height / mark.width);
       ctx.drawImage(mark, fx(L + W_FRAC) - w, inch(0.3), w, h);
     }
-    T("Angles as the ball leaves the hand\nData: MLB StatsAPI", fx(L), fy(ROW_Y), { pt: 12, colour: SUBHEADER, va: "center", linespacing: 1.6 });
+    T("Angles as the ball leaves the hand\nData: MLB StatsAPI", fx(L), fy(ROW_Y), { pt: 12, colour: SUBHEADER, va: "center", linespacing: 1.2 });
     ctx.restore();
   }
 
