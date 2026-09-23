@@ -427,7 +427,7 @@ ported to the browser: the same figure geometry, depth / share / segment maps on
 1100-point grid, colour ramp (stepped through L\*a\*b\*), leaders, titles and four-state loop,
 and an overlap report whose per-type table and summary agree with the script's to every
 printed digit (checked on Paul Skenes' 2026; segment densities move in the first decimal, since
-the tighter frame puts the grid's cells closer together). It departs from the script in four
+the tighter frame puts the grid's cells closer together). It departs from the script in five
 places:
 
 - **Names never collide.** Candidate spots ring each ellipse at a ladder of distances and must
@@ -441,8 +441,11 @@ places:
   the frame is the square round the ellipses and the placed names plus a small margin. Text is
   sized in points while the frame sets the degree scale, so frame, name sizes and placement are
   iterated until the frame settles — on the first 20 orders, with all 120 run once at the end.
-- **One bottom row.** The footer note, the scale and the Pitcher List Stats wordmark share one
-  centre line, below the chart.
+- **The Swing Profiles header.** The pitcher's name in large teal type, what the chart shows
+  (season, view, date segment) in a muted line under it, and the Pitcher List Stats wordmark top
+  right — Swing Profiles' sizes and offsets, scaled to this figure's width. No rule under it,
+  and the footer note in the sub-header's muted colour.
+- **One bottom row.** The footer note and the scale share one centre line, below the chart.
 - **No spines.** The degree grid is the only frame.
 
 The GIF merges each hold's identical frames into one long frame, as Pillow does, so it has the
