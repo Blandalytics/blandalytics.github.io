@@ -61,7 +61,7 @@ window.ReleaseAngles = (() => {
   const TITLES = [
     ["Release Angles", ""],
     ["Release Angle Overlap", "Number of Pitch Types"],
-    ["Release Angle Overlap", "Weighted by Usage"],
+    ["Release Angle Overlap", "Usage Share"],
     ["Release Angle Overlap", "Pitch Concentration"],
   ];
   const TAGS = ["type", "count", "share", "segment"];
@@ -480,7 +480,7 @@ window.ReleaseAngles = (() => {
   const md = (iso) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`;
   function spanText(start, end) {
     if (!start && !end) return "";
-    if (!start) return `Through ${md(end)}`;
+    if (!start) return `through ${md(end)}`;
     if (!end) return `From ${md(start)}`;
     return `${md(start)} to ${md(end)}`;
   }
