@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Release Angles · Blandalytics</title>
+<meta name="description" content="An MLB pitcher's release angles by pitch type — one ellipse per pitch over horizontal and vertical release angle — and how much they overlap, as images and an animated GIF.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://data.blandalytics.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
+  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
+  --accent:#6cb4ff; --bad:#ff8a80; --warn:#ffd166;
+}
+*{box-sizing:border-box}
+body{margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased; padding:24px 16px}
+main{max-width:860px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1{margin:0; font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
+h3{margin:18px 0 8px; font-size:15px; font-weight:600}
+p{margin:0}
+.tag{margin:6px 0 0; color:var(--muted); font-size:14px}
+a{color:var(--accent)}
+a.home{color:var(--muted); text-decoration:none; font-size:14px}
+a.home:hover{color:var(--ink)}
+.card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
+.controls{display:grid; grid-template-columns:100px minmax(220px,1fr) auto; gap:12px 18px; align-items:end}
+.dates{display:grid; grid-template-columns:1fr 1fr auto; gap:12px 18px; align-items:end; margin-top:12px}
+@media (max-width:640px){.controls{grid-template-columns:1fr} .controls .player{grid-column:1 / -1}
+  .dates{grid-template-columns:1fr 1fr} .dates button{grid-column:1 / -1; justify-self:start}}
+label{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
+label b{color:var(--ink); font-weight:500}
+fieldset{border:0; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); min-width:0}
+fieldset legend{padding:0; color:var(--ink); font-weight:500; margin-bottom:4px}
+fieldset .opts{display:flex; gap:12px; flex-wrap:wrap}
+fieldset label{flex-direction:row; align-items:center; gap:5px; color:var(--ink); font-size:14px; white-space:nowrap}
+fieldset label:has(input:disabled){color:var(--faint)}
+input,select,button{font:inherit; color:var(--ink)}
+input[type=text],input[type=date],input[type=number],select{background:var(--ground); border:1px solid var(--rule); border-radius:6px; padding:7px 9px; width:100%}
+input[type=date]{color-scheme:dark}
+input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
+button{background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:7px 12px; cursor:pointer}
+button:hover:not(:disabled){border-color:var(--faint); background:#222b36}
+button:disabled{opacity:.45; cursor:default}
+button[aria-pressed=true]{border-color:var(--accent); background:#1d2a3a}
+.row{display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center}
+.status{color:var(--muted); font-size:13px}
+.status.err{color:var(--bad)}
+.status.warn{color:var(--warn)}
+.views{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px}
+.views .sep{flex:1}
+.figure{display:flex; justify-content:center; background:#262940; border-radius:8px; overflow:hidden}
+.figure canvas{display:block; width:100%; max-width:820px; height:auto; aspect-ratio:1}
+.suggest{position:relative}
+.suggest-list{--rows:10; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:5; margin:0; padding:4px; list-style:none;
+  background:var(--raise); border:1px solid var(--rule); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.4);
+  max-height:calc(var(--rows) * 32px + 10px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--faint) transparent}
+.suggest-list li{display:flex; justify-content:space-between; gap:12px; padding:6px 9px; border-radius:4px; cursor:pointer; font-size:14px; line-height:20px; color:var(--ink)}
+.suggest-list li small{color:var(--muted); font-size:12px; white-space:nowrap}
+.suggest-list li.active{background:#222b36}
+.actions{margin-top:14px}
+.note{color:var(--faint); font-size:12.5px; margin-top:8px}
+.method{color:var(--muted); font-size:14px}
+.method p{margin:0 0 10px}
+.method p:last-child{margin-bottom:0}
+.method b{color:var(--ink); font-weight:500}
+.advanced{margin-top:12px}
+.advanced summary{font-size:13px; font-weight:500; color:var(--muted)}
+.advanced .grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 18px; margin-top:10px}
+@media (max-width:640px){.advanced .grid{grid-template-columns:1fr}}
+[hidden]{display:none!important}
+details summary{cursor:pointer; list-style:none}
+details summary::-webkit-details-marker{display:none}
+details.section summary{font-size:17px; font-weight:600}
+details.section[open] summary{margin-bottom:10px}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse; width:100%; font-size:13.5px; font-variant-numeric:tabular-nums}
+th,td{padding:5px 8px; border-bottom:1px solid var(--rule); text-align:left; white-space:nowrap}
+th{color:var(--muted); font-weight:500}
+td.n,th.n{text-align:right}
+td i{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px}
+tr.clip td{color:var(--muted)}
+.facts{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px 18px; margin:14px 0 0}
+.facts div{display:flex; flex-direction:column}
+.facts dt{color:var(--muted); font-size:12.5px}
+.facts dd{margin:0; font-size:15px}
+.facts small{color:var(--muted); font-size:12px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <a class="home" href="/">← Blandalytics</a>
+    <h1>Release Angles</h1>
+    <p class="tag">Where each of a pitcher's pitch types leaves the hand, as horizontal and vertical release angle: one ellipse per pitch type, and how much they overlap. The more a pitcher's pitches share a release angle, the longer they look the same to the hitter.</p>
+  </header>
+
+  <section class="card">
+    <form id="form" class="controls">
+      <label><b>Season</b><select id="season"></select></label>
+      <label class="player"><b>Pitcher</b>
+        <div class="suggest">
+          <input id="player" type="text" placeholder="name or MLBAM id" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest">
+          <ul id="suggest" class="suggest-list" role="listbox" hidden></ul>
+        </div>
+      </label>
+      <fieldset>
+        <legend>Games</legend>
+        <div class="opts">
+          <label><input type="radio" name="games" value="R" checked> Regular</label>
+          <label><input type="radio" name="games" value="P"> Postseason</label>
+          <label><input type="radio" name="games" value="A"> Both</label>
+        </div>
+      </fieldset>
+    </form>
+    <div class="dates">
+      <label><b>From</b><input id="from" type="date"></label>
+      <label><b>Through</b><input id="to" type="date"></label>
+      <button id="clear_dates" type="button">Whole season</button>
+    </div>
+    <details class="advanced">
+      <summary>Options</summary>
+      <div class="grid">
+        <label><b>Ellipse size (SD)</b><input id="n_std" type="number" min="0.1" max="3" step="0.1" value="1"></label>
+        <label><b>Min. pitches per type</b><input id="min_rows" type="number" min="3" step="1" value="20"></label>
+        <label><b>Min. segment area (sq°)</b><input id="min_seg" type="number" min="0" step="0.01" value="0.10"></label>
+      </div>
+    </details>
+    <div class="row" style="margin-top:12px">
+      <span id="through" class="status"></span>
+      <span id="status" class="status"></span>
+    </div>
+  </section>
+
+  <section id="out" class="card" hidden>
+    <div id="views" class="views" role="toolbar" aria-label="Chart">
+      <button data-view="0" aria-pressed="true">Pitch types</button>
+      <button data-view="1" aria-pressed="false">Overlap count</button>
+      <button data-view="2" aria-pressed="false">Usage-weighted</button>
+      <button data-view="3" aria-pressed="false">Concentration</button>
+      <span class="sep"></span>
+      <button id="play" aria-pressed="false">▶ Play loop</button>
+    </div>
+    <div class="figure"><canvas id="fig" width="928" height="928"></canvas></div>
+    <p id="note" class="note"></p>
+    <div class="row actions">
+      <button id="dl_png">Download PNG</button>
+      <button id="dl_all">All four PNGs</button>
+      <button id="dl_gif">Download GIF</button>
+      <span id="gif_status" class="status"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <details class="section">
+      <summary>Overlap numbers</summary>
+      <div id="numbers" class="method"></div>
+    </details>
+  </section>
+
+  <section class="card">
+    <details class="section">
+      <summary>How it works</summary>
+      <div class="method">
+        <p><b>Release angles</b> are the direction the ball is travelling as it leaves the hand: the pitch's trajectory is backed out from 50 feet to the release point (60.5 ft minus extension), and HRA and VRA are the horizontal and vertical angles that velocity makes with the line to the plate.</p>
+        <p>Each <b>ellipse</b> is a pitch type's 1-SD covariance ellipse of HRA against VRA. Pitch types with fewer than 20 pitches are left out. The frame is square, so a degree across is the same length as a degree up.</p>
+        <p><b>Overlap count</b> shades each spot by how many ellipses cover it. <b>Usage-weighted</b> shades it by the share of the pitcher's pitches whose type covers it. <b>Concentration</b> splits the chart into segments — each exact set of overlapping ellipses — and shades each by how many pitches actually landed in it per square degree. Segments under 0.10 sq° stay on the map but are left out of its scale.</p>
+        <p><b>Play loop</b> cross-fades through the four; <b>Download GIF</b> saves that loop, and the PNGs are the stills at 2320 × 2320.</p>
+        <p><b>Data:</b> MLB's StatsAPI trajectory fits, from this site's nightly pitch-level data files. A port of <a href="https://github.com/Blandalytics/baseball_snippets/blob/main/release_angles.py">release_angles.py</a>.</p>
+      </div>
+    </details>
+  </section>
+</main>
+<script src="angles.js?v=1"></script>
+<script type="module" src="app.js?v=1"></script>
+</body>
+</html>

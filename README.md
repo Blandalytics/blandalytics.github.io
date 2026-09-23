@@ -402,6 +402,67 @@ batted balls in it. Locally, `python tools/batted_balls/build_data.py --out batt
 them with `?data=data/`. After any change to the JavaScript, bump the `?v=` query on the two
 script tags in `index.html` so browsers fetch the new files.
 
+## Release Angles
+
+[blandalytics.com/release-angles/](https://blandalytics.com/release-angles/) — where each of an
+MLB pitcher's pitch types leaves the hand, as horizontal (HRA) against vertical (VRA) release
+angle: one 1-SD covariance ellipse per pitch type, and how much they overlap. Four views of the
+same chart: the outlines alone, **Overlap count** (how many ellipses cover each spot),
+**Usage-weighted** (the share of the pitcher's pitches whose type covers it) and
+**Concentration** (each exact set of overlapping ellipses — a segment — shaded by the pitches
+that landed in it per square degree). **Play loop** cross-fades through the four; **Download
+GIF** saves that loop (928 × 928, 17.2 s) and the PNGs are the stills at 2320 × 2320. Pick a
+season and a pitcher; *Games* switches between the regular season, the postseason or both, and
+*From* / *Through* cut the season to a date segment. *Options* sets the ellipse size, the
+fewest pitches a type needs to be drawn, and the smallest segment the concentration scale
+counts. **Overlap numbers** is the script's printed report: per pitch type area, mean depth and
+mean share, and the most concentrated segments. Paul Skenes' current season loads on arrival; a
+chart is linkable as `release-angles/#<season>-<mlbam id>`, with `&games=P|A`,
+`&from=` / `&to=` (ISO dates), `&sd=`, `&min=`, `&seg=` and `&view=type|count|share|segment`.
+
+It is [baseball_snippets `release_angles.py`](https://github.com/Blandalytics/baseball_snippets/blob/main/release_angles.py)
+(with the ellipse maths of [`ellipse_depth.py`](https://github.com/Blandalytics/baseball_snippets/blob/main/ellipse_depth.py))
+ported to the browser: the same figure geometry, window and frame, depth / share / segment
+maps on the same 1100-point grid, colour ramp (stepped through L\*a\*b\*), label search and
+leaders, titles, footer and Pitcher List Stats wordmark, and the same four-state loop. Checked
+against the Python on Paul Skenes' 2026: the overlap report agrees to every printed digit, and
+the stills match pixel for pixel apart from glyph rasterisation — which can nudge a name to the
+next-best spot, since the label search takes the cheapest of many near-tied candidates. The GIF
+merges each hold's identical frames into one long frame, as Pillow does, so it has the Python's
+57 frames and runs in the browser in a few seconds.
+
+### How it works
+
+The angles come from the completed-games Parquet in the bucket (see *Data files*): release
+velocity is backed out of the 50 ft trajectory fit to the release point (60.5 ft minus
+extension), and HRA / VRA are the angles it makes with the line to the plate — the script's
+`pitch_angles()`. They are computed once a night and written back to the bucket:
+
+- `https://data.blandalytics.com/release-angles/index.json` — the seasons built, with what each
+  covers.
+- `https://data.blandalytics.com/release-angles/<season>.json` — the pitchers: id, name, team,
+  hand, regular-season and postseason pitch counts, first and last dates. About 110 KB.
+- `https://data.blandalytics.com/release-angles/<season>.parquet` — every pitch's pitcher, date,
+  game type, pitch type, HRA and VRA, sorted by pitcher in 8,192-row groups (~8 MB a season). The
+  page reads the row-group statistics on `pitcher` from the footer and range-requests only the
+  one or two groups holding the chosen pitcher, with
+  [hyparquet](https://github.com/hyparam/hyparquet) — a chart costs 150–200 KB.
+- [`.github/workflows/release-angles.yml`](.github/workflows/release-angles.yml) rebuilds the
+  current season every morning at 11:30 UTC, after the data files roll, and takes a `seasons`
+  input for backfills; every season from 2020 builds in under half a minute.
+
+| file | role |
+|---|---|
+| `tools/release_angles/build_data.py` | reads a season's files from the bucket, computes HRA and VRA, writes the season's Parquet, pitcher list and the index |
+| `release-angles/angles.js` | the figure: ellipses, frame and window, the three shaded maps and the segments, label placement, drawing at any dpi, the GIF (gifenc), the report |
+| `release-angles/index.html`, `app.js` | the page: season, pitcher, games and date controls, the views and loop, the Parquet read, downloads, the link hash |
+
+Locally, `python tools/release_angles/build_data.py --out release-angles/data --seasons 2026`
+writes the same files under `release-angles/data/release-angles/`, and the page reads them with
+`?data=data/` — from a server that honours `Range` requests, which `python -m http.server` does
+not. After any change to the JavaScript, bump the `?v=` query on the two script tags in
+`index.html` so browsers fetch the new files.
+
 ## NHL Draft Tool
 
 [blandalytics.com/nhl-draft/](https://blandalytics.com/nhl-draft/) — a draft tool for a 12-team

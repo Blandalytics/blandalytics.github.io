@@ -1,0 +1,42 @@
+name: Build release-angle data
+
+# The Release Angles page's data (tools/release_angles/build_data.py): every pitch's
+# horizontal and vertical release angle for a season, from the completed-games Parquet in
+# the bucket, written back to the bucket under release-angles/.
+on:
+  schedule:
+    # 11:30 UTC: after the data files roll at 10:30, so the season holds the day that has
+    # just settled
+    - cron: "30 11 * * *"
+  workflow_dispatch:
+    inputs:
+      seasons:
+        description: "Seasons to build, space-separated (e.g. 2021 2022 2023). Default: the current one."
+        required: false
+
+concurrency:
+  group: release-angles
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/release_angles/requirements.txt
+
+      - name: Install
+        run: pip install -r tools/release_angles/requirements.txt
+
+      - name: Build
+        run: python tools/release_angles/build_data.py ${{ inputs.seasons && format('--seasons {0}', inputs.seasons) || '' }}

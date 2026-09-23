@@ -19,3 +19,5 @@ tools/live/.wrangler/
 batted-balls/data/
 # the homepage tiles' full-size app exports (make_tiles.py crops them into images/)
 tools/homepage/cache/
+# a local build of the release-angle data (it lives in the bucket)
+release-angles/data/
