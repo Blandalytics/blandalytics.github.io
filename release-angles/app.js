@@ -5,7 +5,7 @@
 // request, using the row-group statistics on `pitcher` to find the one or two groups
 // holding them.
 
-import { parquetMetadataAsync, parquetReadObjects, asyncBufferFromUrl } from "https://cdn.jsdelivr.net/npm/hyparquet@1.31.1/+esm";
+import { parquetMetadataAsync, parquetReadObjects } from "https://cdn.jsdelivr.net/npm/hyparquet@1.31.1/+esm";
 import { compressors } from "https://cdn.jsdelivr.net/npm/hyparquet-compressors@1.1.2/+esm";
 
 const RA = window.ReleaseAngles;
@@ -43,10 +43,39 @@ function once(map, key, make) {
   return map.get(key);
 }
 const loadSeason = (year) => once(seasons, year, () => fetchJson(`release-angles/${year}.json`));
+
+// A season's Parquet as hyparquet's AsyncBuffer, over ranges fetched ahead of time: opening it
+// is one suffix request (the footer, and the file's length from Content-Range -- no HEAD), and
+// a pitcher is one request for the span of their row groups, so hyparquet reads from memory.
+const FOOTER_GUESS = 1 << 17;
+async function rangeFetch(url, range) {
+  const r = await fetch(url, { headers: { Range: `bytes=${range}` } });
+  if (r.status !== 206) throw new Error(`${url}: HTTP ${r.status}`);
+  const total = Number((r.headers.get("Content-Range") || "").split("/")[1]);
+  return { total, buf: await r.arrayBuffer() };
+}
+async function prefetchedFile(url) {
+  const { total, buf } = await rangeFetch(url, `-${FOOTER_GUESS}`);
+  const chunks = [{ start: total - buf.byteLength, buf }];
+  const find = (start, end) => chunks.find((c) => start >= c.start && end <= c.start + c.buf.byteLength);
+  return {
+    byteLength: total,
+    async prefetch(start, end) {
+      if (find(start, end)) return;
+      chunks.push({ start, buf: (await rangeFetch(url, `${start}-${end - 1}`)).buf });
+    },
+    async slice(start, end = total) {
+      let c = find(start, end);
+      if (!c) { await this.prefetch(start, end); c = find(start, end); }
+      return c.buf.slice(start - c.start, end - c.start);
+    },
+  };
+}
 const openSeason = (year) => once(files, year, async () => {
-  const file = await asyncBufferFromUrl({ url: `${DATA}release-angles/${year}.parquet` });
-  return { file, metadata: await parquetMetadataAsync(file) };
+  const file = await prefetchedFile(`${DATA}release-angles/${year}.parquet`);
+  return { file, metadata: await parquetMetadataAsync(file, { initialFetchSize: FOOTER_GUESS }) };
 });
+const COLUMNS = ["pitcher", "game_date", "pitch_type", "HRA", "VRA"];
 
 const isoDate = (v) => {
   if (v instanceof Date) return v.toISOString().slice(0, 10);
@@ -57,21 +86,29 @@ const isoDate = (v) => {
 function readPitcher(year, id) {
   return once(pitchCache, `${year}-${id}`, async () => {
     const { file, metadata } = await openSeason(year);
-    const colIdx = metadata.schema.slice(1).findIndex((s) => s.name === "pitcher");
-    let row = 0, rowStart = null, rowEnd = null;
+    const names = metadata.schema.slice(1).map((s) => s.name), colIdx = names.indexOf("pitcher");
+    let row = 0, rowStart = null, rowEnd = null, byteStart = Infinity, byteEnd = 0;
     for (const rg of metadata.row_groups) {
       const st = rg.columns[colIdx].meta_data.statistics || {};
       const lo = Number(st.min_value ?? st.min), hi = Number(st.max_value ?? st.max), n = Number(rg.num_rows);
-      if (lo <= id && id <= hi) { if (rowStart === null) rowStart = row; rowEnd = row + n; }
+      if (lo <= id && id <= hi) {
+        if (rowStart === null) rowStart = row;
+        rowEnd = row + n;
+        // the byte span of the columns read, so the whole pitcher is one request
+        rg.columns.forEach((c, j) => {
+          if (!COLUMNS.includes(names[j])) return;
+          const md = c.meta_data, from = Number(md.dictionary_page_offset ?? md.data_page_offset);
+          byteStart = Math.min(byteStart, from);
+          byteEnd = Math.max(byteEnd, from + Number(md.total_compressed_size));
+        });
+      }
       row += n;
     }
     if (rowStart === null) return [];
-    const rows = await parquetReadObjects({
-      file, metadata, compressors, rowStart, rowEnd,
-      columns: ["pitcher", "game_date", "game_type", "pitch_type", "HRA", "VRA"],
-    });
+    await file.prefetch(byteStart, byteEnd);
+    const rows = await parquetReadObjects({ file, metadata, compressors, rowStart, rowEnd, columns: COLUMNS });
     return rows.filter((r) => Number(r.pitcher) === id)
-      .map((r) => ({ t: r.pitch_type, x: Number(r.HRA), y: Number(r.VRA), d: isoDate(r.game_date), g: r.game_type }));
+      .map((r) => ({ t: r.pitch_type, x: Number(r.HRA), y: Number(r.VRA), d: isoDate(r.game_date) }));
   });
 }
 
@@ -210,8 +247,7 @@ async function show() {
   try {
     const all = await readPitcher(sel.season, sel.id);
     if (ticket !== drawing) return;
-    // regular season only, as the script's default (older season files also hold the postseason)
-    let pts = all.filter((p) => p.g === "R");
+    let pts = all;   // regular season only: the build keeps nothing else
     if (sel.from) pts = pts.filter((p) => p.d >= sel.from);
     if (sel.to) pts = pts.filter((p) => p.d <= sel.to);
     if (!pts.length) { status("no pitches in that selection", "warn"); return; }
@@ -228,7 +264,7 @@ async function show() {
     el.out.hidden = false;
     if (wasLooping) startLoop(); else setView(view);
     history.replaceState(null, "", hash(sel));
-    renderNumbers(m);
+    setTimeout(() => { if (model === m) renderNumbers(m); }, 0);   // after the chart is on screen
     const kept = m.order.reduce((s, p) => s + m.counts.get(p), 0);
     el.note.textContent = `${m.total.toLocaleString()} pitches in ${m.games} game${m.games === 1 ? "" : "s"}` +
       `${sel.from || sel.to ? "" : ` through ${chosen.last}`}; ${kept.toLocaleString()} in the ${m.order.length} pitch types drawn.` +
