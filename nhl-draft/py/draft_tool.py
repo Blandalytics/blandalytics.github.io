@@ -168,7 +168,7 @@ class Draft:
         """
         slots, dnd = self.eng.players["slots"], self.eng.dnd
         idx = [i for i in range(self.n) if not self.gone[i] and (include_dnd or not dnd[i])
-               and (pos is None or pos in slots.iat[i])]
+               and (pos is None or pos in slots[i])]
         idx.sort(key=lambda i: (self.my_score[i], i))
         return idx
 
@@ -206,7 +206,7 @@ class Draft:
 
 def fmt_player(eng, i, width=22):
     p = eng.players
-    return "%-*s %-7s %-4s" % (width, p["Player"].iat[i][:width], p["Pos_Y"].iat[i], str(p["Team"].iat[i])[:4])
+    return "%-*s %-7s %-4s" % (width, p["Player"][i][:width], p["Pos_Y"][i], str(p["Team"][i])[:4])
 
 
 def roster_slots(draft, team):
@@ -214,7 +214,7 @@ def roster_slots(draft, team):
     R = Roster(draft.lg.slots)
     out = {}
     for i in draft.rosters[team]:
-        slot = R.add(i, draft.eng.players["slots"].iat[i]) if i in draft.starters[team] else None
+        slot = R.add(i, draft.eng.players["slots"][i]) if i in draft.starters[team] else None
         out[i] = R.slot_of.get(i, "BN") if slot is not None else "BN"
     return out
 
@@ -229,7 +229,7 @@ def show_roster(draft, team, label=None):
         return
     parts = []
     for s in SLOT_ORDER:
-        names = [p["Player"].iat[i] for i in draft.rosters[team] if slots[i] == s]
+        names = [p["Player"][i] for i in draft.rosters[team] if slots[i] == s]
         if names:
             parts.append("%s: %s" % (s, ", ".join(names)))
     print("  %-9s %s" % (head, " | ".join(parts)))
@@ -366,7 +366,7 @@ def show_final(draft, mock=True):
     print("\n  your roster")
     for i in sorted(draft.rosters[me], key=lambda i: (SLOT_ORDER.index(slots[i]), -eng.value[i])):
         print("    %-5s %-35s vorp %6.2f  value %6.2f" % (slots[i], fmt_player(eng, i), eng.vorp[i], eng.value[i]))
-    pts = roto_points(pd.DataFrame([team_totals(eng.stats, r) for r in draft.starters]))
+    pts = pd.DataFrame(roto_points([team_totals(eng.stats, r) for r in draft.starters]))
     place = int((pts["Total"] > pts["Total"].iat[me]).sum()) + 1
     print("\n  roto points %.1f of %d; team vorp %.1f; finish %d of %d"
           % (pts["Total"].iat[me], draft.lg.n_teams * len(CATS), eng.team_vorp(draft.starters[me], draft.benches[me]),
@@ -395,14 +395,14 @@ def resolve(draft, text):
         if not 1 <= k <= len(board):
             return None, "board rank out of range: %s" % text
         return board[k - 1], None
-    hits = [i for i in board if text.lower() in names.iat[i].lower()]
+    hits = [i for i in board if text.lower() in names[i].lower()]
     if not hits:
         return None, "nobody available matches %r" % text
     if len(hits) > 1:
-        exact = [i for i in hits if names.iat[i].lower() == text.lower()]
+        exact = [i for i in hits if names[i].lower() == text.lower()]
         if len(exact) == 1:
             return exact[0], None
-        return None, "%d players match %r: %s" % (len(hits), text, ", ".join(names.iat[i] for i in hits[:6]))
+        return None, "%d players match %r: %s" % (len(hits), text, ", ".join(names[i] for i in hits[:6]))
     return hits[0], None
 
 
@@ -556,7 +556,7 @@ class Console:
         if i is None:
             return False
         if mine and not d.legal_for(team, i):
-            print("  %s is not a legal pick for your roster" % d.eng.players["Player"].iat[i])
+            print("  %s is not a legal pick for your roster" % d.eng.players["Player"][i])
             return False
         d.take(i)
         if mine:
@@ -580,11 +580,11 @@ class Console:
 
 def resolve_names(players, text):
     """Pool indices for a comma-separated list of names (case-insensitive, unique substring)."""
-    names = players["Player"].str.lower()
+    names = [n.lower() for n in players["Player"]]
     found, unknown = [], []
     for frag in [t.strip().lower() for t in text.split(",") if t.strip()]:
         hits = [i for i, nm in enumerate(names) if frag in nm]
-        exact = [i for i in hits if names.iat[i] == frag]
+        exact = [i for i in hits if names[i] == frag]
         if len(exact) == 1 or len(hits) == 1:
             found.append((exact or hits)[0])
         else:
@@ -626,13 +626,13 @@ def main(argv=None):
     print("loading the board...", end=" ", flush=True)
     base = base_args(["--sheet", a.sheet, "--teams", str(a.teams), "--slots", a.slots, "--bench", str(a.bench)])
     players = load_players(a.sheet)
-    cal = calibrate(players, players[STATS].to_numpy(float), league, base, np.random.default_rng(base.seed),
+    cal = calibrate(players, players.matrix(STATS), league, base, np.random.default_rng(base.seed),
                     log=lambda *x: None)
     dnd, unknown = resolve_names(players, a.do_not_draft)
     eng = Engine(players, cal["coef"], cal["repl"], cal["assigned"], league, a.w_lo, a.w_hi, dnd)
     print("%d players" % eng.n)
     if dnd:
-        print("do not draft: %s" % ", ".join(players["Player"].iat[i] for i in dnd))
+        print("do not draft: %s" % ", ".join(players["Player"][i] for i in dnd))
     for u in unknown:
         print("  do-not-draft name not matched: %s" % u)
 

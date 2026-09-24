@@ -6,7 +6,7 @@ const f2 = (v) => (v === null || v === undefined) ? "-" : Number(v).toFixed(2);
 const pct = (v) => Math.round(100 * v) + "%";
 const signed = (v) => { const s = (v > 0 ? "+" : "") + Number(v).toFixed(1); return `<td class="${v > 0.05 ? "posv" : v < -0.05 ? "neg" : "zero"}">${s}</td>`; };
 
-const VERSION = "6";                     // bump with every deploy: it busts the cache on the worker and the Python files
+const VERSION = "7";                     // bump with every deploy: it busts the cache on the worker and the Python files
 const worker = new Worker("worker.js?v=" + VERSION);
 let players = [];
 let dnd = [];

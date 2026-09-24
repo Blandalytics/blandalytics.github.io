@@ -14,7 +14,6 @@ as a pool index (a clicked option) or the same text commands the console takes.
 import json
 
 import numpy as np
-import pandas as pd
 
 from draft_sim import calibrate, parse_args as base_args
 from draft_tool import Draft, SLOT_ORDER, rank_options, resolve, resolve_names, roster_slots
@@ -29,8 +28,8 @@ DEFAULTS = dict(slot=1, teams=12, slots="C:2,LW:2,RW:2,D:4,UTIL:2,G:2", bench=0,
 def players_json(sheet="sheet_live.csv", yahoo="merged_players.csv"):
     """The pool, for the page's player pickers."""
     p = load_players(sheet, yahoo)
-    return json.dumps([{"i": int(i), "name": r.Player, "pos": r.Pos_Y, "nhl": str(r.Team),
-                        "adp": None if pd.isna(r.ADP) else float(r.ADP)} for i, r in p.iterrows()])
+    return json.dumps([{"i": i, "name": p["Player"][i], "pos": p["Pos_Y"][i], "nhl": str(p["Team"][i]),
+                        "adp": None if np.isnan(p["ADP"][i]) else float(p["ADP"][i])} for i in range(len(p))])
 
 
 class Session:
@@ -45,7 +44,7 @@ class Session:
         base = base_args(["--sheet", c["sheet"], "--teams", str(league.n_teams), "--slots", c["slots"],
                           "--bench", str(league.bench), "--calib-sims", str(int(c["calib_sims"]))])
         self.log_fn("calibrating (%d market leagues)" % base.calib_sims)
-        cal = calibrate(players, players[STATS].to_numpy(float), league, base, np.random.default_rng(base.seed),
+        cal = calibrate(players, players.matrix(STATS), league, base, np.random.default_rng(base.seed),
                         log=lambda *a: None)
         dnd_text = ", ".join(c["dnd"]) if isinstance(c["dnd"], (list, tuple)) else str(c["dnd"])
         dnd, self.unknown_dnd = resolve_names(players, dnd_text)
@@ -60,7 +59,7 @@ class Session:
 
     def player(self, i):
         p = self.eng.players
-        return {"i": int(i), "name": p["Player"].iat[i], "pos": p["Pos_Y"].iat[i], "nhl": str(p["Team"].iat[i])}
+        return {"i": int(i), "name": p["Player"][i], "pos": p["Pos_Y"][i], "nhl": str(p["Team"][i])}
 
     def pick_row(self, overall, rd, team, i):
         d = self.draft
@@ -223,12 +222,12 @@ class Session:
 
     def final(self):
         d, eng, me = self.draft, self.eng, self.draft.user_team
-        pts = roto_points(pd.DataFrame([team_totals(eng.stats, r) for r in d.starters]))
+        pts = roto_points([team_totals(eng.stats, r) for r in d.starters])
         rows = []
-        for t in np.argsort(-pts["Total"].to_numpy(), kind="stable"):
+        for t in np.argsort(-pts["Total"], kind="stable"):
             rows.append({"team": int(t) + 1, "you": int(t) == me,
                          "w": None if (not self.mock or int(t) == me) else round(float(d.weights[t]), 2),
                          "vorp": round(eng.team_vorp(d.starters[t], d.benches[t]), 1),
-                         "cats": [round(float(pts[c].iat[t]), 1) for c in CATS], "total": round(float(pts["Total"].iat[t]), 1)})
+                         "cats": [round(float(pts[c][t]), 1) for c in CATS], "total": round(float(pts["Total"][t]), 1)})
         return json.dumps({"roster": self.roster_rows(me), "cats": CATS, "standings": rows,
-                           "place": int((pts["Total"] > pts["Total"].iat[me]).sum()) + 1})
+                           "place": int((pts["Total"] > pts["Total"][me]).sum()) + 1})
