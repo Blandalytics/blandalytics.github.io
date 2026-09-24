@@ -21,7 +21,7 @@ const SPORT = 'mlb';
 
 export const COLORS = {
   FF: '#FF6683', SI: '#F2B24B', FS: '#83D6FF', FC: '#C59C9C', SL: '#CE66FF', ST: '#FFAAF7',
-  CU: '#339cff', CS: '#2A98FF', SV: '#2A98FF', CH: '#6DE95D', KN: '#c7c7c7', SC: '#c7c7c7', UN: '#c7c7c7',
+  CU: '#339cff', KC: '#339cff', CS: '#2A98FF', SV: '#2A98FF', CH: '#6DE95D', KN: '#c7c7c7', SC: '#c7c7c7', UN: '#c7c7c7',
 };
 const PITCH_NAMES = {
   FF: 'Four-Seam Fastball', FA: 'Fastball', SI: 'Sinker', FC: 'Cutter', SL: 'Slider', ST: 'Sweeper',
