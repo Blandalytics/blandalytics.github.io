@@ -222,16 +222,24 @@ function build(opts = {}) {
 // Ending nodes share one face and are told apart by outline color. Plotly only takes a single
 // node outline, so the per-node outlines are painted onto the rects after each plot.
 function paintOutlines() {
+  const surface = token('--surface');
+  // Plotly reuses these elements across renders, so every one is set on every pass: a rect that
+  // was the feed node (or an ending) must not keep its styling when it becomes something else.
   nodeRects().forEach(el => {
     const d = el.__data__, n = d && currentNodes[d.node.pointNumber];
-    if (n && n.type === 'END') { el.style.stroke = n.outline; el.style.strokeWidth = '2.5px'; el.style.strokeOpacity = n.dimmed ? 0.18 : 1; }
-    // the invisible feed node is drawn last, over the first column: no outline (its 1px surface-colored
-    // edge would cut across the first-column bands), and it must not take the hover
-    if (n && n.feed) { el.style.strokeOpacity = 0; el.parentNode.style.pointerEvents = 'none'; }
+    if (!n) return;
+    if (n.type === 'END') {
+      el.style.stroke = n.outline; el.style.strokeWidth = '2.5px'; el.style.strokeOpacity = n.dimmed ? 0.18 : 1;
+    } else {
+      el.style.stroke = surface; el.style.strokeWidth = '1px';
+      // the invisible feed node sits over the first column: its 1px edge would cut across those bands
+      el.style.strokeOpacity = n.feed ? 0 : 1;
+    }
+    el.parentNode.style.pointerEvents = n.feed ? 'none' : '';   // the feed must not take the hover
   });
   linkPaths().forEach(el => {
     const d = el.__data__, l = d && currentLinks[d.link.pointNumber];
-    if (l && l.feed) el.style.pointerEvents = 'none';
+    el.style.pointerEvents = l && l.feed ? 'none' : '';
   });
 }
 function render() {
