@@ -136,10 +136,10 @@ tr.clip td{color:var(--muted)}
     <div class="figure"><canvas id="fig" width="928" height="928"></canvas></div>
     <p id="note" class="note"></p>
     <div class="row actions">
-      <button id="dl_png">Download PNG</button>
-      <button id="dl_all">All four PNGs</button>
-      <button id="dl_gif">Download GIF</button>
-      <span id="gif_status" class="status"></span>
+      <button id="copy_png">Copy PNG</button>
+      <button id="copy_gif">Copy GIF</button>
+      <button id="dl_all">Download All PNGs + GIF</button>
+      <span id="dl_status" class="status"></span>
     </div>
   </section>
 
@@ -157,13 +157,13 @@ tr.clip td{color:var(--muted)}
         <p><b>Release angles</b> are the direction the ball is travelling as it leaves the hand: the pitch's trajectory is backed out from 50 feet to the release point (60.5 ft minus extension), and HRA and VRA are the horizontal and vertical angles that velocity makes with the line to the plate.</p>
         <p>Each <b>ellipse</b> is a pitch type's 1-SD covariance ellipse of HRA against VRA. Pitch types with fewer than 20 pitches are left out. The frame is square, so a degree across is the same length as a degree up.</p>
         <p><b>Overlap count</b> shades each spot by how many ellipses cover it. <b>Usage-weighted</b> shades it by the share of the pitcher's pitches whose type covers it. <b>Concentration</b> splits the chart into segments — each exact set of overlapping ellipses — and shades each by how many pitches actually landed in it per square degree. Segments under 0.10 sq° stay on the map but are left out of its scale.</p>
-        <p><b>Play loop</b> cross-fades through the four; <b>Download GIF</b> saves that loop, and the PNGs are the stills at 2320 × 2320.</p>
+        <p><b>Play loop</b> cross-fades through the four. <b>Copy PNG</b> copies the view shown as a 2320 × 2320 still; <b>Copy GIF</b> is the loop, 1080 × 1080 at a steady 20 fps, sized for X (Twitter); <b>Download All PNGs + GIF</b> saves the four stills and the loop as one zip.</p>
         <p><b>Data:</b> MLB's StatsAPI trajectory fits, from this site's nightly pitch-level data files. A port of <a href="https://github.com/Blandalytics/baseball_snippets/blob/main/release_angles.py">release_angles.py</a>.</p>
       </div>
     </details>
   </section>
 </main>
-<script src="angles.js?v=8"></script>
-<script type="module" src="app.js?v=4"></script>
+<script src="angles.js?v=9"></script>
+<script type="module" src="app.js?v=5"></script>
 </body>
 </html>

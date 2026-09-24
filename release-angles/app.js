@@ -14,7 +14,7 @@ const el = {
   form: $("form"), season: $("season"), player: $("player"), suggest: $("suggest"),
   from: $("from"), to: $("to"), clearDates: $("clear_dates"), status: $("status"), through: $("through"),
   out: $("out"), fig: $("fig"), note: $("note"), views: $("views"), play: $("play"),
-  dlPng: $("dl_png"), dlAll: $("dl_all"), dlGif: $("dl_gif"), gifStatus: $("gif_status"),
+  copyPng: $("copy_png"), copyGif: $("copy_gif"), dlAll: $("dl_all"), dlStatus: $("dl_status"),
   nStd: $("n_std"), minRows: $("min_rows"), minSeg: $("min_seg"), numbers: $("numbers"),
 };
 
@@ -48,21 +48,21 @@ const loadSeason = (year) => once(seasons, year, () => fetchJson(`release-angles
 // is one suffix request (the footer, and the file's length from Content-Range -- no HEAD), and
 // a pitcher is one request for the span of their row groups, so hyparquet reads from memory.
 const FOOTER_GUESS = 1 << 17;
-async function rangeFetch(url, range) {
-  const r = await fetch(url, { headers: { Range: `bytes=${range}` } });
+async function rangeFetch(url, range, cache = "default") {
+  const r = await fetch(url, { headers: { Range: `bytes=${range}` }, cache });
   if (r.status !== 206) throw new Error(`${url}: HTTP ${r.status}`);
   const total = Number((r.headers.get("Content-Range") || "").split("/")[1]);
   return { total, buf: await r.arrayBuffer() };
 }
-async function prefetchedFile(url) {
-  const { total, buf } = await rangeFetch(url, `-${FOOTER_GUESS}`);
+async function prefetchedFile(url, cache = "default") {
+  const { total, buf } = await rangeFetch(url, `-${FOOTER_GUESS}`, cache);
   const chunks = [{ start: total - buf.byteLength, buf }];
   const find = (start, end) => chunks.find((c) => start >= c.start && end <= c.start + c.buf.byteLength);
   return {
     byteLength: total,
     async prefetch(start, end) {
       if (find(start, end)) return;
-      chunks.push({ start, buf: (await rangeFetch(url, `${start}-${end - 1}`)).buf });
+      chunks.push({ start, buf: (await rangeFetch(url, `${start}-${end - 1}`, cache)).buf });
     },
     async slice(start, end = total) {
       let c = find(start, end);
@@ -71,9 +71,23 @@ async function prefetchedFile(url) {
     },
   };
 }
+// The season's Parquet is rebuilt nightly under the same name, and a browser holding byte ranges
+// of the old file could splice them into the new one. The URL carries the build stamp from the
+// season's list, so a rebuilt file is a new URL; a footer that still fails to parse is fetched
+// once more past the cache.
 const openSeason = (year) => once(files, year, async () => {
-  const file = await prefetchedFile(`${DATA}release-angles/${year}.parquet`);
-  return { file, metadata: await parquetMetadataAsync(file, { initialFetchSize: FOOTER_GUESS }) };
+  const { built = "" } = await loadSeason(year);
+  const url = `${DATA}release-angles/${year}.parquet?v=${encodeURIComponent(built)}`;
+  const open = async (cache) => {
+    const file = await prefetchedFile(url, cache);
+    return { file, metadata: await parquetMetadataAsync(file, { initialFetchSize: FOOTER_GUESS }) };
+  };
+  try {
+    return await open("default");
+  } catch (e) {
+    console.warn(`${url}: ${e.message}; refetching past the cache`);
+    return open("reload");
+  }
 });
 const COLUMNS = ["pitcher", "game_date", "pitch_type", "HRA", "VRA"];
 
@@ -307,36 +321,77 @@ function save(blob, name) {
   a.href = url; a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
-function pngOf(i) {
+function pngOf(m, i) {
   const c = document.createElement("canvas");
-  RA.draw(c, model, RA.DPI_PNG, RA.still(i), RA.still(i), mark);
+  RA.draw(c, m, RA.DPI_PNG, RA.still(i), RA.still(i), mark);
   return new Promise((res) => c.toBlob(res, "image/png"));
 }
-el.dlPng.addEventListener("click", async () => {
+const dlStatus = (msg, kind = "") => { el.dlStatus.textContent = msg; el.dlStatus.className = "status " + kind; };
+// The loop is encoded once per chart and shared by Copy GIF and Download All.
+const gifs = new WeakMap();
+function gifOf(m) {
+  if (!gifs.has(m)) {
+    gifs.set(m, RA.gif(m, mark, (p) => { if (model === m) dlStatus(`encoding GIF… ${Math.round(p * 100)}%`); })
+      .catch((e) => { gifs.delete(m); throw e; }));
+  }
+  return gifs.get(m);
+}
+// The ClipboardItem is made in the click itself, around the promise of the image, so the copy
+// keeps the click's permission while the image is drawn (Safari insists on it).
+function copyImage(type, blobPromise) {
+  return navigator.clipboard.write([new ClipboardItem({ [type]: blobPromise })]);
+}
+el.copyPng.addEventListener("click", async () => {
   if (!model) return;
-  const i = loop ? 0 : view;
-  save(await pngOf(i), `${RA.stem(model)}_${RA.TAGS[i]}.png`);
+  const m = model, i = loop ? 0 : view;
+  try {
+    await copyImage("image/png", pngOf(m, i));
+    dlStatus(`copied the ${["pitch types", "overlap count", "usage share", "concentration"][i]} PNG`);
+  } catch (e) {
+    console.error(e);
+    save(await pngOf(m, i), `${RA.stem(m)}_${RA.TAGS[i]}.png`);
+    dlStatus("couldn't copy to the clipboard here, so the PNG was downloaded", "warn");
+  }
+});
+// No mainstream browser puts a GIF on the clipboard yet (only PNG is supported), so this copies
+// where the browser can and otherwise downloads the file, ready to drag into a post.
+el.copyGif.addEventListener("click", async () => {
+  if (!model) return;
+  const m = model;
+  el.copyGif.disabled = true;
+  try {
+    if (window.ClipboardItem?.supports?.("image/gif")) {
+      await copyImage("image/gif", gifOf(m));
+      dlStatus("copied the GIF");
+    } else {
+      const blob = await gifOf(m);
+      save(blob, `${RA.stem(m)}.gif`);
+      dlStatus(`browsers can't copy GIFs yet, so it was downloaded (${(blob.size / 1e6).toFixed(1)} MB)`, "warn");
+    }
+  } catch (e) {
+    console.error(e);
+    dlStatus(`GIF failed: ${e.message}`, "err");
+  } finally {
+    el.copyGif.disabled = false;
+  }
 });
 el.dlAll.addEventListener("click", async () => {
   if (!model) return;
-  for (let i = 0; i < RA.STATES; i++) {
-    save(await pngOf(i), `${RA.stem(model)}_${RA.TAGS[i]}.png`);
-    await new Promise((r) => setTimeout(r, 400));
-  }
-});
-el.dlGif.addEventListener("click", async () => {
-  if (!model) return;
-  const m = model;
-  el.dlGif.disabled = true;
+  const m = model, stem = RA.stem(m);
+  el.dlAll.disabled = true;
   try {
-    const blob = await RA.gif(m, mark, (p) => { el.gifStatus.textContent = `encoding GIF… ${Math.round(p * 100)}%`; });
-    save(blob, `${RA.stem(m)}.gif`);
-    el.gifStatus.textContent = `${(blob.size / 1e6).toFixed(1)} MB`;
+    const { zipSync } = await import("https://cdn.jsdelivr.net/npm/fflate@0.8.2/+esm");
+    const files = {};
+    for (let i = 0; i < RA.STATES; i++) files[`${stem}_${RA.TAGS[i]}.png`] = new Uint8Array(await (await pngOf(m, i)).arrayBuffer());
+    files[`${stem}.gif`] = new Uint8Array(await (await gifOf(m)).arrayBuffer());
+    // PNG and GIF are compressed already: stored, not deflated
+    save(new Blob([zipSync(files, { level: 0 })], { type: "application/zip" }), `${stem}.zip`);
+    dlStatus("downloaded the four PNGs and the GIF");
   } catch (e) {
     console.error(e);
-    el.gifStatus.textContent = `GIF failed: ${e.message}`;
+    dlStatus(`download failed: ${e.message}`, "err");
   } finally {
-    el.dlGif.disabled = false;
+    el.dlAll.disabled = false;
   }
 });
 
