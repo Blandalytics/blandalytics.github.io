@@ -138,6 +138,14 @@
     return { season: Number(m[1]), who: m[2], vs: m[3].split("-").includes("self") ? "self" : "league" };
   }
 
+  // Backing pixels per chart pixel for the on-screen canvas: its displayed width at the
+  // screen's pixel ratio (the figure is at most 820 CSS px wide), never more than the 2 the
+  // Download PNG uses. A 1x laptop draws ~820 px wide instead of 2780.
+  function screenScale() {
+    const css = Math.min(820, el.fig.clientWidth || document.querySelector("main").clientWidth || 820);
+    return Math.min(2, (css * (window.devicePixelRatio || 1)) / BattedBalls.W);
+  }
+
   let drawing = 0;
   async function show() {
     const sel = selection();
@@ -163,7 +171,10 @@
         prior = p.bbe;
       }
       if (ticket !== drawing) return;
-      const result = BattedBalls.compute({ hitter, league: data.league, prior });
+      const result = BattedBalls.compute({
+        hitter, league: data.league, prior,
+        key: `${sel.season}:${sel.team || sel.id}`, priorKey: prior ? `${sel.season - 1}:${sel.id}` : null,
+      });
       if (!result) { status(`not enough batted balls to draw a density (${hitter.length})`, "warn"); el.out.hidden = true; return; }
       // the hitter is the title; what the chart shows goes in the subtitle, as on
       // the Swing Profiles figure
@@ -174,9 +185,10 @@
           ? `Batted Ball Difference, ${sel.season} compared to ${sel.season - 1}`
           : `${sel.season} Batted Ball Profile, compared to the rest of MLB`,
       };
-      await BattedBalls.render(el.fig, result, opts);
+      const scale = screenScale();
+      await BattedBalls.render(el.fig, result, opts, scale);
       if (ticket !== drawing) return;
-      current = { ...sel, name };
+      current = { ...sel, name, result, opts, scale };
       el.out.hidden = false;
       const n = hitter.length, m = prior ? prior.length : null;
       el.note.textContent = prior
@@ -274,16 +286,34 @@
     if (li) setActive(Number(li.dataset.index));
   });
 
-  el.dlPng.addEventListener("click", () => {
+  // The download is drawn fresh at 2x, whatever the screen needed.
+  el.dlPng.addEventListener("click", async () => {
     if (!current) return;
     const who = (current.name || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
     const name = `${who}_${current.season}_batted_balls${current.vs === "self" ? `_vs_${current.season - 1}` : ""}.png`;
-    el.fig.toBlob((b) => {
+    const png = document.createElement("canvas");
+    await BattedBalls.render(png, current.result, current.opts, 2);
+    png.toBlob((b) => {
       const url = URL.createObjectURL(b);
       const a = document.createElement("a");
       a.href = url; a.download = name; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, "image/png");
+  });
+
+  // A wider window or a move to a sharper screen: redraw the chart just drawn (no
+  // recomputing) once the canvas would otherwise be stretched.
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (!current || el.out.hidden) return;
+      const scale = screenScale();
+      if (scale > current.scale * 1.15) {
+        current.scale = scale;
+        BattedBalls.render(el.fig, current.result, current.opts, scale);
+      }
+    }, 200);
   });
 
   window.addEventListener("hashchange", () => {
