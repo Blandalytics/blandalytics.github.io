@@ -413,8 +413,11 @@ angle: one 1-SD covariance ellipse per pitch type, and how much they overlap. Fo
 same chart: the outlines alone, **Overlap count** (how many ellipses cover each spot),
 **Usage-weighted** (the share of the pitcher's pitches whose type covers it) and
 **Concentration** (each exact set of overlapping ellipses — a segment — shaded by the pitches
-that landed in it per square degree). **Play loop** cross-fades through the four; **Download
-GIF** saves that loop (928 × 928, 17.2 s) and the PNGs are the stills at 2320 × 2320. Pick a
+that landed in it per square degree). **Play loop** cross-fades through the four. **Copy PNG**
+copies the view shown as a 2320 × 2320 still; **Copy GIF** is the loop, sized for X (Twitter);
+**Download All PNGs + GIF** saves the four stills and the loop as one zip. No browser can put a
+GIF on the clipboard yet (only PNG), so Copy GIF downloads the file where it can't copy, and says
+so. Pick a
 season and a pitcher (regular season only, the script's default); *From* / *Through* cut the
 season to a date segment. *Options* sets the ellipse size, the
 fewest pitches a type needs to be drawn, and the smallest segment the concentration scale
@@ -451,8 +454,12 @@ places:
 - **One bottom row.** The footer note and the scale share one centre line, below the chart.
 - **No spines.** The degree grid is the only frame.
 
-The GIF merges each hold's identical frames into one long frame, as Pillow does, so it has the
-Python's 57 frames and runs in the browser in a few seconds.
+The GIF is built for X, which re-encodes GIFs as video: 1080 × 1080 (its GIF limit is
+1280 × 1080) and all 344 frames at a constant 20 fps (its limit is 350 frames), so nothing rests on
+how the re-encode treats long per-frame delays. A frame identical to the one before — the rest of
+every hold — is a 1 × 1 transparent frame left over it, so the file is ~3 MB (X allows 15 MB) and
+encodes in the browser in about three seconds; it is built once per chart and shared by Copy GIF
+and Download All.
 
 ### How it works
 
@@ -472,7 +479,9 @@ extension), and HRA / VRA are the angles it makes with the line to the plate —
   [hyparquet](https://github.com/hyparam/hyparquet) — a chart costs 150–200 KB. Opening a season
   is one suffix request (the footer, and the file's length from `Content-Range`, so no HEAD), and
   a pitcher is one request for the byte span of their row groups, which hyparquet then reads
-  from memory: a new pitcher is on screen in ~100 ms.
+  from memory: a new pitcher is on screen in ~100 ms. The file is rebuilt nightly under the
+  same name, so its URL carries the build stamp from `<season>.json` (`?v=<built>`): a browser
+  never splices byte ranges of yesterday's file into today's.
 - [`.github/workflows/release-angles.yml`](.github/workflows/release-angles.yml) rebuilds the
   current season every morning at 11:30 UTC, after the data files roll, and takes a `seasons`
   input for backfills; every season from 2020 builds in under half a minute.

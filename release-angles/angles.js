@@ -7,13 +7,14 @@
 // `build(pitches, opts)` does the arithmetic the Python's build() does (the ellipses, the
 // frame, the depth / share / segment maps, where the names go); `draw(canvas, model, dpi,
 // weights)` paints one state or any blend of two onto a canvas at the Python figure's
-// geometry (11.6 in square; 200 dpi for the stills, 80 for the GIF); `gif(model)` encodes
-// the loop. Constants keep the Python's names so the two can be read side by side.
+// geometry (11.6 in square; 200 dpi for the stills, 1080 px for the GIF); `gif(model)`
+// encodes the loop. Constants keep the Python's names so the two can be read side by side.
 
 window.ReleaseAngles = (() => {
   "use strict";
 
-  const FPS = 20, HOLD = 72, TRANS = 14, DPI_GIF = 80, DPI_PNG = 200;
+  const FPS = 20, HOLD = 72, TRANS = 14, DPI_PNG = 200;
+  const DPI_GIF = 1080 / 11.6;   // the GIF at 1080 x 1080, the largest square X (Twitter) plays
   const STATES = 4;   // outline, count, share, concentration
 
   const NAMES = {
@@ -803,28 +804,35 @@ window.ReleaseAngles = (() => {
   }
 
   // ---- the GIF --------------------------------------------------------------------------------
-  // The Python writes all 344 frames; the 72 identical frames of each hold are one frame here
-  // with the hold's whole duration, which plays the same and encodes in a fraction of the time.
+  // Sized and timed for X (Twitter): 1080 x 1080 (its GIF limit is 1280 x 1080) and all 344
+  // frames at a constant 20 fps (its limit is 350 frames), so nothing rests on how its video
+  // re-encode treats long per-frame delays. A frame identical to the one before -- the rest of
+  // every hold -- is a 1 x 1 transparent frame left over it, so the holds cost almost nothing
+  // and the file stays a few MB, far under X's 15 MB.
+  // a turn of the event loop, so progress can paint -- a message, which background tabs don't
+  // throttle the way they do setTimeout
+  const yieldTask = () => new Promise((r) => { const ch = new MessageChannel(); ch.port1.onmessage = () => r(); ch.port2.postMessage(0); });
   async function gif(m, mark, onProgress = () => {}) {
     const { GIFEncoder, quantize, applyPalette } = await import("https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm");
     const canvas = document.createElement("canvas");
     const enc = GIFEncoder();
-    const frames = [];
-    for (let s = 0; s < STATES; s++) {
-      const base = s * (HOLD + TRANS);
-      // the transition's last frame is the next state at rest, so it joins that hold
-      frames.push({ f: base, delay: (HOLD + (s === 0 ? 0 : 1)) * (1000 / FPS) });
-      for (let k = HOLD; k < HOLD + TRANS - 1; k++) frames.push({ f: base + k, delay: 1000 / FPS });
-    }
-    frames.push({ f: 0, delay: 1000 / FPS });   // ...and the loop's last frame is the first state
-    for (let i = 0; i < frames.length; i++) {
-      draw(canvas, m, DPI_GIF, weights(frames[i].f), swapWeights(frames[i].f), mark);
-      const { data, width, height } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
-      const palette = quantize(data, 256, { format: "rgb565" });
-      const index = applyPalette(data, palette, "rgb565");
-      enc.writeFrame(index, width, height, { palette, delay: frames[i].delay, repeat: 0 });
-      onProgress((i + 1) / frames.length);
-      await new Promise((r) => setTimeout(r, 0));
+    const total = STATES * (HOLD + TRANS), delay = 1000 / FPS;
+    const still = { palette: [[0, 0, 0], [0, 0, 0]], transparent: true, transparentIndex: 0, dispose: 1, delay };
+    let last = "";
+    for (let f = 0; f < total; f++) {
+      const mw = weights(f), tw = swapWeights(f), key = mw.join() + "|" + tw.join();
+      if (key === last) {
+        enc.writeFrame(new Uint8Array([0]), 1, 1, still);
+      } else {
+        draw(canvas, m, DPI_GIF, mw, tw, mark);
+        const { data, width, height } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+        const palette = quantize(data, 256, { format: "rgb565" });
+        const index = applyPalette(data, palette, "rgb565");
+        enc.writeFrame(index, width, height, { palette, delay, repeat: 0, dispose: 1 });
+        await yieldTask();
+      }
+      last = key;
+      onProgress((f + 1) / total);
     }
     enc.finish();
     return new Blob([enc.bytes()], { type: "image/gif" });
