@@ -22,6 +22,24 @@ let currentLinks = [], currentNodes = [];
 let paById = new Map();
 let wired = false;
 
+// Plotly is 1.2 MB and takes ~400 ms to run (~1.7 s on a slow phone), so the page doesn't block
+// on it: index.html preloads it and app.js calls loadPlotly() once its data requests are out.
+// Drawing waits on the same promise.
+const PLOTLY_URL = 'https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.3/plotly.min.js';
+let plotlyReady = null;
+export function loadPlotly() {
+  if (!plotlyReady) {
+    plotlyReady = window.Plotly ? Promise.resolve(window.Plotly) : new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = PLOTLY_URL;
+      s.onload = () => resolve(window.Plotly);
+      s.onerror = () => { plotlyReady = null; reject(new Error('Plotly did not load')); };
+      document.head.appendChild(s);
+    });
+  }
+  return plotlyReady;
+}
+
 const legendEl = $('legend'), showEnds = $('show-ends'), endKey = $('end-key'), chartEl = $('chart'), tip = $('tip');
 // Each .sankey-link path and .node-rect carries its d3 datum on __data__ (Plotly 2 no longer exposes d3).
 const linkPaths = () => [...chartEl.querySelectorAll('path.sankey-link')];
@@ -218,7 +236,7 @@ function paintOutlines() {
 }
 function render() {
   const { trace, layout } = build();
-  return Plotly.react(chartEl, [trace], layout, { displayModeBar: false, responsive: true }).then(paintOutlines);
+  return loadPlotly().then(Plotly => Plotly.react(chartEl, [trace], layout, { displayModeBar: false, responsive: true })).then(paintOutlines);
 }
 
 // Find a spot for the tooltip near the cursor that doesn't touch any link or node of the traced PA.
@@ -400,6 +418,7 @@ function loadWordmark() {
 
 export async function savePng(meta) {
   if (!DATA) return;
+  const Plotly = await loadPlotly();
   const S = 1000, SCALE = 2, PADX = 44;
   const mark = await loadWordmark();
   const ground = token('--ground') || '#0d1117', ink = token('--ink'), muted = token('--muted');
@@ -529,7 +548,7 @@ export function clear() {
   legendEl.innerHTML = '';
   endKey.hidden = true;
   tip.hidden = true;
-  if (chartEl.data) Plotly.purge(chartEl);
+  if (chartEl.data) window.Plotly.purge(chartEl);   // chartEl.data exists only once Plotly has drawn
   wired = false;
 }
 
