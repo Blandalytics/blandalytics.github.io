@@ -15,7 +15,7 @@ credit) with the site's dark palette. Each tile's picture is real output from it
 | `assets/css/blandalytics.css` | the site's palette and font over the template, the tile scrim, the footer wordmark |
 | `images/tile-*.webp` | the tile pictures, one per tool: `tile-NAME.webp` at 900 px and `tile-NAME-720.webp`, offered through `srcset` |
 | `tools/homepage/grab_app_pngs.py` | runs each tool in headless Chrome and saves the PNG from its own export button (the NHL Draft Tool has none, so it screenshots the options table of a mock draft) |
-| `tools/homepage/make_tiles.py` | crops those exports into the tiles, all at the template's tile aspect ratio (a figure whose edges carry text, like Batted Ball Charts, is padded out with its background instead) |
+| `tools/homepage/make_tiles.py` | crops those exports into square tiles (a figure whose edges carry text, like Batted Ball Charts and Swing Profiles, is padded out with its background instead); `blandalytics.css` holds every tile at 1:1 |
 
 ### Updating the tiles
 

@@ -186,6 +186,15 @@
 		border: solid 1px var(--rule);
 		border-radius: 8px;
 		background: var(--surface);
+		aspect-ratio: 1 / 1;
+	}
+
+	/* Every tile is square whatever its picture: the image fills the square, cropped rather than
+	   stretched if it isn't square itself (main.css sets only its width). */
+	.tiles article > .image img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
 	}
 
 	.tiles article > .image:after {

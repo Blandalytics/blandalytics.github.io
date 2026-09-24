@@ -1,6 +1,7 @@
 """Crop the captured app PNGs (from grab_app_pngs.py) into uniform tile images.
 
-Phantom sizes each tile from its image's aspect ratio, so every crop shares one ratio.
+Every tile is square: cropped from the export, or padded out with the figure's own
+background where a crop would cut text at the edges.
 Name tiles on the command line to redo only those (make_tiles.py batted-balls); with no
 names, every tile is redone from whatever exports are in the cache.
 
@@ -22,7 +23,7 @@ from PIL import Image
 CACHE = Path(__file__).parent / "cache"
 IMAGES = Path(__file__).resolve().parents[2] / "images"
 INDEX = IMAGES.parent / "index.html"
-RATIO = 353 / 326  # the template's original tile aspect ratio
+RATIO = 1.0  # square: the page also holds each tile to 1:1 in CSS (blandalytics.css)
 WIDTH = 900
 SMALL = 720
 WEBP = {"quality": 82, "method": 6}
@@ -32,7 +33,7 @@ WEBP = {"quality": 82, "method": 6}
 CROPS = {
     "pitcher-cards": (0.0, 0.0),     # name, grades, usage and movement plots
     "sequencing-flow": (0.0, 0.5),   # the Sankey body
-    "swing-profiles": (0.5, 0.0),
+    "swing-profiles": None,          # padded: a square crop cuts the axis label and the wordmark
     "batted-balls": None,            # padded, not cropped: the wordmark and data credit sit at the edges
     "release-angles": (0.5, 0.0),   # the figure with its title; trims the footer
     "nhl-draft": (0.0, 0.0),         # top of the options table
