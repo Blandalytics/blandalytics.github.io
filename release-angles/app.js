@@ -14,7 +14,7 @@ const el = {
   form: $("form"), season: $("season"), player: $("player"), suggest: $("suggest"),
   from: $("from"), to: $("to"), clearDates: $("clear_dates"), status: $("status"), through: $("through"),
   out: $("out"), fig: $("fig"), note: $("note"), views: $("views"), play: $("play"),
-  copyPng: $("copy_png"), copyGif: $("copy_gif"), dlAll: $("dl_all"), dlStatus: $("dl_status"),
+  copyPng: $("copy_png"), dlGif: $("dl_gif"), dlAll: $("dl_all"), dlStatus: $("dl_status"),
   nStd: $("n_std"), minRows: $("min_rows"), minSeg: $("min_seg"), numbers: $("numbers"),
 };
 
@@ -327,7 +327,7 @@ function pngOf(m, i) {
   return new Promise((res) => c.toBlob(res, "image/png"));
 }
 const dlStatus = (msg, kind = "") => { el.dlStatus.textContent = msg; el.dlStatus.className = "status " + kind; };
-// The loop is encoded once per chart and shared by Copy GIF and Download All.
+// The loop is encoded once per chart and shared by Download GIF and Download All.
 const gifs = new WeakMap();
 function gifOf(m) {
   if (!gifs.has(m)) {
@@ -353,26 +353,19 @@ el.copyPng.addEventListener("click", async () => {
     dlStatus("couldn't copy to the clipboard here, so the PNG was downloaded", "warn");
   }
 });
-// No mainstream browser puts a GIF on the clipboard yet (only PNG is supported), so this copies
-// where the browser can and otherwise downloads the file, ready to drag into a post.
-el.copyGif.addEventListener("click", async () => {
+el.dlGif.addEventListener("click", async () => {
   if (!model) return;
   const m = model;
-  el.copyGif.disabled = true;
+  el.dlGif.disabled = true;
   try {
-    if (window.ClipboardItem?.supports?.("image/gif")) {
-      await copyImage("image/gif", gifOf(m));
-      dlStatus("copied the GIF");
-    } else {
-      const blob = await gifOf(m);
-      save(blob, `${RA.stem(m)}.gif`);
-      dlStatus(`browsers can't copy GIFs yet, so it was downloaded (${(blob.size / 1e6).toFixed(1)} MB)`, "warn");
-    }
+    const blob = await gifOf(m);
+    save(blob, `${RA.stem(m)}.gif`);
+    dlStatus(`downloaded the GIF (${(blob.size / 1e6).toFixed(1)} MB)`);
   } catch (e) {
     console.error(e);
     dlStatus(`GIF failed: ${e.message}`, "err");
   } finally {
-    el.copyGif.disabled = false;
+    el.dlGif.disabled = false;
   }
 });
 el.dlAll.addEventListener("click", async () => {

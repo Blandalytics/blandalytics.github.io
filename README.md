@@ -414,10 +414,8 @@ same chart: the outlines alone, **Overlap count** (how many ellipses cover each 
 **Usage-weighted** (the share of the pitcher's pitches whose type covers it) and
 **Concentration** (each exact set of overlapping ellipses — a segment — shaded by the pitches
 that landed in it per square degree). **Play loop** cross-fades through the four. **Copy PNG**
-copies the view shown as a 2320 × 2320 still; **Copy GIF** is the loop, sized for X (Twitter);
-**Download All PNGs + GIF** saves the four stills and the loop as one zip. No browser can put a
-GIF on the clipboard yet (only PNG), so Copy GIF downloads the file where it can't copy, and says
-so. Pick a
+copies the view shown as a 2320 × 2320 still; **Download GIF** saves the loop, sized for X
+(Twitter); **Download All PNGs + GIF** saves the four stills and the loop as one zip. Pick a
 season and a pitcher (regular season only, the script's default); *From* / *Through* cut the
 season to a date segment. *Options* sets the ellipse size, the
 fewest pitches a type needs to be drawn, and the smallest segment the concentration scale
@@ -458,8 +456,8 @@ The GIF is built for X, which re-encodes GIFs as video: 1080 × 1080 (its GIF li
 1280 × 1080) and all 344 frames at a constant 20 fps (its limit is 350 frames), so nothing rests on
 how the re-encode treats long per-frame delays. A frame identical to the one before — the rest of
 every hold — is a 1 × 1 transparent frame left over it, so the file is ~3 MB (X allows 15 MB) and
-encodes in the browser in about three seconds; it is built once per chart and shared by Copy GIF
-and Download All.
+encodes in the browser in about three seconds; it is built once per chart and shared by Download
+GIF and Download All.
 
 ### How it works
 
