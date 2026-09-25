@@ -168,7 +168,7 @@ function liveRows(g, date) {
       bat_team: top ? g.away.abbr : g.home.abbr, field_team: top ? g.home.abbr : g.away.abbr,
       at_bat_index: p.atBat, inning: p.inning, half: p.half,
       pitcher: p.pitcher, pitcher_name: g.players[p.pitcher] || String(p.pitcher), p_throws: p.throws,
-      batter: p.batter, batter_name: g.players[p.batter] || String(p.batter),
+      batter: p.batter, batter_name: g.players[p.batter] || String(p.batter), stand: p.stand,
       pitch_number: p.n, pitch_type: p.type || 'UN', pitch_name: PITCH_NAMES[p.type] || p.type || 'Unknown',
       events: play.complete ? play.event : null,
       event: play.complete && play.event ? eventName(play.event, play.description) : null,

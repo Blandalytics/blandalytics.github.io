@@ -258,8 +258,9 @@ subheader then reads e.g. *June 12, 2026 @ PHI (vRHH)*, on the page and in the i
 
 Search a pitcher to open their most recent appearance (falling back to their latest season that
 has one) and list the rest of that season; or pick a game date to list everyone who threw a tracked
-pitch that day, longest outing first. With both set the page goes straight to that game. On arrival
-with nothing asked for, it shows the longest outing of the most recent day with finished games.
+pitch that day, longest outing first. With both set the page goes straight to that game. With nothing
+asked for — on arrival, or after **Clear** — it shows the longest outing of the most recent day
+with finished games.
 
 ### How it works
 

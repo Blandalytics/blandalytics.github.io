@@ -6,7 +6,7 @@
 // With both set, the page goes straight to that pitcher's game on that date. A flow is linkable
 // as #<pitcherId>-<YYYY-MM-DD>.
 
-import * as data from './data.js?v=4';
+import * as data from './data.js?v=5';
 import * as sankey from './sankey.js?v=17';
 
 const $ = id => document.getElementById(id);
@@ -243,13 +243,16 @@ png.addEventListener('click', async () => {
   try { await sankey.savePng(state.meta); } catch (e) { console.error(e); }
   png.disabled = false;
 });
-reset.addEventListener('click', () => {
+// Clear drops every choice and lands back where the page opens with nothing asked for: the
+// longest outing of the most recent day with finished games.
+reset.addEventListener('click', async () => {
   state.pitcher = null; state.date = null; state.log = []; state.dayList = [];
   q.value = ''; dateIn.value = ''; fill(gameSel, []); gameLabel.textContent = 'Game';
   fill(handSel, []); handSel.value = '';
   renderHits([]);
   history.replaceState(null, '', location.pathname);
-  showEmpty('Search a pitcher, or pick a game date.');
+  showEmpty('Loading…');
+  if (!(await defaultGame())) showEmpty('Search a pitcher, or pick a game date.');
 });
 
 function setStatus() {
@@ -257,9 +260,9 @@ function setStatus() {
   status.textContent = 'MLB · data files through ' + (last ? niceDate(last, true) : '?') + ' · live feed after';
 }
 
-// With nothing asked for, land on the most recent day that has finished games and show its
-// longest outing: today's or yesterday's finished games from the live feed if there are any,
-// else the last settled day in the data files.
+// With nothing asked for — on arrival, or after Clear — land on the most recent day that has
+// finished games and show its longest outing: today's or yesterday's finished games from the
+// live feed if there are any, else the last settled day in the data files.
 function prevDay(iso) {
   const d = new Date(iso + 'T12:00:00');
   d.setDate(d.getDate() - 1);
