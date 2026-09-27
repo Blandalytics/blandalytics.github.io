@@ -80,7 +80,7 @@ def _count(n: int, one: str, many: str) -> str:
 
 
 def game_line(box: dict, p: pd.DataFrame) -> str:
-    """'6.0 IP, 1 ER, 4 Hits (1 HR), 1 BB, 9 Ks - 17 Whiffs, 34.1% CSW, 96 Pitches'"""
+    """'6.0 IP, 1 ER, 4 Hits (1 HR), 1 BB, 9 Ks - 17 Whiffs, 34% CSW, 96 Pitches'"""
     hr = f" ({box['homeRuns']} HR)" if box["homeRuns"] else ""
     return (
         f"{box['inningsPitched']} IP, {box['earnedRuns']} ER, "
@@ -88,7 +88,7 @@ def game_line(box: dict, p: pd.DataFrame) -> str:
         f"{_count(box['baseOnBalls'], 'BB', 'BBs')}, "
         f"{_count(box['strikeOuts'], 'K', 'Ks')} - "
         f"{_count(int(p['sw_str'].sum()), 'Whiff', 'Whiffs')}, "
-        f"{p['csw'].mean() * 100:.1f}% CSW, {box['numberOfPitches']} Pitches"
+        f"{p['csw'].mean() * 100:.0f}% CSW, {box['numberOfPitches']} Pitches"
     )
 
 
