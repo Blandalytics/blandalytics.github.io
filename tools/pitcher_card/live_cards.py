@@ -9,8 +9,9 @@ pitches so far, and builds a card for every pitcher who has thrown one — rebui
 card only when that pitcher's pitch count has moved. The pages go to
 ``live/cards/<gamePk>-<pitcherId>.html`` with ``live/cards/index.json`` beside them, in
 the same shape as a day's manifest in pitcher-cards/days/, so the picker can show them.
-A game gets one last build after it goes final; the nightly build then writes the
-permanent card into the repo, and the bucket's copies expire with the rest of live/."""
+A game gets one last build after it goes final, and leaves the index as soon as the
+nightly build has written its permanent cards — those supersede the live copies, which
+expire with the rest of live/."""
 
 from __future__ import annotations
 
@@ -22,10 +23,12 @@ import sys
 import time
 from zoneinfo import ZoneInfo
 
+import requests
+
 from card import DEFAULT_CACHE, ROOT, cards_for_game, game_pitches  # first: sys.path
 
 import fetch  # noqa: E402
-from build_site import entry, game_entry  # noqa: E402
+from build_site import PREFIX, entry, game_entry  # noqa: E402
 
 sys.path.insert(0, os.path.join(ROOT, "tools", "data"))
 from backfill import LocalStore, R2Store  # noqa: E402
@@ -42,6 +45,19 @@ def today_games(s) -> list[dict]:
     r = s.get(f"{fetch.DATA_URL}/live/today.json", timeout=30)
     r.raise_for_status()
     return r.json()["games"]
+
+
+def built_games(s) -> set[str]:
+    """gamePks whose permanent cards exist. A live copy is only worth keeping until the
+    nightly build has written the real one; an index that cannot be read keeps them
+    all, which is the old behaviour and costs nothing but a day of staleness."""
+    try:
+        r = s.get(f"{fetch.DATA_URL}/{PREFIX}/index.json", timeout=30)
+        r.raise_for_status()
+        return set(r.json().get("games", {}))
+    except (requests.RequestException, ValueError) as exc:
+        print(f"card index unavailable, keeping every live game: {exc}", file=sys.stderr)
+        return set()
 
 
 def wanted(games: list[dict], index: dict) -> list[dict]:
@@ -112,12 +128,12 @@ def run(store, data_cache: str, only: int | None = None) -> int:
     data = fetch.DataStore(data_cache, s)
     index = load_index(store)
     games = today_games(s)
-    todo = wanted(games, index) if only is None else [one_game(games, only)]
-    # games that have dropped off the schedule window leave the index; their pages
-    # expire with the rest of live/
-    keep = {str(g["gamePk"]) for g in games}
+    # a game leaves the index once its permanent cards are built, or when it drops off
+    # the schedule window; pruning first also keeps it out of this run's work
+    keep = {str(g["gamePk"]) for g in games} - built_games(s)
     for pk in [k for k in index["games"] if k not in keep]:
         del index["games"][pk]
+    todo = wanted(games, index) if only is None else [one_game(games, only)]
 
     t0 = time.perf_counter()
     built = 0

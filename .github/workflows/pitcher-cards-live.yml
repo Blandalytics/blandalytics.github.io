@@ -18,20 +18,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # a cheap look before the full setup: is anything on, or waiting for its final build?
+  # a cheap look before the full setup: is anything on, waiting for its final build, or
+  # left in the index now that its permanent cards exist?
   check:
     runs-on: ubuntu-latest
     outputs:
       live: ${{ steps.q.outputs.live }}
     steps:
       - id: q
+        shell: python
         run: |
-          n=$(curl -sf https://data.blandalytics.com/live/today.json | python3 -c \
-            "import sys,json; g=json.load(sys.stdin)['games']; print(sum(1 for x in g if x['sport']['id']==1 and x['status']['abstract']=='Live'))" || echo 0)
-          f=$(curl -sf https://data.blandalytics.com/live/cards/index.json | python3 -c \
-            "import sys,json; g=json.load(sys.stdin).get('games',{}); print(sum(1 for x in g.values() if not x.get('final')))" || echo 0)
-          echo "$n live, $f awaiting a final build"
-          if [ "$n" -gt 0 ] || [ "$f" -gt 0 ]; then echo "live=true" >> "$GITHUB_OUTPUT"; else echo "live=false" >> "$GITHUB_OUTPUT"; fi
+          import json, os, urllib.request
+
+          def load(url):
+              # the bucket is behind Cloudflare, which turns away urllib's own agent
+              req = urllib.request.Request(url, headers={"User-Agent": "blandalytics-site"})
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      return json.load(r)
+              except Exception as exc:          # noqa: BLE001 - a miss just means "nothing"
+                  print(f"{url}: {exc}")
+                  return {}
+
+          BASE = "https://data.blandalytics.com"
+          today = load(f"{BASE}/live/today.json").get("games", [])
+          index = load(f"{BASE}/live/cards/index.json").get("games", {})
+          built = set(load(f"{BASE}/cards/index.json").get("games", {}))
+          live = sum(1 for g in today
+                     if g["sport"]["id"] == 1 and g["status"]["abstract"] == "Live")
+          pending = sum(1 for g in index.values() if not g.get("final"))
+          superseded = len(set(index) & built)
+          print(f"{live} live, {pending} awaiting a final build, {superseded} superseded")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"live={'true' if live or pending or superseded else 'false'}\n")
 
   build:
     needs: check

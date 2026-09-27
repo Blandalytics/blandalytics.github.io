@@ -150,8 +150,9 @@ from there:
   every 15 minutes through game hours and builds cards for the pitchers in the games in
   progress — the same card, from the pitches thrown so far — into `live/cards/`. A card is
   rebuilt only when its pitcher's pitch count has moved; a game gets one last build after it
-  ends, and the nightly run then writes the permanent card. The picker shows these under a
-  **Live** entry while games are on.
+  ends, and leaves the live index as soon as the nightly run has written its permanent cards,
+  so the **Live** entry never carries a game the date entries already cover. The live pages
+  expire with the rest of `live/`.
 - `https://data.blandalytics.com/cards/<gamePk>-<pitcherId>.html` — one standalone page per
   pitcher per game. The card is a single SVG drawn in the original figure's 1500 × 2000
   coordinate system, so every panel keeps the matplotlib layout. Every comparison season's
