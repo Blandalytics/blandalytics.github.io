@@ -262,6 +262,31 @@ def _share(x: float, y: float, label: str, color: str, ha: str, spans: str) -> s
     )
 
 
+def _clipped(name: str, x: float, width: float, shapes: list[str]) -> str:
+    """Shapes cut to a vertical band. Painting over them instead would leave a hairline
+    where the two edges meet, which shows as a band once the card is scaled."""
+    return (
+        f'<clipPath id="{name}"><rect x="{_fmt(x)}" y="0" width="{_fmt(width)}" '
+        f'height="{H}"/></clipPath><g clip-path="url(#{name})">{"".join(shapes)}</g>'
+    )
+
+
+def _bars(ax: Axes, types: list[dict], shares: list[float], fw: float, sign: int) -> list[str]:
+    """One side's usage bars, each running from the centre outward so the clip can cut it
+    at the gap's edge. A side the pitcher never faced gets no bar: a zero-width one would
+    have its own edge on the clip's, which is what leaves a hairline."""
+    rx, ry = 2.5 * ax.sx, 0.25 * -ax.sy
+    out = []
+    for i, t in enumerate(types):
+        if not shares[i]:
+            continue
+        width = (shares[i] + fw) * ax.sx
+        color = MARKER_COLORS.get(t["code"], "#c7c7c7")
+        x = ax.x(0) if sign > 0 else ax.x(0) - width
+        out.append(rect(x, ax.y(i - 0.4), width, 0.8 * -ax.sy, color, rx=rx, ry=ry))
+    return out
+
+
 def usage(card: dict) -> list[str]:
     """Pitch mix against each side of the plate: bars out from the middle, the type and
     its overall usage in the gap, arrows against the comparison season."""
@@ -273,7 +298,6 @@ def usage(card: dict) -> list[str]:
     lo, hi = -(max(vs_l) + fw), max(vs_r) + fw
     xl = (max(-lo, hi) + 0.05 * (hi - lo)) * 4 / 3
     ax = Axes((0.445, 0.598, 0.535, 0.19), (-xl, xl), (n - 0.5, -0.5))
-    rx, ry = 2.5 * ax.sx, 0.25 * -ax.sy
     out = [
         text(fx(0.7125), fy(0.815), "Usage", 30),
         text(fx(0.6525), fy(0.798), f"vs LHB ({card['n_vl']})", 20, LINE, ha="right"),
@@ -281,12 +305,6 @@ def usage(card: dict) -> list[str]:
     ]
     for i, t in enumerate(types):
         color = MARKER_COLORS.get(t["code"], "#c7c7c7")
-        top, height = ax.y(i - 0.4), 0.8 * -ax.sy
-        out.append(rect(ax.x(0), top, (vs_r[i] + fw) * ax.sx, height, color, rx=rx, ry=ry))
-        out.append(
-            rect(ax.x(-(vs_l[i] + fw)), top, (vs_l[i] + fw) * ax.sx, height, color, rx=rx, ry=ry)
-        )
-        out.append(rect(ax.x(-fw), top, 2 * fw * ax.sx, height, BACKGROUND))
         size = min(t["usage"] or 0, 33) / 33 * 15 + 16 if n > 1 else 25
         out.append(text(ax.x(0), ax.y(i + 0.05), f"{t['code']} {t['usage']:.0f}%", size, color))
         xr = ax.x(vs_r[i] + bar_lim / 2.75)
@@ -297,6 +315,12 @@ def usage(card: dict) -> list[str]:
         out.append(_share(xl_i, ax.y(i), _pct(t["vsL"]), color, "right", ""))
         arrows = _arrow_spans(card, t["code"], "vsL_arrow")
         out.append(_share(xl_i, ax.y(i), "", color, "left", arrows))
+    # the bars go under the labels, which sit in the gap, and are clipped to their own
+    # side of it rather than having the gap painted over them
+    out[3:3] = [
+        _clipped("ubr", ax.x(fw), W - ax.x(fw), _bars(ax, types, vs_r, fw, 1)),
+        _clipped("ubl", 0, ax.x(-fw), _bars(ax, types, vs_l, fw, -1)),
+    ]
     for c in card["comparisons"]:
         note = f"Arrows are vs\n{c['year']} Usage"
         out.append(text(fx(0.98), fy(0.595), note, 12, ha="right", va="baseline", alpha=0.5,
@@ -484,6 +508,8 @@ _HEADERS = (
     (0.085, "Type"), (0.235, "#"), (0.42, "IVB"), (0.49, "HB"), (0.57, "Str%"), (0.645, "SwStr%"),
     (0.7225, "CSW%"), (0.8025, "xSLGcon"), (0.8825, "plvStuff+"), (0.955, "PLV+"),
 )  # fmt: skip
+# the Velo column's centre in table coordinates: midway between the # and IVB columns
+_VELO_X = 0.15
 _WIDTHS = (("Velo", 0), ("IVB", 0.9), ("HB", 0.65), ("Str%", 0.75), ("SwStr%", 0.75),
            ("CSW%", 0.75), ("xSLGcon", 0.75), ("plvStuff+", 0.75), ("PLV+", 0.7))  # fmt: skip
 
@@ -498,7 +524,7 @@ def _velo_cell(card: dict, t: dict, ax: Axes, x: float, y: float) -> list[str]:
         span = (f'<tspan font-size="{16 * PT:.1f}" fill="{diff["color"]}">{esc(diff["text"])}'
                 "</tspan>" if diff else "")  # fmt: skip
         out.append(
-            f'<text x="{_fmt(ax.x(x - 0.15))}" y="{_fmt(y)}" font-size="{20 * PT:.1f}" '
+            f'<text x="{_fmt(ax.x(x))}" y="{_fmt(y)}" font-size="{20 * PT:.1f}" '
             f'fill="{WHITE}" text-anchor="middle" data-cmp="{c["year"]}">'
             f'<tspan dy="{_SHIFT["center"]}em">{esc(cell["text"])}</tspan>{span}</text>'
         )
@@ -515,18 +541,19 @@ def metrics(card: dict) -> list[str]:
             text(fx(0.97), fy(0.005), "*Some pitches missing data", 12, ha="right", alpha=0.5)
         )
     out += [text(fx(x), fy(0.23), label, 16, LINE) for x, label in _HEADERS]
-    out.append(text(fx(0.335), fy(0.23), "Velo", 16, LINE, attrs=' data-cmp="0"'))
-    out += [text(fx(0.335), fy(0.23), f"Velo (vs '{str(c['year'])[-2:]})", 16, LINE,
-                 attrs=f' data-cmp="{c["year"]}"') for c in card["comparisons"]]  # fmt: skip
     hdr = Axes((0.01, 0.015, 0.25, 0.205), (0, 1), (n - 0.5, -0.5))
     tbl = Axes((0.26, 0.015, 0.73, 0.205), (-0.5, 6.5), (n - 0.5, -0.5))
+    velo_x = tbl.x(_VELO_X)  # the header sits over its own values, not beside them
+    out.append(text(velo_x, fy(0.23), "Velo", 16, LINE, attrs=' data-cmp="0"'))
+    out += [text(velo_x, fy(0.23), f"Velo (vs '{str(c['year'])[-2:]})", 16, LINE,
+                 attrs=f' data-cmp="{c["year"]}"') for c in card["comparisons"]]  # fmt: skip
     bw = max(0.5, min(0.8, 2 / n))
     for i, t in enumerate(types):
         color, y = MARKER_COLORS.get(t["code"], "#c7c7c7"), hdr.y(i)
         out.append(rect(hdr.x(0.1), hdr.y(i - bw / 2), 0.075 * hdr.sx, bw * -hdr.sy, color, rx=4))
         out.append(text(hdr.x(0.225), y, t["name"], 20, color, ha="left"))
         out.append(text(hdr.x(0.9), y, f"{t['n']:,}", 20))
-        x = 0.15
+        x = _VELO_X
         for stat, width in _WIDTHS:
             x += width
             cell = t["cells"][stat]
