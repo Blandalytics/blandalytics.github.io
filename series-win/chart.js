@@ -501,6 +501,9 @@
 
   function drawOutcomesSwing(canvas, res, opts, scale) {
     const f = swingFigure(canvas, scale), { ctx, ax, text, measure } = f;
+    // no y axis to make room for, so the axes take the right margin on both sides and the
+    // bars, the key and the x label centre on the image
+    ax.x0 = f.W - ax.x1;
     const n = res.games;
     const space = [];
     for (let g = res.need; g <= n; g++) space.push(g);
