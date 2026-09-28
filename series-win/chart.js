@@ -422,7 +422,7 @@
     // anchored to the page, so stacked segments' hatches line up
     for (let c = Math.floor((x - h) / step) * step; c <= x + w + h; c += step) {
       ctx.moveTo(c, y); ctx.lineTo(c + h, y + h);
-    //  ctx.moveTo(c + h, y); ctx.lineTo(c, y + h);
+      ctx.moveTo(c + h, y); ctx.lineTo(c, y + h);
     }
     ctx.stroke();
     ctx.restore();
