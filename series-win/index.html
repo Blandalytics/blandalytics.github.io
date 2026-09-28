@@ -125,10 +125,10 @@ details[open] summary{margin-bottom:10px}
       <summary>How it works</summary>
       <div class="method">
         <p><b>Team xWin%:</b> each team's <a href="https://www.mlb.com/glossary/advanced-stats/pythagorean-winning-percentage">Pythagorean</a> win% with the <a href="https://legacy.baseballprospectus.com/glossary/index.php?mode=viewstat&amp;stat=136">PythagenPat</a> exponent, from its regular-season runs scored (<code>RS/G</code>) and allowed (<code>RA/G</code>) per game: <code>total_runs_factor = (RS/G + RA/G) ^ 0.285</code>, then <code>xWin% = RS/G ^ total_runs_factor / (RS/G ^ total_runs_factor + RA/G ^ total_runs_factor)</code>.</p>
-        <p><b>Head to Head:</b> the two are combined with <a href="https://web.williams.edu/Mathematics/sjmiller/public_html/103/Log5WonLoss_Paper.pdf">log5</a> into the higher seed's chance to win one game at a neutral site: <code>(higher − higher × lower) / (higher + lower − 2 × higher × lower)</code>.</p>
+        <p><b>Head to Head:</b> the two are combined using the <a href="https://web.williams.edu/Mathematics/sjmiller/public_html/103/Log5WonLoss_Paper.pdf">log5</a> method into the higher seed's chance to win one game at a neutral site: <code>(higher − higher × lower) / (higher + lower − 2 × higher × lower)</code>.</p>
         <p><b>Home Field:</b> worth 4%. The higher seed wins a home game at the neutral chance plus 4 points, and a road game at it minus 4. A best of 3 goes home–road–home; longer series open with two at home and two on the road, then alternate starting at home (2-2-1, 2-2-1-1-1, …). <b>All higher seed</b> puts every game in the higher seed's park.</p>
-        <p><b>The Series:</b> played out exactly, summing every path to a clinch, rather than simulated, so the numbers are the same on every load. The first chart is the higher seed's chance to take a series of each length (a best of 1 is one home game); the second splits the chosen length by who wins and in how many games.</p>
-        <p><b>Data:</b> runs scored, runs allowed and games played from MLB's standings (StatsAPI), fetched when the page opens. A port of <a href="https://github.com/Blandalytics/baseball_snippets/blob/main/mlb_series_win.py">mlb_series_win.py</a>.</p>
+        <p><b>Series:</b> simulating every series until it is won. The first chart is the higher seed's chance to take a series of each length (a best of 1 is one home game); the second splits the chosen length by who wins and in how many games.</p>
+        <p><b>Data:</b> runs scored, runs allowed, and games played from MLB's standings (StatsAPI).</p>
       </div>
     </details>
   </section>
