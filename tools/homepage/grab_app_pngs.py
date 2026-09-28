@@ -55,8 +55,8 @@ APPS = [
     # Nolan McLean, 2026, the concentration view
     ("release-angles", "https://blandalytics.com/release-angles/#2026-690997&view=segment",
      "document.getElementById('out') && !document.getElementById('out').hidden && document.getElementById('note').textContent && document.getElementById('player').value.includes('McLean')", "dl_png"),
-    # Dodgers over Rays, 2026, best of 7: the series-outcomes chart
-    ("series-win", "https://blandalytics.com/series-win/#2026-LAD-TB&games=7",
+    # Yankees over Red Sox, 2026, best of 7: the series-outcomes chart
+    ("series-win", "https://blandalytics.com/series-win/#2026-NYY-BOS&games=7",
      "document.getElementById('out') && !document.getElementById('out').hidden && document.getElementById('stats').textContent", "dl_png_games"),
 ]
 
