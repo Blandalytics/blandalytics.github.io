@@ -416,13 +416,13 @@
     ctx.beginPath();
     ctx.rect(x, y, w, h);
     ctx.clip();
-    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
     ctx.lineWidth = 0.8 * PT;
     ctx.beginPath();
     // anchored to the page, so stacked segments' hatches line up
     for (let c = Math.floor((x - h) / step) * step; c <= x + w + h; c += step) {
       ctx.moveTo(c, y); ctx.lineTo(c + h, y + h);
-      ctx.moveTo(c + h, y); ctx.lineTo(c, y + h);
+    //  ctx.moveTo(c + h, y); ctx.lineTo(c, y + h);
     }
     ctx.stroke();
     ctx.restore();
