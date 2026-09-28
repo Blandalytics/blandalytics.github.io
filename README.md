@@ -515,8 +515,21 @@ all home games (teams by MLB abbreviation, e.g. `#2026-LAD-TB&games=7`).
 
 It is [baseball_snippets `mlb_series_win.py`](https://github.com/Blandalytics/baseball_snippets/blob/main/mlb_series_win.py)
 (the [mlb-series-win.streamlit.app](https://mlb-series-win.streamlit.app/) app) ported to the
-browser: the same model, schedule and two figures, laid out in the pixels of the script's
-200 dpi matplotlib output. It departs from the script in three places:
+browser: the same model, schedule and two charts. It departs from the script in four places:
+
+- **Swing Profiles figures.** Both charts wear the Swing Profiles figure's template: 8 × 6 in at
+  200 dpi with its axes box, the matchup as the large teal title over a muted subtitle, the
+  Pitcher List Stats wordmark top right, regular-weight axis text and a footer note. Neither has
+  gridlines or an x spine. The series win% chart is a teal line with ringed markers and plain
+  value labels, over a y axis (`<higher seed> Series Win%`) trimmed to its first and last
+  labelled ticks, with a dashed 50% line. The outcomes chart has no y axis at all: team-coloured
+  stacked bars (higher seed below) labelled inside, or above the bar in a tag of the team's colour
+  when a slice is too thin, and each side's series win% centred over the bars. When the two
+  teams' colours look alike (under 30 apart in CIELAB, e.g. Dodgers/Yankees, Red Sox/Angels,
+  or a team against itself) the lower seed's slices, tags and key swatch get a faint
+  cross-hatch. The footer notes carry the neutral-site single-game chance and who hosts which
+  games (`LAD hosts games 1, 2, 5 and 7 (2-2-1-1-1)`). `?style=app` draws the Streamlit app's
+  own matplotlib figures instead, laid out in the pixels of its 200 dpi output.
 
 - **Exact, not simulated.** The script plays 100,000 (and 250,000) random series; the page sums
   every path to a clinch, so its numbers are the ones the simulations scatter around (within
@@ -538,7 +551,7 @@ open 2-2 and then alternate from home (2-2-1, 2-2-1-1-1, …), the script's sche
 
 | file | role |
 |---|---|
-| `series-win/chart.js` | the model (xWin%, log5, schedule, the exact series) and the two figures, drawn on a canvas at any scale |
+| `series-win/chart.js` | the model (xWin%, log5, schedule, the exact series) and the two figures in both styles (Swing Profiles, the default; the app's, `?style=app`), drawn on a canvas at any scale |
 | `series-win/index.html`, `app.js` | the page: season, seed, length and home controls, the StatsAPI fetch, downloads, the link hash |
 
 After any change to the JavaScript, bump the `?v=` query on the two script tags in `index.html`
