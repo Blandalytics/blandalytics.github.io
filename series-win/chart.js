@@ -330,7 +330,7 @@
   // ---- the Swing Profiles style ------------------------------------------------------
   //
   // The page's figures: the same two charts in the Swing Profiles figure's clothes -- an
-  // 8 x 6 in figure at 200 dpi, its axes box (left 0.10, right 0.96, 0.95 in from the
+  // square 8 x 8 in figure at 200 dpi, its axes box (left 0.10, right 0.96, 0.95 in from the
   // top, 1.08 in from the bottom), the matchup as a large teal title with a muted
   // subtitle under it, the wordmark top right, regular-weight 9 / 10 pt axis text, 2 pt
   // lines with surface-edged markers, and a footer note bottom left. No gridlines and no
@@ -338,7 +338,7 @@
   // chart has none. (The app's own matplotlib look above is kept as ?style=app.)
 
   const SW = {
-    w: 8, h: 6, left: 0.10, right: 0.96, top: 0.95, bottom: 1.08,
+    w: 8, h: 8, left: 0.10, right: 0.96, top: 0.95, bottom: 1.08,
     header: "#00D4FF", sub: "#8D96B3", chrome: "#8D96B3", line: "#00D4FF",
   };
 
@@ -397,6 +397,8 @@
   // Two team colours "look alike" when they are under SIMILAR apart in CIELAB (CIE76):
   // Dodgers/Yankees, Red Sox/Angels, Royals/Blue Jays do; Dodgers/Rays, Brewers/Athletics don't.
   const SIMILAR = 30;
+  // the outcomes chart outlines each bar segment, and the tags and key swatches standing in for them
+  const OUTLINE = 1 * PT;
   function lab(hex) {
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
       .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
@@ -489,10 +491,34 @@
     line.forEach(([x, y], i) => (i ? ctx.lineTo(sx(x), sy(y)) : ctx.moveTo(sx(x), sy(y))));
     ctx.stroke();
     ctx.restore();
-    for (const [x, y] of line) {
-      marker(ctx, sx(x), sy(y), SW.line);
-      text(Math.round(y * 1000) / 1000 < 1 ? pct(y) : "~100%", sx(x), sy(y) - 8 * PT, { size: 11, ha: "center", va: "bottom" });
-    }
+    for (const [x, y] of line) marker(ctx, sx(x), sy(y), SW.line);
+    // Each value sits above its point unless the line runs through that spot (a steep
+    // drop does); then below, then the four diagonals -- the first spot clear of the line,
+    // the markers and the labels already placed.
+    const pts = line.map(([x, y]) => [sx(x), sy(y)]);
+    const lh = 11 * PT * (ASC + DESC), off = 8 * PT, clear = 3 * PT;
+    const placed = [];
+    const hits = (r) => {
+      const inside = (px, py) => px > r.l - clear && px < r.r + clear && py > r.t - clear && py < r.b + clear;
+      for (let i = 1; i < pts.length; i++) {
+        const [ax0, ay0] = pts[i - 1], [ax1, ay1] = pts[i];
+        for (let k = 0; k <= 24; k++) if (inside(ax0 + (ax1 - ax0) * k / 24, ay0 + (ay1 - ay0) * k / 24)) return true;
+      }
+      const m = 4 * PT;  // the markers' radius
+      if (pts.some(([px, py]) => px > r.l - m && px < r.r + m && py > r.t - m && py < r.b + m)) return true;
+      return placed.some((o) => r.l < o.r && r.r > o.l && r.t < o.b && r.b > o.t);
+    };
+    line.forEach(([, y], i) => {
+      const s = Math.round(y * 1000) / 1000 < 1 ? pct(y) : "~100%";
+      const w = f.measure(s, 11), [px, py] = pts[i];
+      const spots = [[0, -1], [0, 1], [1, -1], [-1, -1], [1, 1], [-1, 1]].map(([dx, dy]) => {
+        const cx = px + dx * (w / 2 + off * 0.5), cy = py + dy * (off + lh / 2);
+        return { l: cx - w / 2, r: cx + w / 2, t: cy - lh / 2, b: cy + lh / 2, cx, cy };
+      });
+      const r = spots.find((c) => !hits(c)) || spots[0];
+      placed.push(r);
+      text(s, r.cx, r.cy, { size: 11, ha: "center", va: "middle" });
+    });
     const home = opts.allHome ? `, all @${opts.code}` : "";
     swingChrome(f, `${opts.higher.name} over ${opts.lower.name}`, `${opts.season} Series Win%, by Series Length${home}`,
       `Single game at a neutral site: ${opts.code} ${pct(opts.p)}. ` +
@@ -517,7 +543,7 @@
     // the lower seed's parts are hatched when its colour could pass for the higher seed's
     const hatch = lookAlike(opts.higher.color, opts.lower.color);
 
-    // stacked bars, the higher seed at the bottom, split by a surface-coloured seam
+    // stacked bars, the higher seed at the bottom, each segment outlined in white
     const size = n >= 13 ? 9 : n >= 9 ? 10 : 11;
     const labelH = size * PT * 1.25;
     const halfW = 0.4;
@@ -530,8 +556,9 @@
         ctx.fillRect(l, sy(b), r - l, sy(a) - sy(b));
         if (hatch && k === 1) crossHatch(ctx, l, sy(b), r - l, sy(a) - sy(b));
       });
-      ctx.fillStyle = BACKGROUND;
-      ctx.fillRect(l, sy(hi[i]) - 0.75 * PT, r - l, 1.5 * PT);
+      ctx.strokeStyle = WHITE;
+      ctx.lineWidth = OUTLINE;
+      for (const [a, b] of segs) if (sy(a) - sy(b) > 0.5) ctx.strokeRect(l, sy(b), r - l, sy(a) - sy(b));
       const stack = [];
       segs.forEach(([a, b, colour], k) => {
         const s = b - a >= 0.0005 ? pct(b - a) : "~0%";
@@ -552,8 +579,8 @@
         if (hatched) { ctx.save(); ctx.clip(); crossHatch(ctx, sx(g) - w / 2, y - h, w, h); ctx.restore(); }
         ctx.beginPath();
         ctx.roundRect(sx(g) - w / 2, y - h, w, h, 3 * PT);
-        ctx.strokeStyle = SW.chrome;
-        ctx.lineWidth = 0.8 * PT;
+        ctx.strokeStyle = WHITE;
+        ctx.lineWidth = OUTLINE;
         ctx.stroke();
         text(s, sx(g), y - h / 2, { size, ha: "center", va: "middle" });
         y -= h + 3 * PT;
@@ -571,8 +598,8 @@
       ctx.fillStyle = it.team.color;
       ctx.fillRect(kx, ky - sw / 2, sw, sw);
       if (it.hatched) crossHatch(ctx, kx, ky - sw / 2, sw, sw);
-      ctx.strokeStyle = SW.chrome;
-      ctx.lineWidth = 0.8 * PT;
+      ctx.strokeStyle = WHITE;
+      ctx.lineWidth = OUTLINE;
       ctx.strokeRect(kx, ky - sw / 2, sw, sw);
       text(it.s, kx + sw + gap, ky, { size: 12, va: "middle" });
       kx += it.w + between;

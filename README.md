@@ -517,7 +517,7 @@ It is [baseball_snippets `mlb_series_win.py`](https://github.com/Blandalytics/ba
 (the [mlb-series-win.streamlit.app](https://mlb-series-win.streamlit.app/) app) ported to the
 browser: the same model, schedule and two charts. It departs from the script in four places:
 
-- **Swing Profiles figures.** Both charts wear the Swing Profiles figure's template: 8 × 6 in at
+- **Swing Profiles figures.** Both charts wear the Swing Profiles figure's template, square: 8 × 8 in at
   200 dpi with its axes box, the matchup as the large teal title over a muted subtitle, the
   Pitcher List Stats wordmark top right, regular-weight axis text and a footer note. Neither has
   gridlines or an x spine. The series win% chart is a teal line with ringed markers and plain
