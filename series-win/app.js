@@ -23,6 +23,7 @@
     143: "#E81828", 144: "#CE1141", 145: "#27251F", 146: "#00A3E0", 147: "#003087", 158: "#12284B",
   };
   const FIRST_SEASON = 2000;
+  const DEFAULT = { higher: 147, lower: 111 };  // Yankees over Red Sox, by MLB team id
   // the figures are drawn in the Swing Profiles style; ?style=app draws the Streamlit app's
   const STYLE = new URLSearchParams(location.search).get("style") === "app" ? "app" : "swing";
   const FIG_W = STYLE === "swing" ? { length: 1600, games: 1600 } : { length: 1064, games: 970 };
@@ -158,8 +159,8 @@
   // ---- season ------------------------------------------------------------------------
 
   // Load a season into the controls. The same clubs carry over where they exist;
-  // otherwise `pick` (abbreviations from a link), else the script's defaults: the
-  // 2nd and 6th best teams by xWin%.
+  // otherwise `pick` (abbreviations from a link), else Yankees over Red Sox (or, in a
+  // season missing either, the script's defaults: the 2nd and 6th best teams by xWin%).
   async function setSeason(year, pick = {}) {
     el.go.disabled = true;
     status(`loading the ${year} standings…`);
@@ -175,9 +176,9 @@
     const prev = [higher.team, lower.team];
     teams = list; season = year;
     el.season.value = String(year);
-    const find = (code, before, i) => byCode(code) || (before && byId(before.id)) || teams[Math.min(i, teams.length - 1)];
-    higher.set(find(pick.higher, prev[0], 1));
-    lower.set(find(pick.lower, prev[1], 5));
+    const find = (code, before, id, i) => byCode(code) || (before && byId(before.id)) || byId(id) || teams[Math.min(i, teams.length - 1)];
+    higher.set(find(pick.higher, prev[0], DEFAULT.higher, 1));
+    lower.set(find(pick.lower, prev[1], DEFAULT.lower, 5));
     const updated = teams.map((t) => t.updated).filter(Boolean).sort().pop();
     status(`${teams.length} teams · ${year} regular season` + (updated && year === THIS_YEAR ? `, through ${new Date(updated).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : ""));
     el.go.disabled = false;

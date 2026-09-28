@@ -510,7 +510,7 @@ the higher seed's series win% at every length from a best of 1 to a best of 15, 
 chosen length, who wins in how many games — then each team's xWin% (with RS/G, RA/G and
 record) and the series win% with its likeliest outcome, the app's summary sentence, and
 **Download Series Win% PNG** / **Download Outcomes PNG** (2x, 400 dpi) and **Swap seeds**.
-The 2nd- and 6th-best teams by xWin% load on arrival, as in the app; a matchup is linkable as `series-win/#<season>-<higher>-<lower>&games=<n>`, with `&home=1` for
+Yankees over Red Sox loads on arrival, best of 7; a matchup is linkable as `series-win/#<season>-<higher>-<lower>&games=<n>`, with `&home=1` for
 all home games (teams by MLB abbreviation, e.g. `#2026-LAD-TB&games=7`).
 
 It is [baseball_snippets `mlb_series_win.py`](https://github.com/Blandalytics/baseball_snippets/blob/main/mlb_series_win.py)
