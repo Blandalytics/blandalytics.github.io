@@ -36,6 +36,7 @@ CROPS = {
     "swing-profiles": None,          # padded: a square crop cuts the axis label and the wordmark
     "batted-balls": None,            # padded, not cropped: the wordmark and data credit sit at the edges
     "release-angles": (0.5, 0.0),   # the figure with its title; trims the footer
+    "series-win": None,              # padded: the legend and the wordmark sit at the edges
     "nhl-draft": (0.0, 0.0),         # top of the options table
 }
 
