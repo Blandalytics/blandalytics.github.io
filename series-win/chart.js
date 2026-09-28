@@ -471,7 +471,7 @@
     const sy = (y) => ax.y1 - ((y - ylo) / (yhi - ylo)) * (ax.y1 - ax.y0);
     const yBins = Math.min(9, Math.floor((ax.y1 - ax.y0) / PT / 18));
     const yTicks = niceTicks(ylo, yhi, yBins);
-    swingAxes(f, { xTicks: LENGTHS, sx, xLabel: "Series length (best of X)",
+    swingAxes(f, { xTicks: LENGTHS, sx, xLabel: "Series Length (Best of X)",
       y: { ticks: yTicks, fmt: (v) => pct(v, 0), sy, label: `${opts.higher.name} Series Win%` } });
     // the coin flip, dashed
     ctx.save();
@@ -495,7 +495,7 @@
     }
     const home = opts.allHome ? `, all @${opts.code}` : "";
     swingChrome(f, `${opts.higher.name} over ${opts.lower.name}`, `${opts.season} Series Win%, by Series Length${home}`,
-      `Single game at a neutral site: ${opts.code} ${pct(opts.p)} (xWin%, log5). ` +
+      `Single game at a neutral site: ${opts.code} ${pct(opts.p)}. ` +
       (opts.allHome ? `Every game at ${opts.code}, home field worth 4%.` : "Higher seed has home field, worth 4%."), opts.wordmark);
   }
 
@@ -510,7 +510,7 @@
     const sx = (x) => ax.x0 + ((x - (x0 - margin)) / (x1 - x0 + 2 * margin)) * (ax.x1 - ax.x0);
     const ytop = tallest * 1.28;  // room for the key at the top
     const sy = (y) => ax.y1 - (y / ytop) * (ax.y1 - ax.y0);
-    swingAxes(f, { xTicks: space, sx, xLabel: "Series ends in X games" });
+    swingAxes(f, { xTicks: space, sx, xLabel: "Series Ends in X Games" });
     // the lower seed's parts are hatched when its colour could pass for the higher seed's
     const hatch = lookAlike(opts.higher.color, opts.lower.color);
 
