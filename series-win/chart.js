@@ -327,10 +327,265 @@
     if (opts.wordmark) ctx.drawImage(opts.wordmark, logo.x, logo.y, logo.w, logo.h);
   }
 
-  async function render(which, canvas, data, opts, scale = 2) {
+  // ---- the Swing Profiles style ------------------------------------------------------
+  //
+  // The page's figures: the same two charts in the Swing Profiles figure's clothes -- an
+  // 8 x 6 in figure at 200 dpi, its axes box (left 0.10, right 0.96, 0.95 in from the
+  // top, 1.08 in from the bottom), the matchup as a large teal title with a muted
+  // subtitle under it, the wordmark top right, regular-weight 9 / 10 pt axis text, 2 pt
+  // lines with surface-edged markers, and a footer note bottom left. No gridlines and no
+  // x spine; the series win% chart keeps a y axis trimmed to its ticks, the outcomes
+  // chart has none. (The app's own matplotlib look above is kept as ?style=app.)
+
+  const SW = {
+    w: 8, h: 6, left: 0.10, right: 0.96, top: 0.95, bottom: 1.08,
+    header: "#00D4FF", sub: "#8D96B3", chrome: "#8D96B3", line: "#00D4FF",
+  };
+
+  function swingFigure(canvas, scale) {
+    const W = SW.w * DPI, H = SW.h * DPI;
+    canvas.width = Math.round(W * scale); canvas.height = Math.round(H * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.fillStyle = BACKGROUND;
+    ctx.fillRect(0, 0, W, H);
+    const ax = { x0: SW.left * W, x1: SW.right * W, y0: SW.top * DPI, y1: H - SW.bottom * DPI };
+    const font = (size, weight) => { ctx.font = `${weight} ${size * PT}px ${FONT}`; };
+    const text = (s, x, y, { size = 10, weight = 400, colour = WHITE, ha = "left", va = "alphabetic", rotate = 0 } = {}) => {
+      ctx.save();
+      font(size, weight);
+      ctx.fillStyle = colour;
+      ctx.textAlign = ha;
+      ctx.textBaseline = va;
+      ctx.translate(x, y);
+      if (rotate) ctx.rotate(rotate);
+      ctx.fillText(s, 0, 0);
+      ctx.restore();
+    };
+    const measure = (s, size, weight = 400) => { font(size, weight); return ctx.measureText(s).width; };
+    return { ctx, W, H, ax, text, measure };
+  }
+
+  // tick labels and axis labels, as Swing Profiles' styleAxis, without its gridlines.
+  // `y` is optional: { ticks, fmt, sy, label }.
+  function swingAxes(f, { xTicks, xFmt = String, sx, xLabel, y = null }) {
+    const { ax, text, measure } = f;
+    const tickPad = 3.5 * PT, labelPad = 4 * PT;
+    for (const v of xTicks) text(xFmt(v), sx(v), ax.y1 + tickPad, { size: 9, ha: "center", va: "top" });
+    text(xLabel, (ax.x0 + ax.x1) / 2, ax.y1 + tickPad + 9 * PT + labelPad, { size: 10, ha: "center", va: "top" });
+    if (!y) return;
+    let widest = 0;
+    for (const v of y.ticks) {
+      widest = Math.max(widest, measure(y.fmt(v), 9));
+      text(y.fmt(v), ax.x0 - tickPad, y.sy(v), { size: 9, ha: "right", va: "middle" });
+    }
+    text(y.label, ax.x0 - tickPad - widest - labelPad, (ax.y0 + ax.y1) / 2, { size: 10, ha: "center", va: "bottom", rotate: -Math.PI / 2 });
+  }
+  // the y spine alone, trimmed to run from the first labelled tick to the last
+  function ySpine(f, top, bottom) {
+    const { ctx, ax } = f;
+    ctx.save();
+    ctx.strokeStyle = SW.chrome;
+    ctx.lineWidth = 1 * PT;
+    ctx.lineCap = "butt";
+    ctx.beginPath();
+    ctx.moveTo(ax.x0, top); ctx.lineTo(ax.x0, bottom);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Two team colours "look alike" when they are under SIMILAR apart in CIELAB (CIE76):
+  // Dodgers/Yankees, Red Sox/Angels, Royals/Blue Jays do; Dodgers/Rays, Brewers/Athletics don't.
+  const SIMILAR = 30;
+  function lab(hex) {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    const x = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047, y = r * 0.2126 + g * 0.7152 + b * 0.0722,
+      z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
+    const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+    return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+  }
+  function lookAlike(a, b) {
+    const A = lab(a), B = lab(b);
+    return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]) < SIMILAR;
+  }
+  // a faint cross-hatch over a rectangle (clipped to it, and to any clip already set)
+  function crossHatch(ctx, x, y, w, h) {
+    const step = 7 * PT;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.lineWidth = 0.8 * PT;
+    ctx.beginPath();
+    // anchored to the page, so stacked segments' hatches line up
+    for (let c = Math.floor((x - h) / step) * step; c <= x + w + h; c += step) {
+      ctx.moveTo(c, y); ctx.lineTo(c + h, y + h);
+      ctx.moveTo(c + h, y); ctx.lineTo(c, y + h);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // title, subtitle, wordmark and the footer note (one sentence a line)
+  function swingChrome(f, title, subtitle, note, wordmark) {
+    const { ctx, W, H, text } = f;
+    text(title, SW.left * W, 0.25 * DPI, { size: 22, weight: 700, colour: SW.header, va: "top" });
+    text(subtitle, SW.left * W, 0.625 * DPI, { size: 14, colour: SW.sub, va: "top" });
+    const lines = note.split(/(?<=\.)\s+/).filter(Boolean);
+    const lineH = 7.5 * PT * 1.6, bottom = H - 0.22 * DPI;
+    lines.forEach((s, i) => text(s, SW.left * W, bottom - (lines.length - 1 - i) * lineH, { size: 10, colour: SW.chrome, va: "bottom" }));
+    if (wordmark) {
+      const w = 0.25 * W, h = w * (wordmark.height / wordmark.width);
+      ctx.drawImage(wordmark, SW.right * W - w, 0.3 * DPI, w, h);
+    }
+  }
+
+  function marker(ctx, x, y, colour) {
+    ctx.beginPath();
+    ctx.arc(x, y, 4 * PT, 0, Math.PI * 2);
+    ctx.fillStyle = colour;
+    ctx.fill();
+    ctx.strokeStyle = BACKGROUND;
+    ctx.lineWidth = 2 * PT;
+    ctx.stroke();
+  }
+
+  // who hosts: "hosts games 1, 2, 5 and 7 (2-2-1-1-1)"
+  function hostingNote(code, games, allHome) {
+    if (allHome) return `Every game at ${code}, home field worth 4%.`;
+    const s = schedule(games);
+    const home = s.map((h, i) => (h ? i + 1 : 0)).filter(Boolean);
+    const runs = [];
+    s.forEach((h, i) => (i && h === s[i - 1] ? runs[runs.length - 1]++ : runs.push(1)));
+    const list = home.length > 1 ? `${home.slice(0, -1).join(", ")} and ${home[home.length - 1]}` : String(home[0]);
+    return `${code} hosts games ${list} (${runs.join("-")}), home field worth 4%.`;
+  }
+
+  function drawLengthSwing(canvas, line, opts, scale) {
+    const f = swingFigure(canvas, scale), { ctx, ax, text } = f;
+    const vals = line.map(([, v]) => v);
+    const ylo = Math.min(0.3, Math.min(...vals) - 0.05), yhi = Math.max(0.7, Math.max(...vals) + 0.05);
+    const sx = (x) => ax.x0 + (x / (MAX_LEN + 1)) * (ax.x1 - ax.x0);
+    const sy = (y) => ax.y1 - ((y - ylo) / (yhi - ylo)) * (ax.y1 - ax.y0);
+    const yBins = Math.min(9, Math.floor((ax.y1 - ax.y0) / PT / 18));
+    const yTicks = niceTicks(ylo, yhi, yBins);
+    swingAxes(f, { xTicks: LENGTHS, sx, xLabel: "Series length (best of X)",
+      y: { ticks: yTicks, fmt: (v) => pct(v, 0), sy, label: `${opts.higher.name} Series Win%` } });
+    // the coin flip, dashed
+    ctx.save();
+    ctx.strokeStyle = SW.chrome;
+    ctx.lineWidth = 1 * PT;
+    ctx.setLineDash([4 * PT, 3 * PT]);
+    ctx.beginPath(); ctx.moveTo(ax.x0, sy(0.5)); ctx.lineTo(ax.x1, sy(0.5)); ctx.stroke();
+    ctx.restore();
+    ySpine(f, sy(yTicks[yTicks.length - 1]), sy(yTicks[0]));
+    ctx.save();
+    ctx.strokeStyle = SW.line;
+    ctx.lineWidth = 2 * PT;
+    ctx.lineCap = ctx.lineJoin = "round";
+    ctx.beginPath();
+    line.forEach(([x, y], i) => (i ? ctx.lineTo(sx(x), sy(y)) : ctx.moveTo(sx(x), sy(y))));
+    ctx.stroke();
+    ctx.restore();
+    for (const [x, y] of line) {
+      marker(ctx, sx(x), sy(y), SW.line);
+      text(Math.round(y * 1000) / 1000 < 1 ? pct(y) : "~100%", sx(x), sy(y) - 8 * PT, { size: 11, ha: "center", va: "bottom" });
+    }
+    const home = opts.allHome ? `, all @${opts.code}` : "";
+    swingChrome(f, `${opts.higher.name} over ${opts.lower.name}`, `${opts.season} Series Win%, by Series Length${home}`,
+      `Single game at a neutral site: ${opts.code} ${pct(opts.p)} (xWin%, log5). ` +
+      (opts.allHome ? `Every game at ${opts.code}, home field worth 4%.` : "Higher seed has home field, worth 4%."), opts.wordmark);
+  }
+
+  function drawOutcomesSwing(canvas, res, opts, scale) {
+    const f = swingFigure(canvas, scale), { ctx, ax, text, measure } = f;
+    const n = res.games;
+    const space = [];
+    for (let g = res.need; g <= n; g++) space.push(g);
+    const hi = space.map((g) => res.higher[g]), lo = space.map((g) => res.lower[g]);
+    const tallest = Math.max(...space.map((_, i) => hi[i] + lo[i]));
+    const x0 = space[0] - 0.5, x1 = space[space.length - 1] + 0.5, margin = 0.05 * (x1 - x0);
+    const sx = (x) => ax.x0 + ((x - (x0 - margin)) / (x1 - x0 + 2 * margin)) * (ax.x1 - ax.x0);
+    const ytop = tallest * 1.28;  // room for the key at the top
+    const sy = (y) => ax.y1 - (y / ytop) * (ax.y1 - ax.y0);
+    swingAxes(f, { xTicks: space, sx, xLabel: "Series ends in X games" });
+    // the lower seed's parts are hatched when its colour could pass for the higher seed's
+    const hatch = lookAlike(opts.higher.color, opts.lower.color);
+
+    // stacked bars, the higher seed at the bottom, split by a surface-coloured seam
+    const size = n >= 13 ? 9 : n >= 9 ? 10 : 11;
+    const labelH = size * PT * 1.25;
+    const halfW = 0.4;
+    const above = [];  // labels too big for their segment, stacked over the bar
+    space.forEach((g, i) => {
+      const segs = [[0, hi[i], opts.higher.color], [hi[i], hi[i] + lo[i], opts.lower.color]];
+      const l = sx(g - halfW), r = sx(g + halfW);
+      segs.forEach(([a, b, colour], k) => {
+        ctx.fillStyle = colour;
+        ctx.fillRect(l, sy(b), r - l, sy(a) - sy(b));
+        if (hatch && k === 1) crossHatch(ctx, l, sy(b), r - l, sy(a) - sy(b));
+      });
+      ctx.fillStyle = BACKGROUND;
+      ctx.fillRect(l, sy(hi[i]) - 0.75 * PT, r - l, 1.5 * PT);
+      const stack = [];
+      segs.forEach(([a, b, colour], k) => {
+        const s = b - a >= 0.0005 ? pct(b - a) : "~0%";
+        if (sy(a) - sy(b) >= labelH + 4 * PT) text(s, (l + r) / 2, (sy(a) + sy(b)) / 2, { size, ha: "center", va: "middle" });
+        else stack.push([s, colour, hatch && k === 1]);
+      });
+      above.push([g, hi[i] + lo[i], stack]);
+    });
+    // a label that doesn't fit sits over its bar in a pill of its team's colour
+    for (const [g, top, stack] of above) {
+      let y = sy(top) - 4 * PT;
+      for (const [s, colour, hatched] of stack) {  // in the bar's order: the higher seed's lowest
+        const w = measure(s, size) + 8 * PT, h = labelH + 2 * PT;
+        ctx.beginPath();
+        ctx.roundRect(sx(g) - w / 2, y - h, w, h, 3 * PT);
+        ctx.fillStyle = colour;
+        ctx.fill();
+        if (hatched) { ctx.save(); ctx.clip(); crossHatch(ctx, sx(g) - w / 2, y - h, w, h); ctx.restore(); }
+        ctx.beginPath();
+        ctx.roundRect(sx(g) - w / 2, y - h, w, h, 3 * PT);
+        ctx.strokeStyle = SW.chrome;
+        ctx.lineWidth = 0.8 * PT;
+        ctx.stroke();
+        text(s, sx(g), y - h / 2, { size, ha: "center", va: "middle" });
+        y -= h + 3 * PT;
+      }
+    }
+
+    // the key: each side's colour and series win%, centred over the bars
+    const ky = ax.y0 + 14 * PT, sw = 10 * PT, gap = 6 * PT, between = 24 * PT;
+    const items = [[opts.higher, res.win, false], [opts.lower, 1 - res.win, hatch]].map(([team, v, hatched]) => {
+      const s = `${team.name} win: ${pct(v)}`;
+      return { team, s, hatched, w: sw + gap + measure(s, 12) };
+    });
+    let kx = (ax.x0 + ax.x1) / 2 - (items[0].w + between + items[1].w) / 2;
+    for (const it of items) {
+      ctx.fillStyle = it.team.color;
+      ctx.fillRect(kx, ky - sw / 2, sw, sw);
+      if (it.hatched) crossHatch(ctx, kx, ky - sw / 2, sw, sw);
+      ctx.strokeStyle = SW.chrome;
+      ctx.lineWidth = 0.8 * PT;
+      ctx.strokeRect(kx, ky - sw / 2, sw, sw);
+      text(it.s, kx + sw + gap, ky, { size: 12, va: "middle" });
+      kx += it.w + between;
+    }
+
+    const home = opts.allHome ? `, all @${opts.code}` : "";
+    swingChrome(f, `${opts.higher.name} vs. ${opts.lower.name}`, `${opts.season} Series Outcomes, Best of ${n}${home}`,
+      `Share of series won by each side, by games played. ${hostingNote(opts.code, n, opts.allHome)}`, opts.wordmark);
+  }
+
+  async function render(which, canvas, data, opts, scale = 2, style = "app") {
     await ensureFonts();
+    if (style === "swing" && document.fonts) { try { await document.fonts.load(`400 40px ${FONT}`); } catch { /* fallback */ } }
     const wordmark = await loadWordmark();
-    (which === "length" ? drawLength : drawOutcomes)(canvas, data, { ...opts, wordmark }, scale);
+    const draw = style === "swing" ? (which === "length" ? drawLengthSwing : drawOutcomesSwing) : (which === "length" ? drawLength : drawOutcomes);
+    draw(canvas, data, { ...opts, wordmark }, scale);
   }
 
   window.SeriesWin = { HFA, MAX_LEN, LENGTHS, xWin, log5, schedule, series, byLength, render };

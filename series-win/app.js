@@ -23,6 +23,9 @@
     143: "#E81828", 144: "#CE1141", 145: "#27251F", 146: "#00A3E0", 147: "#003087", 158: "#12284B",
   };
   const FIRST_SEASON = 2000;
+  // the figures are drawn in the Swing Profiles style; ?style=app draws the Streamlit app's
+  const STYLE = new URLSearchParams(location.search).get("style") === "app" ? "app" : "swing";
+  const FIG_W = STYLE === "swing" ? { length: 1600, games: 1600 } : { length: 1064, games: 970 };
   const THIS_YEAR = new Date().getFullYear();
 
   const status = (text, cls = "") => { el.status.textContent = text; el.status.className = `status ${cls}`.trim(); };
@@ -195,13 +198,13 @@
     const opts = { hfa: S.HFA, allHome: sel.allHome };
     const line = S.byLength(p, opts);
     const res = S.series(p, sel.games, opts);
-    const figOpts = { higher: h, lower: l, p, allHome: sel.allHome, code: h.code };
+    const figOpts = { higher: h, lower: l, p, allHome: sel.allHome, code: h.code, season };
 
     el.out.hidden = false;  // shown first, so the canvases have a width to size to
     const scale = (canvas, w) => Math.max(1, Math.min(2, (canvas.clientWidth || 800) * (window.devicePixelRatio || 1) / w));
     await Promise.all([
-      S.render("length", el.figLength, line, figOpts, scale(el.figLength, 1064)),
-      S.render("games", el.figGames, res, figOpts, scale(el.figGames, 970)),
+      S.render("length", el.figLength, line, figOpts, scale(el.figLength, FIG_W.length), STYLE),
+      S.render("games", el.figGames, res, figOpts, scale(el.figGames, FIG_W.games), STYLE),
     ]);
     if (token !== drawing) return;
 
@@ -259,7 +262,7 @@
   async function download(which) {
     if (!drawn) return;
     const d = drawn, c = document.createElement("canvas");
-    await S.render(which, c, which === "length" ? d.line : d.res, d.figOpts, 2);
+    await S.render(which, c, which === "length" ? d.line : d.res, d.figOpts, 2, STYLE);
     const stem = `${d.sel.season}_${d.sel.higher.code}_${d.sel.lower.code}`.toLowerCase();
     const name = which === "length" ? `series_win_${stem}` : `series_outcomes_${stem}_bo${d.sel.games}`;
     c.toBlob((b) => save(b, `${name}${d.sel.allHome ? "_all_home" : ""}.png`), "image/png");
