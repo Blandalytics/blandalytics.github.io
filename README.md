@@ -498,6 +498,52 @@ writes the same files under `release-angles/data/release-angles/`, and the page 
 not. After any change to the JavaScript, bump the `?v=` query on the two script tags in
 `index.html` so browsers fetch the new files.
 
+## Series Win
+
+[blandalytics.com/series-win/](https://blandalytics.com/series-win/) — how often one MLB team
+beats another over a series, and how long the series goes. The controls and layout are Swing
+Profiles': a season, the higher and lower seed as type-ahead fields (club name, city or
+abbreviation; an empty field lists every team, best xWin% first, with its record), **Best of**
+(3 to 15) and **Home games** (split, or all in the higher seed's park), then **Simulate**. A
+pick from a list, or a change to a select, draws straight away. One card holds both charts —
+the higher seed's series win% at every length from a best of 1 to a best of 15, and, for the
+chosen length, who wins in how many games — then each team's xWin% (with RS/G, RA/G and
+record) and the series win% with its likeliest outcome, the app's summary sentence, and
+**Download Series Win% PNG** / **Download Outcomes PNG** (2x, 400 dpi) and **Swap seeds**.
+The 2nd- and 6th-best teams by xWin% load on arrival, as in the app; a matchup is linkable as `series-win/#<season>-<higher>-<lower>&games=<n>`, with `&home=1` for
+all home games (teams by MLB abbreviation, e.g. `#2026-LAD-TB&games=7`).
+
+It is [baseball_snippets `mlb_series_win.py`](https://github.com/Blandalytics/baseball_snippets/blob/main/mlb_series_win.py)
+(the [mlb-series-win.streamlit.app](https://mlb-series-win.streamlit.app/) app) ported to the
+browser: the same model, schedule and two figures, laid out in the pixels of the script's
+200 dpi matplotlib output. It departs from the script in three places:
+
+- **Exact, not simulated.** The script plays 100,000 (and 250,000) random series; the page sums
+  every path to a clinch, so its numbers are the ones the simulations scatter around (within
+  ~0.2 points on Dodgers–Rays) and never change between loads.
+- **MLB's standings, any season.** Runs scored, runs allowed and games played come straight from
+  the StatsAPI standings (it allows any origin), one request per season, for 2000 onwards,
+  rather than from the app's Google Sheet. Team colours are the sheet's, keyed by MLB team id.
+- **All home games moves both charts.** In the script the checkbox only changes the outcomes
+  chart; here the series win% line follows it too, and both subtitles say `all @<team>`.
+
+### How it works
+
+Each team's xWin% is its Pythagorean win% with the PythagenPat exponent, from runs per game:
+`total_runs_factor = (RS/G + RA/G) ^ 0.285`, `xWin% = RS/G ^ total_runs_factor / (RS/G ^
+total_runs_factor + RA/G ^ total_runs_factor)`. log5 turns the two into the higher seed's
+chance to win one game at a neutral site, `(h − h·l) / (h + l − 2·h·l)` (0.5 for a team against
+itself). Home field is worth 4 points either way. A best of 3 is home–road–home; longer series
+open 2-2 and then alternate from home (2-2-1, 2-2-1-1-1, …), the script's schedule.
+
+| file | role |
+|---|---|
+| `series-win/chart.js` | the model (xWin%, log5, schedule, the exact series) and the two figures, drawn on a canvas at any scale |
+| `series-win/index.html`, `app.js` | the page: season, seed, length and home controls, the StatsAPI fetch, downloads, the link hash |
+
+After any change to the JavaScript, bump the `?v=` query on the two script tags in `index.html`
+so browsers fetch the new files.
+
 ## NHL Draft Tool
 
 [blandalytics.com/nhl-draft/](https://blandalytics.com/nhl-draft/) — a draft tool for a 12-team
