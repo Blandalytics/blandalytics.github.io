@@ -181,13 +181,20 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 
 ### The models
 
-Stuff, Locations and PLV come from the pitch-modeling project, whose four chained logit
-models, run-value tables and plus scale live in the bucket under `pitch-modeling/` (60 MB,
-downloaded once and cached beside the data files). Its `pitch_values.py` gives a run value
-per pitch from the pitcher's side — count-neutral Stuff, what the location added, and the
-two together as Pitching, which is the card's PLV — and `output/game_scale_2023_2026.json`
-puts a unit's mean on the card's 100 ± 15 scale: whole outings for the three grades, one
-pitch type of one outing for the plvStuff+ and PLV+ columns. The letters keep their old cut
+Stuff, Locations and PLV come from the
+[pitch-modeling](https://github.com/Blandalytics/pitch-modeling) repo. It is published to
+the bucket under `pitch-modeling/` (60 MB, downloaded once and cached beside the data files)
+and contains:
+
+* `score_pitches.py`, the standalone scorer;
+* `models/`, the four chained logit models;
+* `constants/`, the run-value tables and plus scale.
+
+The scorer gives a run value per pitch from the pitcher's side: count-neutral Stuff, what the
+location added, and the two together as Pitching, which is the card's PLV.
+`constants/plus_scale_constants.json` puts a unit's mean on the card's 100 ± 15 scale, with
+2023–26 constants. The card uses whole outings for the three grades, and one pitch type of
+one outing for the plvStuff+ and PLV+ columns. The letters keep their old cut
 points at the same distances from the mean, so a grade still means what it did, and the
 per-pitch-type colour bins are the 10th, 30th, 70th and 90th percentiles of that pitch
 type's 2026 pitcher-games. A pitch the chain does not model — a position player's eephus,
