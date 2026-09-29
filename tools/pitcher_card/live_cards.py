@@ -60,9 +60,10 @@ def built_games(s) -> set[str]:
         return set()
 
 
-def wanted(games: list[dict], index: dict) -> list[dict]:
+def wanted(games: list[dict], index: dict, force: bool = False) -> list[dict]:
     """Live MLB games, plus any game the index is following that has since gone final
-    (it gets one last build)."""
+    (it gets one last build). With ``force``, every game the index follows, so that a
+    rendering change reaches cards whose pitch counts have stopped moving."""
     out = []
     for g in games:
         if g["sport"]["id"] != 1:
@@ -71,7 +72,7 @@ def wanted(games: list[dict], index: dict) -> list[dict]:
         followed = str(g["gamePk"]) in index["games"]
         final_pending = g["status"]["abstract"] == "Final" and followed \
             and not index["games"][str(g["gamePk"])].get("final")  # fmt: skip
-        if live or final_pending:
+        if live or final_pending or (force and followed):
             out.append(g)
     return out
 
@@ -89,7 +90,7 @@ def load_index(store) -> dict:
     return idx
 
 
-def build_game(g: dict, s, data, store, index: dict) -> int:
+def build_game(g: dict, s, data, store, index: dict, force: bool = False) -> int:
     """Build the cards a game needs right now; returns how many were written."""
     pk = g["gamePk"]
     feed = fetch.feed(s, pk)
@@ -102,7 +103,7 @@ def build_game(g: dict, s, data, store, index: dict) -> int:
     final = feed["gameData"]["status"]["codedGameState"] == "F"
 
     def skip(_pk, pid):  # unchanged since the last build, unless this is the final pass
-        return not final and have.get(pid) == counts.get(pid)
+        return not force and not final and have.get(pid) == counts.get(pid)
 
     n = 0
     cards = cards_for_game(pk, feed, df, s, data, strict=False, skip=skip, logo=LOGO)
@@ -123,7 +124,7 @@ def build_game(g: dict, s, data, store, index: dict) -> int:
     return n
 
 
-def run(store, data_cache: str, only: int | None = None) -> int:
+def run(store, data_cache: str, only: int | None = None, force: bool = False) -> int:
     s = fetch.session()
     data = fetch.DataStore(data_cache, s)
     index = load_index(store)
@@ -133,13 +134,13 @@ def run(store, data_cache: str, only: int | None = None) -> int:
     keep = {str(g["gamePk"]) for g in games} - built_games(s)
     for pk in [k for k in index["games"] if k not in keep]:
         del index["games"][pk]
-    todo = wanted(games, index) if only is None else [one_game(games, only)]
+    todo = wanted(games, index, force) if only is None else [one_game(games, only)]
 
     t0 = time.perf_counter()
     built = 0
     for g in todo:
         try:
-            built += build_game(g, s, data, store, index)
+            built += build_game(g, s, data, store, index, force)
         except Exception as exc:  # noqa: BLE001 - one game must not sink the rest
             print(f"  game {g['gamePk']} FAILED: {exc}", file=sys.stderr)
     index["updated"] = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -157,9 +158,14 @@ def main(argv=None) -> int:
     ap.add_argument("--game", type=int, help="one gamePk, whatever its state")
     ap.add_argument("--out", help="write to this folder instead of the bucket")
     ap.add_argument("--cache", default=DEFAULT_CACHE, help="the comparison-season cache")
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="rebuild every card, not just those whose pitch count moved",
+    )
     a = ap.parse_args(argv)
     store = LocalStore(a.out) if a.out else R2Store()
-    run(store, a.cache, a.game)
+    run(store, a.cache, a.game, a.force)
     return 0
 
 
