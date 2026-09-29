@@ -302,7 +302,12 @@ def _empty() -> pd.DataFrame:
 
 
 def _concat(*frames: pd.DataFrame) -> pd.DataFrame:
-    """Append, keeping the string columns categorical across differing category sets."""
+    """Append, keeping the string columns categorical across differing category sets.
+
+    Frames with no rows are dropped first. They add nothing, and a typeless empty one
+    would turn every numeric column object: past the last regular-season day the tail
+    pull covers a span with no games, which is every day of the postseason."""
+    frames = tuple(f for f in frames if not f.empty) or frames[:1]
     if len(frames) == 1:
         return frames[0]
     cats = [c for c in frames[0].columns if isinstance(frames[0][c].dtype, pd.CategoricalDtype)]
