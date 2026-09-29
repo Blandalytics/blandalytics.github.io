@@ -394,16 +394,19 @@ def _arm_label(ax: Axes, card: dict, lim: int) -> list[str]:
 
 
 def _shapes(ax: Axes, card: dict) -> list[str]:
-    """The comparison seasons' movement regions, one group per season."""
+    """The comparison seasons' movement regions, one group per season.
+
+    The opacity is on each path, not the group: seaborn draws a type at a time, so where
+    two types overlap the colours composite and darken. Group opacity would flatten the
+    types together first and composite once, hiding whatever the last type covers."""
     out = []
     for c in card["comparisons"]:
         paths = "".join(
-            f'<path d="{d}" fill="{MARKER_COLORS.get(code, "#c7c7c7")}"/>'
+            f'<path d="{d}" fill="{MARKER_COLORS.get(code, "#c7c7c7")}" fill-opacity="0.25"/>'
             for code, ds in c["shapes"].items()
             for d in ds
         )
-        out.append(f'<g data-cmp="{c["year"]}" opacity="0.25" transform="{ax.transform()}">'
-                   f"{paths}</g>")  # fmt: skip
+        out.append(f'<g data-cmp="{c["year"]}" transform="{ax.transform()}">{paths}</g>')
     return out
 
 
