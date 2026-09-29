@@ -1,9 +1,13 @@
 name: Live pitcher cards
 
 # Cards for the MLB games in progress, written to the bucket (live/cards/) rather than
-# the repo, every 15 minutes through game hours. A pitcher's card is rebuilt only when
-# his pitch count has moved; a game gets one last build after it goes final, and the
-# nightly pitcher-cards run then commits the permanent card.
+# the repo. A pitcher's card is rebuilt only when his pitch count has moved; a game gets
+# one last build after it goes final, and the nightly pitcher-cards run then commits the
+# permanent card.
+#
+# The live poller in tools/live drives this: it runs every minute and asks for a build
+# every five while a game is on. The schedule below is only a backstop -- GitHub drops
+# most firings of a cron this frequent, delivering it roughly three times a day.
 on:
   schedule:
     - cron: "*/15 16-23,0-6 * * *"
