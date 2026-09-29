@@ -23,7 +23,7 @@ FEED = "https://statsapi.mlb.com/api/v1.1/game/{pk}/feed/live"
 DATA_URL = "https://data.blandalytics.com"
 ARM_ANGLES = (
     "https://baseballsavant.mlb.com/leaderboard/pitcher-arm-angles?batSide=&dateStart={start}"
-    "&dateEnd={end}&gameType=R&groupBy=api_pitch_type_group03&min=1&minGroupPitches=1"
+    "&dateEnd={end}&gameType={gt}&groupBy=api_pitch_type_group03&min=1&minGroupPitches=1"
     "&perspective=back&pitchHand=&pitchType=&season={season}&size=small&sort=ascending"
     "&team=&csv=true"
 )
@@ -58,32 +58,48 @@ def feed(s: requests.Session, game_pk: int) -> dict:
 
 
 # ---- arm angles ---------------------------------------------------------------------
-def _arm_query(game_date: dt.date, today: dt.date) -> dict[str, str]:
-    """Which leaderboard to read. Savant's per-day arm angles land a few days after the
-    game, so a recent game reads the season to date; a game before the season opens
-    reads the previous season."""
+def _arm_queries(game_date: dt.date, today: dt.date, game_type: str) -> list[dict[str, str]]:
+    """The leaderboards to try for a game, best first.
+
+    Savant's per-day arm angles land a few days after the game, so a recent game reads
+    the season to date; a game before the season opens reads the previous season. The
+    season is always named: without it a date window in a past season comes back empty.
+    A postseason date holds no regular-season games, so the round's own code has to be
+    asked for -- and a round Savant has not published yet falls back to the pitcher's
+    regular season, which is the sample the comparisons use anyway."""
     opener = dt.date(game_date.year, 3, 25)
+    year = str(game_date.year - 1 if game_date <= opener else game_date.year)
+    day = game_date.isoformat()
+    out = []
     if (today - game_date).days >= 3 and game_date > opener:
-        return {"start": game_date.isoformat(), "end": game_date.isoformat(), "season": ""}
-    year = game_date.year - 1 if game_date <= opener else game_date.year
-    return {"start": "", "end": "", "season": str(year)}
+        out.append({"start": day, "end": day, "season": year, "gt": game_type})
+    out.append({"start": "", "end": "", "season": year, "gt": game_type})
+    if game_type != "R":
+        out.append({"start": "", "end": "", "season": year, "gt": "R"})
+    return out
 
 
 _arm_cache: dict[str, dict[int, dict[str, float]]] = {}
 
 
 def arm_angles(
-    s: requests.Session, game_date: dt.date, today: dt.date | None = None
+    s: requests.Session,
+    game_date: dt.date,
+    today: dt.date | None = None,
+    game_type: str = "R",
 ) -> dict[int, dict[str, float]]:
     """pitcher id -> {raw pitch-type code: arm angle in degrees} for a game date."""
-    url = ARM_ANGLES.format(**_arm_query(game_date, today or dt.date.today()))
-    if url not in _arm_cache:
-        try:
-            _arm_cache[url] = _read_arm_angles(s, url)
-        except (requests.RequestException, ValueError, KeyError) as exc:
-            print(f"arm angles unavailable for {game_date}: {exc}", file=sys.stderr)
-            _arm_cache[url] = {}
-    return _arm_cache[url]
+    for q in _arm_queries(game_date, today or dt.date.today(), game_type):
+        url = ARM_ANGLES.format(**q)
+        if url not in _arm_cache:
+            try:
+                _arm_cache[url] = _read_arm_angles(s, url)
+            except (requests.RequestException, ValueError, KeyError) as exc:
+                print(f"arm angles unavailable for {game_date}: {exc}", file=sys.stderr)
+                _arm_cache[url] = {}
+        if _arm_cache[url]:
+            return _arm_cache[url]
+    return {}
 
 
 def _read_arm_angles(s: requests.Session, url: str) -> dict[int, dict[str, float]]:

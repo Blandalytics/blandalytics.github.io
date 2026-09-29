@@ -128,7 +128,8 @@ def build_card(game_pk, pitcher_id, feed, df, session, store, logo=render.LOGO, 
     the Pitcher List mark's URL as the page will see it; ``values`` the game's model
     columns, scored here for this pitcher alone when a caller has none in hand."""
     date = dt.date.fromisoformat(feed["gameData"]["datetime"]["officialDate"])
-    arm = fetch.arm_angles(session, date).get(pitcher_id, {})
+    game_type = feed["gameData"]["game"]["type"]
+    arm = fetch.arm_angles(session, date, game_type=game_type).get(pitcher_id, {})
     seasons = seasons_for(pitcher_id, date, store)
     if values is None:
         values = game_values(df, session, store)
