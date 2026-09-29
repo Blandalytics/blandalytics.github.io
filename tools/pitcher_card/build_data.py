@@ -23,7 +23,8 @@ from grades import (
     run_diff_bucket,
     stat_color,
 )
-from models import GRADE_COLUMNS, Models
+from models import Models
+from pitch_model import GRADE_COLUMNS
 
 MIN_GAMES = 3  # a season needs this many appearances to be offered as a comparison
 FASTBALL_PANEL = ("Velo", "Ext", "IVB", "HB", "HAVAA")
@@ -100,11 +101,13 @@ def outing_grade(box: dict, p: pd.DataFrame) -> str:
 
 
 # ---- scoring ------------------------------------------------------------------------
-def scored_pitches(df: pd.DataFrame, info: dict, arm: dict[str, float], models: Models):
-    """The prepared pitch frame with model grades, blanked where the tracking data the
-    models need is missing."""
+def scored_pitches(df, info: dict, arm: dict[str, float], models: Models, values: pd.DataFrame):
+    """The prepared pitch frame with its model columns, blanked where the tracking data
+    the models need is missing. ``values`` is this pitcher's per-pitch run values, keyed
+    as pitch_model.KEYS; a pitch the scorer skipped is simply absent and stays blank."""
     p = prep.pitches(df, info["height"], arm)
-    p[list(GRADE_COLUMNS)] = models.score(p)
+    keys = pd.MultiIndex.from_arrays([p["game_pk"], p["abi"], p["pitch_no"]])
+    p[list(GRADE_COLUMNS)] = values[list(GRADE_COLUMNS)].reindex(keys).to_numpy()
     p["xSLGcon"] = models.xslg_con(p)
     missing = p[list(prep.TRACKING)].isna().any(axis=1)
     p.loc[missing, ["plvStuff+", "PLV+", "stuffGrade_game", "plvGrade_game"]] = np.nan
@@ -246,12 +249,14 @@ def build(
     seasons: dict[int, pd.DataFrame],
     arm_angles: dict[str, float],
     models: Models,
+    values: pd.DataFrame,
 ) -> dict:
     """The card dict for one pitcher's game. ``df`` is that pitcher's pitches from
-    statfast; ``seasons`` maps year -> the same pitcher's regular-season pitches from
-    before this game."""
+    statfast, ``values`` their Stuff / Locations / Pitching columns from pitch_model, and
+    ``seasons`` maps year -> the same pitcher's regular-season pitches from before this
+    game."""
     info = game_info(feed, pitcher_id)
-    p = scored_pitches(df, info, arm_angles, models)
+    p = scored_pitches(df, info, arm_angles, models, values)
     table = prep.game_table(p)
     date = dt.date.fromisoformat(info["date"])
     grades = {"game": outing_grade(info["box"], p), **grade_summary(p)}

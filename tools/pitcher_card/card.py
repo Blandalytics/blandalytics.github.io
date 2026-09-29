@@ -47,9 +47,11 @@ import statfast  # noqa: E402
 import build_data  # noqa: E402
 import fetch  # noqa: E402
 import render  # noqa: E402
+import pitch_model  # noqa: E402
 from models import Models  # noqa: E402
 
 GAME_TYPES = "R,P"  # regular season and postseason
+_pitch_model: pitch_model.PitchModel | None = None
 SCHEDULE = "https://statsapi.mlb.com/api/v1/schedule"
 _models: Models | None = None
 
@@ -63,6 +65,21 @@ def models() -> Models:
     if _models is None:
         _models = Models(MODELS_DIR)
     return _models
+
+
+def pitch_values(session, store) -> pitch_model.PitchModel:
+    """The Stuff / Locations / Pitching scorer, its artifacts cached beside the data files."""
+    global _pitch_model
+    if _pitch_model is None:
+        _pitch_model = pitch_model.PitchModel(store.dir, session)
+    return _pitch_model
+
+
+def game_values(df: pd.DataFrame, session, store) -> pd.DataFrame:
+    """The card's model columns for a whole game's pitches, keyed by pitch_model.KEYS.
+    Score whole outings: the scorer reads each pitcher's arsenal off what it is given."""
+    pm = pitch_values(session, store)
+    return pm.columns(pm.score(df))
 
 
 def day_pitches(date: dt.date, session, store=None, game_type: str = GAME_TYPES) -> pd.DataFrame:
@@ -106,20 +123,23 @@ def pitcher_order(feed: dict) -> list[int]:
     return [*home[:1], *away[:1], *home[1:], *away[1:]]
 
 
-def build_card(game_pk, pitcher_id, feed, df, session, store, logo=render.LOGO):
+def build_card(game_pk, pitcher_id, feed, df, session, store, logo=render.LOGO, values=None):
     """(html, card dict) for one pitcher whose feed and pitches are in hand. ``logo`` is
-    the Pitcher List mark's URL as the page will see it."""
+    the Pitcher List mark's URL as the page will see it; ``values`` the game's model
+    columns, scored here for this pitcher alone when a caller has none in hand."""
     date = dt.date.fromisoformat(feed["gameData"]["datetime"]["officialDate"])
     arm = fetch.arm_angles(session, date).get(pitcher_id, {})
     seasons = seasons_for(pitcher_id, date, store)
-    card = build_data.build(game_pk, pitcher_id, feed, df, seasons, arm, models())
+    if values is None:
+        values = game_values(df, session, store)
+    card = build_data.build(game_pk, pitcher_id, feed, df, seasons, arm, models(), values)
     return render.render_html(card, logo), card
 
 
-def _try_card(game_pk, pid, feed, pitches, session, store, strict, logo=render.LOGO):
+def _try_card(game_pk, pid, feed, pitches, session, store, strict, logo, values):
     """build_card, or None with the failure logged when ``strict`` is off."""
     try:
-        return build_card(game_pk, pid, feed, pitches, session, store, logo)
+        return build_card(game_pk, pid, feed, pitches, session, store, logo, values)
     except Exception:  # noqa: BLE001 - a site build carries on past one bad card
         if strict:
             raise
@@ -134,11 +154,12 @@ def cards_for_game(
     """Yields (pitcher id, html, card) for every pitcher with tracked pitches in a game.
     With ``strict`` off a pitcher whose card fails is logged and skipped; ``skip(game_pk,
     pitcher_id)`` can decline a card before it is built."""
+    values = game_values(df, session, store)  # once for the game, keyed per pitch
     for pid in pitcher_order(feed):
         pitches = df[df["pitcher"] == pid]
         if pitches.empty or (skip is not None and skip(game_pk, pid)):
             continue
-        built = _try_card(game_pk, pid, feed, pitches, session, store, strict, logo)
+        built = _try_card(game_pk, pid, feed, pitches, session, store, strict, logo, values)
         if built is not None:
             yield pid, *built
 
