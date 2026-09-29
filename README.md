@@ -143,8 +143,8 @@ from there:
   morning at 10:30 UTC. It clones
   [Blandalytics/statcast_scraper](https://github.com/Blandalytics/statcast_scraper) (the
   pitches) and [Blandalytics/player_cards](https://github.com/Blandalytics/player_cards) (the
-  PLV model files) and builds a card for every pitcher who threw a tracked pitch the day
-  before. A backfill splits its range into months and builds them as parallel jobs; the index
+  PLV model files) and fetches the pitch-modeling chain from the bucket, then builds a card
+  for every pitcher who threw a tracked pitch the day before. A backfill splits its range into months and builds them as parallel jobs; the index
   is rebuilt from the day manifests once they have all finished.
 - [`.github/workflows/pitcher-cards-live.yml`](.github/workflows/pitcher-cards-live.yml) runs
   every 15 minutes through game hours and builds cards for the pitchers in the games in
@@ -171,15 +171,31 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 | `fetch.py` | the statsapi live feed (box score, bio, teams), Baseball Savant's arm angles, and `DataStore`: pitches by date from the data files in the bucket, topped up through the scraper for the days the files don't reach yet |
 | `live_cards.py` | the cards for the games in progress, published to the bucket; what `pitcher-cards-live.yml` runs |
 | `prep.py` | per-pitch metrics from the scraper's columns: counts before the pitch, approach angles, break as acceleration, fastball differences, the per-type tables |
-| `models.py` | the stuff / location / PLV model chains and the xSLG model, from the `player_cards` checkout |
+| `pitch_model.py` | Stuff, Locations and PLV: the pitch-modeling chain from the bucket, and the scale that turns its run values into the card's numbers |
+| `models.py` | expected slugging on contact, the one model still read from the `player_cards` checkout |
 | `shapes.py` | the comparison season's movement regions (seaborn's 90%-mass KDE contours) as SVG paths |
 | `grades.py` | palette, pitch-type names and colours, benchmark bins, letter grades and both game-score formulas |
 | `build_data.py` | assembles all of that into one card dict |
 | `render.py` | renders the dict as the page |
 | `build_site.py` | builds a date range into the bucket (or a folder with `--out`) and maintains the manifests; `--reindex` rebuilds the index alone |
 
+### The models
+
+Stuff, Locations and PLV come from the pitch-modeling project, whose four chained logit
+models, run-value tables and plus scale live in the bucket under `pitch-modeling/` (60 MB,
+downloaded once and cached beside the data files). Its `pitch_values.py` gives a run value
+per pitch from the pitcher's side — count-neutral Stuff, what the location added, and the
+two together as Pitching, which is the card's PLV — and `output/game_scale_2023_2026.json`
+puts a unit's mean on the card's 100 ± 15 scale: whole outings for the three grades, one
+pitch type of one outing for the plvStuff+ and PLV+ columns. The letters keep their old cut
+points at the same distances from the mean, so a grade still means what it did, and the
+per-pitch-type colour bins are the 10th, 30th, 70th and 90th percentiles of that pitch
+type's 2026 pitcher-games. A pitch the chain does not model — a position player's eephus,
+anything missing tracking — simply has no value, and the card shows a dash. Expected
+slugging on contact is still the xSLG model from `player_cards`.
+
 The comparison seasons, and the pitches of any settled date, come from the completed-games
-Parquet in the bucket (see *Data files*): each file is downloaded once, narrowed to the ~40
+Parquet in the bucket (see *Data files*): each file is downloaded once, narrowed to the
 columns a card reads and cached, so a cold build of a card is under a minute rather than
 four. The days the files don't reach yet — the two most recent — are pulled through the
 scraper, as is a game in progress (one game at a time, so a card can be built mid-game). The
