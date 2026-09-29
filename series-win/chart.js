@@ -399,6 +399,8 @@
   const SIMILAR = 30;
   // the outcomes chart outlines each bar segment, and the tags and key swatches standing in for them
   const OUTLINE = 1 * PT;
+  // the outcomes chart's tallest bar stops this far under the key (half the 75 pt it used to)
+  const KEY_GAP = 37.5 * PT;
   function lab(hex) {
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
       .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
@@ -537,15 +539,30 @@
     const tallest = Math.max(...space.map((_, i) => hi[i] + lo[i]));
     const x0 = space[0] - 0.5, x1 = space[space.length - 1] + 0.5, margin = 0.05 * (x1 - x0);
     const sx = (x) => ax.x0 + ((x - (x0 - margin)) / (x1 - x0 + 2 * margin)) * (ax.x1 - ax.x0);
-    const ytop = tallest * 1.28;  // room for the key at the top
-    const sy = (y) => ax.y1 - (y / ytop) * (ax.y1 - ax.y0);
+    const size = n >= 13 ? 9 : n >= 9 ? 10 : 11;
+    const labelH = size * PT * 1.25;
+    const fits = (px) => px >= labelH + 4 * PT;       // a segment tall enough to hold its label
+    const tagStep = labelH + 2 * PT + 3 * PT;          // one tag over a bar, and the space after it
+    // The key sits at the top of the axes; the tallest bar stops KEY_GAP under it. A bar
+    // carrying tags for thin slices stops low enough that its tags keep clear of the key.
+    // (Which slices need tags depends on the scale, so it settles over a few passes.)
+    const ky = ax.y0 + 14 * PT, sw = 10 * PT;
+    const room = ax.y1 - (ky + sw / 2);
+    let k = (room - KEY_GAP) / tallest;               // px per unit share
+    for (let pass = 0; pass < 3; pass++) {
+      let next = (room - KEY_GAP) / tallest;
+      space.forEach((_, i) => {
+        const tags = [hi[i], lo[i]].filter((v) => !fits(v * k)).length;
+        if (tags) next = Math.min(next, (room - 6 * PT - 4 * PT - tags * tagStep) / (hi[i] + lo[i]));
+      });
+      k = next;
+    }
+    const sy = (y) => ax.y1 - y * k;
     swingAxes(f, { xTicks: space, sx, xLabel: "Series Ends in X Games" });
     // the lower seed's parts are hatched when its colour could pass for the higher seed's
     const hatch = lookAlike(opts.higher.color, opts.lower.color);
 
     // stacked bars, the higher seed at the bottom, each segment outlined in white
-    const size = n >= 13 ? 9 : n >= 9 ? 10 : 11;
-    const labelH = size * PT * 1.25;
     const halfW = 0.4;
     const above = [];  // labels too big for their segment, stacked over the bar
     space.forEach((g, i) => {
@@ -562,7 +579,7 @@
       const stack = [];
       segs.forEach(([a, b, colour], k) => {
         const s = b - a >= 0.0005 ? pct(b - a) : "~0%";
-        if (sy(a) - sy(b) >= labelH + 4 * PT) text(s, (l + r) / 2, (sy(a) + sy(b)) / 2, { size, ha: "center", va: "middle" });
+        if (fits(sy(a) - sy(b))) text(s, (l + r) / 2, (sy(a) + sy(b)) / 2, { size, ha: "center", va: "middle" });
         else stack.push([s, colour, hatch && k === 1]);
       });
       above.push([g, hi[i] + lo[i], stack]);
@@ -588,7 +605,7 @@
     }
 
     // the key: each side's colour and series win%, centred over the bars
-    const ky = ax.y0 + 14 * PT, sw = 10 * PT, gap = 6 * PT, between = 24 * PT;
+    const gap = 6 * PT, between = 24 * PT;
     const items = [[opts.higher, res.win, false], [opts.lower, 1 - res.win, hatch]].map(([team, v, hatched]) => {
       const s = `${team.name} win: ${pct(v)}`;
       return { team, s, hatched, w: sw + gap + measure(s, 12) };
