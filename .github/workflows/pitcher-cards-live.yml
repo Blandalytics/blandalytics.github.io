@@ -12,6 +12,10 @@ on:
       game:
         description: "One gamePk to build, whatever its state (default: every live game)"
         required: false
+      force:
+        description: "Rebuild every card the index follows, not just those that moved"
+        type: boolean
+        default: false
 
 concurrency:
   group: pitcher-cards-live
@@ -91,7 +95,8 @@ jobs:
       - name: Build
         run: |
           ARGS=""
-          [ -n "${{ inputs.game }}" ] && ARGS="--game ${{ inputs.game }}"
+          if [ -n "${{ inputs.game }}" ]; then ARGS="--game ${{ inputs.game }}"; fi
+          if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
           python tools/pitcher_card/live_cards.py $ARGS
 
       - name: Save the season cache

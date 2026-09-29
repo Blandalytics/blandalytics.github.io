@@ -245,20 +245,27 @@ def _pct(v: float | None) -> str:
     return f"{v:.0f}%" if v > 0.5 or v == 0 else "< 1%"
 
 
-def _arrow_spans(card: dict, code: str, key: str) -> str:
-    """One usage arrow per comparison season, as tspans shown one at a time."""
+def _arrow_spans(card: dict, code: str, key: str, shift: bool = False) -> str:
+    """One usage arrow per comparison season, as tspans shown one at a time.
+
+    ``shift`` centres them, for the element that has no label to carry the shift. Every
+    arrow gets it rather than just the first: one is displayed at a time, so it has to
+    be on whichever that turns out to be."""
+    dy = f' dy="{_SHIFT["center"]}em"' if shift else ""
     return "".join(
-        f'<tspan data-cmp="{c["year"]}">{esc(c["types"].get(code, {}).get(key, ""))}</tspan>'
+        f'<tspan data-cmp="{c["year"]}"{dy}>{esc(c["types"].get(code, {}).get(key, ""))}</tspan>'
         for c in card["comparisons"]
     )
 
 
 def _share(x: float, y: float, label: str, color: str, ha: str, spans: str) -> str:
     """A usage share with its arrows trailing it, as the original annotated them."""
+    # an empty leading tspan carries no glyphs, so its dy is never applied; the arrows
+    # bring their own shift in that case
+    lead = f'<tspan dy="{_SHIFT["center"]}em">{esc(label)}</tspan>' if label else ""
     return (
         f'<text x="{_fmt(x)}" y="{_fmt(y)}" font-size="{20 * PT:.1f}" fill="{color}" '
-        f'text-anchor="{_ANCHOR[ha]}"><tspan dy="{_SHIFT["center"]}em">{esc(label)}'
-        f"</tspan>{spans}</text>"
+        f'text-anchor="{_ANCHOR[ha]}">{lead}{spans}</text>'
     )
 
 
@@ -305,7 +312,7 @@ def usage(card: dict) -> list[str]:
     ]
     for i, t in enumerate(types):
         color = MARKER_COLORS.get(t["code"], "#c7c7c7")
-        size = min(t["usage"] or 0, 33) / 33 * 15 + 16 if n > 1 else 25
+        size = min(t["usage"] or 0, 33) / 33 * 12 + 16 if n > 1 else 25
         out.append(text(ax.x(0), ax.y(i + 0.05), f"{t['code']} {t['usage']:.0f}%", size, color))
         xr = ax.x(vs_r[i] + bar_lim / 2.75)
         arrows = _arrow_spans(card, t["code"], "vsR_arrow")
@@ -313,7 +320,7 @@ def usage(card: dict) -> list[str]:
         # the left share is right-aligned, so its arrows sit in their own element after it
         xl_i = ax.x(-(vs_l[i] + bar_lim / (2.2 if compared else 2.5)))
         out.append(_share(xl_i, ax.y(i), _pct(t["vsL"]), color, "right", ""))
-        arrows = _arrow_spans(card, t["code"], "vsL_arrow")
+        arrows = _arrow_spans(card, t["code"], "vsL_arrow", shift=True)
         out.append(_share(xl_i, ax.y(i), "", color, "left", arrows))
     # the bars go under the labels, which sit in the gap, and are clipped to their own
     # side of it rather than having the gap painted over them
