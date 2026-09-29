@@ -107,6 +107,19 @@ class PitchModel:
         return self._parts
 
     # -- scoring --
+    @staticmethod
+    def _plain(raw: pd.DataFrame) -> pd.DataFrame:
+        """The string columns as plain objects rather than categoricals.
+
+        The scorer compares two of them to each other -- p_throws against stand, for the
+        platoon flag -- and pandas refuses that when the two carry different categories.
+        The scraper builds each column's categories from the values it actually saw, so
+        an outing that has faced only left-handers has ``stand=['L']`` against
+        ``p_throws=['R']`` and the comparison raises. It settles once a game has seen
+        both, which is why this only ever bit the first innings of a live build."""
+        cats = [c for c in raw.columns if isinstance(raw[c].dtype, pd.CategoricalDtype)]
+        return raw.astype(dict.fromkeys(cats, "object")) if cats else raw
+
     def score(self, raw: pd.DataFrame) -> pd.DataFrame:
         """Per-pitch run values for a whole game's statfast pitches, keyed by KEYS.
 
@@ -116,7 +129,7 @@ class PitchModel:
         simply absent from the result. One game is small, so it is scored in-process."""
         sp, models, mix, values, by_count, _ = self._load()
         try:
-            pitches, _dropped = sp.score(raw, models, mix, values, by_count, workers=1)
+            pitches, _dropped = sp.score(self._plain(raw), models, mix, values, by_count, workers=1)
         except ValueError:
             # nothing here the models cover -- a position player's eephus, say; the card
             # shows dashes
