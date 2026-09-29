@@ -115,7 +115,7 @@ iframe[hidden]{display:none}
     <label for="year">Year for comparison</label>
     <select id="year" disabled></select>
   </div>
-  <button class="btn" id="png" type="button" hidden>Save PNG</button>
+  <button class="btn" id="png" type="button" hidden>Copy PNG</button>
   <a class="open" id="open" href="#" target="_blank" rel="noopener" hidden>Open full page ↗</a>
 </header>
 
@@ -311,20 +311,45 @@ iframe[hidden]{display:none}
   pitcherSel.addEventListener('change', onPitcher);
   compare.addEventListener('change', onCompare);
   yearSel.addEventListener('change', onCompare);
-  // the PNG is drawn inside the frame and handed back as a blob; saving it from here
-  // keeps the download on this page's click
+  // the PNG is drawn inside the frame and handed back as a blob, so the copy happens
+  // here, on this page's click. clipboard.write is handed a promise rather than a
+  // blob and is started inside the click: the round trip and the 3000x4000 render
+  // outlive the click's user activation, and a write begun after it has lapsed is
+  // refused. Falls back to a download where the clipboard will not take an image.
+  var pendingPng = null;
+  function downloadPng(p) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(p.blob); a.download = p.filename; a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  }
+  function copyPng(p) {
+    var saved = function () { return p.then(downloadPng).then(function () { return 'Saved PNG'; }); };
+    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
+      return saved();
+    }
+    var blob = p.then(function (x) { return x.blob; });
+    return navigator.clipboard.write([new ClipboardItem({'image/png': blob})])
+      .then(function () { return 'Copied'; }, saved);
+  }
   png.addEventListener('click', function () {
+    var label = png.textContent;
     png.disabled = true;
+    var p = new Promise(function (resolve, reject) {
+      pendingPng = resolve;
+      setTimeout(function () { reject(new Error('the card did not answer')); }, 15000);
+    });
+    var done = function (text) {
+      png.textContent = text;
+      setTimeout(function () { png.textContent = label; png.disabled = false; }, 1500);
+    };
     frame.contentWindow.postMessage({type: 'png'}, '*');
-    setTimeout(function () { png.disabled = false; }, 15000);
+    copyPng(p).then(done, function () { done('Copy failed'); });
   });
   window.addEventListener('message', function (e) {
     var d = e.data || {};
-    if (d.type !== 'png' || !d.blob) return;
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(d.blob); a.download = d.filename || 'card.png'; a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
-    png.disabled = false;
+    if (d.type !== 'png' || !d.blob || !pendingPng) return;
+    pendingPng({blob: d.blob, filename: d.filename || 'card.png'});
+    pendingPng = null;
   });
 
   // a #gamePk-pitcherId in the URL selects that card directly

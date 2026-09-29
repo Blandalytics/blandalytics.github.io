@@ -624,7 +624,7 @@ svg{display:block;width:100%%;max-width:1500px;height:auto}
 </head>
 <body>
 %(svg)s
-<button id="png" type="button" hidden>Save PNG</button>
+<button id="png" type="button" hidden>Copy PNG</button>
 <script>
 (function () {
   var years = %(years)s, filename = %(filename)s;
@@ -641,7 +641,7 @@ svg{display:block;width:100%%;max-width:1500px;height:auto}
   window.addEventListener('hashchange', apply);
   apply();
 
-  // ---- Save PNG: embed the font, serialise the SVG, draw it on a canvas at 2x ----
+  // ---- Copy PNG: embed the font, serialise the SVG, draw it on a canvas at 2x ----
   var FONT = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@700&display=swap';
   function b64(buf) {
     var s = '', b = new Uint8Array(buf);
@@ -703,17 +703,31 @@ svg{display:block;width:100%%;max-width:1500px;height:auto}
       });
     });
   };
-  window.savePng = function () {
-    return window.renderPng().then(function (png) {
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(png.blob); a.download = png.filename; a.click();
-      setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
-    });
+  function download(png) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(png.blob); a.download = png.filename; a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  }
+  window.savePng = function () { return window.renderPng().then(download); };
+  // clipboard.write is handed a promise rather than a blob, and is started inside the
+  // click: rendering at 3000x4000 outlives the click's user activation, and a write
+  // begun after that has lapsed is refused. Resolves with what to report.
+  window.copyPng = function () {
+    var png = window.renderPng();
+    var saved = function () {
+      return png.then(download).then(function () { return 'Saved PNG'; });
+    };
+    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
+      return saved();
+    }
+    var blob = png.then(function (p) { return p.blob; });
+    return navigator.clipboard.write([new ClipboardItem({'image/png': blob})])
+      .then(function () { return 'Copied'; }, saved);
   };
   // the picker page frames this one from another origin, so it asks by message: a
   // {type: 'cmp', year} switches the comparison layer, a {type: 'png'} is answered with
-  // {type: 'png', blob, filename} for the picker to save (a download started here, in a
-  // cross-origin frame without its own click, would be blocked)
+  // {type: 'png', blob, filename} for the picker to copy (a clipboard write or a
+  // download started here, in a cross-origin frame without its own click, is refused)
   window.addEventListener('message', function (e) {
     var d = e.data || {};
     if (d.type === 'cmp') {
@@ -727,7 +741,15 @@ svg{display:block;width:100%%;max-width:1500px;height:auto}
   });
   var btn = document.getElementById('png');
   btn.hidden = window.self !== window.top;   // the picker page has its own button
-  btn.addEventListener('click', function () { window.savePng(); });
+  btn.addEventListener('click', function () {
+    var label = btn.textContent;
+    btn.disabled = true;
+    var done = function (text) {
+      btn.textContent = text;
+      setTimeout(function () { btn.textContent = label; btn.disabled = false; }, 1500);
+    };
+    window.copyPng().then(done, function () { done('Copy failed'); });
+  });
 })();
 </script>
 </body>
