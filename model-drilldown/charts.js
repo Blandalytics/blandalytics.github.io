@@ -105,8 +105,8 @@ function header(W, ctx, subtitle) {
   const col = kpiColor(kpiT(target, unit));
   const val = f.v(unit.exact);
   // KPI: "{stat}: {value}". A plus score is its own stat (Stuff+, PLV+); anything else is the
-  // stat over "<model> Pred", centred, and the value is twice the label's size to span both.
-  const lines = target === 'plus' ? [MODELS[model].title] : [TARGET_NAMES[target], `${MODELS[model].short} Pred`];
+  // stat over "(<model>)", centred, and the value is twice the label's size to span both.
+  const lines = target === 'plus' ? [MODELS[model].title] : [TARGET_NAMES[target], `(${MODELS[model].short})`];
   const LS = 21, VS = 2 * LS, pad = 22, cy = 73;
   const lw = Math.max(...lines.map((l) => textWidth(l, LS)));
   const vw = textWidth(val, VS);
