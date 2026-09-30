@@ -434,15 +434,14 @@ export function swarmSvg(ctx) {
   const H = top + BH + 104;
   let s = svgOpen(W, H, 'fig swarm-fig');
   s += header(W, ctx, `${season}  ·  every row's ${ctx.byOutcome ? 'run value' : 'SHAP'}, ${poolLabel.replace(/^vs /, '')}`);
-  // one shared axis over every value shown
-  let lo = Math.min(...rows.map((r) => r.v)), hi = Math.max(...rows.map((r) => r.v));
-  for (const r of rows) {
-    for (const p of pool) {
-      const v = val(r.k, p);
-      if (v < lo) lo = v;
-      if (v > hi) hi = v;
-    }
-  }
+  // One shared axis, clipped to the 0.5th-99.5th percentile of every row's values pooled (so one
+  // heavy-tailed row, like Location, can't stretch it), always including the pitcher's own
+  // values. The dots beyond it are pinned at the edge.
+  const pooled = [];
+  for (const r of rows) for (const p of pool) { const v = val(r.k, p); if (Number.isFinite(v)) pooled.push(v); }
+  pooled.sort((a, b) => a - b);
+  let lo = Math.min(...rows.map((r) => r.v), pooled.length ? quantile(pooled, 0.005) : 0);
+  let hi = Math.max(...rows.map((r) => r.v), pooled.length ? quantile(pooled, 0.995) : 0);
   const pad = (hi - lo) * 0.03;
   lo -= pad; hi += pad;
   const sx = lin(lo, hi, L, R);
