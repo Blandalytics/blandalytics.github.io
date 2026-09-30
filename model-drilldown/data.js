@@ -34,7 +34,7 @@ export const OUTCOMES = ['ball', 'called_strike', 'swinging_strike', 'foul', 'fi
 export const TARGET_NAMES = {
   p_ball: 'Ball%', p_called_strike: 'CStr%', p_swinging_strike: 'SwStr%', p_foul: 'Foul%',
   p_field_out: 'In-Play Out%', p_single: 'Single%', p_double: 'Double%', p_triple: 'Triple%',
-  p_home_run: 'Home Run%', wobacon: 'wOBAcon',
+  p_home_run: 'Home Run%', wobacon: 'wOBAcon', era: 'ERA',
 };
 export const OUTCOME_NAMES = {
   ball: 'Ball', called_strike: 'Called Strike', swinging_strike: 'Swinging Strike', foul: 'Foul',
@@ -46,12 +46,14 @@ export const OUTCOME_COLORS = {
   field_out: '#65BAFF', single: '#F4707C', double: '#F4707C', triple: '#F4707C', home_run: '#FF5EDC',
 };
 // targets where lower is better for the pitcher: gold and teal swap
-export const LOWER_IS_BETTER = new Set(['p_ball', 'p_single', 'p_double', 'p_triple', 'p_home_run', 'wobacon']);
+export const LOWER_IS_BETTER = new Set(['p_ball', 'p_single', 'p_double', 'p_triple', 'p_home_run', 'wobacon', 'era']);
 export const targetGood = (t) => (LOWER_IS_BETTER.has(t) ? -1 : 1);
 // 'outcomes' is the plus score split by outcome (shap_values_card.py --by outcome); in the
 // figures it is named like the plus score it splits
 export const isPlus = (t) => t === 'plus' || t === 'outcomes';
-export const targetName = (model, t) => (isPlus(t) ? MODELS[model].title : TARGET_NAMES[t]);
+// era: pitch type ERA from the model (model_era.py --by pt), named "PLV ERA" / "Stuff ERA"
+export const targetName = (model, t) => (isPlus(t) ? MODELS[model].title
+  : t === 'era' ? `${MODELS[model].short} ERA` : TARGET_NAMES[t]);
 
 export const LABELS = {
   velo: 'Velocity', ax_m: 'Horizontal Mvmt', az: 'Induced Vertical Mvmt', rel_x_m: 'Release Side',
@@ -96,7 +98,7 @@ export const PCT = new Set(['spin_eff', 'is_primary', 'z_n', 'baseline']);  // a
 // features drawn as one row: SHAP is additive, so a row's impact is its features' sum
 export const GROUPS = { Location: ['x_b', 'z_n'], Count: ['balls', 'strikes'] };
 const TO_OTHER = new Set(['season_env']);  // always folded into Other, whatever its size
-export const MIN_IMPACT = { plus: 1, outcomes: 1, wobacon: 0.002 };  // anything else: 0.1 percentage points
+export const MIN_IMPACT = { plus: 1, outcomes: 1, wobacon: 0.002, era: 0.05 };  // anything else: 0.1 percentage points
 export const minImpact = (t) => MIN_IMPACT[t] ?? 0.1;
 
 function sgn(v, n) {
@@ -226,19 +228,22 @@ export function allRows(meta, model, unit, info) {
   return rows;
 }
 
-// The card's rows: impacts of at least min, largest first, then Other (the rest, Season and the
-// surrogate residual), so the bars always end at the exact value. `all` keeps every row.
+// The card's rows: impacts of at least min, largest first, then Other (the rest, Season, the
+// surrogate residual and, for ERA, the season's calibration constant), so the bars always end
+// at the exact value. `all` keeps every row.
 export function cardRows(meta, model, unit, info, min, all = false) {
   const rows = allRows(meta, model, unit, info);
   const keep = rows.filter((r) => !r.season && (all || Math.abs(r.v) >= min));
   const rest = rows.filter((r) => !keep.includes(r));
   keep.sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
   const small = rest.filter((r) => !r.season).length;
-  const other = rest.reduce((a, r) => a + r.v, 0) + unit.residual;
+  const calibration = Number.isFinite(unit.calibration) ? unit.calibration : 0;  // era only
+  const other = rest.reduce((a, r) => a + r.v, 0) + unit.residual + calibration;
   const parts = [];
   if (small) parts.push(`${small} smaller impact${small > 1 ? 's' : ''}`);
   if (rest.some((r) => r.season)) parts.push('season');
   parts.push('residual');
+  if (calibration) parts.push('calibration');
   keep.push({ k: 'Other', label: 'Other', v: other, detail: parts.join(' + '), folded: rest.map((r) => r.k) });
   return keep;
 }
