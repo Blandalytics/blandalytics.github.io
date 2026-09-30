@@ -5,11 +5,11 @@
 import {
   loadMeta, loadFeatures, loadUnits, loadFidelity, cardRows, rowValue, minImpact, targetName, targetGood,
   MODELS, OUTCOMES, TARGET_NAMES, PITCH_NAMES, LABELS,
-} from './data.js?v=1';
+} from './data.js?v=2';
 import {
   flowSvg, swarmSvg, sankeySvg, svgToPng, nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, C,
-} from './charts.js?v=9';
+} from './charts.js?v=10';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -523,7 +523,7 @@ el.dlCsv.addEventListener('click', () => {
 
 function writeHash() {
   const q = new URLSearchParams();
-  if (state.model !== 'stuff') q.set('model', state.model);
+  if (state.model !== 'stuff') q.set('model', 'plv');  // the pitching tables, shown as PLV
   if (state.target !== 'plus') q.set('target', state.target);
   if (state.row) q.set('row', state.row);
   if (el.vs.value !== 'pt') q.set('vs', el.vs.value);
@@ -539,7 +539,7 @@ function readHash() {
   state.season = Number(m[1]);
   state.pitcher = Number(m[2]);
   state.pt = m[3];
-  state.model = MODELS[q.get('model')] ? q.get('model') : 'stuff';
+  state.model = ['plv', 'pitching'].includes(q.get('model')) ? 'pitching' : 'stuff';  // older links say pitching
   state.target = TARGETS.includes(q.get('target')) ? q.get('target') : 'plus';
   state.row = q.get('row') || null;
   if (['pt', 'group', 'all'].includes(q.get('vs'))) el.vs.value = q.get('vs');
