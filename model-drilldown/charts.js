@@ -189,7 +189,24 @@ export function flowSvg(ctx) {
   for (const r of rows) { x += r.v; path.push(x); }
   const lo = Math.min(...path), hi = Math.max(...path);
   const pad = Math.max(f.pad, 0.06 * (hi - lo));
-  const d0 = lo - pad, d1 = hi + pad * 1.6;
+  let d0 = lo - pad, d1 = hi + pad * 1.6;
+  // Widen the axis until every value, chip and all, fits beside its bar: a drag's number (left
+  // of its bar) must clear the row labels, a lift's (right) the funnel.
+  const ROOM_L = LX + 10, ROOM_R = HX1 - 6;
+  for (let iter = 0; iter < 8; iter++) {
+    const k = (X1 - X0) / (d1 - d0);
+    let over = 0, under = 0, at = unit.league;
+    for (const r of rows) {
+      const end = at + r.v;
+      const tw = textWidth(f.d(r.v), 13) + 11;  // gap to the bar, chip padding
+      if (r.v >= 0) over = Math.max(over, X0 + (Math.max(at, end) - d0) * k + tw - ROOM_R);
+      else under = Math.max(under, ROOM_L - (X0 + (Math.min(at, end) - d0) * k - tw));
+      at = end;
+    }
+    if (over <= 0.5 && under <= 0.5) break;
+    if (under > 0) d0 -= (under + 2) / k;
+    if (over > 0) d1 += (over + 2) / k;
+  }
   const sx = (v) => n1(lin(d0, d1, X0, X1)(v));
   // Layers, bottom to top: row highlights (tinted like the funnel they feed), gridlines, the
   // league line, bars and connectors, the final-value line, then the labels. Each row is split
@@ -216,8 +233,8 @@ export function flowSvg(ctx) {
     const tw = textWidth(val, 13), tx = right ? b + 7 : a - 7;
     front += `${g}><rect data-m="vb:${r.k}" x="${n1(right ? tx - 4 : tx - tw - 4)}" y="${n1(cy - 10)}" width="${n1(tw + 8)}" height="20" rx="4" fill="${C.card}" fill-opacity=".8"/>`;
     front += text(tx, cy + 4.5, val, `font-size="13" font-weight="700" fill="${C.ink}" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
-    // Other carries no sub-label here (its tooltip and league panel still say what it holds)
-    const sub = r.k === 'Other' ? '' : r.detail;
+    // Other, Location and Count carry no sub-label here (the tooltip and league panel say more)
+    const sub = r.k === 'Other' || GROUPS[r.k] ? '' : r.detail;  // Other, Location, Count: name only
     front += text(LX, sub ? cy - 1 : cy + 5, r.label, `font-size="14.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
     if (sub) front += text(LX, cy + 15, sub, `font-size="11.5" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
     front += '</g>';
