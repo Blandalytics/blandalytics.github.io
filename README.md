@@ -585,9 +585,14 @@ so browsers fetch the new files.
 [blandalytics.com/model-drilldown/](https://blandalytics.com/model-drilldown/) — why a pitch grades
 the way it does. Pick a season, a pitcher and a pitch type, then a model (Stuff+, count-neutral; or
 PLV+, which adds location and count) and a target: the plus score split by feature (*Stuff+
-(features)*, the default) or by outcome (*Stuff+ (outcomes)*), any of the nine outcome
-probabilities, or wOBAcon. The controls are Swing Profiles'. Jacob Misiorowski's 2026 four-seamer
+(features)*, the default) or by outcome (*Stuff+ (outcomes)*), the model's pitch type ERA
+(*Stuff ERA* / *PLV ERA*), any of the nine outcome probabilities, or wOBAcon. The controls are Swing Profiles'. Jacob Misiorowski's 2026 four-seamer
 loads on arrival.
+
+*Stuff ERA* / *PLV ERA* is the tables' `era` target (`model_era.py --by pt`, runs per 9: a season
+constant − 9 × run value per pitch × modelled pitches per inning), split by feature like the other
+targets. Its reference line is the season's league ERA, lower is better (gold), rows under 0.05 runs
+fold into Other, and the `calibration` column goes into Other too, as the card draws it.
 
 *By outcome* is `shap_values_card.py --by outcome`: the plus score as 100 plus the nine
 `rv_<outcome>` rows (each outcome's predicted rate × its average run value, in plus points vs the

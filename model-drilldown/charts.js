@@ -16,7 +16,7 @@
 import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, OUTCOME_NAMES, OUTCOME_COLORS, TARGET_NAMES, LABELS, AXIS, PCT,
   GROUPS, MODELS, isPlus, targetGood, targetName, rowValue, rowInput, allRows, sgn,
-} from './data.js?v=3';
+} from './data.js?v=4';
 
 export const C = {
   card: '#292C42', raise: '#30344F', ink: '#E3E9F1', muted: '#8A96A6', faint: '#6B7684', grid: '#3A3E5A',
@@ -38,6 +38,9 @@ export function formats(target) {
   }
   if (target === 'wobacon') {
     return { d: (v) => woba(v, true), v: (v) => woba(v), tick: (v) => woba(v), unit: 'wOBA', pad: 0.005 };
+  }
+  if (target === 'era') {  // runs per 9
+    return { d: (v) => sgn(v, 2), v: (v) => v.toFixed(2), tick: (v) => `${+v.toFixed(2)}`, unit: 'runs', pad: 0.2 };
   }
   return { d: (v) => sgn(v, 2), v: (v) => `${v.toFixed(1)}%`, tick: (v) => `${+v.toFixed(2)}`, unit: 'pp', pad: 0.3 };
 }
@@ -289,6 +292,7 @@ export function flowSvg(ctx) {
   const note = ctx.byOutcome ? `${label} points (average 100, SD 15): each predicted outcome rate × its average run value, vs league`
     : f.unit === 'pts' ? `${label} points (average 100, SD 15)`
     : f.unit === 'wOBA' ? `wOBA on contact, per ball in play (league ${woba(unit.league)})`
+    : f.unit === 'runs' ? `Runs per 9 innings (league ERA ${unit.league.toFixed(2)}): season constant − 9 × run value per pitch × modelled pitches per inning`
       : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%)`;
   s += text(36, H - 26, `${note}; ${ctx.byOutcome ? 'an exact split, no proxy' : 'feature contributions from a proxy model'}. ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`, `font-size="11.5" fill="${C.faint}"`, 'foot');
   s += wordmark(W - 36 - 150, H - 48, 150);
@@ -447,7 +451,7 @@ export function swarmSvg(ctx) {
     s += text(sx(t), top + BH + 20, t === 0 ? '0' : `${t > 0 ? '+' : '−'}${f.tick(Math.abs(t))}`, `font-size="12" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
   }
   s += `<line data-m="zero" x1="${n1(sx(0))}" x2="${n1(sx(0))}" y1="${top - 8}" y2="${top + BH}" stroke="#fff" stroke-opacity=".6"/>`;
-  const unitWord = f.unit === 'pts' ? 'points' : f.unit === 'pp' ? 'percentage points' : 'wOBA';
+  const unitWord = f.unit === 'pts' ? 'points' : f.unit === 'pp' ? 'percentage points' : f.unit === 'runs' ? 'runs per 9' : 'wOBA';
   s += text((L + R) / 2, top + BH + 44, `${ctx.byOutcome ? 'Run value' : 'SHAP value'} (${targetName(model, target)}, ${unitWord})`, `font-size="13" fill="${C.muted}" text-anchor="middle"`, 'xlab');
   s += head(L - 16, top - 22, 'Row', 'end', 'h1') + head(L, top - 22, poolLabel.replace(/^vs /, 'League: '), 'start', 'h2')
     + head(R + 20, top - 22, `This ${info.pt}`, 'start', 'h3');

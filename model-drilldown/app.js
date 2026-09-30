@@ -6,16 +6,16 @@ import {
   loadMeta, loadFeatures, loadUnits, loadFidelity, cardRows, rowValue, minImpact, targetName, targetGood,
   outcomeRows, outcomeValue, outcomeInput, OUTCOME_AXIS,
   MODELS, OUTCOMES, TARGET_NAMES, PITCH_NAMES, LABELS,
-} from './data.js?v=3';
+} from './data.js?v=4';
 import {
   flowSvg, swarmSvg, sankeySvg, svgToPng, nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, C,
-} from './charts.js?v=21';
+} from './charts.js?v=22';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
 // 'outcomes' is the plus score split by outcome (the features split is the default)
-const TARGETS = ['plus', 'outcomes', ...OUTCOMES.map((o) => `p_${o}`), 'wobacon'];
+const TARGETS = ['plus', 'outcomes', 'era', ...OUTCOMES.map((o) => `p_${o}`), 'wobacon'];
 const RV = OUTCOMES.map((o) => `rv_${o}`);
 const tableTarget = (t) => (t === 'outcomes' ? 'plus' : t);  // the row that holds its value
 
@@ -478,7 +478,8 @@ el.flow.addEventListener('pointermove', (e) => {
     const r = view.rows.find((x) => x.k === 'Other');
     const f = formats(state.target);
     const parts = r.folded.map((k) => `${LABELS[k] || k} ${f.d(rowValue(k, view.unit))}`);
-    showTip(`<div class="name">Other ${esc(f.d(r.v))}</div><div class="meta">${esc([...parts, `residual ${f.d(view.unit.residual)}`].join(' · '))}</div>`, e);
+    const cal = Number.isFinite(view.unit.calibration) && view.unit.calibration ? [`calibration ${f.d(view.unit.calibration)}`] : [];
+    showTip(`<div class="name">Other ${esc(f.d(r.v))}</div><div class="meta">${esc([...parts, `residual ${f.d(view.unit.residual)}`, ...cal].join(' · '))}</div>`, e);
     return;
   }
   hideTip();
