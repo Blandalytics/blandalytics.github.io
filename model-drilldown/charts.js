@@ -16,7 +16,7 @@
 import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, OUTCOME_NAMES, OUTCOME_COLORS, TARGET_NAMES, LABELS, AXIS, PCT,
   GROUPS, targetGood, targetName, rowValue, rowInput, allRows, sgn,
-} from './data.js?v=1';
+} from './data.js?v=2';
 
 export const C = {
   card: '#292C42', raise: '#30344F', ink: '#E3E9F1', muted: '#8A96A6', faint: '#6B7684', grid: '#3A3E5A',
@@ -535,7 +535,7 @@ export function sankeySvg(ctx) {
   const left = stack(lossOf), right = stack(gainOf), mid = stack(fh);
   const H = Math.max(top + avail, ...[left, right, mid].map((c) => c[c.length - 1].y1)) + 100;
   let s = svgOpen(W, H, 'fig sankey-fig');
-  s += header(W, ctx, `${season}  ·  ${model === 'stuff' ? 'Stuff' : 'Pitching'} model outcome probabilities: what each row moves`);
+  s += header(W, ctx, `${season}  ·  ${model === 'stuff' ? 'Stuff' : 'PLV'} model outcome probabilities: what each row moves`);
   s += head(XL + NW, top - 22, 'Takes from', 'end', 'h1') + head(XM + NW / 2, top - 22, 'Row', 'middle', 'h2')
     + head(XR, top - 22, 'Gives to', 'start', 'h3') + head(W - 36, top - 22, 'Net vs league', 'end', 'h4');
 

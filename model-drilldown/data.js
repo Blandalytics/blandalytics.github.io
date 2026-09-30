@@ -28,7 +28,7 @@ export const PITCH_COLORS = {
 
 export const MODELS = {
   stuff: { title: 'Stuff+', short: 'Stuff', blurb: 'count-neutral: shape, release and arsenal' },
-  pitching: { title: 'Pitching+', short: 'Pitching', blurb: 'the pitch as thrown: adds location and count' },
+  pitching: { title: 'PLV+', short: 'PLV', blurb: 'the pitch as thrown: adds location and count' },
 };
 export const OUTCOMES = ['ball', 'called_strike', 'swinging_strike', 'foul', 'field_out', 'single', 'double', 'triple', 'home_run'];
 export const TARGET_NAMES = {
