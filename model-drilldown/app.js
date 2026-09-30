@@ -4,16 +4,20 @@
 
 import {
   loadMeta, loadFeatures, loadUnits, loadFidelity, cardRows, rowValue, minImpact, targetName, targetGood,
+  outcomeRows, outcomeValue, outcomeInput, OUTCOME_AXIS,
   MODELS, OUTCOMES, TARGET_NAMES, PITCH_NAMES, LABELS,
-} from './data.js?v=2';
+} from './data.js?v=3';
 import {
   flowSvg, swarmSvg, sankeySvg, svgToPng, nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, C,
-} from './charts.js?v=19';
+} from './charts.js?v=21';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
-const TARGETS = ['plus', ...OUTCOMES.map((o) => `p_${o}`), 'wobacon'];
+// 'outcomes' is the plus score split by outcome (the features split is the default)
+const TARGETS = ['plus', 'outcomes', ...OUTCOMES.map((o) => `p_${o}`), 'wobacon'];
+const RV = OUTCOMES.map((o) => `rv_${o}`);
+const tableTarget = (t) => (t === 'outcomes' ? 'plus' : t);  // the row that holds its value
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -38,7 +42,9 @@ const status = (text, cls = '') => { el.status.textContent = text; el.status.cla
 
 function fillTargets() {
   const keep = el.target.value || state.target;
-  el.target.replaceChildren(...TARGETS.map((t) => new Option(targetName(state.model, t), t)));
+  const menu = (t) => (t === 'plus' ? `${targetName(state.model, t)} (features)`
+    : t === 'outcomes' ? `${targetName(state.model, t)} (outcomes)` : targetName(state.model, t));
+  el.target.replaceChildren(...TARGETS.map((t) => new Option(menu(t), t)));
   el.target.value = keep;
 }
 
@@ -126,7 +132,7 @@ async function loadSeason(season) {
 
 async function loadModel() {
   const want = [state.season, state.model];
-  const size = state.model === 'stuff' ? '7' : '9';
+  const size = state.model === 'stuff' ? '14' : '17';
   if (!units || units._for !== want.join('|')) {
     status(`loading the ${state.season} ${MODELS[state.model].title} SHAP tables (~${size} MB, once per season)…`);
     const u = await loadUnits(...want);
@@ -179,7 +185,7 @@ async function draw() {
 function poolFor(info) {
   const minN = Number(el.minN.value);
   const vs = el.vs.value;
-  const rows = units.byTarget.get(state.target) || [];
+  const rows = units.byTarget.get(tableTarget(state.target)) || [];
   const pool = [];
   for (const u of rows) {
     const i = feats.byUnit.get(`${u.pitcher}|${u.pt}`);
@@ -209,7 +215,7 @@ function kpiShade(unit) {
   const key = `${state.season}|${state.model}|${state.target}`;
   if (!kpiDists.has(key)) {
     const floor = Math.max(...feats.rows.map((r) => r.n)) / 4;
-    const vals = (units.byTarget.get(state.target) || [])
+    const vals = (units.byTarget.get(tableTarget(state.target)) || [])
       .filter((u) => (feats.byUnit.get(`${u.pitcher}|${u.pt}`)?.n ?? 0) >= floor)
       .map((u) => u.exact).sort((a, b) => a - b);
     kpiDists.set(key, { vals, floor });
@@ -224,21 +230,33 @@ function kpiShade(unit) {
 
 function render() {
   const info = feats.byUnit.get(`${state.pitcher}|${state.pt}`);
-  const unit = units.byKey.get(`${state.pitcher}|${state.pt}|${state.target}`);
+  const unit = units.byKey.get(`${state.pitcher}|${state.pt}|${tableTarget(state.target)}`);
   if (!info || !unit) { status('no SHAP values for that pitch type', 'warn'); return; }
-  const rows = cardRows(meta, state.model, unit, info, minImpact(state.target), el.all.checked);
+  const byOutcome = state.target === 'outcomes';
+  const rows = byOutcome ? outcomeRows(state.model, units, info)
+    : cardRows(meta, state.model, unit, info, minImpact(state.target), el.all.checked);
   // the chosen row carries across inputs; while it's folded into Other, Other stands in for it
   // (state.row keeps the choice, so it comes back when the row does)
   let row = state.row;
   if (!rows.some((r) => r.k === row)) {
     const other = rows.find((r) => r.k === 'Other');
-    row = row && other.folded.includes(row) ? 'Other' : rows[0].k;
-    if (!state.row || !other.folded.includes(state.row)) state.row = row;
+    const folded = other ? other.folded : [];
+    row = row && folded.includes(row) ? 'Other' : rows[0].k;
+    if (!state.row || !folded.includes(state.row)) state.row = row;
   }
-  const arsenal = feats.byId.get(state.pitcher).pts.map((u) => ({ pt: u.pt, n: u.n, unit: units.byKey.get(`${state.pitcher}|${u.pt}|${state.target}`) }));
+  const arsenal = feats.byId.get(state.pitcher).pts.map((u) => ({ pt: u.pt, n: u.n, unit: units.byKey.get(`${state.pitcher}|${u.pt}|${tableTarget(state.target)}`) }));
   const { pool, label, what } = poolFor(info);
-  const perTarget = new Map(TARGETS.map((t) => [t, units.byKey.get(`${state.pitcher}|${state.pt}|${t}`)]));
+  const perTarget = new Map([...TARGETS, ...RV].map((t) => [t, units.byKey.get(`${state.pitcher}|${state.pt}|${t}`)]));
   view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, poolWhat: what, units: perTarget, kpi: kpiShade(unit) };
+  // by outcome, the league charts read each row's run value and the unit's predicted rate
+  if (byOutcome) {
+    Object.assign(view, {
+      byOutcome,
+      rowValueOf: (k, p) => outcomeValue(k, units, p.info.pitcher, p.info.pt),
+      rowInputOf: (k, p) => outcomeInput(k, units, p.info),
+      axisOf: OUTCOME_AXIS,
+    });
+  }
 
   el.out.hidden = false;
   el.swarmCard.hidden = false;
@@ -309,7 +327,7 @@ function renderStats() {
   }];
   for (const [r, word, color] of [[lift, 'Biggest lift', C.gold], [drag, 'Biggest drag', C.teal]]) {
     if (!r) continue;
-    const vals = others.map((p) => rowValue(r.k, p.unit)).filter(Number.isFinite);
+    const vals = others.map((p) => (view.rowValueOf ? view.rowValueOf(r.k, p) : rowValue(r.k, p.unit))).filter(Number.isFinite);
     const signed = (v) => (Math.abs(v) < 1e-9 ? '0' : `${v > 0 ? '+' : '−'}${f.tick(Math.abs(v))}`);
     tiles.push({ k: r.k, head: `${word}: ${r.label}`, value: `${f.d(r.v)} ${f.unit}`, sub: `${r.detail ? `${r.detail}; ` : ''}${ord(pctile(vals, r.v))} percentile for ${view.poolWhat}`, values: vals, x: r.v, color, fmt: signed });
   }
@@ -534,7 +552,7 @@ el.copySankey.addEventListener('click', () => copyPng(el.sankey, 'outcomes', el.
 el.dlCsv.addEventListener('click', () => {
   const cols = Object.keys(view.unit);
   const lines = [cols.join(',')];
-  for (const t of TARGETS) {
+  for (const t of [...TARGETS.filter((x) => x !== 'outcomes'), ...RV]) {
     const u = view.units.get(t);
     if (u) lines.push(cols.map((c) => u[c]).join(','));
   }

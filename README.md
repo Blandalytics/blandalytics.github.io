@@ -584,9 +584,18 @@ so browsers fetch the new files.
 
 [blandalytics.com/model-drilldown/](https://blandalytics.com/model-drilldown/) — why a pitch grades
 the way it does. Pick a season, a pitcher and a pitch type, then a model (Stuff+, count-neutral; or
-PLV+, which adds location and count) and a target (the plus score, any of the nine outcome
-probabilities, or wOBAcon). The controls are Swing Profiles'. Jacob Misiorowski's 2026 four-seamer
+PLV+, which adds location and count) and a target: the plus score split by feature (*Stuff+
+(features)*, the default) or by outcome (*Stuff+ (outcomes)*), any of the nine outcome
+probabilities, or wOBAcon. The controls are Swing Profiles'. Jacob Misiorowski's 2026 four-seamer
 loads on arrival.
+
+*By outcome* is `shap_values_card.py --by outcome`: the plus score as 100 plus the nine
+`rv_<outcome>` rows (each outcome's predicted rate × its average run value, in plus points vs the
+league), plus *Count Leverage* for PLV, which prices outcomes at the pitch's actual count. It is an
+exact split with no proxy, and every outcome is shown (nothing folds into Other). The league panel
+and the beeswarm then plot each outcome's run value against the unit's predicted rate of it. In
+the figures the score is only ever named *Stuff+* / *PLV+*; *(features)* and *(outcomes)* appear
+only in the Target menu.
 
 Three figures, in the Swing Profiles card colours:
 
@@ -629,7 +638,7 @@ to the bucket's `shap-values/` folder (`publish_shap_values.py`), with
 - `https://data.blandalytics.com/shap-values/unit_features_<season>.parquet`: the pitcher list,
   pitch counts and mean inputs (0.6 MB). It is read first, so the controls fill quickly.
 - `.../units_<model>_<season>.parquet`: one row per pitcher × pitch type × target, with
-  `exact = league + baseline + Σ feature SHAP + residual` (7–9 MB). Each file is a single row
+  `exact = league + baseline + Σ feature SHAP + residual`, and the `rv_<outcome>` rows the outcome split reads (13–17 MB). Each file is a single row
   group, so a season × model is read whole, once, and every later pick is instant. The other
   model's file is fetched in the background after the first draw.
 - `.../meta.json` (feature lists, labels) and `.../fidelity.csv` (each proxy's held-out R², shown

@@ -48,7 +48,10 @@ export const OUTCOME_COLORS = {
 // targets where lower is better for the pitcher: gold and teal swap
 export const LOWER_IS_BETTER = new Set(['p_ball', 'p_single', 'p_double', 'p_triple', 'p_home_run', 'wobacon']);
 export const targetGood = (t) => (LOWER_IS_BETTER.has(t) ? -1 : 1);
-export const targetName = (model, t) => (t === 'plus' ? MODELS[model].title : TARGET_NAMES[t]);
+// 'outcomes' is the plus score split by outcome (shap_values_card.py --by outcome); in the
+// figures it is named like the plus score it splits
+export const isPlus = (t) => t === 'plus' || t === 'outcomes';
+export const targetName = (model, t) => (isPlus(t) ? MODELS[model].title : TARGET_NAMES[t]);
 
 export const LABELS = {
   velo: 'Velocity', ax_m: 'Horizontal Mvmt', az: 'Induced Vertical Mvmt', rel_x_m: 'Release Side',
@@ -93,7 +96,7 @@ export const PCT = new Set(['spin_eff', 'is_primary', 'z_n', 'baseline']);  // a
 // features drawn as one row: SHAP is additive, so a row's impact is its features' sum
 export const GROUPS = { Location: ['x_b', 'z_n'], Count: ['balls', 'strikes'] };
 const TO_OTHER = new Set(['season_env']);  // always folded into Other, whatever its size
-export const MIN_IMPACT = { plus: 1, wobacon: 0.002 };  // anything else: 0.1 percentage points
+export const MIN_IMPACT = { plus: 1, outcomes: 1, wobacon: 0.002 };  // anything else: 0.1 percentage points
 export const minImpact = (t) => MIN_IMPACT[t] ?? 0.1;
 
 function sgn(v, n) {
@@ -255,5 +258,50 @@ export function rowInput(k, info) {
   const v = info[k];
   return Number.isFinite(v) ? v : null;
 }
+
+// ---- by outcome (shap_values_card.rows_by_outcome) -------------------------------------------
+
+// Plus = 100 + the nine rv_<outcome> rows (each outcome's predicted rate x its average run value,
+// in plus points vs league) + count leverage. Stuff prices outcomes at those average values, so
+// its nine sum exactly; Pitching (PLV) prices them at the pitch's count, and the gap is "Count
+// Leverage". An exact split, no proxy. Every outcome is shown: nothing folds into Other.
+export const OUTCOME_ROWS = {
+  ball: 'Balls', called_strike: 'Called Strikes', swinging_strike: 'Swinging Strikes', foul: 'Fouls',
+  field_out: 'In-Play Outs', single: 'Singles', double: 'Doubles', triple: 'Triples', home_run: 'Home Runs',
+};
+
+// A row's value for one unit, from the units index: rv_<outcome>, or the leverage left over
+export function outcomeValue(k, idx, pitcher, pt) {
+  const get = (t) => idx.byKey.get(`${pitcher}|${pt}|${t}`);
+  if (k === 'leverage') {
+    const plus = get('plus');
+    if (!plus) return NaN;
+    return plus.exact - 100 - OUTCOMES.reduce((a, o) => a + (get(`rv_${o}`)?.exact ?? 0), 0);
+  }
+  return get(k)?.exact ?? NaN;
+}
+
+// A row's input: the unit's predicted rate of that outcome (%); for leverage, its average count
+// in the pitcher's favour (strikes - balls before the pitch)
+export function outcomeInput(k, idx, info) {
+  if (k === 'leverage') return info.strikes - info.balls;
+  return idx.byKey.get(`${info.pitcher}|${info.pt}|p_${k.slice(3)}`)?.exact ?? NaN;
+}
+
+export function outcomeRows(model, idx, info) {
+  const rows = OUTCOMES.map((o) => {
+    const p = idx.byKey.get(`${info.pitcher}|${info.pt}|p_${o}`);
+    return {
+      k: `rv_${o}`, label: OUTCOME_ROWS[o], v: outcomeValue(`rv_${o}`, idx, info.pitcher, info.pt),
+      detail: p ? `${p.exact.toFixed(1)}% vs ${p.league.toFixed(1)}% league` : '',
+    };
+  });
+  if (model === 'pitching') {
+    rows.push({ k: 'leverage', label: 'Count Leverage', v: outcomeValue('leverage', idx, info.pitcher, info.pt), detail: 'outcomes priced at their actual counts' });
+  }
+  return rows.filter((r) => Number.isFinite(r.v)).sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+}
+
+export const OUTCOME_AXIS = (k) => (k === 'leverage' ? 'Strikes − balls before the pitch (avg)' : `Predicted ${OUTCOME_ROWS[k.slice(3)].toLowerCase()} rate (%)`);
 
 export { sgn };
