@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="modulepreload" href="app.js?v=10">
-<link rel="modulepreload" href="data.js?v=1">
-<link rel="modulepreload" href="charts.js?v=9">
+<link rel="modulepreload" href="app.js?v=11">
+<link rel="modulepreload" href="data.js?v=2">
+<link rel="modulepreload" href="charts.js?v=10">
 <link rel="modulepreload" href="morph.js?v=1">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/hyparquet@1.31.1/+esm">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Model Drilldown · Blandalytics</title>
-<meta name="description" content="Why a pitch grades the way it does: SHAP values for Stuff+ and Pitching+ and their outcome probabilities, per pitcher, season and pitch type.">
+<meta name="description" content="Why a pitch grades the way it does: SHAP values for Stuff+ and PLV+ and their outcome probabilities, per pitcher, season and pitch type.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -124,7 +124,7 @@ details[open] summary{margin-bottom:10px}
   <header>
     <a class="home" href="/">← Blandalytics</a>
     <h1>Model Drilldown</h1>
-    <p class="tag">Why a pitch grades the way it does. Pick a season, a pitcher and a pitch type to see its Stuff+ or Pitching+ (or any of their outcome probabilities) split into what each trait adds or takes away, and then see where each trait sits against the league.</p>
+    <p class="tag">Why a pitch grades the way it does. Pick a season, a pitcher and a pitch type to see its Stuff+ or PLV+ (or any of their outcome probabilities) split into what each trait adds or takes away, and then see where each trait sits against the league.</p>
   </header>
 
   <section class="card">
@@ -192,8 +192,8 @@ details[open] summary{margin-bottom:10px}
     <details>
       <summary>How it works</summary>
       <div class="method">
-        <p><b>The models:</b> <em>Stuff+</em> grades a pitch on its shape, release, spin and how it plays off the pitcher's primary fastball, at a league-average location and count. <em>Pitching+</em> adds where the pitch was thrown (<code>x_b</code>, <code>z_n</code>) and the count it was thrown in. Both are on a 100 ± 15 scale per pitcher, season and pitch type. Each also gives nine outcome probabilities (ball, called strike, swinging strike, foul, in-play out, single, double, triple, home run), and wOBA on contact is built from the batted-ball ones.</p>
-        <p><b>SHAP values:</b> neither model is a single tree model, so for each model, target and pitch group × matchup, an XGBoost proxy is trained to reproduce it from the same inputs. Its held-out R² is 0.965 or higher for Stuff+ and Pitching+ and 0.906 or higher for every probability. TreeSHAP on that proxy splits every pitch's value into one contribution per input, and a pitcher's pitch type is the average over its pitches. Its value then adds up exactly: <code>league + pitch group &amp; matchup + Σ features + residual</code>, where the residual is the proxy's miss.</p>
+        <p><b>The models:</b> <em>Stuff+</em> grades a pitch on its shape, release, spin and how it plays off the pitcher's primary fastball, at a league-average location and count. <em>PLV+</em> adds where the pitch was thrown (<code>x_b</code>, <code>z_n</code>) and the count it was thrown in. Both are on a 100 ± 15 scale per pitcher, season and pitch type. Each also gives nine outcome probabilities (ball, called strike, swinging strike, foul, in-play out, single, double, triple, home run), and wOBA on contact is built from the batted-ball ones.</p>
+        <p><b>SHAP values:</b> neither model is a single tree model, so for each model, target and pitch group × matchup, an XGBoost proxy is trained to reproduce it from the same inputs. Its held-out R² is 0.965 or higher for Stuff+ and PLV+ and 0.906 or higher for every probability. TreeSHAP on that proxy splits every pitch's value into one contribution per input, and a pitcher's pitch type is the average over its pitches. Its value then adds up exactly: <code>league + pitch group &amp; matchup + Σ features + residual</code>, where the residual is the proxy's miss.</p>
         <p><b>The waterfall:</b> it starts at the league reference (100, or the league rate), adds <em>Pitch Group &amp; Matchup</em> (what that pitch type is worth given its share of same-handed batters), then each input, largest first. Rows smaller than 1 point (0.1 percentage points, or .002 of wOBAcon) are folded into <em>Other</em>, along with the season and the residual, so the bars end on the actual value. Gold helps the pitcher and teal hurts. Click a row to see it against the league. Each dot is another pitcher's version of the same pitch, with its input on the x-axis and its SHAP on the y-axis, and the white line is the binned mean. Click a band in the arsenal to switch pitch types.</p>
         <p><b>Data:</b> the tables behind this page are public, with the script that draws the same card in Python: <a href="https://data.blandalytics.com/shap-values/README.md" target="_blank" rel="noopener">data.blandalytics.com/shap-values</a>. Scorer and models: <a href="https://github.com/Blandalytics/pitch-modeling" target="_blank" rel="noopener">Blandalytics/pitch-modeling</a>.</p>
       </div>
@@ -201,6 +201,6 @@ details[open] summary{margin-bottom:10px}
   </section>
 </main>
 <div id="tip" hidden role="tooltip"></div>
-<script type="module" src="app.js?v=10"></script>
+<script type="module" src="app.js?v=11"></script>
 </body>
 </html>

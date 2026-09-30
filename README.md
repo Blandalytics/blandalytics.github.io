@@ -584,7 +584,7 @@ so browsers fetch the new files.
 
 [blandalytics.com/model-drilldown/](https://blandalytics.com/model-drilldown/) — why a pitch grades
 the way it does. Pick a season, a pitcher and a pitch type, then a model (Stuff+, count-neutral; or
-Pitching+, which adds location and count) and a target (the plus score, any of the nine outcome
+PLV+, which adds location and count) and a target (the plus score, any of the nine outcome
 probabilities, or wOBAcon). The controls are Swing Profiles'. Jacob Misiorowski's 2026 four-seamer
 loads on arrival.
 
@@ -610,7 +610,7 @@ Flow traces a plate appearance. Hovering a dot names the pitcher, and clicking i
 *Min. pitches* its floor. **Copy PNG** copies each figure to the clipboard at 2x with the font and
 the wordmark embedded (downloading it where the browser refuses the clipboard); the CSV holds the
 unit's rows for every target. A view is linkable as
-`model-drilldown/#<season>-<pitcher id>-<pitch type>&model=pitching&target=p_swinging_strike&row=velo`
+`model-drilldown/#<season>-<pitcher id>-<pitch type>&model=plv&target=p_swinging_strike&row=velo`
 (`&vs=group|all` for the comparison group).
 
 **Transitions** follow Sequencing Flow's Plotly sankey (`Plotly.react`: 500 ms, linear). When any
