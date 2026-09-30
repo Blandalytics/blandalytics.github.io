@@ -204,7 +204,7 @@ export function flowSvg(ctx) {
     const on = r.k === selected;
     const g = `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}"`;
     back += `${g} tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`
-      + `<rect class="hit" data-m="hit:${r.k}" x="${HX0}" y="${n1(cy - HIT / 2)}" width="${HX1 - HX0}" height="${n1(HIT)}" rx="8" fill="${col}" fill-opacity="${on ? HILITE : 0}"/></g>`;
+      + `<rect class="hit" data-m="hit:${r.k}" x="${HX0}" y="${n1(cy - HIT / 2)}" width="${HX1 - HX0}" height="${n1(HIT)}" rx="8" fill="${col}" fill-opacity="0"/></g>`;
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end));
     const w = Math.max(1, n1(b - a));
     bars += `${g}><rect data-m="bar:${r.k}" x="${a}" y="${n1(cy - BAR / 2)}" width="${w}" height="${n1(BAR)}" rx="${n1(Math.min(4, w / 2))}" fill="${col}"/>`;
@@ -222,6 +222,16 @@ export function flowSvg(ctx) {
     if (on) selRow = { cy, col, r };
     x = end;
   });
+  // The selected row's highlight and its funnel to the league panel are one shape, rounded on
+  // the left only, so the band runs into the ribbon with no seam or pinch.
+  const py = selRow ? Math.max(Y0, Math.min(Y0 + BB - PH, selRow.cy - PH / 2)) : 0;
+  if (selRow) {
+    const y0 = n1(selRow.cy - HIT / 2), y1 = n1(selRow.cy + HIT / 2), b0 = n1(py + 4), b1 = n1(py + PH - 4);
+    const rr = 8, m = n1((HX1 + PX) / 2);
+    const d = `M${HX0 + rr},${y0}L${HX1},${y0}C${m},${y0} ${m},${b0} ${PX},${b0}L${PX},${b1}C${m},${b1} ${m},${y1} ${HX1},${y1}`
+      + `L${HX0 + rr},${y1}Q${HX0},${y1} ${HX0},${n1(y1 - rr)}L${HX0},${n1(y0 + rr)}Q${HX0},${y0} ${HX0 + rr},${y0}Z`;
+    s += `<g class="row fx sel" data-k="${selRow.r.k}"><path class="ribbon" data-f="1" d="${d}" fill="${selRow.col}" opacity="${HILITE}" pointer-events="none"/></g>`;
+  }
   s += back;
   for (const t of niceTicks(d0, d1, 6)) {
     s += `<line data-m="g:${t}" x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="${C.grid}" stroke-width="1" pointer-events="none"/>`;
@@ -236,8 +246,6 @@ export function flowSvg(ctx) {
   // ---- league panel for the selected row ----
   panelPoints = null;
   if (selRow) {
-    const py = Math.max(Y0, Math.min(Y0 + BB - PH, selRow.cy - PH / 2));
-    s += `<path class="ribbon" data-f="1" d="${ribbon(HX1, selRow.cy - HIT / 2, selRow.cy + HIT / 2, PX, py + 4, py + PH - 4)}" fill="${selRow.col}" opacity=".16"/>`;
     s += panel(ctx, selRow.r, PX, py, W - 36 - PX, PH, pool, poolLabel);
   }
 
