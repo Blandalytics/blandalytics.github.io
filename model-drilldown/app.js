@@ -9,7 +9,7 @@ import {
 import {
   flowSvg, swarmSvg, sankeySvg, svgToPng, nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, C,
-} from './charts.js?v=13';
+} from './charts.js?v=15';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -575,5 +575,7 @@ window.addEventListener('hashchange', () => {
   fillTargets();
   el.target.value = state.target;
   [el.season, el.model, el.target, el.player].forEach((c) => { c.disabled = false; });
+  // the figures measure their text in DM Sans (value chips, the KPI box), so let it load first
+  if (document.fonts) await Promise.race([document.fonts.load('700 21px "DM Sans"'), new Promise((r) => setTimeout(r, 1500))]).catch(() => {});
   await draw();
 })();
