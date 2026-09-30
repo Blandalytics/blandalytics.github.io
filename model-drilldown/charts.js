@@ -104,24 +104,22 @@ function header(W, ctx, subtitle) {
   const title = `${info.pitcher_name} - ${PITCH_NAMES[info.pt] || info.pt}`;
   const col = kpiColor(kpiT(target, unit));
   const val = f.v(unit.exact);
-  // KPI: "{stat}: {value}". A plus score is its own stat (Stuff+, PLV+); anything else is the
+  // KPI: "{stat} {value}". A plus score is its own stat (Stuff+, PLV+); anything else is the
   // stat over "(<model>)", centred, and the value is twice the label's size to span both.
   const lines = target === 'plus' ? [MODELS[model].title] : [TARGET_NAMES[target], `(${MODELS[model].short})`];
-  const LS = 21, VS = 2 * LS, pad = 22, cy = 73;
-  const lw = Math.max(...lines.map((l) => textWidth(l, LS)));
+  const LS = 21, VS = 2 * LS, pad = 22, cy = 73, gap = 16;
+  const one = lines.length === 1, size = one ? VS : LS;  // a one-line plus label matches its value
+  const lw = Math.max(...lines.map((l) => textWidth(l, size)));
   const vw = textWidth(val, VS);
-  // the colon hugs a one-line label (a little clear of a two-line one); a gap before the value
-  const cw = textWidth(":", LS), gap = 14, cgap = lines.length === 1 ? 1 : 5;
-  const bw = pad + lw + cgap + cw + gap + vw + pad;
+  const bw = pad + lw + gap + vw + pad;
   const kx = W - 36 - bw;
-  const lx = kx + pad + lw / 2, colonX = kx + pad + lw + cgap, vx = colonX + cw + gap;
-  const base = lines.length === 1 ? [cy + 7.5] : [cy - 3.5, cy + 18.5];
-  const lab = `font-size="${LS}" font-weight="700" fill="#fff" text-anchor="middle"`;
+  const lx = kx + pad + lw / 2, vx = kx + pad + lw + gap;
+  const base = one ? [cy + 15] : [cy - 3.5, cy + 18.5];  // one line shares the value's baseline
+  const lab = `font-size="${size}" font-weight="700" fill="#fff" text-anchor="middle"`;
   return text(36, 64, title, `font-size="30" font-weight="700" fill="${C.teal}"`, 'title')
     + text(36, 96, subtitle, `font-size="16" fill="${C.muted}"`, 'sub')
     + `<rect data-m="kbox" x="${n1(kx)}" y="24" width="${n1(bw)}" height="98" rx="14" fill="${C.card}" stroke="${col}" stroke-width="2.5"/>`
     + lines.map((l, i) => text(lx, base[i], l, lab, `klabel${i}`)).join('')
-    + text(colonX, cy + 7.5, ':', `font-size="${LS}" font-weight="700" fill="#fff"`, 'kcolon')
     + text(vx, cy + 15, val, `font-size="${VS}" font-weight="700" fill="${col}"`, 'kval');
 }
 
