@@ -417,7 +417,9 @@ export function swarmSvg(ctx) {
     for (const [key, d] of buckets) s += `<path data-f="1" d="${d}" fill="${key === 'n' ? C.muted : valueColor(key / 10)}" opacity=".8"/>`;
     const mx = n1(Math.max(L, Math.min(R, sx(r.v))));
     const col = good * r.v > 0 ? C.gold : C.teal;
-    s += `<path data-m="dia:${r.k}" d="M${mx},-9L${n1(mx + 7)},0L${mx},9L${n1(mx - 7)},0Z" fill="${col}" stroke="#fff" stroke-width="1.8"/>`;
+    // the pitcher's marker: a diamond as tall as the row
+    const mh = RH / 2 - 1, mw = 9;
+    s += `<path data-m="dia:${r.k}" d="M${mx},${-mh}L${n1(mx + mw)},0L${mx},${mh}L${n1(mx - mw)},0Z" fill="${col}" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>`;
     s += text(R + 20, 4.5, f.d(r.v), `font-size="13" font-weight="700" fill="${col}"`, `sv:${r.k}`);
     s += '</g>';
     byRow.push({ k: r.k, cy, pts });
@@ -427,7 +429,7 @@ export function swarmSvg(ctx) {
   s += text(kx - 16, ky + 4, 'Unit\'s mean input', `font-size="11.5" fill="${C.muted}" text-anchor="end"`, 'k1');
   for (let i = 0; i <= 20; i++) s += `<rect data-m="kc:${i}" x="${kx + i * 6}" y="${ky - 5}" width="6.5" height="10" fill="${valueColor(i / 20)}"/>`;
   s += text(kx + 134, ky + 4, 'low → high   (grey: no single input)', `font-size="11.5" fill="${C.muted}"`, 'k2');
-  s += `<path data-m="kd" d="M${kx + 400},${ky - 7}L${kx + 407},${ky}L${kx + 400},${ky + 7}L${kx + 393},${ky}Z" fill="${C.gold}" stroke="#fff" stroke-width="1.5"/>`;
+  s += `<path data-m="kd" d="M${kx + 400},${ky - 11}L${kx + 406},${ky}L${kx + 400},${ky + 11}L${kx + 394},${ky}Z" fill="${C.gold}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>`;
   s += text(kx + 414, ky + 4, `${info.pitcher_name}'s ${PITCH_NAMES[info.pt] || info.pt}`, `font-size="11.5" fill="${C.muted}"`, 'k3');
   s += wordmark(W - 36 - 150, H - 48, 150);
   swarmPoints = { rows: byRow, RH };
