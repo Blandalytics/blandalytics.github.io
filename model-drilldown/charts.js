@@ -118,6 +118,15 @@ function header(W, ctx, subtitle) {
 // ======================================================================================
 
 export const FLOW = { W: 1200, Y0: 180, RH: 46, PH: 380 };
+const HILITE = 0.16;         // the selected row's tint: the same colour and opacity as its funnel
+const CONNECTOR = '#B4BECC';  // the waterfall's bar-to-bar connectors
+
+// DM Sans bold, roughly: enough to size a label's backing chip
+function textWidth(str, size) {
+  let w = 0;
+  for (const ch of str) w += /[.,:]/.test(ch) ? 0.28 : /[0-9]/.test(ch) ? 0.58 : 0.6;
+  return w * size;
+}
 let panelPoints = null;  // the panel's dots in figure coordinates, for the hover lookup
 
 export function flowSvg(ctx) {
@@ -182,13 +191,10 @@ export function flowSvg(ctx) {
   const pad = Math.max(f.pad, 0.06 * (hi - lo));
   const d0 = lo - pad, d1 = hi + pad * 1.6;
   const sx = (v) => n1(lin(d0, d1, X0, X1)(v));
-  for (const t of niceTicks(d0, d1, 6)) {
-    s += `<line data-m="g:${t}" x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="${C.grid}" stroke-width="1"/>`;
-    s += text(sx(t), Y0 + BB + 24, f.tick(t), `font-size="12" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
-  }
-  s += text((X0 + X1) / 2, Y0 + BB + 50, target === 'plus' || target === 'wobacon' ? label : `${label}, %`, `font-size="13" fill="${C.muted}" text-anchor="middle"`, 'xlab');
-  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.2"/>`;
-
+  // Layers, bottom to top: row highlights (tinted like the funnel they feed), gridlines, the
+  // league line, bars and connectors, the final-value line, then the labels. Each row is split
+  // across the layers as <g class="row fx" data-k>, so hover, focus and clicks still see one row.
+  let back = '', bars = '', front = '';
   x = unit.league;
   let selRow = null;
   rows.forEach((r, i) => {
@@ -196,21 +202,36 @@ export function flowSvg(ctx) {
     const end = x + r.v;
     const col = good * r.v > 0 ? C.gold : C.teal;
     const on = r.k === selected;
-    s += `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}" tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`;
-    s += `<rect class="hit" data-m="hit:${r.k}" x="${HX0}" y="${n1(cy - HIT / 2)}" width="${HX1 - HX0}" height="${n1(HIT)}" rx="8" fill="${C.raise}" fill-opacity="${on ? 1 : 0}"/>`;
+    const g = `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}"`;
+    back += `${g} tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`
+      + `<rect class="hit" data-m="hit:${r.k}" x="${HX0}" y="${n1(cy - HIT / 2)}" width="${HX1 - HX0}" height="${n1(HIT)}" rx="8" fill="${col}" fill-opacity="${on ? HILITE : 0}"/></g>`;
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end));
     const w = Math.max(1, n1(b - a));
-    s += `<rect data-m="bar:${r.k}" x="${a}" y="${n1(cy - BAR / 2)}" width="${w}" height="${n1(BAR)}" rx="${n1(Math.min(4, w / 2))}" fill="${col}"/>`;
-    if (i) s += `<line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${C.faint}" stroke-width="0.8"/>`;
+    bars += `${g}><rect data-m="bar:${r.k}" x="${a}" y="${n1(cy - BAR / 2)}" width="${w}" height="${n1(BAR)}" rx="${n1(Math.min(4, w / 2))}" fill="${col}"/>`;
+    if (i) bars += `<line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${CONNECTOR}" stroke-width="1.5"/>`;
+    bars += '</g>';
+    // the lift, on a translucent chip so it reads over the league and final-value lines
     const right = r.v >= 0;
-    s += text(right ? b + 6 : a - 6, cy + 4.5, f.d(r.v), `font-size="13" font-weight="700" fill="${C.ink}" text-anchor="${right ? 'start' : 'end'}" stroke="${on ? C.raise : C.card}" stroke-width="4" paint-order="stroke"`, `v:${r.k}`);
-    s += text(LX, r.detail ? cy - 1 : cy + 5, r.label, `font-size="14.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
-    if (r.detail) s += text(LX, cy + 15, r.detail, `font-size="11.5" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
-    s += '</g>';
+    const val = f.d(r.v);
+    const tw = textWidth(val, 13), tx = right ? b + 7 : a - 7;
+    front += `${g}><rect data-m="vb:${r.k}" x="${n1(right ? tx - 4 : tx - tw - 4)}" y="${n1(cy - 10)}" width="${n1(tw + 8)}" height="20" rx="4" fill="${C.card}" fill-opacity=".8"/>`;
+    front += text(tx, cy + 4.5, val, `font-size="13" font-weight="700" fill="${C.ink}" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
+    front += text(LX, r.detail ? cy - 1 : cy + 5, r.label, `font-size="14.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
+    if (r.detail) front += text(LX, cy + 15, r.detail, `font-size="11.5" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
+    front += '</g>';
     if (on) selRow = { cy, col, r };
     x = end;
   });
-  s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.6" stroke-dasharray="6 5"/>`;
+  s += back;
+  for (const t of niceTicks(d0, d1, 6)) {
+    s += `<line data-m="g:${t}" x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="${C.grid}" stroke-width="1" pointer-events="none"/>`;
+    s += text(sx(t), Y0 + BB + 24, f.tick(t), `font-size="12" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
+  }
+  s += text((X0 + X1) / 2, Y0 + BB + 50, target === 'plus' || target === 'wobacon' ? label : `${label}, %`, `font-size="13" fill="${C.muted}" text-anchor="middle"`, 'xlab');
+  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.2" pointer-events="none"/>`;
+  s += bars;
+  s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.6" stroke-dasharray="6 5" pointer-events="none"/>`;
+  s += front;
 
   // ---- league panel for the selected row ----
   panelPoints = null;

@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="modulepreload" href="app.js?v=2">
+<link rel="modulepreload" href="app.js?v=3">
 <link rel="modulepreload" href="data.js?v=1">
-<link rel="modulepreload" href="charts.js?v=3">
+<link rel="modulepreload" href="charts.js?v=4">
 <link rel="modulepreload" href="morph.js?v=1">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/hyparquet@1.31.1/+esm">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -82,8 +82,9 @@ body.focusing .stats .fx:not(.hot){opacity:.45}
 body.focusing .figure .link:not(.hot){opacity:.07}
 body.focusing .figure .link.hot{opacity:.85}
 .figure .row .hit{transition:fill-opacity .12s}
-.figure .row:hover .hit{fill-opacity:.55}
-.figure .row.sel .hit,.figure .row.sel:hover .hit{fill-opacity:1}
+/* a row's parts sit in separate layers, so hover reads the shared focus (.hot), not :hover;
+   the selected row keeps its own tint (the funnel's colour, from its fill-opacity attribute) */
+.figure .row.hot:not(.sel) .hit{fill-opacity:.08}
 
 /* the three numbers under the waterfall, each with its league KDE (Swing Profiles' stat tiles) */
 .stats{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px 20px; margin-top:14px}
@@ -200,6 +201,6 @@ details[open] summary{margin-bottom:10px}
   </section>
 </main>
 <div id="tip" hidden role="tooltip"></div>
-<script type="module" src="app.js?v=2"></script>
+<script type="module" src="app.js?v=3"></script>
 </body>
 </html>
