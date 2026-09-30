@@ -377,7 +377,11 @@ export function swarmSvg(ctx) {
   const f = formats(target);
   const good = targetGood(target);
   const W = 1200, RH = 36, top = 170, L = 330, R = 1070;
-  const rows = allRows(meta, model, unit, info).filter((r) => !r.season).sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+  // no Primary Fastball row for a pitch never thrown as the primary fastball (reads 0%)
+  const neverPrimary = Math.round(100 * (info.is_primary || 0)) === 0;
+  const rows = allRows(meta, model, unit, info)
+    .filter((r) => !r.season && !(r.k === 'is_primary' && neverPrimary))
+    .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
   const BH = rows.length * RH;
   const H = top + BH + 104;
   let s = svgOpen(W, H, 'fig swarm-fig');
