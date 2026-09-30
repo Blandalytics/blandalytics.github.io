@@ -416,8 +416,9 @@ export function swarmSvg(ctx) {
     // slides to its new position whole
     s += `<g class="srow fx" data-k="${r.k}" data-m="sr:${r.k}" transform="translate(0,${n1(cy)})">`;
     s += `<rect class="hit" x="16" y="${-RH / 2 + 1}" width="${W - 32}" height="${RH - 2}" rx="6" fill="transparent"/>`;
-    s += text(L - 16, r.detail ? -1 : 4.5, r.label, `font-size="13.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `sl:${r.k}`);
-    if (r.detail) s += text(L - 16, 13, r.detail, `font-size="11" fill="${C.muted}" text-anchor="end"`, `sd:${r.k}`);
+    const sub = GROUPS[r.k] ? '' : r.detail;  // Location and Count go without one here
+    s += text(L - 16, sub ? -1 : 4.5, r.label, `font-size="13.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `sl:${r.k}`);
+    if (sub) s += text(L - 16, 13, sub, `font-size="11" fill="${C.muted}" text-anchor="end"`, `sd:${r.k}`);
     // colour by the unit's input, 2nd-98th percentile within the pool
     const xin = pool.map((p) => rowInput(r.k, p.info));
     const fin = xin.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
