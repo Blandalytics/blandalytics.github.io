@@ -239,7 +239,7 @@ export function flowSvg(ctx) {
     s += `<line data-m="g:${t}" x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="${C.grid}" stroke-width="1" pointer-events="none"/>`;
     s += text(sx(t), Y0 + BB + 24, f.tick(t), `font-size="12" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
   }
-  s += text((X0 + X1) / 2, Y0 + BB + 50, target === 'plus' || target === 'wobacon' ? label : `${label}, %`, `font-size="13" fill="${C.muted}" text-anchor="middle"`, 'xlab');
+  s += text((X0 + X1) / 2, Y0 + BB + 50, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="13" fill="${C.muted}" text-anchor="middle"`, 'xlab');
   s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.2" pointer-events="none"/>`;
   s += bars;
   s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.6" stroke-dasharray="6 5" pointer-events="none"/>`;
