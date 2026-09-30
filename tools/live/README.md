@@ -49,13 +49,23 @@ stale for hours mid-game. This Worker's minute cron is reliable, so it drives th
 build and the workflow's own schedule stays on only as a backstop.
 
 It needs one more secret, a token with **Actions: write** on the repo (a
-fine-grained PAT scoped to `blandalytics.github.io` will do):
+fine-grained PAT scoped to `blandalytics.github.io` will do). Wrangler reads
+`wrangler.jsonc` from the working directory, so run this from *this* folder —
+from the repo root it fails with `Required Worker name missing`:
 
 ```powershell
+cd tools/live
 npx.cmd wrangler secret put GH_TOKEN
 ```
 
-Secrets survive `wrangler deploy`, so this is a one-off. Until it is set the
+or name the config from anywhere in the repo:
+
+```powershell
+npx.cmd wrangler secret put GH_TOKEN --config tools/live/wrangler.jsonc
+```
+
+Let it prompt for the value rather than piping it in, so the token stays out of
+your shell history. Secrets survive `wrangler deploy`, so this is a one-off. Until it is set the
 poller runs exactly as before and only the rebuild is skipped — so the cards stay
 on the backstop cron, which is the stale behaviour this replaces. A refused
 dispatch is logged (`wrangler tail`) and retried on the next tick.
