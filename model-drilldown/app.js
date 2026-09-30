@@ -9,7 +9,7 @@ import {
 import {
   flowSvg, swarmSvg, sankeySvg, svgToPng, nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, C,
-} from './charts.js?v=1';
+} from './charts.js?v=2';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -22,7 +22,7 @@ const el = {
   out: $('out'), flow: $('flow'), stats: $('stats'), notes: $('notes'),
   vs: $('vs'), minN: $('minn'), all: $('all'),
   swarmCard: $('swarm-card'), swarm: $('swarm'), sankeyCard: $('sankey-card'), sankey: $('sankey'),
-  tip: $('tip'), dlFlow: $('dl_flow'), dlSwarm: $('dl_swarm'), dlSankey: $('dl_sankey'), dlCsv: $('dl_csv'),
+  tip: $('tip'), copyFlow: $('copy_flow'), copySwarm: $('copy_swarm'), copySankey: $('copy_sankey'), dlCsv: $('dl_csv'),
 };
 
 const state = { season: null, pitcher: null, pt: null, model: 'stuff', target: 'plus', row: null };
@@ -480,15 +480,30 @@ function save(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 const fileStem = () => `${view.info.pitcher_name.toLowerCase().replace(/[^a-z]+/g, '_')}_${view.info.pt.toLowerCase()}_${state.season}_${state.model}_${state.target}`;
-async function png(host, suffix, btn) {
+// Copy PNG, as Release Angles does: the ClipboardItem is made in the click itself, around the
+// promise of the image, so the copy keeps the click's permission while the image is drawn
+// (Safari insists on it). Where the clipboard is refused, the PNG downloads instead.
+async function copyPng(host, suffix, btn) {
   const svg = host.querySelector('svg');
   if (!svg) return;
+  const label = btn.textContent;
+  const blob = svgToPng(svg);
   btn.disabled = true;
-  try { save(await svgToPng(svg), `${fileStem()}_${suffix}.png`); } finally { btn.disabled = false; }
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    btn.textContent = 'Copied';
+  } catch (e) {
+    console.error(e);
+    save(await blob, `${fileStem()}_${suffix}.png`);
+    btn.textContent = 'Downloaded (no clipboard here)';
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = label; }, 1600);
+  }
 }
-el.dlFlow.addEventListener('click', () => png(el.flow, 'waterfall', el.dlFlow));
-el.dlSwarm.addEventListener('click', () => png(el.swarm, 'beeswarm', el.dlSwarm));
-el.dlSankey.addEventListener('click', () => png(el.sankey, 'outcomes', el.dlSankey));
+el.copyFlow.addEventListener('click', () => copyPng(el.flow, 'waterfall', el.copyFlow));
+el.copySwarm.addEventListener('click', () => copyPng(el.swarm, 'beeswarm', el.copySwarm));
+el.copySankey.addEventListener('click', () => copyPng(el.sankey, 'outcomes', el.copySankey));
 el.dlCsv.addEventListener('click', () => {
   const cols = Object.keys(view.unit);
   const lines = [cols.join(',')];

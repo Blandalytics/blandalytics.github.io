@@ -126,8 +126,12 @@ export function flowSvg(ctx) {
   const f = formats(target);
   const good = targetGood(target);
   const label = targetName(model, target);
-  const BH = rows.length * RH;
-  const BB = Math.max(BH, PH, arsenal.length * 22);
+  // The body is as tall as the rows need, the league panel or the arsenal, whichever is most;
+  // rows and pitch types are spread evenly over all of it (bars keep the card's thickness).
+  const BB = Math.max(rows.length * RH, PH, arsenal.length * 22);
+  const S = BB / rows.length;              // row pitch
+  const BAR = RH * 0.6;                    // bar thickness
+  const HIT = Math.min(S - 4, RH + 12);    // row highlight / hover band
   const H = Y0 + BB + 118;
   let s = svgOpen(W, H, 'fig flow-fig');
   s += header(W, ctx, `${season}  ·  ${info.n.toLocaleString()} pitches  ·  ${label}`);
@@ -140,7 +144,7 @@ export function flowSvg(ctx) {
   // ---- arsenal: one band per pitch type, as tall as its share of the pitches ----
   const AX = 94, AW = 14, gap = 8, minH = 8;
   const total = sum(arsenal.map((p) => p.n));
-  const avail = BH - gap * (arsenal.length - 1);
+  const avail = BB - gap * (arsenal.length - 1);
   const small = arsenal.filter((p) => (avail * p.n) / total < minH);
   const bigTotal = total - sum(small.map((p) => p.n));
   const bigAvail = avail - small.length * minH;
@@ -166,8 +170,8 @@ export function flowSvg(ctx) {
     y += h + gap;
   }
   if (sel) {
-    s += `<path class="ribbon" data-f="1" d="${ribbon(AX + AW, sel.y0, sel.y1, 198, Y0, Y0 + BH)}" fill="${sel.col}" opacity=".16"/>`;
-    s += `<rect data-m="bracket" x="198" y="${Y0}" width="3" height="${BH}" rx="1.5" fill="${sel.col}" opacity=".6"/>`;
+    s += `<path class="ribbon" data-f="1" d="${ribbon(AX + AW, sel.y0, sel.y1, 198, Y0, Y0 + BB)}" fill="${sel.col}" opacity=".16"/>`;
+    s += `<rect data-m="bracket" x="198" y="${Y0}" width="3" height="${BB}" rx="1.5" fill="${sel.col}" opacity=".6"/>`;
   }
 
   // ---- waterfall (shap_values_card.card) ----
@@ -179,25 +183,25 @@ export function flowSvg(ctx) {
   const d0 = lo - pad, d1 = hi + pad * 1.6;
   const sx = (v) => n1(lin(d0, d1, X0, X1)(v));
   for (const t of niceTicks(d0, d1, 6)) {
-    s += `<line data-m="g:${t}" x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 6}" y2="${Y0 + BH + 4}" stroke="${C.grid}" stroke-width="1"/>`;
-    s += text(sx(t), Y0 + BH + 24, f.tick(t), `font-size="12" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
+    s += `<line data-m="g:${t}" x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="${C.grid}" stroke-width="1"/>`;
+    s += text(sx(t), Y0 + BB + 24, f.tick(t), `font-size="12" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
   }
-  s += text((X0 + X1) / 2, Y0 + BH + 50, target === 'plus' || target === 'wobacon' ? label : `${label}, %`, `font-size="13" fill="${C.muted}" text-anchor="middle"`, 'xlab');
-  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${Y0 - 6}" y2="${Y0 + BH + 4}" stroke="#fff" stroke-width="1.2"/>`;
+  s += text((X0 + X1) / 2, Y0 + BB + 50, target === 'plus' || target === 'wobacon' ? label : `${label}, %`, `font-size="13" fill="${C.muted}" text-anchor="middle"`, 'xlab');
+  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.2"/>`;
 
   x = unit.league;
   let selRow = null;
   rows.forEach((r, i) => {
-    const cy = Y0 + i * RH + RH / 2;
+    const cy = Y0 + i * S + S / 2;
     const end = x + r.v;
     const col = good * r.v > 0 ? C.gold : C.teal;
     const on = r.k === selected;
     s += `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}" tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`;
-    s += `<rect class="hit" data-m="hit:${r.k}" x="${HX0}" y="${n1(cy - RH / 2 + 2)}" width="${HX1 - HX0}" height="${RH - 4}" rx="8" fill="${C.raise}" fill-opacity="${on ? 1 : 0}"/>`;
+    s += `<rect class="hit" data-m="hit:${r.k}" x="${HX0}" y="${n1(cy - HIT / 2)}" width="${HX1 - HX0}" height="${n1(HIT)}" rx="8" fill="${C.raise}" fill-opacity="${on ? 1 : 0}"/>`;
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end));
     const w = Math.max(1, n1(b - a));
-    s += `<rect data-m="bar:${r.k}" x="${a}" y="${n1(cy - RH * 0.3)}" width="${w}" height="${n1(RH * 0.6)}" rx="${n1(Math.min(4, w / 2))}" fill="${col}"/>`;
-    if (i) s += `<line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - RH * 0.7)}" y2="${n1(cy - RH * 0.3)}" stroke="${C.faint}" stroke-width="0.8"/>`;
+    s += `<rect data-m="bar:${r.k}" x="${a}" y="${n1(cy - BAR / 2)}" width="${w}" height="${n1(BAR)}" rx="${n1(Math.min(4, w / 2))}" fill="${col}"/>`;
+    if (i) s += `<line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${C.faint}" stroke-width="0.8"/>`;
     const right = r.v >= 0;
     s += text(right ? b + 6 : a - 6, cy + 4.5, f.d(r.v), `font-size="13" font-weight="700" fill="${C.ink}" text-anchor="${right ? 'start' : 'end'}" stroke="${on ? C.raise : C.card}" stroke-width="4" paint-order="stroke"`, `v:${r.k}`);
     s += text(LX, r.detail ? cy - 1 : cy + 5, r.label, `font-size="14.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
@@ -206,13 +210,13 @@ export function flowSvg(ctx) {
     if (on) selRow = { cy, col, r };
     x = end;
   });
-  s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${Y0 - 6}" y2="${Y0 + BH + 4}" stroke="#fff" stroke-width="1.6" stroke-dasharray="6 5"/>`;
+  s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.6" stroke-dasharray="6 5"/>`;
 
   // ---- league panel for the selected row ----
   panelPoints = null;
   if (selRow) {
     const py = Math.max(Y0, Math.min(Y0 + BB - PH, selRow.cy - PH / 2));
-    s += `<path class="ribbon" data-f="1" d="${ribbon(HX1, selRow.cy - RH / 2 + 2, selRow.cy + RH / 2 - 2, PX, py + 4, py + PH - 4)}" fill="${selRow.col}" opacity=".16"/>`;
+    s += `<path class="ribbon" data-f="1" d="${ribbon(HX1, selRow.cy - HIT / 2, selRow.cy + HIT / 2, PX, py + 4, py + PH - 4)}" fill="${selRow.col}" opacity=".16"/>`;
     s += panel(ctx, selRow.r, PX, py, W - 36 - PX, PH, pool, poolLabel);
   }
 

@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="modulepreload" href="app.js?v=1">
+<link rel="modulepreload" href="app.js?v=2">
 <link rel="modulepreload" href="data.js?v=1">
-<link rel="modulepreload" href="charts.js?v=1">
+<link rel="modulepreload" href="charts.js?v=2">
 <link rel="modulepreload" href="morph.js?v=1">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/hyparquet@1.31.1/+esm">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -163,7 +163,7 @@ details[open] summary{margin-bottom:10px}
     <div id="stats" class="stats"></div>
     <div id="notes"></div>
     <div class="row actions">
-      <button id="dl_flow" type="button">Download PNG</button>
+      <button id="copy_flow" type="button">Copy PNG</button>
       <button id="dl_csv" type="button">Download SHAP values (CSV)</button>
       <a href="https://data.blandalytics.com/shap-values/README.md" target="_blank" rel="noopener">Data files</a>
     </div>
@@ -175,7 +175,7 @@ details[open] summary{margin-bottom:10px}
       <p>Every row's SHAP value for each pitch in the comparison group, coloured by that pitch's own input, with this pitch marked. Hover a dot for the pitcher; click to open them.</p>
     </div>
     <div id="swarm" class="figure"></div>
-    <div class="row actions"><button id="dl_swarm" type="button">Download PNG</button></div>
+    <div class="row actions"><button id="copy_swarm" type="button">Copy PNG</button></div>
   </section>
 
   <section id="sankey-card" class="card" hidden>
@@ -184,7 +184,7 @@ details[open] summary{margin-bottom:10px}
       <p>A pitch's nine outcome probabilities always sum to 100%, so any rise in one comes out of the others. Each row takes probability from the outcomes on the left and gives it to those on the right.</p>
     </div>
     <div id="sankey" class="figure"></div>
-    <div class="row actions"><button id="dl_sankey" type="button">Download PNG</button></div>
+    <div class="row actions"><button id="copy_sankey" type="button">Copy PNG</button></div>
   </section>
 
   <section class="card">
@@ -200,6 +200,6 @@ details[open] summary{margin-bottom:10px}
   </section>
 </main>
 <div id="tip" hidden role="tooltip"></div>
-<script type="module" src="app.js?v=1"></script>
+<script type="module" src="app.js?v=2"></script>
 </body>
 </html>

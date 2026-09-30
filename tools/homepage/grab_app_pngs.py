@@ -60,7 +60,7 @@ APPS = [
      "document.getElementById('out') && !document.getElementById('out').hidden && document.getElementById('stats').textContent", "dl_png_games"),
     # Jacob Misiorowski's 2026 four-seamer, Stuff+, the Velocity row
     ("model-drilldown", "https://blandalytics.com/model-drilldown/#2026-694819-FF&row=velo",
-     "document.querySelector('#flow svg .panel-hit') && document.title.includes('Misiorowski')", "dl_flow"),
+     "document.querySelector('#flow svg .panel-hit') && document.title.includes('Misiorowski')", "copy_flow"),
 ]
 
 
