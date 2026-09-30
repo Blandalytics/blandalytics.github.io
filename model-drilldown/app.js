@@ -193,7 +193,11 @@ function poolFor(info) {
     pool.push({ unit: u, info: i });
   }
   const what = vs === 'pt' ? `${PITCH_NAMES[info.pt] || info.pt}s` : vs === 'group' ? `${info.group.toLowerCase()} pitches` : 'pitch types';
-  return { pool, label: `vs ${(pool.length - 1).toLocaleString()} ${what}, ${state.season}${minN > 1 ? ` (${minN}+ pitches)` : ''}` };
+  return {
+    pool,
+    label: `vs ${(pool.length - 1).toLocaleString()} ${what}, ${state.season}${minN > 1 ? ` (${minN}+ pitches)` : ''}`,
+    what: vs === 'all' ? 'all pitch types' : what,  // "… percentile for Sinkers"
+  };
 }
 
 function render() {
@@ -210,9 +214,9 @@ function render() {
     if (!state.row || !other.folded.includes(state.row)) state.row = row;
   }
   const arsenal = feats.byId.get(state.pitcher).pts.map((u) => ({ pt: u.pt, n: u.n, unit: units.byKey.get(`${state.pitcher}|${u.pt}|${state.target}`) }));
-  const { pool, label } = poolFor(info);
+  const { pool, label, what } = poolFor(info);
   const perTarget = new Map(TARGETS.map((t) => [t, units.byKey.get(`${state.pitcher}|${state.pt}|${t}`)]));
-  view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, units: perTarget };
+  view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, poolWhat: what, units: perTarget };
 
   el.out.hidden = false;
   el.swarmCard.hidden = false;
@@ -277,14 +281,14 @@ function renderStats() {
   const lift = feat.filter((r) => good * r.v > 0).sort((a, b) => good * (b.v - a.v))[0];
   const drag = feat.filter((r) => good * r.v < 0).sort((a, b) => good * (a.v - b.v))[0];
   const tiles = [{
-    k: null, head: label, value: f.v(unit.exact), sub: `${f.d(unit.exact - unit.league)} vs league · ${ord(pctile(others.map((p) => p.unit.exact), unit.exact))} percentile`,
+    k: null, head: label, value: f.v(unit.exact), sub: `${f.d(unit.exact - unit.league)} vs lg avg pitch; ${ord(pctile(others.map((p) => p.unit.exact), unit.exact))} percentile for ${view.poolWhat}`,
     values: others.map((p) => p.unit.exact), x: unit.exact, color: good * (unit.exact - unit.league) >= 0 ? C.gold : C.teal, fmt: f.tick,
   }];
   for (const [r, word, color] of [[lift, 'Biggest lift', C.gold], [drag, 'Biggest drag', C.teal]]) {
     if (!r) continue;
     const vals = others.map((p) => rowValue(r.k, p.unit)).filter(Number.isFinite);
     const signed = (v) => (Math.abs(v) < 1e-9 ? '0' : `${v > 0 ? '+' : '−'}${f.tick(Math.abs(v))}`);
-    tiles.push({ k: r.k, head: `${word}: ${r.label}`, value: `${f.d(r.v)} ${f.unit}`, sub: `${r.detail ? `${r.detail} · ` : ''}${ord(pctile(vals, r.v))} percentile`, values: vals, x: r.v, color, fmt: signed });
+    tiles.push({ k: r.k, head: `${word}: ${r.label}`, value: `${f.d(r.v)} ${f.unit}`, sub: `${r.detail ? `${r.detail}; ` : ''}${ord(pctile(vals, r.v))} percentile for ${view.poolWhat}`, values: vals, x: r.v, color, fmt: signed });
   }
   el.stats.innerHTML = tiles.map((t, i) => `<div class="stat${t.k ? ' fx' : ''}"${t.k ? ` data-k="${t.k}" tabindex="0" role="button"` : ''} data-i="${i}">
     <span>${esc(t.head)}</span><b>${esc(t.value)}</b><span>${esc(t.sub)}</span>
