@@ -18,7 +18,7 @@ const TARGETS = ['plus', ...OUTCOMES.map((o) => `p_${o}`), 'wobacon'];
 const $ = (id) => document.getElementById(id);
 const el = {
   form: $('form'), season: $('season'), player: $('player'), suggest: $('suggest'), pt: $('pt'),
-  model: $('model'), target: $('target'), go: $('go'), status: $('status'),
+  model: $('model'), target: $('target'), status: $('status'),
   out: $('out'), flow: $('flow'), stats: $('stats'), notes: $('notes'),
   vs: $('vs'), minN: $('minn'), all: $('all'),
   swarmCard: $('swarm-card'), swarm: $('swarm'), sankeyCard: $('sankey-card'), sankey: $('sankey'),
@@ -575,6 +575,5 @@ window.addEventListener('hashchange', () => {
   fillTargets();
   el.target.value = state.target;
   [el.season, el.model, el.target, el.player].forEach((c) => { c.disabled = false; });
-  el.go.disabled = false;
   await draw();
 })();

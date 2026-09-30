@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="modulepreload" href="app.js?v=11">
+<link rel="modulepreload" href="app.js?v=12">
 <link rel="modulepreload" href="data.js?v=2">
 <link rel="modulepreload" href="charts.js?v=10">
 <link rel="modulepreload" href="morph.js?v=1">
@@ -33,7 +33,7 @@ a{color:var(--accent)}
 a.home{color:var(--muted); text-decoration:none; font-size:14px}
 a.home:hover{color:var(--ink)}
 .card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
-.controls{display:grid; grid-template-columns:96px minmax(200px,1fr) 250px 130px 150px auto; gap:12px 14px; align-items:end}
+.controls{display:grid; grid-template-columns:96px minmax(200px,1fr) 250px 130px 150px; gap:12px 14px; align-items:end}
 /* narrower: the pitcher field takes the first row, the rest pair up under it */
 @media (max-width:980px){.controls{grid-template-columns:1fr 1fr 1fr} .controls .player{grid-column:1 / -1; order:-1}}
 @media (max-width:600px){.controls{grid-template-columns:1fr 1fr}}
@@ -46,8 +46,6 @@ select:disabled,input:disabled{opacity:.45}
 button{background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:7px 12px; cursor:pointer}
 button:hover:not(:disabled){border-color:var(--faint); background:#222b36}
 button:disabled{opacity:.45; cursor:default}
-button.primary{background:var(--accent); color:#0b1320; border-color:var(--accent); font-weight:600}
-button.primary:hover:not(:disabled){background:#8cc6ff}
 .row{display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center}
 .status{color:var(--muted); font-size:13px; min-height:19px}
 .status.err{color:var(--bad)}
@@ -139,7 +137,6 @@ details[open] summary{margin-bottom:10px}
       <label class="ptype"><b>Pitch type</b><select id="pt" disabled></select></label>
       <label><b>Model</b><select id="model" disabled></select></label>
       <label><b>Target</b><select id="target" disabled></select></label>
-      <button id="go" class="primary" type="submit" disabled>Drill down</button>
     </form>
     <div class="row" style="margin-top:12px">
       <span id="status" class="status">loading the SHAP tables…</span>
@@ -201,6 +198,6 @@ details[open] summary{margin-bottom:10px}
   </section>
 </main>
 <div id="tip" hidden role="tooltip"></div>
-<script type="module" src="app.js?v=11"></script>
+<script type="module" src="app.js?v=12"></script>
 </body>
 </html>
