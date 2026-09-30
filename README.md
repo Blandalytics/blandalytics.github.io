@@ -607,8 +607,9 @@ Three figures, in the Swing Profiles card colours:
 Hovering a row anywhere lights it in all three figures and fades the rest, the way Sequencing
 Flow traces a plate appearance. Hovering a dot names the pitcher, and clicking it opens them.
 *Compare with* sets the league group (same pitch type, same pitch group or every pitch type) and
-*Min. pitches* its floor. **Download PNG** saves each figure at 2x with the font and the wordmark
-embedded; the CSV holds the unit's rows for every target. A view is linkable as
+*Min. pitches* its floor. **Copy PNG** copies each figure to the clipboard at 2x with the font and
+the wordmark embedded (downloading it where the browser refuses the clipboard); the CSV holds the
+unit's rows for every target. A view is linkable as
 `model-drilldown/#<season>-<pitcher id>-<pitch type>&model=pitching&target=p_swinging_strike&row=velo`
 (`&vs=group|all` for the comparison group).
 
