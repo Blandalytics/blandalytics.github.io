@@ -9,7 +9,7 @@ import {
 import {
   flowSvg, swarmSvg, sankeySvg, svgToPng, nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, C,
-} from './charts.js?v=18';
+} from './charts.js?v=19';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -200,6 +200,28 @@ function poolFor(info) {
   };
 }
 
+// The KPI box's colour: where the value sits among the season's established pitches, i.e.
+// every pitcher x pitch type (any type) thrown at least a quarter as often as the season's
+// most-thrown one. The 50th percentile is white, the top pure gold and the bottom pure teal
+// (flipped where lower is better). Sorted values are kept per season x model x target.
+const kpiDists = new Map();
+function kpiShade(unit) {
+  const key = `${state.season}|${state.model}|${state.target}`;
+  if (!kpiDists.has(key)) {
+    const floor = Math.max(...feats.rows.map((r) => r.n)) / 4;
+    const vals = (units.byTarget.get(state.target) || [])
+      .filter((u) => (feats.byUnit.get(`${u.pitcher}|${u.pt}`)?.n ?? 0) >= floor)
+      .map((u) => u.exact).sort((a, b) => a - b);
+    kpiDists.set(key, { vals, floor });
+  }
+  const { vals, floor } = kpiDists.get(key);
+  if (!vals.length) return { t: 0, floor, n: 0, pct: 50 };
+  let below = 0, same = 0;
+  for (const v of vals) { if (v < unit.exact) below++; else if (v === unit.exact) same++; }
+  const p = (below + same / 2) / vals.length;
+  return { t: targetGood(state.target) * (2 * p - 1), floor, n: vals.length, pct: Math.round(100 * p) };
+}
+
 function render() {
   const info = feats.byUnit.get(`${state.pitcher}|${state.pt}`);
   const unit = units.byKey.get(`${state.pitcher}|${state.pt}|${state.target}`);
@@ -216,7 +238,7 @@ function render() {
   const arsenal = feats.byId.get(state.pitcher).pts.map((u) => ({ pt: u.pt, n: u.n, unit: units.byKey.get(`${state.pitcher}|${u.pt}|${state.target}`) }));
   const { pool, label, what } = poolFor(info);
   const perTarget = new Map(TARGETS.map((t) => [t, units.byKey.get(`${state.pitcher}|${state.pt}|${t}`)]));
-  view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, poolWhat: what, units: perTarget };
+  view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, poolWhat: what, units: perTarget, kpi: kpiShade(unit) };
 
   el.out.hidden = false;
   el.swarmCard.hidden = false;

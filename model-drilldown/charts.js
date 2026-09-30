@@ -102,7 +102,8 @@ function header(W, ctx, subtitle) {
   const { info, unit, target, model } = ctx;
   const f = formats(target);
   const title = `${info.pitcher_name} - ${PITCH_NAMES[info.pt] || info.pt}`;
-  const col = kpiColor(kpiT(target, unit));
+  // shaded by the value's standing among the season's established pitches (app.js kpiShade)
+  const col = kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit));
   const val = f.v(unit.exact);
   // KPI: "{stat} {value}". A plus score is its own stat (Stuff+, PLV+); anything else is the
   // stat over "(<model>)", centred, and the value is twice the label's size to span both.
