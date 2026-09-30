@@ -14,6 +14,7 @@ speeds, and only games that turn out to be tracked get the full feed.
 |---|---|
 | `src/index.js` | `scheduled()` polls and writes; `fetch()` serves `live/` read-only |
 | `test/harness.mjs` | `npm test`: one cron pass against an in-memory bucket, plus the probe on games with known answers |
+| `test/dispatch.mjs` | `npm test`: the card-rebuild throttle and window, with no network |
 | `wrangler.jsonc` | Worker name, cron window (game hours, UTC) and the R2 binding |
 | `cors.json` | bucket CORS policy, for when the bucket is served from its own domain |
 
@@ -24,6 +25,7 @@ Objects written:
 | `live/today.json` | yesterday's and today's schedule for every league: status, score, inning, sport, venue, and `tracked` (`true` / `false` / `null` = not enough pitches yet) | 20s |
 | `live/games/<gamePk>.json` | plays and pitches (type, velo, location, spin, EV/LA) for tracked games | 20s, 1h once final |
 | `state/games.json` | what the poller knows about each game (tracked? last feed timestamp? finalised?); not served | — |
+| `state/dispatch.json` | when the pitcher-card rebuild was last asked for, and when an MLB game was last live; not served | — |
 
 The feed is fetched with a `fields=` filter (~250 KB instead of ~750 KB per game)
 and a game is only re-written when the feed's `metaData.timeStamp` has moved. A
@@ -34,6 +36,39 @@ Paid plan (the free plan's 10 ms limit is enforced on consistent overage).
 
 Read it from the site at `https://blandalytics-live.blandalytics.workers.dev/live/...`
 until a custom domain is attached to the bucket.
+
+## Rebuilding the live pitcher cards
+
+This Worker also asks GitHub to run `pitcher-cards-live.yml`, every five minutes
+while an MLB game is on and for twenty minutes after the last one ends, so each
+game still gets the final pass that marks it finished.
+
+That workflow has its own `*/15` cron, but GitHub drops most firings of a
+schedule that frequent — it was arriving about three times a day, so cards sat
+stale for hours mid-game. This Worker's minute cron is reliable, so it drives the
+build and the workflow's own schedule stays on only as a backstop.
+
+It needs one more secret, a token with **Actions: write** on the repo (a
+fine-grained PAT scoped to `blandalytics.github.io` will do). Wrangler reads
+`wrangler.jsonc` from the working directory, so run this from *this* folder —
+from the repo root it fails with `Required Worker name missing`:
+
+```powershell
+cd tools/live
+npx.cmd wrangler secret put GH_TOKEN
+```
+
+or name the config from anywhere in the repo:
+
+```powershell
+npx.cmd wrangler secret put GH_TOKEN --config tools/live/wrangler.jsonc
+```
+
+Let it prompt for the value rather than piping it in, so the token stays out of
+your shell history. Secrets survive `wrangler deploy`, so this is a one-off. Until it is set the
+poller runs exactly as before and only the rebuild is skipped — so the cards stay
+on the backstop cron, which is the stale behaviour this replaces. A refused
+dispatch is logged (`wrangler tail`) and retried on the next tick.
 
 ## Deploying
 

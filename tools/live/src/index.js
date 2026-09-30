@@ -32,6 +32,17 @@ const LIVE_CACHE = "public, max-age=20";
 const FINAL_CACHE = "public, max-age=3600";
 
 const STATE_KEY = "state/games.json";
+const DISPATCH_KEY = "state/dispatch.json";
+
+// Rebuilding the live pitcher cards is driven from here rather than from that
+// workflow's own schedule: GitHub drops most firings of a */15 cron, so it ran
+// about three times a day instead of every quarter hour and the cards went stale
+// mid-game. This Worker's cron is reliable, so it asks for the build and the
+// workflow's schedule stays on only as a backstop.
+const CARDS_WORKFLOW = "https://api.github.com/repos/Blandalytics/blandalytics.github.io"
+  + "/actions/workflows/pitcher-cards-live.yml/dispatches";
+const DISPATCH_EVERY_MS = 5 * 60_000;         // how often the cards are rebuilt
+const DISPATCH_TAIL_MS = 20 * 60_000;         // ...and for how long after the last game
 const UNTRACKED_AFTER = 20;        // pitches with no speed before a game is written off
 const REPROBE_MS = 10 * 60_000;    // ...and how often to give it another look
 
@@ -132,7 +143,45 @@ async function poll(env) {
     putJson(env, "live/today.json", { updated: new Date(now).toISOString(), games }, LIVE_CACHE),
     putJson(env, STATE_KEY, state),
   ]);
+  await dispatchCards(env, games, now);
   return live.length > 0;
+}
+
+/**
+ * Ask GitHub to rebuild the live pitcher cards, at most every DISPATCH_EVERY_MS.
+ *
+ * Runs while an MLB game is on and for DISPATCH_TAIL_MS after the last one ends,
+ * so every game still gets the final pass that marks it finished. Needs a
+ * GH_TOKEN secret holding a token with Actions: write on the repo; without one
+ * the poller carries on and only the rebuild is skipped.
+ */
+async function dispatchCards(env, games, now) {
+  if (!env.GH_TOKEN) return;
+  const live = games.some((g) => g.sport.id === 1 && g.status.abstract === "Live");
+  const was = await loadJson(env, DISPATCH_KEY, {});
+  const lastLive = live ? now : was.lastLive ?? 0;
+  const wanted = live || now - lastLive < DISPATCH_TAIL_MS;
+  if (!wanted || now - (was.at ?? 0) < DISPATCH_EVERY_MS) {
+    if (lastLive !== (was.lastLive ?? 0)) await putJson(env, DISPATCH_KEY, { ...was, lastLive });
+    return;
+  }
+  const r = await fetch(CARDS_WORKFLOW, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.GH_TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "blandalytics-live (blandalytics.com)",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ref: "main" }),
+  });
+  // a failed dispatch leaves `at` alone, so the next tick tries again
+  if (!r.ok) {
+    console.log(`cards dispatch failed: ${r.status} ${(await r.text()).slice(0, 200)}`);
+    await putJson(env, DISPATCH_KEY, { ...was, lastLive });
+    return;
+  }
+  await putJson(env, DISPATCH_KEY, { at: now, lastLive });
 }
 
 /** Decide whether a live game is worth the full feed, and write it if so. */
@@ -307,8 +356,12 @@ function shapeGame(feed) {
 }
 
 async function loadState(env) {
-  const obj = await env.BUCKET.get(STATE_KEY);
-  return obj ? obj.json() : {};
+  return loadJson(env, STATE_KEY, {});
+}
+
+async function loadJson(env, key, fallback) {
+  const obj = await env.BUCKET.get(key);
+  return obj ? obj.json() : fallback;
 }
 
 async function getJson(url) {
@@ -331,4 +384,4 @@ function easternDate(d) {
 }
 
 // exposed for tests
-export { probe, schedule, shapeGame };
+export { probe, schedule, shapeGame, dispatchCards };
