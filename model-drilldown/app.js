@@ -277,7 +277,8 @@ function renderStats() {
   const good = targetGood(target);
   const label = targetName(model, target);
   const others = pool.filter((p) => !(p.info.pitcher === info.pitcher && p.info.pt === info.pt));
-  const feat = rows.filter((r) => r.k !== 'Other' && r.k !== 'baseline');
+  // lift and drag come from the pitch's own traits: not Other, Pitch Group & Matchup or Handedness
+  const feat = rows.filter((r) => !['Other', 'baseline', 'lefty'].includes(r.k));
   const lift = feat.filter((r) => good * r.v > 0).sort((a, b) => good * (b.v - a.v))[0];
   const drag = feat.filter((r) => good * r.v < 0).sort((a, b) => good * (a.v - b.v))[0];
   const tiles = [{
