@@ -15,8 +15,8 @@
 
 import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, OUTCOME_NAMES, OUTCOME_COLORS, TARGET_NAMES, LABELS, AXIS, PCT,
-  GROUPS, MODELS, targetGood, targetName, rowValue, rowInput, allRows, sgn,
-} from './data.js?v=2';
+  GROUPS, MODELS, isPlus, targetGood, targetName, rowValue, rowInput, allRows, sgn,
+} from './data.js?v=3';
 
 export const C = {
   card: '#292C42', raise: '#30344F', ink: '#E3E9F1', muted: '#8A96A6', faint: '#6B7684', grid: '#3A3E5A',
@@ -33,7 +33,7 @@ const n1 = (v) => +v.toFixed(1);
 // ---- formats per target ----------------------------------------------------------------------
 
 export function formats(target) {
-  if (target === 'plus') {
+  if (isPlus(target)) {
     return { d: (v) => sgn(v, 1), v: (v) => String(Math.round(v)), tick: (v) => String(Math.round(v)), unit: 'pts', pad: 3 };
   }
   if (target === 'wobacon') {
@@ -52,7 +52,7 @@ export function kpiColor(t) {
 
 export function kpiT(target, unit) {
   const good = targetGood(target);
-  if (target === 'plus') return (unit.exact - 100) / 45;
+  if (isPlus(target)) return (unit.exact - 100) / 45;
   if (target === 'wobacon') return (good * (unit.exact - unit.league)) / 0.1;
   return (good * (unit.exact - unit.league)) / Math.max(unit.league, 1);
 }
@@ -107,7 +107,7 @@ function header(W, ctx, subtitle) {
   const val = f.v(unit.exact);
   // KPI: "{stat} {value}". A plus score is its own stat (Stuff+, PLV+); anything else is the
   // stat over "(<model>)", centred, and the value is twice the label's size to span both.
-  const lines = target === 'plus' ? [MODELS[model].title] : [TARGET_NAMES[target], `(${MODELS[model].short})`];
+  const lines = isPlus(target) ? [MODELS[model].title] : [TARGET_NAMES[target], `(${MODELS[model].short})`];
   const LS = 21, VS = 2 * LS, pad = 22, cy = 73, gap = 16;
   const one = lines.length === 1, size = one ? VS : LS;  // a one-line plus label matches its value
   const lw = Math.max(...lines.map((l) => textWidth(l, size)));
@@ -165,7 +165,7 @@ export function flowSvg(ctx) {
   const selRowDef = rows.find((r) => r.k === selected);
   // columns: arsenal labels | bands 94-108 | ribbon | row names (end 440) | bars 452-832 | ribbon | panel 888-1164
   const LX = 440, X0 = 452, X1 = 832, HX0 = 208, HX1 = 848, PX = 888;
-  s += head(36, Y0 - 22, 'Arsenal', 'start', 'h1') + head(LX, Y0 - 22, `SHAP · ${label}`, 'end', 'h2')
+  s += head(36, Y0 - 22, 'Arsenal', 'start', 'h1') + head(LX, Y0 - 22, ctx.byOutcome ? label : `SHAP · ${label}`, 'end', 'h2')
     + head(PX, Y0 - 22, selRowDef ? `League · ${selRowDef.label}` : 'League', 'start', 'h3');
 
   // ---- arsenal: one band per pitch type, as tall as its share of the pitches ----
@@ -286,10 +286,11 @@ export function flowSvg(ctx) {
     s += panel(ctx, selRow.r, PX, py, W - 36 - PX, PH, pool, poolLabel);
   }
 
-  const note = f.unit === 'pts' ? `${label} points (average 100, SD 15)`
+  const note = ctx.byOutcome ? `${label} points (average 100, SD 15): each predicted outcome rate × its average run value, vs league`
+    : f.unit === 'pts' ? `${label} points (average 100, SD 15)`
     : f.unit === 'wOBA' ? `wOBA on contact, per ball in play (league ${woba(unit.league)})`
       : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%)`;
-  s += text(36, H - 26, `${note}; feature contributions from a proxy model. ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`, `font-size="11.5" fill="${C.faint}"`, 'foot');
+  s += text(36, H - 26, `${note}; ${ctx.byOutcome ? 'an exact split, no proxy' : 'feature contributions from a proxy model'}. ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`, `font-size="11.5" fill="${C.faint}"`, 'foot');
   s += wordmark(W - 36 - 150, H - 48, 150);
   return s + '</svg>';
 }
@@ -300,6 +301,8 @@ export function flowSvg(ctx) {
 // against each other instead, coloured by the row's SHAP.
 function panel(ctx, r, x, y, w, h, pool, poolLabel) {
   const { unit, info, target } = ctx;
+  const val = ctx.rowValueOf || ((k, p) => rowValue(k, p.unit));
+  const inp = ctx.rowInputOf || ((k, p) => rowInput(k, p.info));
   const f = formats(target);
   const good = targetGood(target);
   // square on the left, where the funnel meets it edge to edge; rounded on the right
@@ -311,10 +314,10 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
   const grouped = GROUPS[r.k];
   const pts = [];
   for (const p of pool) {
-    const v = rowValue(r.k, p.unit);
+    const v = val(r.k, p);
     if (!Number.isFinite(v)) continue;
     let xv, yv;
-    if (grouped) { xv = p.info[grouped[0]]; yv = p.info[grouped[1]]; } else { xv = rowInput(r.k, p.info); yv = v; }
+    if (grouped) { xv = p.info[grouped[0]]; yv = p.info[grouped[1]]; } else { xv = inp(r.k, p); yv = v; }
     if (!Number.isFinite(xv) || !Number.isFinite(yv)) continue;
     if (r.k === 'Other') xv = Math.log10(xv);
     if (r.k === 'lefty') xv += (((p.info.pitcher * 2654435761) % 1000) / 1000) * 0.3 - 0.15;  // strip-plot jitter
@@ -342,10 +345,10 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
   for (const t of xticks) s += text(sxr(t), py1 + 15, xfmt(t), `font-size="10" fill="${C.faint}" text-anchor="middle"`, `px:${t}`);
   if (!grouped && ya < 0 && yb > 0) s += `<line data-m="pzero" x1="${px0}" x2="${px1}" y1="${n1(syr(0))}" y2="${n1(syr(0))}" stroke="#fff" stroke-opacity=".5"/>`;
   const xl = grouped ? (r.k === 'Location' ? 'Horizontal location (ft, + = away)' : 'Balls before the pitch')
-    : r.k === 'Other' ? 'Pitches (log scale)' : AXIS[r.k] || LABELS[r.k];
+    : r.k === 'Other' ? 'Pitches (log scale)' : ctx.axisOf ? ctx.axisOf(r.k) : AXIS[r.k] || LABELS[r.k];
   s += text((px0 + px1) / 2, py1 + 32, xl, `font-size="10.5" fill="${C.muted}" text-anchor="middle"`, 'pxlab');
   const yl = grouped ? (r.k === 'Location' ? 'Vertical location (zone height)' : 'Strikes before the pitch')
-    : r.k === 'Other' ? `Residual (${f.unit})` : `SHAP (${f.unit})`;
+    : r.k === 'Other' ? `Residual (${f.unit})` : ctx.byOutcome ? `Run value (${f.unit})` : `SHAP (${f.unit})`;
   s += `<text data-m="pylab" transform="translate(${x + 16},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="10.5" fill="${C.muted}" text-anchor="middle">${esc(yl)}</text>`;
 
   // dots, keyed by unit so they glide from one row's chart to the next
@@ -371,7 +374,7 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
       s += `<path data-f="1" d="M${line.map(([a, b]) => `${cx(a)},${cy(b)}`).join('L')}" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="1.6" stroke-linejoin="round"/>`;
     }
   }
-  const own = rowValue(r.k, unit);
+  const own = val(r.k, { unit, info });
   const mcol = good * own > 0 ? C.gold : C.teal;
   s += `<circle data-m="pme" cx="${cx(me.xv)}" cy="${cy(me.yv)}" r="6.5" fill="${mcol}" stroke="#fff" stroke-width="2"/>`;
   s += `<rect class="panel-hit" x="${px0 - 6}" y="${n1(py0 - 6)}" width="${px1 - px0 + 12}" height="${py1 - py0 + 12}" fill="transparent"/>`;
@@ -382,8 +385,11 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
   let line2 = r.detail || '';
   if (grouped) line2 = `Dots coloured by each unit's ${r.label.toLowerCase()} SHAP`;
   else if (r.k !== 'Other' && r.k !== 'lefty') {
-    const xin = rowInput(r.k, info);
-    if (Number.isFinite(xin)) line2 = `${r.k === 'baseline' ? 'Same-hand share' : 'Input'} ${r.k === 'baseline' ? xfmt(xin) : r.detail} · ${ord(pctile(pts.map((p) => p.xv), xin))} percentile`;
+    const xin = inp(r.k, { unit, info });
+    const what = ctx.byOutcome
+      ? (r.k === 'leverage' ? `Strikes − balls ${sgn(xin, 2)}` : `Predicted rate ${xin.toFixed(1)}%`)
+      : `${r.k === 'baseline' ? 'Same-hand share' : 'Input'} ${r.k === 'baseline' ? xfmt(xin) : r.detail}`;
+    if (Number.isFinite(xin)) line2 = `${what} · ${ord(pctile(pts.map((p) => p.xv), xin))} percentile`;
   }
   s += text(x + 16, y + h - 38, line2, `font-size="11.5" fill="${C.muted}"`, 'pl2');
   s += text(x + 16, y + h - 18, 'Hover a dot for the pitcher; click to open them.', `font-size="10.5" fill="${C.faint}"`, 'pl3');
@@ -412,21 +418,23 @@ export function swarmSvg(ctx) {
   const f = formats(target);
   const good = targetGood(target);
   const W = 1200, RH = 36, top = 170, L = 330, R = 1070;
+  const val = ctx.rowValueOf || ((k, p) => rowValue(k, p.unit));
+  const inp = ctx.rowInputOf || ((k, p) => rowInput(k, p.info));
   // Primary Fastball stays while its SHAP varies anywhere in the comparison group; it goes when
   // every pitch there has none (e.g. splitters, which are never a primary fastball)
-  const inert = pool.every((p) => Math.abs(rowValue('is_primary', p.unit) || 0) < 1e-9);
-  const rows = allRows(meta, model, unit, info)
+  const inert = !ctx.byOutcome && pool.every((p) => Math.abs(rowValue('is_primary', p.unit) || 0) < 1e-9);
+  const rows = ctx.byOutcome ? ctx.rows.slice() : allRows(meta, model, unit, info)
     .filter((r) => !r.season && !(r.k === 'is_primary' && inert))
     .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
   const BH = rows.length * RH;
   const H = top + BH + 104;
   let s = svgOpen(W, H, 'fig swarm-fig');
-  s += header(W, ctx, `${season}  ·  every row's SHAP, ${poolLabel.replace(/^vs /, '')}`);
+  s += header(W, ctx, `${season}  ·  every row's ${ctx.byOutcome ? 'run value' : 'SHAP'}, ${poolLabel.replace(/^vs /, '')}`);
   // one shared axis over every value shown
   let lo = Math.min(...rows.map((r) => r.v)), hi = Math.max(...rows.map((r) => r.v));
   for (const r of rows) {
     for (const p of pool) {
-      const v = rowValue(r.k, p.unit);
+      const v = val(r.k, p);
       if (v < lo) lo = v;
       if (v > hi) hi = v;
     }
@@ -440,7 +448,7 @@ export function swarmSvg(ctx) {
   }
   s += `<line data-m="zero" x1="${n1(sx(0))}" x2="${n1(sx(0))}" y1="${top - 8}" y2="${top + BH}" stroke="#fff" stroke-opacity=".6"/>`;
   const unitWord = f.unit === 'pts' ? 'points' : f.unit === 'pp' ? 'percentage points' : 'wOBA';
-  s += text((L + R) / 2, top + BH + 44, `SHAP value (${targetName(model, target)}, ${unitWord})`, `font-size="13" fill="${C.muted}" text-anchor="middle"`, 'xlab');
+  s += text((L + R) / 2, top + BH + 44, `${ctx.byOutcome ? 'Run value' : 'SHAP value'} (${targetName(model, target)}, ${unitWord})`, `font-size="13" fill="${C.muted}" text-anchor="middle"`, 'xlab');
   s += head(L - 16, top - 22, 'Row', 'end', 'h1') + head(L, top - 22, poolLabel.replace(/^vs /, 'League: '), 'start', 'h2')
     + head(R + 20, top - 22, `This ${info.pt}`, 'start', 'h3');
 
@@ -455,13 +463,13 @@ export function swarmSvg(ctx) {
     s += text(L - 16, sub ? -1 : 4.5, r.label, `font-size="13.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `sl:${r.k}`);
     if (sub) s += text(L - 16, 13, sub, `font-size="11" fill="${C.muted}" text-anchor="end"`, `sd:${r.k}`);
     // colour by the unit's input, 2nd-98th percentile within the pool
-    const xin = pool.map((p) => rowInput(r.k, p.info));
+    const xin = pool.map((p) => inp(r.k, p));
     const fin = xin.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
     const hasInput = !GROUPS[r.k] && r.k !== 'Other' && fin.length > 1;
     const qa = hasInput ? quantile(fin, 0.02) : 0, qb = hasInput ? quantile(fin, 0.98) : 1;
     const pts = [];
     pool.forEach((p, j) => {
-      const v = rowValue(r.k, p.unit);
+      const v = val(r.k, p);
       if (!Number.isFinite(v)) return;
       const c = hasInput && Number.isFinite(xin[j]) ? Math.max(0, Math.min(1, (xin[j] - qa) / (qb - qa || 1))) : null;
       pts.push({ p, v, c, x: Math.max(L, Math.min(R, sx(v))) });
@@ -500,7 +508,7 @@ export function swarmSvg(ctx) {
   });
   // colour key
   const kx = L, ky = H - 36;
-  s += text(kx - 16, ky + 4, 'Unit\'s mean input', `font-size="11.5" fill="${C.muted}" text-anchor="end"`, 'k1');
+  s += text(kx - 16, ky + 4, ctx.byOutcome ? 'Unit\'s predicted rate' : 'Unit\'s mean input', `font-size="11.5" fill="${C.muted}" text-anchor="end"`, 'k1');
   for (let i = 0; i <= 20; i++) s += `<rect data-m="kc:${i}" x="${kx + i * 6}" y="${ky - 5}" width="6.5" height="10" fill="${valueColor(i / 20)}"/>`;
   s += text(kx + 134, ky + 4, 'low → high   (grey: no single input)', `font-size="11.5" fill="${C.muted}"`, 'k2');
   s += `<path data-m="kd" d="M${kx + 400},${ky - 11}L${kx + 406},${ky}L${kx + 400},${ky + 11}L${kx + 394},${ky}Z" fill="${C.gold}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>`;
