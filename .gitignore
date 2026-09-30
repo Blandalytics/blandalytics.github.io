@@ -21,3 +21,6 @@ batted-balls/data/
 tools/homepage/cache/
 # a local build of the release-angle data (it lives in the bucket)
 release-angles/data/
+
+# a local copy of the SHAP tables (they live in the bucket)
+model-drilldown/data/
