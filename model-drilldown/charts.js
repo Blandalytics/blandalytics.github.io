@@ -377,10 +377,11 @@ export function swarmSvg(ctx) {
   const f = formats(target);
   const good = targetGood(target);
   const W = 1200, RH = 36, top = 170, L = 330, R = 1070;
-  // no Primary Fastball row for a pitch never thrown as the primary fastball (reads 0%)
-  const neverPrimary = Math.round(100 * (info.is_primary || 0)) === 0;
+  // Primary Fastball stays while its SHAP varies anywhere in the comparison group; it goes when
+  // every pitch there has none (e.g. splitters, which are never a primary fastball)
+  const inert = pool.every((p) => Math.abs(rowValue('is_primary', p.unit) || 0) < 1e-9);
   const rows = allRows(meta, model, unit, info)
-    .filter((r) => !r.season && !(r.k === 'is_primary' && neverPrimary))
+    .filter((r) => !r.season && !(r.k === 'is_primary' && inert))
     .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
   const BH = rows.length * RH;
   const H = top + BH + 104;
