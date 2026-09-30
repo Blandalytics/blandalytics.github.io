@@ -216,8 +216,10 @@ export function flowSvg(ctx) {
     const tw = textWidth(val, 13), tx = right ? b + 7 : a - 7;
     front += `${g}><rect data-m="vb:${r.k}" x="${n1(right ? tx - 4 : tx - tw - 4)}" y="${n1(cy - 10)}" width="${n1(tw + 8)}" height="20" rx="4" fill="${C.card}" fill-opacity=".8"/>`;
     front += text(tx, cy + 4.5, val, `font-size="13" font-weight="700" fill="${C.ink}" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
-    front += text(LX, r.detail ? cy - 1 : cy + 5, r.label, `font-size="14.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
-    if (r.detail) front += text(LX, cy + 15, r.detail, `font-size="11.5" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
+    // Other carries no sub-label here (its tooltip and league panel still say what it holds)
+    const sub = r.k === 'Other' ? '' : r.detail;
+    front += text(LX, sub ? cy - 1 : cy + 5, r.label, `font-size="14.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
+    if (sub) front += text(LX, cy + 15, sub, `font-size="11.5" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
     front += '</g>';
     if (on) selRow = { cy, col, r };
     x = end;
