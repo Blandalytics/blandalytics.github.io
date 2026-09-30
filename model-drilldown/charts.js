@@ -216,8 +216,10 @@ export function flowSvg(ctx) {
     const tw = textWidth(val, 13), tx = right ? b + 7 : a - 7;
     front += `${g}><rect data-m="vb:${r.k}" x="${n1(right ? tx - 4 : tx - tw - 4)}" y="${n1(cy - 10)}" width="${n1(tw + 8)}" height="20" rx="4" fill="${C.card}" fill-opacity=".8"/>`;
     front += text(tx, cy + 4.5, val, `font-size="13" font-weight="700" fill="${C.ink}" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
-    front += text(LX, r.detail ? cy - 1 : cy + 5, r.label, `font-size="14.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
-    if (r.detail) front += text(LX, cy + 15, r.detail, `font-size="11.5" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
+    // Other carries no sub-label here (its tooltip and league panel still say what it holds)
+    const sub = r.k === 'Other' ? '' : r.detail;
+    front += text(LX, sub ? cy - 1 : cy + 5, r.label, `font-size="14.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
+    if (sub) front += text(LX, cy + 15, sub, `font-size="11.5" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
     front += '</g>';
     if (on) selRow = { cy, col, r };
     x = end;
@@ -226,7 +228,7 @@ export function flowSvg(ctx) {
   // the left only, so the band runs into the ribbon with no seam or pinch.
   const py = selRow ? Math.max(Y0, Math.min(Y0 + BB - PH, selRow.cy - PH / 2)) : 0;
   if (selRow) {
-    const y0 = n1(selRow.cy - HIT / 2), y1 = n1(selRow.cy + HIT / 2), b0 = n1(py + 4), b1 = n1(py + PH - 4);
+    const y0 = n1(selRow.cy - HIT / 2), y1 = n1(selRow.cy + HIT / 2), b0 = n1(py), b1 = n1(py + PH);  // the card's full height
     const rr = 8, m = n1((HX1 + PX) / 2);
     const d = `M${HX0 + rr},${y0}L${HX1},${y0}C${m},${y0} ${m},${b0} ${PX},${b0}L${PX},${b1}C${m},${b1} ${m},${y1} ${HX1},${y1}`
       + `L${HX0 + rr},${y1}Q${HX0},${y1} ${HX0},${n1(y1 - rr)}L${HX0},${n1(y0 + rr)}Q${HX0},${y0} ${HX0 + rr},${y0}Z`;
@@ -265,7 +267,9 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
   const { unit, info, target } = ctx;
   const f = formats(target);
   const good = targetGood(target);
-  let s = `<rect data-m="pbox" x="${x}" y="${n1(y)}" width="${w}" height="${h}" rx="12" fill="${C.raise}"/>`;
+  // square on the left, where the funnel meets it edge to edge; rounded on the right
+  const rr = 12, y0 = n1(y), y1 = n1(y + h), x1 = x + w;
+  let s = `<path data-m="pbox" d="M${x},${y0}L${x1 - rr},${y0}Q${x1},${y0} ${x1},${n1(y0 + rr)}L${x1},${n1(y1 - rr)}Q${x1},${y1} ${x1 - rr},${y1}L${x},${y1}Z" fill="${C.raise}"/>`;
   s += text(x + 16, y + 28, r.label, `font-size="15" font-weight="700" fill="${C.ink}"`, 'ptitle');
   s += text(x + 16, y + 46, poolLabel, `font-size="11.5" fill="${C.muted}"`, 'psub');
   const px0 = x + 56, px1 = x + w - 16, py0 = y + 64, py1 = y + h - 110;
@@ -373,7 +377,12 @@ export function swarmSvg(ctx) {
   const f = formats(target);
   const good = targetGood(target);
   const W = 1200, RH = 36, top = 170, L = 330, R = 1070;
-  const rows = allRows(meta, model, unit, info).filter((r) => !r.season).sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+  // Primary Fastball stays while its SHAP varies anywhere in the comparison group; it goes when
+  // every pitch there has none (e.g. splitters, which are never a primary fastball)
+  const inert = pool.every((p) => Math.abs(rowValue('is_primary', p.unit) || 0) < 1e-9);
+  const rows = allRows(meta, model, unit, info)
+    .filter((r) => !r.season && !(r.k === 'is_primary' && inert))
+    .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
   const BH = rows.length * RH;
   const H = top + BH + 104;
   let s = svgOpen(W, H, 'fig swarm-fig');
