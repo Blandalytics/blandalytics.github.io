@@ -580,6 +580,74 @@ open 2-2 and then alternate from home (2-2-1, 2-2-1-1-1, …), the script's sche
 After any change to the JavaScript, bump the `?v=` query on the two script tags in `index.html`
 so browsers fetch the new files.
 
+## Model Drilldown
+
+[blandalytics.com/model-drilldown/](https://blandalytics.com/model-drilldown/) — why a pitch grades
+the way it does. Pick a season, a pitcher and a pitch type, then a model (Stuff+, count-neutral; or
+Pitching+, which adds location and count) and a target (the plus score, any of the nine outcome
+probabilities, or wOBAcon). The controls are Swing Profiles'. Jacob Misiorowski's 2026 four-seamer
+loads on arrival.
+
+Three figures, in the Swing Profiles card colours:
+
+- **The drilldown.** Three columns joined by ribbons. On the left is the pitcher's arsenal, one
+  band per pitch type sized by pitches thrown; click a band to switch pitch types. In the middle is
+  the chosen pitch type's SHAP waterfall, drawn as `shap_values_card.py` draws it: the same rows,
+  folding, gold/teal bars, connectors, league line, dashed finish and KPI box. On the right, the
+  selected row (click any row) against the league: each dot is another pitcher's version of the
+  pitch, with its mean input on x and that row's SHAP on y, the binned mean as a white line (the
+  dependence plot of `shap_analysis.py`, per unit rather than per pitch). Location and Count plot
+  their two inputs against each other, coloured by the row's SHAP. The three numbers below carry
+  Swing Profiles' league KDEs: the value, the biggest lift and the biggest drag.
+- **Against the league.** A beeswarm of every row's SHAP over the comparison group, coloured by
+  each unit's input, with the pitcher marked.
+- **Where the probability goes.** A Sankey of the nine outcome probabilities. They sum to 100%, so
+  each row's SHAP takes probability from some outcomes (left) and gives it to others (right).
+
+Hovering a row anywhere lights it in all three figures and fades the rest, the way Sequencing
+Flow traces a plate appearance. Hovering a dot names the pitcher, and clicking it opens them.
+*Compare with* sets the league group (same pitch type, same pitch group or every pitch type) and
+*Min. pitches* its floor. **Download PNG** saves each figure at 2x with the font and the wordmark
+embedded; the CSV holds the unit's rows for every target. A view is linkable as
+`model-drilldown/#<season>-<pitcher id>-<pitch type>&model=pitching&target=p_swinging_strike&row=velo`
+(`&vs=group|all` for the comparison group).
+
+**Transitions** follow Sequencing Flow's Plotly sankey (`Plotly.react`: 500 ms, linear). When any
+input changes, whatever persists moves and resizes from its old place to its new one: bars, bands,
+nodes, axis ticks, the league panel and each pitcher's dot in it, and the numbers count across. The
+ribbons are redrawn at their new shape and fade in, new elements fade in, and removed ones fade out
+where they were. `model-drilldown/morph.js` does this for any two SVGs by matching `data-m` keys
+and tweening every number in their geometry attributes.
+
+### How it works
+
+Nothing is built for the page: it reads the tables that stuff_model's `shap_values.py` publishes
+to the bucket's `shap-values/` folder (`publish_shap_values.py`), with
+[hyparquet](https://github.com/hyparam/hyparquet):
+
+- `https://data.blandalytics.com/shap-values/unit_features_<season>.parquet`: the pitcher list,
+  pitch counts and mean inputs (0.6 MB). It is read first, so the controls fill quickly.
+- `.../units_<model>_<season>.parquet`: one row per pitcher × pitch type × target, with
+  `exact = league + baseline + Σ feature SHAP + residual` (7–9 MB). Each file is a single row
+  group, so a season × model is read whole, once, and every later pick is instant. The other
+  model's file is fetched in the background after the first draw.
+- `.../meta.json` (feature lists, labels) and `.../fidelity.csv` (each proxy's held-out R², shown
+  under the figure).
+
+The URLs carry an hourly `?v=` so a republish reaches browsers within the hour, despite the zone's
+four-hour browser cache.
+
+| file | role |
+|---|---|
+| `model-drilldown/data.js` | reading and indexing the tables; the card's rows, labels, detail formats and folding (`shap_values_card.rows_for`) |
+| `model-drilldown/charts.js` | the three figures as SVG, their hover lookups, and the PNG export |
+| `model-drilldown/morph.js` | the Plotly-style transition between two renders of a figure |
+| `model-drilldown/index.html`, `app.js` | the page: controls, the linked focus, tooltips, downloads, the link hash |
+
+Locally, copy the staged tables (`stuff_model/build/shap-values/`) to `model-drilldown/data/shap-values/`
+and open the page with `?data=data/`. After any change to the JavaScript, bump the `?v=` query on the
+module imports in `index.html` and the `.js` files so browsers fetch the new files.
+
 ## NHL Draft Tool
 
 [blandalytics.com/nhl-draft/](https://blandalytics.com/nhl-draft/) — a draft tool for a 12-team

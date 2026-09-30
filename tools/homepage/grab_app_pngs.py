@@ -58,6 +58,9 @@ APPS = [
     # Yankees over Red Sox, 2026, best of 7: the series-outcomes chart
     ("series-win", "https://blandalytics.com/series-win/#2026-NYY-BOS&games=7",
      "document.getElementById('out') && !document.getElementById('out').hidden && document.getElementById('stats').textContent", "dl_png_games"),
+    # Jacob Misiorowski's 2026 four-seamer, Stuff+, the Velocity row
+    ("model-drilldown", "https://blandalytics.com/model-drilldown/#2026-694819-FF&row=velo",
+     "document.querySelector('#flow svg .panel-hit') && document.title.includes('Misiorowski')", "dl_flow"),
 ]
 
 

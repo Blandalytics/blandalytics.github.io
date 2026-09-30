@@ -37,6 +37,7 @@ CROPS = {
     "batted-balls": None,            # padded, not cropped: the wordmark and data credit sit at the edges
     "release-angles": (0.5, 0.0),   # the figure with its title; trims the footer
     "series-win": None,              # square already: the title and wordmark sit at the edges
+    "model-drilldown": None,         # padded: any square crop loses the bars or the league panel
     "nhl-draft": (0.0, 0.0),         # top of the options table
 }
 
