@@ -15,7 +15,7 @@
 
 import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, OUTCOME_NAMES, OUTCOME_COLORS, TARGET_NAMES, LABELS, AXIS, PCT,
-  GROUPS, targetGood, targetName, rowValue, rowInput, allRows, sgn,
+  GROUPS, MODELS, targetGood, targetName, rowValue, rowInput, allRows, sgn,
 } from './data.js?v=2';
 
 export const C = {
@@ -102,15 +102,27 @@ function header(W, ctx, subtitle) {
   const { info, unit, target, model } = ctx;
   const f = formats(target);
   const title = `${info.pitcher_name} - ${PITCH_NAMES[info.pt] || info.pt}`;
-  const label = targetName(model, target);
   const col = kpiColor(kpiT(target, unit));
-  const kx = W - 36 - 168;
   const val = f.v(unit.exact);
+  // KPI: "{stat}: {value}". A plus score is its own stat (Stuff+, PLV+); anything else is the
+  // stat over "<model> Pred", centred, and the value is twice the label's size to span both.
+  const lines = target === 'plus' ? [MODELS[model].title] : [TARGET_NAMES[target], `${MODELS[model].short} Pred`];
+  const LS = 21, VS = 2 * LS, pad = 22, cy = 73;
+  const lw = Math.max(...lines.map((l) => textWidth(l, LS)));
+  const vw = textWidth(val, VS);
+  // the colon hugs a one-line label (a little clear of a two-line one); a gap before the value
+  const cw = textWidth(":", LS), gap = 14, cgap = lines.length === 1 ? 1 : 5;
+  const bw = pad + lw + cgap + cw + gap + vw + pad;
+  const kx = W - 36 - bw;
+  const lx = kx + pad + lw / 2, colonX = kx + pad + lw + cgap, vx = colonX + cw + gap;
+  const base = lines.length === 1 ? [cy + 7.5] : [cy - 3.5, cy + 18.5];
+  const lab = `font-size="${LS}" font-weight="700" fill="#fff" text-anchor="middle"`;
   return text(36, 64, title, `font-size="30" font-weight="700" fill="${C.teal}"`, 'title')
     + text(36, 96, subtitle, `font-size="16" fill="${C.muted}"`, 'sub')
-    + `<rect data-m="kbox" x="${kx}" y="24" width="168" height="98" rx="14" fill="${C.raise}" stroke="${col}" stroke-width="2.5"/>`
-    + text(kx + 84, 56, label, `font-size="${label.length < 12 ? 17 : 14}" font-weight="700" fill="#fff" text-anchor="middle"`, 'klabel')
-    + text(kx + 84, 106, val, `font-size="${val.length < 5 ? 40 : 34}" font-weight="700" fill="${col}" text-anchor="middle"`, 'kval');
+    + `<rect data-m="kbox" x="${n1(kx)}" y="24" width="${n1(bw)}" height="98" rx="14" fill="${C.card}" stroke="${col}" stroke-width="2.5"/>`
+    + lines.map((l, i) => text(lx, base[i], l, lab, `klabel${i}`)).join('')
+    + text(colonX, cy + 7.5, ':', `font-size="${LS}" font-weight="700" fill="#fff"`, 'kcolon')
+    + text(vx, cy + 15, val, `font-size="${VS}" font-weight="700" fill="${col}"`, 'kval');
 }
 
 // ======================================================================================
@@ -121,8 +133,15 @@ export const FLOW = { W: 1200, Y0: 180, RH: 46, PH: 380 };
 const HILITE = 0.16;         // the selected row's tint: the same colour and opacity as its funnel
 const CONNECTOR = '#B4BECC';  // the waterfall's bar-to-bar connectors
 
-// DM Sans bold, roughly: enough to size a label's backing chip
+// The width of bold text in DM Sans, measured on a canvas once the font is in (app.js waits for
+// it), else estimated per character.
+let measurer = null;
 function textWidth(str, size) {
+  if (document.fonts && document.fonts.check(`700 ${size}px "DM Sans"`)) {
+    measurer ??= document.createElement('canvas').getContext('2d');
+    measurer.font = `700 ${size}px "DM Sans"`;
+    return measurer.measureText(str).width;
+  }
   let w = 0;
   for (const ch of str) w += /[.,:]/.test(ch) ? 0.28 : /[0-9]/.test(ch) ? 0.58 : 0.6;
   return w * size;
