@@ -171,10 +171,10 @@ export function flowSvg(ctx) {
   // column headings in white, high enough to clear the AVG label over the league line; the
   // waterfall's centred over its labels and bars
   const HY = Y0 - 44;
-  // each centred over its span: the arsenal's labels, bands and ribbon (to the bracket at
-  // 201); the waterfall's labels and bars; the funnel and the league card
+  // Arsenal over its labels, bands and ribbon (to the bracket at 201); the waterfall's across
+  // the whole figure; vs League over the funnel and the league card
   s += head((36 + 201) / 2, HY, 'Arsenal', 'middle', 'h1', '#fff')
-    + head((HX0 + HX1) / 2, HY, `Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${label}`, 'middle', 'h2', '#fff')
+    + head(W / 2, HY, `Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${label}`, 'middle', 'h2', '#fff')
     + head((HX1 + W - 36) / 2, HY, 'vs League', 'middle', 'h3', '#fff');
   const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';  // the selected row and its funnel
 
