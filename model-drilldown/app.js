@@ -189,7 +189,7 @@ async function draw() {
 // "The same pitch type" pools these together: curveballs with knuckle curves and slurves,
 // splitters with forkballs
 const PT_POOL = { CU: 'CU', KC: 'CU', SV: 'CU', FS: 'FS', FO: 'FS' };
-const POOL_NAMES = { CU: 'Curveball Group', FS: 'Splitter Group' };
+const POOL_NAMES = { CU: 'CU/KC/SV', FS: 'FS/FO' };
 const ptPool = (pt) => PT_POOL[pt] || pt;
 
 function poolFor(info) {
