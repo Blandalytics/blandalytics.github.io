@@ -219,7 +219,6 @@ export function flowSvg(ctx) {
   const BB = Math.max(rows.length * RH, PH, arsenal.length * 22, FLOW.W - Y0 - 118);
   const S = BB / rows.length;              // row pitch
   const BAR = Math.min(S * 0.6, RH * 0.9);  // bar thickness
-  const HIT = Math.min(S - 4, BAR + 30);   // row highlight / hover band
   // under the body: tick labels, the axis label, then the footnote (a line taller per extra line)
   const footN = footLines(foot, Math.round((Y0 + BB + 130) * FLOW_ASPECT), FLOW_MIN).length;
   const H = Y0 + BB + 130 + (footN - 1) * FLOW_MIN * 1.4;
@@ -238,10 +237,6 @@ export function flowSvg(ctx) {
   const LX = n1(440 + shift + 0.25 * extra), X0 = LX + 12, X1 = n1(832 + shift + 0.6 * extra);
   const HX0 = 208 + shift, HX1 = X1 + 16;
   const PX = n1(HX1 + 40 + 0.05 * extra), PW = W - 36 - PX;
-  // The league card stays within the first row's highlight top and the last row's bottom, so with
-  // either end row selected its edge runs straight on from the highlight's
-  const CT = Y0 + (S - HIT) / 2, CB = Y0 + BB - (S - HIT) / 2;
-  const CARD = Math.min(CB - CT, Math.max(560, PW + 284));  // the league card's height: taller as it widens
   let s = svgOpen(W, H, 'fig flow-fig');
   s += header(W, ctx, `${season}; Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${kpiName(model, target)}`, PX + PW / 2);
   const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';  // the selected row and its funnel
@@ -299,6 +294,25 @@ export function flowSvg(ctx) {
     room / (0.8 * Math.max(1e-9, ...rows.map((r) => per(subOf(r))))),
     (S * 0.82) / 1.9));
   const SUB = Math.max(FLOW_MIN, FS * 0.8);
+  // Each row's highlight / hover band [top, bottom]: it covers the row's label and sub-label and
+  // meets the next row's halfway between their text (the end rows reach as far past their text),
+  // never short of the bar. Text extents: ascent 0.74 and descent 0.24 of the font size.
+  const ext = rows.map((r, i) => {
+    const cy = Y0 + i * S + S / 2;
+    return subOf(r) ? [cy - FS * 0.81, cy + FS * 1.03 + SUB * 0.24] : [cy - FS * 0.39, cy + FS * 0.59];
+  });
+  const band = ext.map((e, i) => [i ? (ext[i - 1][1] + e[0]) / 2 : null, i < ext.length - 1 ? (e[1] + ext[i + 1][0]) / 2 : null]);
+  band.forEach((b, i) => {
+    const [t, u] = ext[i], cy = Y0 + i * S + S / 2;
+    if (b[0] == null) b[0] = b[1] == null ? t - 8 : t - (b[1] - u);
+    if (b[1] == null) b[1] = u + (t - b[0]);
+    b[0] = Math.min(b[0], cy - BAR / 2 - 4);
+    b[1] = Math.max(b[1], cy + BAR / 2 + 4);
+  });
+  // The league card stays within the first row's band top and the last row's bottom, so with
+  // either end row selected its edge runs straight on from the highlight's
+  const CT = band[0][0], CB = band[band.length - 1][1];
+  const CARD = Math.min(CB - CT, Math.max(560, PW + 284));  // the league card's height: taller as it widens
   const ROOM_L = LX + 10, ROOM_R = HX1 - 6;
   for (let iter = 0; iter < 8; iter++) {
     const k = (X1 - X0) / (d1 - d0);
@@ -328,7 +342,7 @@ export function flowSvg(ctx) {
     const on = r.k === selected;
     const g = `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}"`;
     back += `${g} tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`
-      + `<rect class="hit" data-m="hit:${r.k}" x="${HX0}" y="${n1(cy - HIT / 2)}" width="${HX1 - HX0}" height="${n1(HIT)}" rx="8" fill="${pitchCol}" fill-opacity="0"/></g>`;
+      + `<rect class="hit" data-m="hit:${r.k}" x="${HX0}" y="${n1(band[i][0])}" width="${HX1 - HX0}" height="${n1(band[i][1] - band[i][0])}" rx="8" fill="${pitchCol}" fill-opacity="0"/></g>`;
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end));
     const w = Math.max(1, n1(b - a));
     bars += `${g}><rect data-m="bar:${r.k}" x="${a}" y="${n1(cy - BAR / 2)}" width="${w}" height="${n1(BAR)}" rx="${n1(Math.min(4, w / 2))}" fill="${col}"/>`;
@@ -345,14 +359,14 @@ export function flowSvg(ctx) {
     front += text(LX, sub ? cy - FS * 0.07 : cy + FS * 0.35, r.label, `font-size="${n1(FS)}" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
     if (sub) front += text(LX, cy + FS * 1.03, sub, `font-size="${n1(SUB)}" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
     front += '</g>';
-    if (on) selRow = { cy, col, r };
+    if (on) selRow = { cy, col, r, top: band[i][0], bottom: band[i][1] };
     x = end;
   });
   // The selected row's highlight and its funnel to the league panel are one shape, rounded on
   // the left only, so the band runs into the ribbon with no seam or pinch.
-  const py = selRow ? Math.max(CT, Math.min(CB - CARD, selRow.cy - CARD / 2)) : 0;
+  const py = selRow ? Math.max(CT, Math.min(CB - CARD, (selRow.top + selRow.bottom) / 2 - CARD / 2)) : 0;
   if (selRow) {
-    const y0 = n1(selRow.cy - HIT / 2), y1 = n1(selRow.cy + HIT / 2), b0 = n1(py), b1 = n1(py + CARD);  // the card's full height
+    const y0 = n1(selRow.top), y1 = n1(selRow.bottom), b0 = n1(py), b1 = n1(py + CARD);  // the card's full height
     const rr = 8, m = n1((HX1 + PX) / 2);
     const d = `M${HX0 + rr},${y0}L${HX1},${y0}C${m},${y0} ${m},${b0} ${PX},${b0}L${PX},${b1}C${m},${b1} ${m},${y1} ${HX1},${y1}`
       + `L${HX0 + rr},${y1}Q${HX0},${y1} ${HX0},${n1(y1 - rr)}L${HX0},${n1(y0 + rr)}Q${HX0},${y0} ${HX0 + rr},${y0}Z`;
