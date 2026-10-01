@@ -304,6 +304,9 @@ export function flowSvg(ctx) {
     room / (0.8 * Math.max(1e-9, ...rows.map((r) => per(subOf(r))))),
     (S * 0.82) / 1.9));
   const SUB = Math.max(FLOW_MIN, FS * 0.8);
+  // A row's label and sub-label, centred together on its bar: LB is the label's baseline against
+  // the bar's centre (the label's cap top to the sub-label's descender, its baseline 1.1 FS lower)
+  const LB = FS * 0.74 - (FS * 0.74 + FS * 1.1 + SUB * 0.24) / 2;
   // The labels at that size leave room between the widest of them (label or sub-label) and the
   // arsenal's bracket (its right edge at 201): the label column moves left until that gap is a
   // quarter of what it was, and the bars take the width
@@ -315,7 +318,7 @@ export function flowSvg(ctx) {
   // never short of the bar. Text extents: ascent 0.74 and descent 0.24 of the font size.
   const ext = rows.map((r, i) => {
     const cy = Y0 + i * S + S / 2;
-    return subOf(r) ? [cy - FS * 0.81, cy + FS * 1.03 + SUB * 0.24] : [cy - FS * 0.39, cy + FS * 0.59];
+    return subOf(r) ? [cy + LB - FS * 0.74, cy + LB + FS * 1.1 + SUB * 0.24] : [cy - FS * 0.39, cy + FS * 0.59];
   });
   const band = ext.map((e, i) => [i ? (ext[i - 1][1] + e[0]) / 2 : null, i < ext.length - 1 ? (e[1] + ext[i + 1][0]) / 2 : null]);
   band.forEach((b, i) => {
@@ -374,8 +377,8 @@ export function flowSvg(ctx) {
     front += text(tx, cy + FS * 0.35, val, `font-size="${n1(FS)}" font-weight="700" fill="${C.ink}" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
     // Other, Location and Count carry no sub-label here (the tooltip and league panel say more)
     const sub = subOf(r);
-    front += text(LX, sub ? cy - FS * 0.07 : cy + FS * 0.35, r.label, `font-size="${n1(FS)}" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
-    if (sub) front += text(LX, cy + FS * 1.03, sub, `font-size="${n1(SUB)}" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
+    front += text(LX, sub ? cy + LB : cy + FS * 0.35, r.label, `font-size="${n1(FS)}" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
+    if (sub) front += text(LX, cy + LB + FS * 1.1, sub, `font-size="${n1(SUB)}" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
     front += '</g>';
     if (on) selRow = { cy, col, r, top: band[i][0], bottom: band[i][1] };
     x = end;
@@ -701,8 +704,10 @@ export function phoneFlowSvg(ctx, W) {
     front += `${g}><rect data-m="vb:${r.k}" x="${n1(right ? tx - 3 : tx - tw - 3)}" y="${n1(cy - ch / 2)}" width="${n1(tw + 6)}" height="${n1(ch)}" rx="3" fill="${C.card}" fill-opacity=".8"/>`;
     front += text(tx, cy + VS * 0.35, val, `font-size="${VS}" font-weight="700" fill="${C.ink}" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
     const sub = subOf(r);
-    front += text(LX, sub ? cy - 1 : cy + FS * 0.35, r.label, `font-size="${FS}" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
-    if (sub) front += text(LX, cy + SUB + 2, sub, `font-size="${SUB}" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
+    // label and sub-label centred together on the bar (cap top to descender; sub baseline SUB + 3 lower)
+    const lb = FS * 0.74 - (FS * 0.74 + SUB + 3 + SUB * 0.24) / 2;
+    front += text(LX, sub ? cy + lb : cy + FS * 0.35, r.label, `font-size="${FS}" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
+    if (sub) front += text(LX, cy + lb + SUB + 3, sub, `font-size="${SUB}" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
     front += '</g>';
     x = end;
   });
