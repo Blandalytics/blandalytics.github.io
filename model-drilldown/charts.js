@@ -243,7 +243,9 @@ export function flowSvg(ctx) {
   const footN = footLines(foot, Math.round(H1 * FLOW_ASPECT), FLOW_MIN, columns(Math.round(H1 * FLOW_ASPECT)).wmX).length;
   const H = H1 + (footN - 1) * FLOW_MIN * 1.4;
   const W = Math.round(H * FLOW_ASPECT);
-  const { LX, X0, X1, HX0, HX1, PX, PW, wmX } = columns(W);
+  const cols = columns(W);
+  const { X1, HX0, HX1, PX, PW, wmX } = cols;
+  let { LX, X0 } = cols;  // moved left once the labels' size is known (the waterfall section)
   let s = svgOpen(W, H, 'fig flow-fig');
   s += header(W, ctx, `${season}; Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${kpiName(model, target)}`, PX + PW / 2);
   const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';  // the selected row and its funnel
@@ -293,7 +295,8 @@ export function flowSvg(ctx) {
   // One font size for every row's label, value and sub-label (at 0.8x): the largest at which
   // each label and sub-label fits on one line between the funnel's bracket and the bars, and each
   // label block fits its row's height. Kept between the card's 14.5 and 32 px.
-  const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] ? '' : r.detail);  // Other, Location, Count: name only
+  // Other, Location and Count rows, and every row of the Location model: name only
+  const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] || ctx.model === 'location' ? '' : r.detail);
   const per = (str) => textWidth(str, 100) / 100;  // width per px of font size
   const room = LX - (HX0 + 14);
   const FS = Math.max(FLOW_MIN + 4, Math.min(32,
@@ -301,6 +304,12 @@ export function flowSvg(ctx) {
     room / (0.8 * Math.max(1e-9, ...rows.map((r) => per(subOf(r))))),
     (S * 0.82) / 1.9));
   const SUB = Math.max(FLOW_MIN, FS * 0.8);
+  // The labels at that size leave room between the widest of them (label or sub-label) and the
+  // arsenal's bracket (its right edge at 201): the label column moves left until that gap is a
+  // quarter of what it was, and the bars take the width
+  const textW = Math.max(...rows.map((r) => Math.max(textWidth(r.label, FS), subOf(r) ? textWidth(subOf(r), SUB) * 0.94 : 0)));
+  const slack = LX - textW - (201 + shift);
+  if (slack > 0) { LX = n1(LX - 0.75 * slack); X0 = LX + 12; }
   // Each row's highlight / hover band [top, bottom]: it covers the row's label and sub-label and
   // meets the next row's halfway between their text (the end rows reach as far past their text),
   // never short of the bar. Text extents: ascent 0.74 and descent 0.24 of the font size.
@@ -645,7 +654,7 @@ export function phoneFlowSvg(ctx, W) {
 
   // ---- the waterfall, full width ----
   const FS = 12.5, SUB = PHONE_MIN, VS = 12;
-  const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] ? '' : r.detail);
+  const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] || ctx.model === 'location' ? '' : r.detail);  // as the desktop's
   const LW = Math.max(...rows.map((r) => Math.max(textWidth(r.label, FS), subOf(r) ? textWidth(subOf(r), SUB) * 0.95 : 0)));
   const LX = P + LW, X0 = LX + 12, X1 = W - P - 4;
   const S = FS + SUB + 16;  // row pitch
@@ -794,7 +803,7 @@ export function swarmSvg(ctx) {
     // slides to its new position whole
     s += `<g class="srow fx" data-k="${r.k}" data-m="sr:${r.k}" transform="translate(0,${n1(cy)})">`;
     s += `<rect class="hit" x="16" y="${-RH / 2 + 1}" width="${W - 32}" height="${RH - 2}" rx="6" fill="transparent"/>`;
-    const sub = GROUPS[r.k] ? '' : r.detail;  // Location and Count go without one here
+    const sub = GROUPS[r.k] || ctx.model === 'location' ? '' : r.detail;  // Location and Count, and the Location model, go without one here
     s += text(L - 16, sub ? -1 : 4.5, r.label, `font-size="13.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `sl:${r.k}`);
     if (sub) s += text(L - 16, 13, sub, `font-size="11" fill="${C.muted}" text-anchor="end"`, `sd:${r.k}`);
     // colour by the unit's input, 2nd-98th percentile within the pool
