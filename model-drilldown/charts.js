@@ -176,10 +176,8 @@ export const FLOW_ASPECT = 16 / 9;  // the drilldown's shape (width / height), o
 // The drilldown's least text size. On a desktop the 16:9 figure (2133 wide at 1200 tall) shows at
 // about 1200 px, so 18 units is 10 px on screen.
 const FLOW_MIN = 18;
-// the league card's text sizes: the phone card (drawn at screen px) and, for the drilldown,
-// FLOW_MIN with the title and highlighted line at the waterfall's label size
-// (dot: the pitcher's marker's radius; the desktop card's is twice the phone's, about the same on screen)
-const PANEL_TEXT = { title: 15, sub: 11.5, tick: 10, axis: 10.5, zone: 11, hi: 13, line: 11.5, foot: 10.5, none: 12, dot: 6.5 };
+// the league card's text sizes: FLOW_MIN, with the title and highlighted line at the waterfall's
+// label size (dot: the pitcher's marker's radius)
 const flowPanelText = (FS) => ({ title: FS, sub: FLOW_MIN, tick: FLOW_MIN, axis: FLOW_MIN, zone: FLOW_MIN, hi: FS, line: FLOW_MIN, foot: FLOW_MIN, none: FLOW_MIN, dot: 13 });
 const HILITE = 0.16;         // the selected row's tint: the same colour and opacity as its funnel
 const CONNECTOR = '#B4BECC';  // the waterfall's bar-to-bar connectors
@@ -424,9 +422,9 @@ export function flowSvg(ctx) {
 // dependence plot of shap_analysis.py, one dot per pitcher x pitch type rather than per pitch),
 // a binned mean through it, and the pitcher's own dot. Location and Count plot the two inputs
 // against each other instead, coloured by the row's SHAP.
-// T: the text sizes (PANEL_TEXT, or flowPanelText for the drilldown); the lines and the plot's
+// T: the text sizes (flowPanelText); the lines and the plot's
 // margins follow from them.
-function panel(ctx, r, x, y, w, h, pool, poolLabel, T = PANEL_TEXT) {
+function panel(ctx, r, x, y, w, h, pool, poolLabel, T) {
   const { unit, info, target } = ctx;
   const val = ctx.rowValueOf || ((k, p) => rowValue(k, p.unit));
   const inp = ctx.rowInputOf || ((k, p) => rowInput(k, p.info));
@@ -435,11 +433,9 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T = PANEL_TEXT) {
   // square on the left, where the funnel meets it edge to edge; rounded on the right
   const rr = 12, y0 = n1(y), y1 = n1(y + h), x1 = x + w;
   // (the phone card stands alone, so it is rounded all round)
-  let s = ctx.centred ? `<rect data-m="pbox" x="${x}" y="${y0}" width="${w}" height="${n1(h)}" rx="${rr}" fill="${C.raise}"/>`
-    : `<path data-m="pbox" d="M${x},${y0}L${x1 - rr},${y0}Q${x1},${y0} ${x1},${n1(y0 + rr)}L${x1},${n1(y1 - rr)}Q${x1},${y1} ${x1 - rr},${y1}L${x},${y1}Z" fill="${C.raise}"/>`;
+  let s = `<path data-m="pbox" d="M${x},${y0}L${x1 - rr},${y0}Q${x1},${y0} ${x1},${n1(y0 + rr)}L${x1},${n1(y1 - rr)}Q${x1},${y1} ${x1 - rr},${y1}L${x},${y1}Z" fill="${C.raise}"/>`;
   // the Location card plots each unit's average location, and says so
-  // the text lines sit left on desktop, centred on the phone card (ctx.centred)
-  const tx = ctx.centred ? x + w / 2 : x + 16, ta = ctx.centred ? ' text-anchor="middle"' : '';
+  const tx = x + 16, ta = '';
   const t1 = y + 13 + T.title, t2 = t1 + T.sub * 1.55;  // title and pool baselines
   s += text(tx, t1, r.k === 'Location' ? 'Average Location' : r.label, `font-size="${n1(T.title)}" font-weight="700" fill="${C.ink}"${ta}`, 'ptitle');
   s += text(tx, t2, poolLabel.replace(/ \(\d+\+ pitches\)$/, ''), `font-size="${n1(T.sub)}" fill="${C.muted}"${ta}`, 'psub');
@@ -591,7 +587,8 @@ export function nearestPanelPoint(fx, fy, maxDist = 12) {
 
 // ======================================================================================
 // the drilldown on a phone: a one-line header and the waterfall, drawn at the screen's own
-// pixel width (1 unit = 1 CSS px, so no text is under 11 px); the league card is its own panel
+// pixel width (1 unit = 1 CSS px, so no text is under 11 px). Its rows are static, and there is
+// no league card (nor beeswarm or Sankey) on a phone.
 // ======================================================================================
 
 const PHONE_MIN = 11;  // the smallest text on a phone, in CSS px
@@ -608,7 +605,7 @@ function wrapLines(str, size, max) {
 }
 
 export function phoneFlowSvg(ctx, W) {
-  const { rows, unit, target, model, info, selected } = ctx;
+  const { rows, unit, target, model, info } = ctx;
   const f = formats(target);
   const good = targetGood(target);
   const P = 12;  // side margin
@@ -652,7 +649,7 @@ export function phoneFlowSvg(ctx, W) {
   const LW = Math.max(...rows.map((r) => Math.max(textWidth(r.label, FS), subOf(r) ? textWidth(subOf(r), SUB) * 0.95 : 0)));
   const LX = P + LW, X0 = LX + 12, X1 = W - P - 4;
   const S = FS + SUB + 16;  // row pitch
-  const BAR = 14, HIT = S - 4;
+  const BAR = 14;
   const Y0 = headerBottom + 42, BH = rows.length * S;  // room for the AVG label above the bars
   let x = unit.league;
   const path = [x];
@@ -676,16 +673,14 @@ export function phoneFlowSvg(ctx, W) {
     if (over > 0) d1 += (over + 2) / k;
   }
   const sx = (v) => n1(lin(d0, d1, X0, X1)(v));
-  let back = '', bars = '', front = '';
+  // the rows are static on a phone: no highlight, hover or selection (there is no league card)
+  let bars = '', front = '';
   x = unit.league;
   rows.forEach((r, i) => {
     const cy = Y0 + i * S + S / 2;
     const end = x + r.v;
     const col = good * r.v > 0 ? C.gold : C.teal;
-    const on = r.k === selected;
-    const g = `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}"`;
-    back += `${g} tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`
-      + `<rect class="hit" data-m="hit:${r.k}" x="4" y="${n1(cy - HIT / 2)}" width="${W - 8}" height="${n1(HIT)}" rx="6" fill="${pitchCol}" fill-opacity="${on ? HILITE : 0}"/></g>`;
+    const g = '<g class="prow"';
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end));
     const w = Math.max(1, n1(b - a));
     bars += `${g}><rect data-m="bar:${r.k}" x="${a}" y="${n1(cy - BAR / 2)}" width="${w}" height="${BAR}" rx="${n1(Math.min(3, w / 2))}" fill="${col}"/>`;
@@ -702,7 +697,6 @@ export function phoneFlowSvg(ctx, W) {
     front += '</g>';
     x = end;
   });
-  s += back;
   for (const t of niceTicks(d0, d1, 4)) {
     s += `<line data-m="g:${t}" x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 4}" y2="${Y0 + BH + 2}" stroke="${C.grid}" stroke-width="1" pointer-events="none"/>`;
     s += text(sx(t), Y0 + BH + 16, f.tick(t), `font-size="${PHONE_MIN}" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
@@ -738,17 +732,6 @@ export function phoneFlowSvg(ctx, W) {
   s += wordmark((W - ww) / 2, fy + 12, ww);  // centred, like everything on the phone
   const H = fy + 12 + ww * WM_ASPECT + 12;
   s = s.replace(`viewBox="0 0 ${W} 100"`, `viewBox="0 0 ${W} ${n1(H)}"`).replace('height="100" rx="10"', `height="${n1(H)}" rx="10"`);
-  return s + '</svg>';
-}
-
-// The league card for the selected row, on its own. Drawn 10% narrower than the screen and
-// scaled up to fit, so the card's smallest text (10 units) comes out at 11 px.
-export function phoneCardSvg(ctx, screenW) {
-  const r = ctx.rows.find((x) => x.k === ctx.selected);
-  if (!r) return null;
-  const w = Math.floor(screenW / 1.1), h = Math.round(w * 1.3);
-  let s = svgOpen(w, h, 'fig card-fig');
-  s += panel({ ...ctx, centred: true }, r, 0, 0, w, h, ctx.pool, ctx.poolLabel);
   return s + '</svg>';
 }
 

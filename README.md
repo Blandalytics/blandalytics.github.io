@@ -622,7 +622,9 @@ Three figures, in the Swing Profiles card colours:
   Swing Profiles' league KDEs: the value, the biggest lift and the biggest drag.
   The figure is 16:9, on screen and copied (**Copy PNG** gives 4266 × 2400), and on a desktop or
   laptop it scales to fit the card's width and the screen's height (less 40 px). The KPI box sits
-  over the league card.
+  over the league card. On a phone (600 px or narrower) the page shows only the waterfall, drawn
+  at the screen's width with static rows, and the three numbers with their KDEs: no league card,
+  beeswarm or Sankey (**Copy PNG** still gives the full desktop figure).
 - **Against the league.** A beeswarm of every row's SHAP over the comparison group, coloured by
   each unit's input, with the pitcher marked.
 - **Where the probability goes.** A Sankey of the nine outcome probabilities. They sum to 100%, so

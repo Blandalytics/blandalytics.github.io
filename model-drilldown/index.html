@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="modulepreload" href="app.js?v=64">
+<link rel="modulepreload" href="app.js?v=65">
 <link rel="modulepreload" href="data.js?v=8">
-<link rel="modulepreload" href="charts.js?v=61">
+<link rel="modulepreload" href="charts.js?v=62">
 <link rel="modulepreload" href="morph.js?v=1">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/hyparquet@1.31.1/+esm">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -72,9 +72,8 @@ button:disabled{opacity:.45; cursor:default}
 #flow{overflow:hidden}
 #flow svg{min-width:0; width:100%; max-width:min(100%, calc((100svh - 40px) * 16 / 9)); margin:0 auto}
 @media (max-width:600px){ #out{padding:12px 8px} }
-/* on a phone the league card sits under the waterfall as its own panel */
-#flow-card{margin-top:12px; overflow:hidden; background:none}
-#flow-card svg{min-width:0; width:100%}
+/* a phone shows only the waterfall and the stat tiles: no beeswarm or outcome Sankey */
+@media (max-width:600px){ #swarm-card, #sankey-card{display:none !important} }
 .figure .row,.figure [data-pt],.figure .srow,.figure .fnode{cursor:pointer}
 .figure .panel-hit{cursor:crosshair}
 .figure .fx{transition:opacity .12s}
@@ -166,7 +165,6 @@ details[open] summary{margin-bottom:10px}
       <label><input id="all" type="checkbox"> Show every row</label>
     </div>
     <div id="flow" class="figure"></div>
-    <div id="flow-card" class="figure" hidden></div>
     <div id="stats" class="stats"></div>
     <div id="notes"></div>
     <div class="row actions">
@@ -210,6 +208,6 @@ details[open] summary{margin-bottom:10px}
   </section>
 </main>
 <div id="tip" hidden role="tooltip"></div>
-<script type="module" src="app.js?v=64"></script>
+<script type="module" src="app.js?v=65"></script>
 </body>
 </html>

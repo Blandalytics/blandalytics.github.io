@@ -8,10 +8,10 @@ import {
   MODELS, OUTCOMES, TARGET_NAMES, PITCH_NAMES, LABELS,
 } from './data.js?v=8';
 import {
-  flowSvg, phoneFlowSvg, phoneCardSvg, flowSvgForExport, swarmSvg, sankeySvg, svgToPng,
+  flowSvg, phoneFlowSvg, flowSvgForExport, swarmSvg, sankeySvg, svgToPng,
   nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, titleRight, C,
-} from './charts.js?v=61';
+} from './charts.js?v=62';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -27,7 +27,7 @@ const $ = (id) => document.getElementById(id);
 const el = {
   form: $('form'), season: $('season'), player: $('player'), suggest: $('suggest'), pt: $('pt'),
   model: $('model'), target: $('target'), status: $('status'),
-  out: $('out'), flow: $('flow'), flowCard: $('flow-card'), stats: $('stats'), notes: $('notes'),
+  out: $('out'), flow: $('flow'), stats: $('stats'), notes: $('notes'),
   vs: $('vs'), minN: $('minn'), all: $('all'),
   swarmCard: $('swarm-card'), swarm: $('swarm'), sankeyCard: $('sankey-card'), sankey: $('sankey'),
   tip: $('tip'), copyFlow: $('copy_flow'), copySwarm: $('copy_swarm'), copySankey: $('copy_sankey'), dlCsv: $('dl_csv'),
@@ -282,22 +282,17 @@ function render() {
 }
 
 // The drilldown: on a desktop or laptop the 16:9 figure, or on a phone (600 px or narrower) the
-// header and waterfall at the screen's own width, with the league card as its own panel.
+// header and waterfall at the screen's own width: no league card, and the rows are static.
 const phoneQuery = window.matchMedia('(max-width: 600px)');
 let drawnAs = null;  // 'desktop', or the phone width it was drawn at
 const flowKey = () => (phoneQuery.matches ? Math.max(280, el.flow.clientWidth) : 'desktop');
 function drawFlow() {
   if (phoneQuery.matches) {
-    el.flowCard.hidden = false;
     const w = Math.max(280, el.flow.clientWidth);  // never narrower than a small phone
     drawnAs = w;
     morph(el.flow, phoneFlowSvg(view, w));
-    const card = phoneCardSvg(view, w);
-    if (card) morph(el.flowCard, card); else el.flowCard.replaceChildren();
   } else {
     drawnAs = flowKey();
-    el.flowCard.hidden = true;
-    el.flowCard.replaceChildren();
     morph(el.flow, flowSvg(view));
   }
 }
@@ -528,20 +523,6 @@ el.flow.addEventListener('pointermove', (e) => {
     return;
   }
   hideTip();
-});
-
-el.flowCard.addEventListener('pointermove', (e) => {
-  const svg = el.flowCard.querySelector('svg');
-  if (!svg || !view || !e.target.closest('.panel-hit')) { hideTip(); return; }
-  const p = nearestPanelPoint(...svgPoint(svg, e));
-  if (p) showTip(unitTip(p.info, { k: state.row, v: p.v }, p.me), e); else hideTip();
-});
-el.flowCard.addEventListener('pointerleave', hideTip);
-el.flowCard.addEventListener('click', (e) => {
-  const svg = el.flowCard.querySelector('svg');
-  if (!svg || !e.target.closest('.panel-hit')) return;
-  const p = nearestPanelPoint(...svgPoint(svg, e));
-  if (p && !p.me) { hideTip(); state.pt = p.pt; choosePitcher(p.id); }
 });
 
 el.swarm.addEventListener('pointermove', (e) => {
