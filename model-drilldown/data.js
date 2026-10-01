@@ -302,7 +302,7 @@ export function outcomeRows(model, idx, info) {
     };
   });
   if (model === 'pitching') {
-    rows.push({ k: 'leverage', label: 'Count Leverage', v: outcomeValue('leverage', idx, info.pitcher, info.pt), detail: 'outcomes priced at their actual counts' });
+    rows.push({ k: 'leverage', label: 'Count Leverage', v: outcomeValue('leverage', idx, info.pitcher, info.pt), detail: '' });
   }
   return rows.filter((r) => Number.isFinite(r.v)).sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
 }
