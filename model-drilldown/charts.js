@@ -208,7 +208,7 @@ export function flowSvg(ctx) {
   const note = ctx.model === 'location' ? `${label} points (average 100, SD 15): location's change in each outcome rate (PLV vs Stuff at the same count) × its run value at the count, vs league`
     : ctx.byOutcome ? `${label} points (average 100, SD 15): each predicted outcome rate × its average run value, vs league`
     : f.unit === 'pts' ? `${label} points (average 100, SD 15)`
-    : f.unit === 'wOBA' ? `wOBA on contact, per ball in play (league ${woba(unit.league)})`
+    : f.unit === 'wOBA' ? `wOBA on contact (league ${woba(unit.league)})`
     : f.unit === 'runs' ? `Runs per 9 innings (league ERA ${unit.league.toFixed(2)}): season constant − 9 × run value per pitch × modelled pitches per inning`
       : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%)`;
   const foot = `${note}; ${ctx.byOutcome ? 'an exact split, no proxy' : 'feature contributions from a proxy model'}. ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`;
@@ -695,7 +695,7 @@ export function phoneFlowSvg(ctx, W) {
   const note = ctx.model === 'location' ? `${label} points (average 100, SD 15): location's change in each outcome rate (PLV vs Stuff at the same count) × its run value at the count, vs league; an exact split, no proxy.`
     : ctx.byOutcome ? `${label} points (average 100, SD 15): each predicted outcome rate × its average run value, vs league; an exact split, no proxy.`
     : f.unit === 'pts' ? `${label} points (average 100, SD 15); feature contributions from a proxy model.`
-    : f.unit === 'wOBA' ? `wOBA on contact, per ball in play (league ${woba(unit.league)}); feature contributions from a proxy model.`
+    : f.unit === 'wOBA' ? `wOBA on contact (league ${woba(unit.league)}); feature contributions from a proxy model.`
     : f.unit === 'runs' ? `Runs per 9 innings (league ERA ${unit.league.toFixed(2)}); feature contributions from a proxy model.`
     : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%); feature contributions from a proxy model.`;
   const lines = wrapLines(`${note} ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`, PHONE_MIN, W - 2 * P);
