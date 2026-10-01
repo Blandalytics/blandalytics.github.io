@@ -213,7 +213,7 @@ export function flowSvg(ctx) {
     : f.unit === 'pts' ? `${label} points (average 100, SD 15)`
     : f.unit === 'wOBA' ? `wOBA on contact (league ${woba(unit.league)})`
     : f.unit === 'runs' ? `Expected runs per 9 IP (league ERA ${unit.league.toFixed(2)})`
-      : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%)`;
+      : `Per-pitch probability (league ${unit.league.toFixed(1)}%)`;
   const foot = `${note}; ${ctx.byOutcome ? 'an exact split, no proxy' : 'feature contributions from a proxy model'}. ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`;
   // The body takes whatever height makes H = 1200, or more if the rows, the league card or the
   // arsenal need it. Rows and pitch types are spread evenly
@@ -727,7 +727,7 @@ export function phoneFlowSvg(ctx, W) {
     : f.unit === 'pts' ? `${label} points (average 100, SD 15); feature contributions from a proxy model.`
     : f.unit === 'wOBA' ? `wOBA on contact (league ${woba(unit.league)}); feature contributions from a proxy model.`
     : f.unit === 'runs' ? `Expected runs per 9 IP (league ERA ${unit.league.toFixed(2)}); feature contributions from a proxy model.`
-    : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%); feature contributions from a proxy model.`;
+    : `Per-pitch probability (league ${unit.league.toFixed(1)}%); feature contributions from a proxy model.`;
   const lines = wrapLines(`${note} ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`, PHONE_MIN, W - 2 * P);
   let fy = Y0 + BH + 54;
   lines.forEach((l, i) => { s += text(W / 2, fy + i * 15, l, `font-size="${PHONE_MIN}" fill="${C.faint}" text-anchor="middle"`, i ? `foot${i}` : 'foot'); });
