@@ -16,7 +16,7 @@
 import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, OUTCOME_NAMES, OUTCOME_COLORS, TARGET_NAMES, LABELS, AXIS, PCT,
   GROUPS, MODELS, isPlus, targetGood, targetName, rowValue, rowInput, allRows, sgn,
-} from './data.js?v=4';
+} from './data.js?v=5';
 
 export const C = {
   card: '#292C42', raise: '#30344F', ink: '#E3E9F1', muted: '#8A96A6', faint: '#6B7684', grid: '#3A3E5A',
@@ -99,7 +99,7 @@ const svgOpen = (W, H, cls) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox=
   + `<rect class="bg" data-m="bg" width="${W}" height="${n1(H)}" rx="10" fill="${C.card}"/>`;
 const wordmark = (x, y, w) => `<image class="wordmark" data-m="wm" href="${WORDMARK_URL}" x="${x}" y="${n1(y)}" width="${w}" height="${n1(w * WM_ASPECT)}"/>`;
 const text = (x, y, s, attrs = '', m = null) => `<text${m ? ` data-m="${esc(m)}"` : ''} x="${n1(x)}" y="${n1(y)}" ${attrs}>${esc(s)}</text>`;
-const head = (x, y, s, anchor, m) => text(x, y, s.toUpperCase(), `font-size="11" font-weight="600" letter-spacing="1.6" fill="${C.faint}" text-anchor="${anchor}"`, m);
+const head = (x, y, s, anchor, m, fill = C.faint) => text(x, y, s.toUpperCase(), `font-size="11" font-weight="600" letter-spacing="1.6" fill="${fill}" text-anchor="${anchor}"`, m);
 
 function header(W, ctx, subtitle) {
   const { info, unit, target, model } = ctx;
@@ -164,12 +164,17 @@ export function flowSvg(ctx) {
   const HIT = Math.min(S - 4, RH + 12);    // row highlight / hover band
   const H = Y0 + BB + 118;
   let s = svgOpen(W, H, 'fig flow-fig');
-  s += header(W, ctx, `${season}  ·  ${info.n.toLocaleString()} pitches  ·  ${label}`);
+  s += header(W, ctx, `${season}  ·  ${info.n.toLocaleString()} pitches`);
   const selRowDef = rows.find((r) => r.k === selected);
   // columns: arsenal labels | bands 94-108 | ribbon | row names (end 440) | bars 452-832 | ribbon | panel 888-1164
   const LX = 440, X0 = 452, X1 = 832, HX0 = 208, HX1 = 848, PX = 888;
-  s += head(36, Y0 - 22, 'Arsenal', 'start', 'h1') + head(LX, Y0 - 22, ctx.byOutcome ? label : `SHAP · ${label}`, 'end', 'h2')
-    + head(PX, Y0 - 22, selRowDef ? `League · ${selRowDef.label}` : 'League', 'start', 'h3');
+  // column headings in white, high enough to clear the AVG label over the league line; the
+  // waterfall's centred over its labels and bars
+  const HY = Y0 - 44;
+  s += head(36, HY, 'Arsenal', 'start', 'h1', '#fff')
+    + head((HX0 + HX1) / 2, HY, `Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${label}`, 'middle', 'h2', '#fff')
+    + head(PX, HY, selRowDef ? `League · ${selRowDef.label}` : 'League', 'start', 'h3', '#fff');
+  const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';  // the selected row and its funnel
 
   // ---- arsenal: one band per pitch type, as tall as its share of the pitches ----
   const AX = 94, AW = 14, gap = 8, minH = 8;
@@ -242,7 +247,7 @@ export function flowSvg(ctx) {
     const on = r.k === selected;
     const g = `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}"`;
     back += `${g} tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`
-      + `<rect class="hit" data-m="hit:${r.k}" x="${HX0}" y="${n1(cy - HIT / 2)}" width="${HX1 - HX0}" height="${n1(HIT)}" rx="8" fill="${col}" fill-opacity="0"/></g>`;
+      + `<rect class="hit" data-m="hit:${r.k}" x="${HX0}" y="${n1(cy - HIT / 2)}" width="${HX1 - HX0}" height="${n1(HIT)}" rx="8" fill="${pitchCol}" fill-opacity="0"/></g>`;
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end));
     const w = Math.max(1, n1(b - a));
     bars += `${g}><rect data-m="bar:${r.k}" x="${a}" y="${n1(cy - BAR / 2)}" width="${w}" height="${n1(BAR)}" rx="${n1(Math.min(4, w / 2))}" fill="${col}"/>`;
@@ -270,7 +275,7 @@ export function flowSvg(ctx) {
     const rr = 8, m = n1((HX1 + PX) / 2);
     const d = `M${HX0 + rr},${y0}L${HX1},${y0}C${m},${y0} ${m},${b0} ${PX},${b0}L${PX},${b1}C${m},${b1} ${m},${y1} ${HX1},${y1}`
       + `L${HX0 + rr},${y1}Q${HX0},${y1} ${HX0},${n1(y1 - rr)}L${HX0},${n1(y0 + rr)}Q${HX0},${y0} ${HX0 + rr},${y0}Z`;
-    s += `<g class="row fx sel" data-k="${selRow.r.k}"><path class="ribbon" data-f="1" d="${d}" fill="${selRow.col}" opacity="${HILITE}" pointer-events="none"/></g>`;
+    s += `<g class="row fx sel" data-k="${selRow.r.k}"><path class="ribbon" data-f="1" d="${d}" fill="${pitchCol}" opacity="${HILITE}" pointer-events="none"/></g>`;
   }
   s += back;
   for (const t of niceTicks(d0, d1, 6)) {
@@ -278,9 +283,22 @@ export function flowSvg(ctx) {
     s += text(sx(t), Y0 + BB + 24, f.tick(t), `font-size="12" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
   }
   s += text((X0 + X1) / 2, Y0 + BB + 50, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="13" fill="${C.muted}" text-anchor="middle"`, 'xlab');
-  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.2" pointer-events="none"/>`;
+  const AY = Y0 - 18;  // the AVG label's and the arrow's centre line
+  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${AY + 8}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.2" pointer-events="none"/>`;
   s += bars;
-  s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.6" stroke-dasharray="6 5" pointer-events="none"/>`;
+  s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${AY}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.6" stroke-dasharray="6 5" pointer-events="none"/>`;
+  // "AVG" boxed over the league line, and an arrow in the KPI box's colour from it to the
+  // final value (none when the two nearly meet)
+  const ax = sx(unit.league), ex = sx(x);
+  const aw = textWidth('AVG', 11) + 14;
+  s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - 9}" width="${n1(aw)}" height="18" rx="4" fill="${C.card}" stroke="#fff" stroke-width="1.2"/>`;
+  s += text(ax, AY + 4, 'AVG', `font-size="11" font-weight="700" letter-spacing=".6" fill="#fff" text-anchor="middle"`, 'avg');
+  const dir = ex >= ax ? 1 : -1, from = ax + dir * (aw / 2 + 3);
+  if (dir * (ex - from) > 12) {
+    const kcol = kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit));
+    s += `<line data-m="arrow" x1="${n1(from)}" x2="${n1(ex - dir * 8)}" y1="${AY}" y2="${AY}" stroke="${kcol}" stroke-width="2.5" stroke-linecap="round"/>`;
+    s += `<path data-m="arrowhead" d="M${ex},${AY}L${n1(ex - dir * 10)},${AY - 6}L${n1(ex - dir * 10)},${AY + 6}Z" fill="${kcol}"/>`;
+  }
   s += front;
 
   // ---- league panel for the selected row ----

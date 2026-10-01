@@ -6,11 +6,11 @@ import {
   loadMeta, loadFeatures, loadUnits, loadFidelity, cardRows, rowValue, minImpact, targetName, targetGood,
   outcomeRows, outcomeValue, outcomeInput, OUTCOME_AXIS,
   MODELS, OUTCOMES, TARGET_NAMES, PITCH_NAMES, LABELS,
-} from './data.js?v=4';
+} from './data.js?v=5';
 import {
   flowSvg, swarmSvg, sankeySvg, svgToPng, nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, C,
-} from './charts.js?v=24';
+} from './charts.js?v=25';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -329,7 +329,7 @@ function renderStats() {
     if (!r) continue;
     const vals = others.map((p) => (view.rowValueOf ? view.rowValueOf(r.k, p) : rowValue(r.k, p.unit))).filter(Number.isFinite);
     const signed = (v) => (Math.abs(v) < 1e-9 ? '0' : `${v > 0 ? '+' : '−'}${f.tick(Math.abs(v))}`);
-    tiles.push({ k: r.k, head: `${word}: ${r.label}`, value: `${f.d(r.v)} ${f.unit}`, sub: `${r.detail ? `${r.detail}; ` : ''}${ord(pctile(vals, r.v))} percentile for ${view.poolWhat}`, values: vals, x: r.v, color, fmt: signed });
+    tiles.push({ k: r.k, head: `${word}: ${r.label}`, value: `${f.d(r.v)} ${f.unit}`, sub: `${r.detail && !['Location', 'Count', 'leverage'].includes(r.k) ? `${r.detail}; ` : ''}${ord(pctile(vals, r.v))} percentile for ${view.poolWhat}`, values: vals, x: r.v, color, fmt: signed });
   }
   el.stats.innerHTML = tiles.map((t, i) => `<div class="stat${t.k ? ' fx' : ''}"${t.k ? ` data-k="${t.k}" tabindex="0" role="button"` : ''} data-i="${i}">
     <span>${esc(t.head)}</span><b>${esc(t.value)}</b><span>${esc(t.sub)}</span>
