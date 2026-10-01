@@ -312,14 +312,16 @@ export function flowSvg(ctx) {
   const band = ext.map((e, i) => [i ? (ext[i - 1][1] + e[0]) / 2 : null, i < ext.length - 1 ? (e[1] + ext[i + 1][0]) / 2 : null]);
   band.forEach((b, i) => {
     const [t, u] = ext[i], cy = Y0 + i * S + S / 2;
-    if (b[0] == null) b[0] = b[1] == null ? t - 8 : t - (b[1] - u);
+    if (rows.length === 1) { b[0] = cy - BB / 4; b[1] = cy + BB / 4; return; }  // a lone row: half the body
+    if (b[0] == null) b[0] = t - (b[1] - u);
     if (b[1] == null) b[1] = u + (t - b[0]);
     b[0] = Math.min(b[0], cy - BAR / 2 - 4);
     b[1] = Math.max(b[1], cy + BAR / 2 + 4);
   });
   // The league card stays within the first row's band top and the last row's bottom, so with
-  // either end row selected its edge runs straight on from the highlight's
-  const CT = band[0][0], CB = band[band.length - 1][1];
+  // either end row selected its edge runs straight on from the highlight's (a lone row's card
+  // has the whole body, its funnel widening to it)
+  const [CT, CB] = rows.length === 1 ? [Y0, Y0 + BB] : [band[0][0], band[band.length - 1][1]];
   const CARD = Math.min(CB - CT, Math.max(560, PW + 284));  // the league card's height: taller as it widens
   const ROOM_L = LX + 10, ROOM_R = HX1 - 6;
   for (let iter = 0; iter < 8; iter++) {
@@ -466,7 +468,14 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T = PANEL_TEXT) {
   if (ya === yb) { ya -= 0.5; yb += 0.5; }
   const xpad = (xb - xa) * 0.06, ypad = (yb - ya) * 0.08;
   xa -= xpad; xb += xpad; ya -= ypad; yb += ypad;
-  const yfmt = grouped ? (r.k === 'Location' ? (v) => `${Math.round(v * 100)}%` : (v) => `${+v.toFixed(2)}`) : f.tick;
+  let yfmt = grouped ? (r.k === 'Location' ? (v) => `${Math.round(v * 100)}%` : (v) => `${+v.toFixed(2)}`) : f.tick;
+  // tiny values (a lone Other row's residual) can round every tick to one label: then as many
+  // decimals as the tick step needs
+  const yt = niceTicks(ya, yb, 4);
+  if (new Set(yt.map(yfmt)).size < yt.length && yt.length > 1) {
+    const dp = Math.max(0, Math.ceil(-Math.log10(Math.abs(yt[1] - yt[0])) - 1e-9));
+    yfmt = (v) => `${+v.toFixed(dp)}`;
+  }
   // left of the plot: the rotated y label, then the y ticks (as wide as the widest)
   const ylabX = x + 8 + T.axis * 0.75;
   const ytw = Math.max(0, ...niceTicks(ya, yb, 4).map((t) => textWidth(yfmt(t), T.tick) * 0.94));
