@@ -513,8 +513,7 @@ export function phoneFlowSvg(ctx, W) {
   const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';
 
   // ---- header: the desktop's, at phone sizes. The pitcher (teal) over the full pitch type
-  // (its colour), the KPI box to the right (beside the title when both fit at readable sizes,
-  // else under it), then the subtitle ----
+  // (its colour), the KPI box under it, both centred, then the subtitle ----
   const kcol = kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit));
   const kv = f.v(unit.exact);
   const kLines = isPlus(target) ? [MODELS[model].title] : [TARGET_NAMES[target], `(${MODELS[model].short})`];
@@ -524,17 +523,16 @@ export function phoneFlowSvg(ctx, W) {
   const BW = 12 + klw + 10 + kvw + 12, BH0 = 56;
   const ptName = PITCH_NAMES[info.pt] || info.pt;
   const titleW = (sz) => Math.max(textWidth(info.pitcher_name, sz), textWidth(ptName, sz));
+  // title and KPI box each centred across the screen, the box under the title
   let NS = 22;
-  while (NS > 14 && P + titleW(NS) + 12 + BW > W - P) NS -= 0.5;
-  const beside = P + titleW(NS) + 12 + BW <= W - P;
-  if (!beside) { NS = 22; while (NS > 14 && P + titleW(NS) > W - P) NS -= 0.5; }
+  while (NS > 14 && P + titleW(NS) > W - P) NS -= 0.5;
   const T0 = 12;  // the header's top
   const t1 = T0 + NS * 0.74, t2 = t1 + NS * 1.12;  // the title's baselines
   const titleBottom = t2 + NS * 0.26;
-  const bx = W - P - BW, by = beside ? T0 : titleBottom + 8;
+  const bx = (W - BW) / 2, by = titleBottom + 8;
   let s = svgOpen(W, 100, 'fig flow-fig phone');  // height set at the end
-  s += text(P, t1, info.pitcher_name, `font-size="${NS}" font-weight="700" fill="${C.teal}"`, 'title');
-  s += text(P, t2, ptName, `font-size="${NS}" font-weight="700" fill="${pitchCol}"`, 'title2');
+  s += text(W / 2, t1, info.pitcher_name, `font-size="${NS}" font-weight="700" fill="${C.teal}" text-anchor="middle"`, 'title');
+  s += text(W / 2, t2, ptName, `font-size="${NS}" font-weight="700" fill="${pitchCol}" text-anchor="middle"`, 'title2');
   const bcy = by + BH0 / 2;
   s += `<rect data-m="kbox" x="${n1(bx)}" y="${n1(by)}" width="${n1(BW)}" height="${BH0}" rx="10" fill="${C.card}" stroke="${kcol}" stroke-width="2"/>`;
   const lbase = one ? [bcy + KVS * 0.36] : [bcy - 2, bcy + KLS + 1];

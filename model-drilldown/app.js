@@ -11,7 +11,7 @@ import {
   flowSvg, phoneFlowSvg, phoneCardSvg, flowSvgForExport, swarmSvg, sankeySvg, svgToPng,
   nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, titleRight, C,
-} from './charts.js?v=41';
+} from './charts.js?v=42';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
