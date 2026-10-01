@@ -186,6 +186,12 @@ async function draw() {
   }
 }
 
+// "The same pitch type" pools these together: curveballs with knuckle curves and slurves,
+// splitters with forkballs
+const PT_POOL = { CU: 'CU', KC: 'CU', SV: 'CU', FS: 'FS', FO: 'FS' };
+const POOL_NAMES = { CU: 'Curveballs, Knuckle Curves & Slurves', FS: 'Splitters & Forkballs' };
+const ptPool = (pt) => PT_POOL[pt] || pt;
+
 function poolFor(info) {
   const minN = Number(el.minN.value);
   const vs = el.vs.value;
@@ -197,12 +203,12 @@ function poolFor(info) {
     const me = u.pitcher === info.pitcher && u.pt === info.pt;
     if (!me) {
       if (i.n < minN) continue;
-      if (vs === 'pt' && i.pt !== info.pt) continue;
+      if (vs === 'pt' && ptPool(i.pt) !== ptPool(info.pt)) continue;
       if (vs === 'group' && i.group !== info.group) continue;
     }
     pool.push({ unit: u, info: i });
   }
-  const what = vs === 'pt' ? `${PITCH_NAMES[info.pt] || info.pt}s` : vs === 'group' ? `${info.group.toLowerCase()} pitches` : 'pitch types';
+  const what = vs === 'pt' ? POOL_NAMES[ptPool(info.pt)] || `${PITCH_NAMES[info.pt] || info.pt}s` : vs === 'group' ? `${info.group.toLowerCase()} pitches` : 'pitch types';
   return {
     pool,
     label: `vs ${(pool.length - 1).toLocaleString()} ${what}, ${state.season}${minN > 1 ? ` (${minN}+ pitches)` : ''}`,
