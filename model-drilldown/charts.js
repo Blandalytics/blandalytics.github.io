@@ -564,7 +564,9 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T) {
   s += `<rect class="panel-hit" x="${px0 - 6}" y="${n1(py0 - 6)}" width="${px1 - px0 + 12}" height="${py1 - py0 + 12}" fill="transparent"/>`;
 
   // the numbers under it
-  const rank = pctile(vs, me.v);
+  // ranked in the pitcher's favour: the change that helps the pitcher most is the 100th percentile, so a
+  // big drop in ERA or wOBAcon ranks high
+  const rank = pctile(vs.map((v) => good * v).sort((a, b) => a - b), good * me.v);
   // Other: the row's full value (its folded rows and the residual), as its bar shows it; the
   // plot and the percentile are the residual's
   if (r.k === 'Other') {
