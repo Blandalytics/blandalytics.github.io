@@ -53,6 +53,9 @@ export function kpiColor(t) {
   return `rgb(${to.map((c) => Math.round(255 + (c - 255) * a)).join(',')})`;
 }
 
+// the KPI box's target on one line: "Stuff+", "In-Play Out% (PLV)", "ERA (Stuff)"
+export const kpiName = (model, target) => (isPlus(target) ? MODELS[model].title : `${TARGET_NAMES[target]} (${MODELS[model].short})`);
+
 export function kpiT(target, unit) {
   const good = targetGood(target);
   if (isPlus(target)) return (unit.exact - 100) / 45;
@@ -100,12 +103,10 @@ const svgOpen = (W, H, cls) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox=
 const wordmark = (x, y, w) => `<image class="wordmark" data-m="wm" href="${WORDMARK_URL}" x="${x}" y="${n1(y)}" width="${w}" height="${n1(w * WM_ASPECT)}"/>`;
 const text = (x, y, s, attrs = '', m = null) => `<text${m ? ` data-m="${esc(m)}"` : ''} x="${n1(x)}" y="${n1(y)}" ${attrs}>${esc(s)}</text>`;
 const head = (x, y, s, anchor, m, fill = C.faint, size = 11) => text(x, y, s.toUpperCase(), `font-size="${n1(size)}" font-weight="600" letter-spacing="${n1(size * 0.145)}" fill="${fill}" text-anchor="${anchor}"`, m);
-const headWidth = (str, size) => textWidth(str.toUpperCase(), size) + size * 0.145 * str.length;
 
 function header(W, ctx, subtitle) {
   const { info, unit, target, model } = ctx;
   const f = formats(target);
-  const title = `${info.pitcher_name} - ${PITCH_NAMES[info.pt] || info.pt}`;
   // shaded by the value's standing among the season's established pitches (app.js kpiShade)
   const col = kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit));
   const val = f.v(unit.exact);
@@ -121,8 +122,11 @@ function header(W, ctx, subtitle) {
   const lx = kx + pad + lw / 2, vx = kx + pad + lw + gap;
   const base = one ? [cy + 15] : [cy - 3.5, cy + 18.5];  // one line shares the value's baseline
   const lab = `font-size="${size}" font-weight="700" fill="#fff" text-anchor="middle"`;
-  return text(36, 64, title, `font-size="30" font-weight="700" fill="${C.teal}"`, 'title')
-    + text(36, 96, subtitle, `font-size="16" fill="${C.muted}"`, 'sub')
+  // the title: the pitcher in teal over the pitch type in its own colour, two lines spanning
+  // the KPI box's height (24-122); the subtitle under both
+  return text(36, 55, info.pitcher_name, `font-size="44" font-weight="700" fill="${C.teal}"`, 'title')
+    + text(36, 105, PITCH_NAMES[info.pt] || info.pt, `font-size="44" font-weight="700" fill="${PITCH_COLORS[info.pt] || C.ink}"`, 'title2')
+    + text(36, 154, subtitle, `font-size="17" fill="${C.muted}"`, 'sub')
     + `<rect data-m="kbox" x="${n1(kx)}" y="24" width="${n1(bw)}" height="98" rx="14" fill="${C.card}" stroke="${col}" stroke-width="2.5"/>`
     + lines.map((l, i) => text(lx, base[i], l, lab, `klabel${i}`)).join('')
     + text(vx, cy + 15, val, `font-size="${VS}" font-weight="700" fill="${col}"`, 'kval');
@@ -132,7 +136,7 @@ function header(W, ctx, subtitle) {
 // flow: arsenal -> waterfall -> league panel
 // ======================================================================================
 
-export const FLOW = { W: 1200, Y0: 250, RH: 46, PH: 380 };  // PH: the league card's least height
+export const FLOW = { W: 1200, Y0: 232, RH: 46, PH: 380 };  // PH: the league card's least height
 const HILITE = 0.16;         // the selected row's tint: the same colour and opacity as its funnel
 const CONNECTOR = '#B4BECC';  // the waterfall's bar-to-bar connectors
 
@@ -168,23 +172,9 @@ export function flowSvg(ctx) {
   const H = Y0 + BB + 118;
   const CARD = Math.min(BB, 560);          // the league card's height
   let s = svgOpen(W, H, 'fig flow-fig');
-  s += header(W, ctx, `${season}  ·  ${info.n.toLocaleString()} pitches`);
-  const selRowDef = rows.find((r) => r.k === selected);
+  s += header(W, ctx, `${season}; Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${kpiName(model, target)}`);
   // columns: arsenal labels | bands 94-108 | ribbon | row names (end 440) | bars 452-832 | ribbon | panel 888-1164
   const LX = 440, X0 = 452, X1 = 832, HX0 = 208, HX1 = 848, PX = 888;
-  // column headings in white, high enough to clear the AVG label over the league line; the
-  // waterfall's centred over its labels and bars
-  const HY = Y0 - 52, HS = 22;  // headings at twice the old 11 px
-  // Arsenal over its labels, bands and ribbon (to the bracket at 201); the waterfall's across
-  // the whole figure, shrunk if a long target name would reach its neighbours; vs League over
-  // the funnel and the league card
-  const AXC = (36 + 201) / 2, LXC = (HX1 + W - 36) / 2;
-  const wfTitle = `Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${label}`;
-  const room = 2 * Math.min(W / 2 - (AXC + headWidth('Arsenal', HS) / 2) - 24, LXC - headWidth('vs League', HS) / 2 - 24 - W / 2);
-  const wfSize = Math.min(HS, (HS * room) / headWidth(wfTitle, HS));
-  s += head(AXC, HY, 'Arsenal', 'middle', 'h1', '#fff', HS)
-    + head(W / 2, HY, wfTitle, 'middle', 'h2', '#fff', wfSize)
-    + head(LXC, HY, 'vs League', 'middle', 'h3', '#fff', HS);
   const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';  // the selected row and its funnel
 
   // ---- arsenal: one band per pitch type, as tall as its share of the pitches ----
@@ -473,7 +463,7 @@ export function swarmSvg(ctx) {
   const { meta, model, target, unit, info, pool, poolLabel, season } = ctx;
   const f = formats(target);
   const good = targetGood(target);
-  const W = 1200, RH = 36, top = 170, L = 330, R = 1070;
+  const W = 1200, RH = 36, top = 226, L = 330, R = 1070;
   const val = ctx.rowValueOf || ((k, p) => rowValue(k, p.unit));
   const inp = ctx.rowInputOf || ((k, p) => rowInput(k, p.info));
   // Primary Fastball stays while its SHAP varies anywhere in the comparison group; it goes when
@@ -611,7 +601,7 @@ export function sankeySvg(ctx) {
   const exact = per.map((u) => u.exact), league = per.map((u) => u.league);
   const hl = target.startsWith('p_') ? target.slice(2) : null;
 
-  const W = 1200, top = 170, avail = 500, gap = 10, NW = 14;
+  const W = 1200, top = 226, avail = 500, gap = 10, NW = 14;
   const XL = 250, XM = 560, XR = 870;
   const lossOf = OUTCOMES.map((_, j) => sum(feats.map((f) => Math.max(0, -f.s[j]))));
   const gainOf = OUTCOMES.map((_, j) => sum(feats.map((f) => Math.max(0, f.s[j]))));
