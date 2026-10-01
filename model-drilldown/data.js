@@ -58,8 +58,8 @@ export const targetName = (model, t) => (isPlus(t) ? MODELS[model].title
 export const LABELS = {
   velo: 'Velocity', ax_m: 'Horizontal Mvmt', az: 'Induced Vertical Mvmt', rel_x_m: 'Release Side',
   rel_z: 'Release Height', extension: 'Extension', spin_rate: 'Spin Rate', spin_eff: 'Spin Efficiency',
-  axis_diff: 'Seam-Shifted Wake', velo_diff: 'Velo vs Primary FB', ax_diff: 'Horizontal Mvmt vs Primary FB',
-  az_diff: 'Vertical Mvmt vs Primary FB', is_primary: 'Primary Fastball', lefty: 'Handedness',
+  axis_diff: 'Seam-Shifted Wake', velo_diff: 'Velo vs FB', ax_diff: 'Horizontal Mvmt vs FB',
+  az_diff: 'Vertical Mvmt vs FB', is_primary: 'Primary Fastball', lefty: 'Handedness',
   x_b: 'Horizontal Location', z_n: 'Vertical Location', balls: 'Balls', strikes: 'Strikes', season_env: 'Season',
   baseline: 'Pitch Group & Matchup', Location: 'Location', Count: 'Count', Other: 'Other',
 };
@@ -88,8 +88,8 @@ export const AXIS = {
   velo: 'Velocity (mph)', ax_m: 'Horizontal Mvmt (ft/s², arm side +)', az: 'Induced Vertical Mvmt (ft/s²)',
   rel_x_m: 'Release Side (ft, arm side +)', rel_z: 'Release Height (ft)', extension: 'Extension (ft)',
   spin_rate: 'Spin Rate (rpm)', spin_eff: 'Spin Efficiency', axis_diff: 'Seam-Shifted Wake (°)',
-  velo_diff: 'Velo vs Primary FB (mph)', ax_diff: 'Horizontal Mvmt vs Primary FB (ft/s²)',
-  az_diff: 'Vertical Mvmt vs Primary FB (ft/s²)', is_primary: 'Share thrown as the primary fastball',
+  velo_diff: 'Velo vs FB (mph)', ax_diff: 'Horizontal Mvmt vs FB (ft/s²)',
+  az_diff: 'Vertical Mvmt vs FB (ft/s²)', is_primary: 'Share thrown as the primary fastball',
   lefty: 'Handedness (0 = RHP, 1 = LHP)', x_b: 'Horizontal Location (ft, + = away from the batter)',
   z_n: 'Vertical Location (share of zone height)', balls: 'Balls before the pitch', strikes: 'Strikes before the pitch',
   baseline: 'Share of pitches vs same-handed batters', Other: 'Pitches',

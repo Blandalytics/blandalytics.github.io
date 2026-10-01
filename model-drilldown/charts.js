@@ -16,7 +16,7 @@
 import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, OUTCOME_NAMES, OUTCOME_COLORS, TARGET_NAMES, LABELS, AXIS, PCT,
   GROUPS, MODELS, isPlus, targetGood, targetName, rowValue, rowInput, allRows, sgn,
-} from './data.js?v=5';
+} from './data.js?v=7';
 
 export const C = {
   card: '#292C42', raise: '#30344F', ink: '#E3E9F1', muted: '#8A96A6', faint: '#6B7684', grid: '#3A3E5A',
@@ -99,7 +99,8 @@ const svgOpen = (W, H, cls) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox=
   + `<rect class="bg" data-m="bg" width="${W}" height="${n1(H)}" rx="10" fill="${C.card}"/>`;
 const wordmark = (x, y, w) => `<image class="wordmark" data-m="wm" href="${WORDMARK_URL}" x="${x}" y="${n1(y)}" width="${w}" height="${n1(w * WM_ASPECT)}"/>`;
 const text = (x, y, s, attrs = '', m = null) => `<text${m ? ` data-m="${esc(m)}"` : ''} x="${n1(x)}" y="${n1(y)}" ${attrs}>${esc(s)}</text>`;
-const head = (x, y, s, anchor, m, fill = C.faint) => text(x, y, s.toUpperCase(), `font-size="11" font-weight="600" letter-spacing="1.6" fill="${fill}" text-anchor="${anchor}"`, m);
+const head = (x, y, s, anchor, m, fill = C.faint, size = 11) => text(x, y, s.toUpperCase(), `font-size="${n1(size)}" font-weight="600" letter-spacing="${n1(size * 0.145)}" fill="${fill}" text-anchor="${anchor}"`, m);
+const headWidth = (str, size) => textWidth(str.toUpperCase(), size) + size * 0.145 * str.length;
 
 function header(W, ctx, subtitle) {
   const { info, unit, target, model } = ctx;
@@ -131,7 +132,7 @@ function header(W, ctx, subtitle) {
 // flow: arsenal -> waterfall -> league panel
 // ======================================================================================
 
-export const FLOW = { W: 1200, Y0: 214, RH: 46, PH: 380 };
+export const FLOW = { W: 1200, Y0: 250, RH: 46, PH: 380 };  // PH: the league card's least height
 const HILITE = 0.16;         // the selected row's tint: the same colour and opacity as its funnel
 const CONNECTOR = '#B4BECC';  // the waterfall's bar-to-bar connectors
 
@@ -156,13 +157,16 @@ export function flowSvg(ctx) {
   const f = formats(target);
   const good = targetGood(target);
   const label = targetName(model, target);
-  // The body is as tall as the rows need, the league panel or the arsenal, whichever is most;
-  // rows and pitch types are spread evenly over all of it (bars keep the card's thickness).
-  const BB = Math.max(rows.length * RH, PH, arsenal.length * 22);
+  // The figure is square where it can be: the body takes whatever height makes H = W, or more
+  // if the rows, the league card or the arsenal need it. Rows and pitch types are spread evenly
+  // over it; bars thicken a little with the spacing (up to 1.5x the card's), and the league
+  // card grows with the body.
+  const BB = Math.max(rows.length * RH, PH, arsenal.length * 22, W - Y0 - 118);
   const S = BB / rows.length;              // row pitch
-  const BAR = RH * 0.6;                    // bar thickness
-  const HIT = Math.min(S - 4, RH + 12);    // row highlight / hover band
+  const BAR = Math.min(S * 0.6, RH * 0.9);  // bar thickness
+  const HIT = Math.min(S - 4, BAR + 30);   // row highlight / hover band
   const H = Y0 + BB + 118;
+  const CARD = Math.min(BB, 560);          // the league card's height
   let s = svgOpen(W, H, 'fig flow-fig');
   s += header(W, ctx, `${season}  ·  ${info.n.toLocaleString()} pitches`);
   const selRowDef = rows.find((r) => r.k === selected);
@@ -170,12 +174,17 @@ export function flowSvg(ctx) {
   const LX = 440, X0 = 452, X1 = 832, HX0 = 208, HX1 = 848, PX = 888;
   // column headings in white, high enough to clear the AVG label over the league line; the
   // waterfall's centred over its labels and bars
-  const HY = Y0 - 44;
+  const HY = Y0 - 52, HS = 22;  // headings at twice the old 11 px
   // Arsenal over its labels, bands and ribbon (to the bracket at 201); the waterfall's across
-  // the whole figure; vs League over the funnel and the league card
-  s += head((36 + 201) / 2, HY, 'Arsenal', 'middle', 'h1', '#fff')
-    + head(W / 2, HY, `Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${label}`, 'middle', 'h2', '#fff')
-    + head((HX1 + W - 36) / 2, HY, 'vs League', 'middle', 'h3', '#fff');
+  // the whole figure, shrunk if a long target name would reach its neighbours; vs League over
+  // the funnel and the league card
+  const AXC = (36 + 201) / 2, LXC = (HX1 + W - 36) / 2;
+  const wfTitle = `Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${label}`;
+  const room = 2 * Math.min(W / 2 - (AXC + headWidth('Arsenal', HS) / 2) - 24, LXC - headWidth('vs League', HS) / 2 - 24 - W / 2);
+  const wfSize = Math.min(HS, (HS * room) / headWidth(wfTitle, HS));
+  s += head(AXC, HY, 'Arsenal', 'middle', 'h1', '#fff', HS)
+    + head(W / 2, HY, wfTitle, 'middle', 'h2', '#fff', wfSize)
+    + head(LXC, HY, 'vs League', 'middle', 'h3', '#fff', HS);
   const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';  // the selected row and its funnel
 
   // ---- arsenal: one band per pitch type, as tall as its share of the pitches ----
@@ -271,9 +280,9 @@ export function flowSvg(ctx) {
   });
   // The selected row's highlight and its funnel to the league panel are one shape, rounded on
   // the left only, so the band runs into the ribbon with no seam or pinch.
-  const py = selRow ? Math.max(Y0, Math.min(Y0 + BB - PH, selRow.cy - PH / 2)) : 0;
+  const py = selRow ? Math.max(Y0, Math.min(Y0 + BB - CARD, selRow.cy - CARD / 2)) : 0;
   if (selRow) {
-    const y0 = n1(selRow.cy - HIT / 2), y1 = n1(selRow.cy + HIT / 2), b0 = n1(py), b1 = n1(py + PH);  // the card's full height
+    const y0 = n1(selRow.cy - HIT / 2), y1 = n1(selRow.cy + HIT / 2), b0 = n1(py), b1 = n1(py + CARD);  // the card's full height
     const rr = 8, m = n1((HX1 + PX) / 2);
     const d = `M${HX0 + rr},${y0}L${HX1},${y0}C${m},${y0} ${m},${b0} ${PX},${b0}L${PX},${b1}C${m},${b1} ${m},${y1} ${HX1},${y1}`
       + `L${HX0 + rr},${y1}Q${HX0},${y1} ${HX0},${n1(y1 - rr)}L${HX0},${n1(y0 + rr)}Q${HX0},${y0} ${HX0 + rr},${y0}Z`;
@@ -306,7 +315,7 @@ export function flowSvg(ctx) {
   // ---- league panel for the selected row ----
   panelPoints = null;
   if (selRow) {
-    s += panel(ctx, selRow.r, PX, py, W - 36 - PX, PH, pool, poolLabel);
+    s += panel(ctx, selRow.r, PX, py, W - 36 - PX, CARD, pool, poolLabel);
   }
 
   const note = ctx.byOutcome ? `${label} points (average 100, SD 15): each predicted outcome rate × its average run value, vs league`
