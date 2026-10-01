@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="modulepreload" href="app.js?v=49">
+<link rel="modulepreload" href="app.js?v=50">
 <link rel="modulepreload" href="data.js?v=8">
-<link rel="modulepreload" href="charts.js?v=46">
+<link rel="modulepreload" href="charts.js?v=47">
 <link rel="modulepreload" href="morph.js?v=1">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/hyparquet@1.31.1/+esm">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -67,10 +67,11 @@ button:disabled{opacity:.45; cursor:default}
 .opts input[type=checkbox]{width:16px; height:16px; margin:0; accent-color:var(--accent)}
 .figure{background:#292C42; border-radius:10px; overflow-x:auto; overscroll-behavior-x:contain}
 .figure svg{display:block; width:100%; min-width:900px; height:auto; user-select:none; -webkit-user-select:none}
-/* the drilldown is square and scales to the screen instead of scrolling: as wide as its card
-   allows, and short enough to fit on screen whole (the viewport height, less a 40 px margin) */
+/* the drilldown scales to the screen instead of scrolling: drawn in the shape of its room (app.js),
+   as wide as its card allows and short enough to fit on screen whole (the viewport height, less a
+   40 px margin); --flow-aspect is the figure's width / height */
 #flow{overflow:hidden}
-#flow svg{min-width:0; width:100%; max-width:min(100%, calc(100svh - 40px)); margin:0 auto}
+#flow svg{min-width:0; width:100%; max-width:min(100%, calc((100svh - 40px) * var(--flow-aspect, 1))); margin:0 auto}
 @media (max-width:600px){ #out{padding:12px 8px} }
 /* on a phone the league card sits under the waterfall as its own panel */
 #flow-card{margin-top:12px; overflow:hidden; background:none}
@@ -210,6 +211,6 @@ details[open] summary{margin-bottom:10px}
   </section>
 </main>
 <div id="tip" hidden role="tooltip"></div>
-<script type="module" src="app.js?v=49"></script>
+<script type="module" src="app.js?v=50"></script>
 </body>
 </html>

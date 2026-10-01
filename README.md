@@ -620,6 +620,10 @@ Three figures, in the Swing Profiles card colours:
   dependence plot of `shap_analysis.py`, per unit rather than per pitch). Location and Count plot
   their two inputs against each other, coloured by the row's SHAP. The three numbers below carry
   Swing Profiles' league KDEs: the value, the biggest lift and the biggest drag.
+  On a desktop or laptop the figure is drawn in the shape of its room (the card's width by the
+  screen's height, less 40 px; square up to 1.9:1), so it fits on screen whole: it stays 1200 units
+  tall, and the extra width goes to the row names, the bars and the league card. **Copy PNG** is
+  always the square 2400 × 2400 figure.
 - **Against the league.** A beeswarm of every row's SHAP over the comparison group, coloured by
   each unit's input, with the pitcher marked.
 - **Where the probability goes.** A Sankey of the nine outcome probabilities. They sum to 100%, so

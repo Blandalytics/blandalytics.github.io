@@ -11,7 +11,7 @@ import {
   flowSvg, phoneFlowSvg, phoneCardSvg, flowSvgForExport, swarmSvg, sankeySvg, svgToPng,
   nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, titleRight, C,
-} from './charts.js?v=46';
+} from './charts.js?v=47';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -281,11 +281,16 @@ function render() {
   status('');
 }
 
-// The drilldown: the square desktop figure, or on a phone (600 px or narrower) the one-line
+// The drilldown: on a desktop or laptop, a figure in the shape of the space it has (the card's
+// width by the screen's height, less a margin), or on a phone (600 px or narrower) the
 // header and waterfall at the screen's own width, with the league card as its own panel.
 const phoneQuery = window.matchMedia('(max-width: 600px)');
-let drawnAs = null;  // 'desktop', or the phone width it was drawn at
+let drawnAs = null;  // 'desktop:<aspect>', or the phone width it was drawn at
+// the room's width / height, to 0.02: what the desktop figure is drawn to fill
+const roomAspect = () => Math.round((el.flow.clientWidth / Math.max(200, window.innerHeight - 40)) * 50) / 50;
+const flowKey = () => (phoneQuery.matches ? Math.max(280, el.flow.clientWidth) : `desktop:${roomAspect()}`);
 function drawFlow() {
+  el.flow.style.removeProperty('--flow-aspect');
   if (phoneQuery.matches) {
     el.flowCard.hidden = false;
     const w = Math.max(280, el.flow.clientWidth);  // never narrower than a small phone
@@ -294,10 +299,15 @@ function drawFlow() {
     const card = phoneCardSvg(view, w);
     if (card) morph(el.flowCard, card); else el.flowCard.replaceChildren();
   } else {
-    drawnAs = 'desktop';
+    drawnAs = flowKey();
     el.flowCard.hidden = true;
     el.flowCard.replaceChildren();
-    morph(el.flow, flowSvg(view));
+    const markup = flowSvg(view, roomAspect());
+    // the CSS caps the width so the height fits the screen, at the new figure's own shape (read
+    // from the markup: morph tweens the viewBox from the old one)
+    const [, , vw, vh] = markup.match(/viewBox="([^"]+)"/)[1].split(' ').map(Number);
+    el.flow.style.setProperty('--flow-aspect', (vw / vh).toFixed(4));
+    morph(el.flow, markup);
   }
 }
 let resizeTimer = 0;
@@ -305,8 +315,7 @@ window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     if (!view) return;
-    const now = phoneQuery.matches ? el.flow.clientWidth : 'desktop';
-    if (now !== drawnAs) { drawFlow(); applyFocus(); }
+    if (flowKey() !== drawnAs) { drawFlow(); applyFocus(); }
   }, 120);
 });
 

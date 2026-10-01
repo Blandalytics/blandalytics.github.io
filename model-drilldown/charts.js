@@ -160,6 +160,7 @@ function header(W, ctx, subtitle) {
 // ======================================================================================
 
 export const FLOW = { W: 1200, Y0: 232, RH: 46, PH: 380 };  // PH: the league card's least height
+export const FLOW_MAX_ASPECT = 1.9;  // the widest the drilldown gets (width / height)
 const HILITE = 0.16;         // the selected row's tint: the same colour and opacity as its funnel
 const CONNECTOR = '#B4BECC';  // the waterfall's bar-to-bar connectors
 
@@ -178,26 +179,34 @@ function textWidth(str, size) {
 }
 let panelPoints = null;  // the panel's dots in figure coordinates, for the hover lookup
 
-export function flowSvg(ctx) {
-  const { W, Y0, RH, PH } = FLOW;
+// aspect: the shape to fill (width / height). The figure stays 1200 tall and widens to match,
+// from square (the export, narrow windows) to FLOW_MAX_ASPECT; the extra width goes to the row
+// labels, the bars, the funnel and the league card.
+export function flowSvg(ctx, aspect = 1) {
+  const { Y0, RH, PH } = FLOW;
+  const W = Math.round((FLOW.W * Math.min(FLOW_MAX_ASPECT, Math.max(1, aspect || 1))) / 10) * 10;
+  const extra = W - FLOW.W;
   const { rows, unit, target, model, season, info, arsenal, selected, pool, poolLabel } = ctx;
   const f = formats(target);
   const good = targetGood(target);
   const label = targetName(model, target);
-  // The figure is square where it can be: the body takes whatever height makes H = W, or more
-  // if the rows, the league card or the arsenal need it. Rows and pitch types are spread evenly
+  // The figure is 1200 tall where it can be: the body takes whatever height makes H = 1200, or
+  // more if the rows, the league card or the arsenal need it. Rows and pitch types are spread evenly
   // over it; bars thicken a little with the spacing (up to 1.5x the card's), and the league
   // card grows with the body.
-  const BB = Math.max(rows.length * RH, PH, arsenal.length * 22, W - Y0 - 118);
+  const BB = Math.max(rows.length * RH, PH, arsenal.length * 22, FLOW.W - Y0 - 118);
   const S = BB / rows.length;              // row pitch
   const BAR = Math.min(S * 0.6, RH * 0.9);  // bar thickness
   const HIT = Math.min(S - 4, BAR + 30);   // row highlight / hover band
   const H = Y0 + BB + 118;
-  const CARD = Math.min(BB, 560);          // the league card's height
+  // columns, square: arsenal labels | bands 94-108 | ribbon | row names (end 440) | bars 452-832 |
+  // ribbon | panel 888-1164. A wider figure gives a quarter of the extra to the names, a third
+  // or so each to the bars and the card, and the rest to the funnel.
+  const LX = n1(440 + 0.25 * extra), X0 = LX + 12, X1 = n1(832 + 0.6 * extra), HX0 = 208, HX1 = X1 + 16;
+  const PX = n1(HX1 + 40 + 0.05 * extra), PW = W - 36 - PX;
+  const CARD = Math.min(BB, Math.max(560, PW + 284));  // the league card's height: taller as it widens
   let s = svgOpen(W, H, 'fig flow-fig');
   s += header(W, ctx, `${season}; Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${kpiName(model, target)}`);
-  // columns: arsenal labels | bands 94-108 | ribbon | row names (end 440) | bars 452-832 | ribbon | panel 888-1164
-  const LX = 440, X0 = 452, X1 = 832, HX0 = 208, HX1 = 848, PX = 888;
   const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';  // the selected row and its funnel
 
   // ---- arsenal: one band per pitch type, as tall as its share of the pitches ----
@@ -339,7 +348,7 @@ export function flowSvg(ctx) {
   // ---- league panel for the selected row ----
   panelPoints = null;
   if (selRow) {
-    s += panel(ctx, selRow.r, PX, py, W - 36 - PX, CARD, pool, poolLabel);
+    s += panel(ctx, selRow.r, PX, py, PW, CARD, pool, poolLabel);
   }
 
   const note = ctx.model === 'location' ? `${label} points (average 100, SD 15): location's change in each outcome rate (PLV vs Stuff at the same count) × its run value at the count, vs league`
