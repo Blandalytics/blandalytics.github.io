@@ -11,7 +11,7 @@ import {
   flowSvg, phoneFlowSvg, phoneCardSvg, flowSvgForExport, swarmSvg, sankeySvg, svgToPng,
   nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, titleRight, C,
-} from './charts.js?v=47';
+} from './charts.js?v=48';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -281,16 +281,12 @@ function render() {
   status('');
 }
 
-// The drilldown: on a desktop or laptop, a figure in the shape of the space it has (the card's
-// width by the screen's height, less a margin), or on a phone (600 px or narrower) the
+// The drilldown: on a desktop or laptop the 16:9 figure, or on a phone (600 px or narrower) the
 // header and waterfall at the screen's own width, with the league card as its own panel.
 const phoneQuery = window.matchMedia('(max-width: 600px)');
-let drawnAs = null;  // 'desktop:<aspect>', or the phone width it was drawn at
-// the room's width / height, to 0.02: what the desktop figure is drawn to fill
-const roomAspect = () => Math.round((el.flow.clientWidth / Math.max(200, window.innerHeight - 40)) * 50) / 50;
-const flowKey = () => (phoneQuery.matches ? Math.max(280, el.flow.clientWidth) : `desktop:${roomAspect()}`);
+let drawnAs = null;  // 'desktop', or the phone width it was drawn at
+const flowKey = () => (phoneQuery.matches ? Math.max(280, el.flow.clientWidth) : 'desktop');
 function drawFlow() {
-  el.flow.style.removeProperty('--flow-aspect');
   if (phoneQuery.matches) {
     el.flowCard.hidden = false;
     const w = Math.max(280, el.flow.clientWidth);  // never narrower than a small phone
@@ -302,12 +298,7 @@ function drawFlow() {
     drawnAs = flowKey();
     el.flowCard.hidden = true;
     el.flowCard.replaceChildren();
-    const markup = flowSvg(view, roomAspect());
-    // the CSS caps the width so the height fits the screen, at the new figure's own shape (read
-    // from the markup: morph tweens the viewBox from the old one)
-    const [, , vw, vh] = markup.match(/viewBox="([^"]+)"/)[1].split(' ').map(Number);
-    el.flow.style.setProperty('--flow-aspect', (vw / vh).toFixed(4));
-    morph(el.flow, markup);
+    morph(el.flow, flowSvg(view));
   }
 }
 let resizeTimer = 0;
@@ -615,7 +606,7 @@ async function copyPng(getSvg, suffix, btn) {
     setTimeout(() => { btn.textContent = label; }, 1600);
   }
 }
-// the drilldown's copy is always the square desktop figure (2400 x 2400), even on a phone
+// the drilldown's copy is always the 16:9 desktop figure (4266 x 2400), even on a phone
 function desktopFlow() {
   const t = document.createElement('template');
   t.innerHTML = flowSvgForExport(view).trim();

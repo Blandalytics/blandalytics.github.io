@@ -124,7 +124,9 @@ function footnote(str, W, H) {
 const text = (x, y, s, attrs = '', m = null) => `<text${m ? ` data-m="${esc(m)}"` : ''} x="${n1(x)}" y="${n1(y)}" ${attrs}>${esc(s)}</text>`;
 const head = (x, y, s, anchor, m, fill = C.faint, size = 11) => text(x, y, s.toUpperCase(), `font-size="${n1(size)}" font-weight="600" letter-spacing="${n1(size * 0.145)}" fill="${fill}" text-anchor="${anchor}"`, m);
 
-function header(W, ctx, subtitle) {
+// kpiX: where to centre the KPI box (the drilldown puts it over the league card); otherwise it
+// is centred between the season's longest title line and the right edge
+function header(W, ctx, subtitle, kpiX = null) {
   const { info, unit, target, model } = ctx;
   const f = formats(target);
   // shaded by the value's standing among the season's established pitches (app.js kpiShade)
@@ -132,8 +134,11 @@ function header(W, ctx, subtitle) {
   const val = f.v(unit.exact);
   // KPI: "{stat} {value}". A plus score is its own stat (Stuff+, PLV+); anything else is the
   // stat over "(<model>)", centred, and the value is twice the label's size to span both.
+  // The box spans the title and subtitle, top of the name (24) to under the subtitle (158),
+  // and everything in it scales with it (K: against the old 98-tall box).
   const lines = isPlus(target) ? [MODELS[model].title] : [TARGET_NAMES[target], `(${MODELS[model].short})`];
-  const LS = 21, VS = 2 * LS, pad = 22, cy = 73, gap = 16;
+  const BY = 24, BH = 134, K = BH / 98;
+  const LS = 21 * K, VS = 2 * LS, pad = 22 * K, cy = BY + BH / 2, gap = 16 * K;
   const one = lines.length === 1, size = one ? VS : LS;  // a one-line plus label matches its value
   const lw = Math.max(...lines.map((l) => textWidth(l, size)));
   const vw = textWidth(val, VS);
@@ -141,18 +146,19 @@ function header(W, ctx, subtitle) {
   // centred between where the season's longest title line ends (ctx.titleRight, so the box
   // sits still from pitcher to pitcher) and the card's right edge
   const right = ctx.titleRight ?? titleRight([info.pitcher_name]);
-  const kx = Math.min(W - 12 - bw, (right + W) / 2 - bw / 2);
+  const kx = kpiX == null ? Math.min(W - 12 - bw, (right + W) / 2 - bw / 2)
+    : Math.max(right + 24, Math.min(W - 12 - bw, kpiX - bw / 2));
   const lx = kx + pad + lw / 2, vx = kx + pad + lw + gap;
-  const base = one ? [cy + 15] : [cy - 3.5, cy + 18.5];  // one line shares the value's baseline
-  const lab = `font-size="${size}" font-weight="700" fill="#fff" text-anchor="middle"`;
+  const base = one ? [cy + 15 * K] : [cy - 3.5 * K, cy + 18.5 * K];  // one line shares the value's baseline
+  const lab = `font-size="${n1(size)}" font-weight="700" fill="#fff" text-anchor="middle"`;
   // the title: the pitcher in teal over the pitch type in its own colour, two lines spanning
   // the KPI box's height (24-122); the subtitle under both
   return text(36, 55, info.pitcher_name, `font-size="44" font-weight="700" fill="${C.teal}"`, 'title')
     + text(36, 105, PITCH_NAMES[info.pt] || info.pt, `font-size="44" font-weight="700" fill="${PITCH_COLORS[info.pt] || C.ink}"`, 'title2')
     + text(36, 154, subtitle, `font-size="17" fill="${C.muted}"`, 'sub')
-    + `<rect data-m="kbox" x="${n1(kx)}" y="24" width="${n1(bw)}" height="98" rx="14" fill="${C.card}" stroke="${col}" stroke-width="2.5"/>`
+    + `<rect data-m="kbox" x="${n1(kx)}" y="${BY}" width="${n1(bw)}" height="${BH}" rx="${n1(14 * K)}" fill="${C.card}" stroke="${col}" stroke-width="3"/>`
     + lines.map((l, i) => text(lx, base[i], l, lab, `klabel${i}`)).join('')
-    + text(vx, cy + 15, val, `font-size="${VS}" font-weight="700" fill="${col}"`, 'kval');
+    + text(vx, cy + 15 * K, val, `font-size="${n1(VS)}" font-weight="700" fill="${col}"`, 'kval');
 }
 
 // ======================================================================================
@@ -160,7 +166,7 @@ function header(W, ctx, subtitle) {
 // ======================================================================================
 
 export const FLOW = { W: 1200, Y0: 232, RH: 46, PH: 380 };  // PH: the league card's least height
-export const FLOW_MAX_ASPECT = 1.9;  // the widest the drilldown gets (width / height)
+export const FLOW_ASPECT = 16 / 9;  // the drilldown's shape (width / height), on screen and copied
 const HILITE = 0.16;         // the selected row's tint: the same colour and opacity as its funnel
 const CONNECTOR = '#B4BECC';  // the waterfall's bar-to-bar connectors
 
@@ -179,19 +185,17 @@ function textWidth(str, size) {
 }
 let panelPoints = null;  // the panel's dots in figure coordinates, for the hover lookup
 
-// aspect: the shape to fill (width / height). The figure stays 1200 tall and widens to match,
-// from square (the export, narrow windows) to FLOW_MAX_ASPECT; the extra width goes to the row
-// labels, the bars, the funnel and the league card.
-export function flowSvg(ctx, aspect = 1) {
+// The figure is 16:9 (FLOW_ASPECT): 1200 tall (more if the rows need it) and as wide as that
+// makes it. The width past the old square's 1200 goes to the arsenal's labels as they need it,
+// then to the row names, the bars, the funnel and the league card.
+export function flowSvg(ctx) {
   const { Y0, RH, PH } = FLOW;
-  const W = Math.round((FLOW.W * Math.min(FLOW_MAX_ASPECT, Math.max(1, aspect || 1))) / 10) * 10;
-  const extra = W - FLOW.W;
   const { rows, unit, target, model, season, info, arsenal, selected, pool, poolLabel } = ctx;
   const f = formats(target);
   const good = targetGood(target);
   const label = targetName(model, target);
-  // The figure is 1200 tall where it can be: the body takes whatever height makes H = 1200, or
-  // more if the rows, the league card or the arsenal need it. Rows and pitch types are spread evenly
+  // The body takes whatever height makes H = 1200, or more if the rows, the league card or the
+  // arsenal need it. Rows and pitch types are spread evenly
   // over it; bars thicken a little with the spacing (up to 1.5x the card's), and the league
   // card grows with the body.
   const BB = Math.max(rows.length * RH, PH, arsenal.length * 22, FLOW.W - Y0 - 118);
@@ -199,18 +203,31 @@ export function flowSvg(ctx, aspect = 1) {
   const BAR = Math.min(S * 0.6, RH * 0.9);  // bar thickness
   const HIT = Math.min(S - 4, BAR + 30);   // row highlight / hover band
   const H = Y0 + BB + 118;
-  // columns, square: arsenal labels | bands 94-108 | ribbon | row names (end 440) | bars 452-832 |
-  // ribbon | panel 888-1164. A wider figure gives a quarter of the extra to the names, a third
-  // or so each to the bars and the card, and the rest to the funnel.
-  const LX = n1(440 + 0.25 * extra), X0 = LX + 12, X1 = n1(832 + 0.6 * extra), HX0 = 208, HX1 = X1 + 16;
+  const W = Math.round(H * FLOW_ASPECT);
+  // the arsenal's labels (pitch type over value, or both on one line for a thin band) end at
+  // AX - 10, at least 20 from the edge: the columns right of them shift over to make room
+  const armW = Math.max(0, ...arsenal.map((p) => {
+    const v = p.unit ? f.v(p.unit.exact) : '–';
+    return Math.max(textWidth(p.pt, 28), textWidth(v, 24), textWidth(`${p.pt} ${v}`, 22));
+  }));
+  const AX = Math.max(94, Math.ceil(30 + armW)), shift = AX - 94;
+  const extra = W - FLOW.W - shift;
+  // columns, at the old square's 1200: arsenal labels | bands 94-108 | ribbon | row names (end 440)
+  // | bars 452-832 | ribbon | panel 888-1164. Of the extra width, a quarter goes to the names, a
+  // third or so each to the bars and the card, and the rest to the funnel.
+  const LX = n1(440 + shift + 0.25 * extra), X0 = LX + 12, X1 = n1(832 + shift + 0.6 * extra);
+  const HX0 = 208 + shift, HX1 = X1 + 16;
   const PX = n1(HX1 + 40 + 0.05 * extra), PW = W - 36 - PX;
-  const CARD = Math.min(BB, Math.max(560, PW + 284));  // the league card's height: taller as it widens
+  // The league card stays within the first row's highlight top and the last row's bottom, so with
+  // either end row selected its edge runs straight on from the highlight's
+  const CT = Y0 + (S - HIT) / 2, CB = Y0 + BB - (S - HIT) / 2;
+  const CARD = Math.min(CB - CT, Math.max(560, PW + 284));  // the league card's height: taller as it widens
   let s = svgOpen(W, H, 'fig flow-fig');
-  s += header(W, ctx, `${season}; Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${kpiName(model, target)}`);
+  s += header(W, ctx, `${season}; Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${kpiName(model, target)}`, PX + PW / 2);
   const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';  // the selected row and its funnel
 
   // ---- arsenal: one band per pitch type, as tall as its share of the pitches ----
-  const AX = 94, AW = 14, gap = 8, minH = 8;
+  const AW = 14, gap = 8, minH = 20;  // minH: room for a thin band's one-line label
   const total = sum(arsenal.map((p) => p.n));
   const avail = BB - gap * (arsenal.length - 1);
   const small = arsenal.filter((p) => (avail * p.n) / total < minH);
@@ -227,19 +244,19 @@ export function flowSvg(ctx, aspect = 1) {
     s += `<rect data-m="band:${p.pt}" x="${AX}" y="${n1(y)}" width="${AW}" height="${n1(h)}" rx="2" fill="${col}" opacity="${on ? 1 : 0.5}"/>`;
     const cy = y + h / 2;
     const val = p.unit ? f.v(p.unit.exact) : '–';
-    if (h >= 30) {
-      s += text(AX - 8, cy - 2, p.pt, `font-size="14" font-weight="700" fill="${on ? C.ink : C.muted}" text-anchor="end"`, `bl:${p.pt}`);
-      s += text(AX - 8, cy + 14, val, `font-size="12" fill="${on ? C.ink : C.faint}" text-anchor="end"`, `bv:${p.pt}`);
+    if (h >= 56) {
+      s += text(AX - 10, cy - 3, p.pt, `font-size="28" font-weight="700" fill="${on ? C.ink : C.muted}" text-anchor="end"`, `bl:${p.pt}`);
+      s += text(AX - 10, cy + 25, val, `font-size="24" fill="${on ? C.ink : C.faint}" text-anchor="end"`, `bv:${p.pt}`);
     } else {
-      s += text(AX - 8, cy + 4, `${p.pt} ${val}`, `font-size="11" font-weight="600" fill="${on ? C.ink : C.faint}" text-anchor="end"`, `bs:${p.pt}`);
+      s += text(AX - 10, cy + 8, `${p.pt} ${val}`, `font-size="22" font-weight="600" fill="${on ? C.ink : C.faint}" text-anchor="end"`, `bs:${p.pt}`);
     }
     s += '</g>';
     if (on) sel = { y0: y, y1: y + h, col };
     y += h + gap;
   }
   if (sel) {
-    s += `<path class="ribbon" data-f="1" d="${ribbon(AX + AW, sel.y0, sel.y1, 198, Y0, Y0 + BB)}" fill="${sel.col}" opacity=".16"/>`;
-    s += `<rect data-m="bracket" x="198" y="${Y0}" width="3" height="${BB}" rx="1.5" fill="${sel.col}" opacity=".6"/>`;
+    s += `<path class="ribbon" data-f="1" d="${ribbon(AX + AW, sel.y0, sel.y1, 198 + shift, Y0, Y0 + BB)}" fill="${sel.col}" opacity=".16"/>`;
+    s += `<rect data-m="bracket" x="${198 + shift}" y="${Y0}" width="3" height="${BB}" rx="1.5" fill="${sel.col}" opacity=".6"/>`;
   }
 
   // ---- waterfall (shap_values_card.card) ----
@@ -313,7 +330,7 @@ export function flowSvg(ctx, aspect = 1) {
   });
   // The selected row's highlight and its funnel to the league panel are one shape, rounded on
   // the left only, so the band runs into the ribbon with no seam or pinch.
-  const py = selRow ? Math.max(Y0, Math.min(Y0 + BB - CARD, selRow.cy - CARD / 2)) : 0;
+  const py = selRow ? Math.max(CT, Math.min(CB - CARD, selRow.cy - CARD / 2)) : 0;
   if (selRow) {
     const y0 = n1(selRow.cy - HIT / 2), y1 = n1(selRow.cy + HIT / 2), b0 = n1(py), b1 = n1(py + CARD);  // the card's full height
     const rr = 8, m = n1((HX1 + PX) / 2);
