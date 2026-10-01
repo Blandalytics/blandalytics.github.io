@@ -8,9 +8,10 @@ import {
   MODELS, OUTCOMES, TARGET_NAMES, PITCH_NAMES, LABELS,
 } from './data.js?v=7';
 import {
-  flowSvg, swarmSvg, sankeySvg, svgToPng, nearestPanelPoint, nearestSwarmPoint, sankeyLink,
+  flowSvg, phoneFlowSvg, phoneCardSvg, flowSvgForExport, swarmSvg, sankeySvg, svgToPng,
+  nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, titleRight, C,
-} from './charts.js?v=36';
+} from './charts.js?v=41';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -23,7 +24,7 @@ const $ = (id) => document.getElementById(id);
 const el = {
   form: $('form'), season: $('season'), player: $('player'), suggest: $('suggest'), pt: $('pt'),
   model: $('model'), target: $('target'), status: $('status'),
-  out: $('out'), flow: $('flow'), stats: $('stats'), notes: $('notes'),
+  out: $('out'), flow: $('flow'), flowCard: $('flow-card'), stats: $('stats'), notes: $('notes'),
   vs: $('vs'), minN: $('minn'), all: $('all'),
   swarmCard: $('swarm-card'), swarm: $('swarm'), sankeyCard: $('sankey-card'), sankey: $('sankey'),
   tip: $('tip'), copyFlow: $('copy_flow'), copySwarm: $('copy_swarm'), copySankey: $('copy_sankey'), dlCsv: $('dl_csv'),
@@ -266,7 +267,7 @@ function render() {
 
   el.out.hidden = false;
   el.swarmCard.hidden = false;
-  morph(el.flow, flowSvg(view));
+  drawFlow();
   morph(el.swarm, swarmSvg(view));
   const sk = sankeySvg(view);
   el.sankeyCard.hidden = !sk;
@@ -276,6 +277,35 @@ function render() {
   writeHash();
   status('');
 }
+
+// The drilldown: the square desktop figure, or on a phone (600 px or narrower) the one-line
+// header and waterfall at the screen's own width, with the league card as its own panel.
+const phoneQuery = window.matchMedia('(max-width: 600px)');
+let drawnAs = null;  // 'desktop', or the phone width it was drawn at
+function drawFlow() {
+  if (phoneQuery.matches) {
+    el.flowCard.hidden = false;
+    const w = el.flow.clientWidth;
+    drawnAs = w;
+    morph(el.flow, phoneFlowSvg(view, w));
+    const card = phoneCardSvg(view, w);
+    if (card) morph(el.flowCard, card); else el.flowCard.replaceChildren();
+  } else {
+    drawnAs = 'desktop';
+    el.flowCard.hidden = true;
+    el.flowCard.replaceChildren();
+    morph(el.flow, flowSvg(view));
+  }
+}
+let resizeTimer = 0;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (!view) return;
+    const now = phoneQuery.matches ? el.flow.clientWidth : 'desktop';
+    if (now !== drawnAs) { drawFlow(); applyFocus(); }
+  }, 120);
+});
 
 // ---- the numbers under the figure (Swing Profiles' stat tiles, each with its league KDE) ------
 
@@ -491,6 +521,20 @@ el.flow.addEventListener('pointermove', (e) => {
   hideTip();
 });
 
+el.flowCard.addEventListener('pointermove', (e) => {
+  const svg = el.flowCard.querySelector('svg');
+  if (!svg || !view || !e.target.closest('.panel-hit')) { hideTip(); return; }
+  const p = nearestPanelPoint(...svgPoint(svg, e));
+  if (p) showTip(unitTip(p.info, { k: state.row, v: p.v }, p.me), e); else hideTip();
+});
+el.flowCard.addEventListener('pointerleave', hideTip);
+el.flowCard.addEventListener('click', (e) => {
+  const svg = el.flowCard.querySelector('svg');
+  if (!svg || !e.target.closest('.panel-hit')) return;
+  const p = nearestPanelPoint(...svgPoint(svg, e));
+  if (p && !p.me) { hideTip(); state.pt = p.pt; choosePitcher(p.id); }
+});
+
 el.swarm.addEventListener('pointermove', (e) => {
   const svg = el.swarm.querySelector('svg');
   if (!svg || !view) return;
@@ -535,8 +579,8 @@ const fileStem = () => `${view.info.pitcher_name.toLowerCase().replace(/[^a-z]+/
 // Copy PNG, as Release Angles does: the ClipboardItem is made in the click itself, around the
 // promise of the image, so the copy keeps the click's permission while the image is drawn
 // (Safari insists on it). Where the clipboard is refused, the PNG downloads instead.
-async function copyPng(host, suffix, btn) {
-  const svg = host.querySelector('svg');
+async function copyPng(getSvg, suffix, btn) {
+  const svg = getSvg();
   if (!svg) return;
   const label = btn.textContent;
   const blob = svgToPng(svg);
@@ -553,9 +597,15 @@ async function copyPng(host, suffix, btn) {
     setTimeout(() => { btn.textContent = label; }, 1600);
   }
 }
-el.copyFlow.addEventListener('click', () => copyPng(el.flow, 'waterfall', el.copyFlow));
-el.copySwarm.addEventListener('click', () => copyPng(el.swarm, 'beeswarm', el.copySwarm));
-el.copySankey.addEventListener('click', () => copyPng(el.sankey, 'outcomes', el.copySankey));
+// the drilldown's copy is always the square desktop figure (2400 x 2400), even on a phone
+function desktopFlow() {
+  const t = document.createElement('template');
+  t.innerHTML = flowSvgForExport(view).trim();
+  return t.content.firstElementChild;
+}
+el.copyFlow.addEventListener('click', () => view && copyPng(desktopFlow, 'waterfall', el.copyFlow));
+el.copySwarm.addEventListener('click', () => copyPng(() => el.swarm.querySelector('svg'), 'beeswarm', el.copySwarm));
+el.copySankey.addEventListener('click', () => copyPng(() => el.sankey.querySelector('svg'), 'outcomes', el.copySankey));
 el.dlCsv.addEventListener('click', () => {
   const cols = Object.keys(view.unit);
   const lines = [cols.join(',')];

@@ -488,6 +488,178 @@ export function nearestPanelPoint(fx, fy, maxDist = 12) {
 }
 
 // ======================================================================================
+// the drilldown on a phone: a one-line header and the waterfall, drawn at the screen's own
+// pixel width (1 unit = 1 CSS px, so no text is under 11 px); the league card is its own panel
+// ======================================================================================
+
+const PHONE_MIN = 11;  // the smallest text on a phone, in CSS px
+
+// wrap a note into lines no wider than max at the given size
+function wrapLines(str, size, max) {
+  const lines = [''];
+  for (const word of str.split(' ')) {
+    const next = lines[lines.length - 1] ? `${lines[lines.length - 1]} ${word}` : word;
+    if (textWidth(next, size) * 0.94 > max && lines[lines.length - 1]) lines.push(word);
+    else lines[lines.length - 1] = next;
+  }
+  return lines;
+}
+
+export function phoneFlowSvg(ctx, W) {
+  const { rows, unit, target, model, info, selected } = ctx;
+  const f = formats(target);
+  const good = targetGood(target);
+  const P = 12;  // side margin
+  const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';
+
+  // ---- header: the desktop's, at phone sizes. The pitcher (teal) over the full pitch type
+  // (its colour), the KPI box to the right (beside the title when both fit at readable sizes,
+  // else under it), then the subtitle ----
+  const kcol = kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit));
+  const kv = f.v(unit.exact);
+  const kLines = isPlus(target) ? [MODELS[model].title] : [TARGET_NAMES[target], `(${MODELS[model].short})`];
+  const one = kLines.length === 1;
+  const KLS = 12, KVS = 24, KLSZ = one ? KVS : KLS;  // a one-line plus label matches its value
+  const klw = Math.max(...kLines.map((l) => textWidth(l, KLSZ))), kvw = textWidth(kv, KVS);
+  const BW = 12 + klw + 10 + kvw + 12, BH0 = 56;
+  const ptName = PITCH_NAMES[info.pt] || info.pt;
+  const titleW = (sz) => Math.max(textWidth(info.pitcher_name, sz), textWidth(ptName, sz));
+  let NS = 22;
+  while (NS > 14 && P + titleW(NS) + 12 + BW > W - P) NS -= 0.5;
+  const beside = P + titleW(NS) + 12 + BW <= W - P;
+  if (!beside) { NS = 22; while (NS > 14 && P + titleW(NS) > W - P) NS -= 0.5; }
+  const T0 = 12;  // the header's top
+  const t1 = T0 + NS * 0.74, t2 = t1 + NS * 1.12;  // the title's baselines
+  const titleBottom = t2 + NS * 0.26;
+  const bx = W - P - BW, by = beside ? T0 : titleBottom + 8;
+  let s = svgOpen(W, 100, 'fig flow-fig phone');  // height set at the end
+  s += text(P, t1, info.pitcher_name, `font-size="${NS}" font-weight="700" fill="${C.teal}"`, 'title');
+  s += text(P, t2, ptName, `font-size="${NS}" font-weight="700" fill="${pitchCol}"`, 'title2');
+  const bcy = by + BH0 / 2;
+  s += `<rect data-m="kbox" x="${n1(bx)}" y="${n1(by)}" width="${n1(BW)}" height="${BH0}" rx="10" fill="${C.card}" stroke="${kcol}" stroke-width="2"/>`;
+  const lbase = one ? [bcy + KVS * 0.36] : [bcy - 2, bcy + KLS + 1];
+  kLines.forEach((l, i) => { s += text(bx + 12 + klw / 2, lbase[i], l, `font-size="${KLSZ}" font-weight="700" fill="#fff" text-anchor="middle"`, `klabel${i}`); });
+  s += text(bx + 12 + klw + 10, bcy + KVS * 0.36, kv, `font-size="${KVS}" font-weight="700" fill="${kcol}"`, 'kval');
+  // the subtitle, wrapped to the width
+  const subLines = wrapLines(`${ctx.season}; Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${kpiName(model, target)}`, 12, W - 2 * P);
+  const sy0 = Math.max(titleBottom, by + BH0) + 20;
+  subLines.forEach((l, i) => { s += text(P, sy0 + i * 16, l, `font-size="12" fill="${C.muted}"`, i ? `sub${i}` : 'sub'); });
+  const headerBottom = sy0 + (subLines.length - 1) * 16;
+
+  // ---- the waterfall, full width ----
+  const FS = 12.5, SUB = PHONE_MIN, VS = 12;
+  const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] ? '' : r.detail);
+  const LW = Math.max(...rows.map((r) => Math.max(textWidth(r.label, FS), subOf(r) ? textWidth(subOf(r), SUB) * 0.95 : 0)));
+  const LX = P + LW, X0 = LX + 12, X1 = W - P - 4;
+  const S = FS + SUB + 16;  // row pitch
+  const BAR = 14, HIT = S - 4;
+  const Y0 = headerBottom + 42, BH = rows.length * S;  // room for the AVG label above the bars
+  let x = unit.league;
+  const path = [x];
+  for (const r of rows) { x += r.v; path.push(x); }
+  const lo = Math.min(...path), hi = Math.max(...path);
+  const pad = Math.max(f.pad, 0.06 * (hi - lo));
+  let d0 = lo - pad, d1 = hi + pad * 1.6;
+  const ROOM_L = LX + 6, ROOM_R = W - P;
+  for (let iter = 0; iter < 8; iter++) {  // widen until every value's chip fits beside its bar
+    const k = (X1 - X0) / (d1 - d0);
+    let over = 0, under = 0, at = unit.league;
+    for (const r of rows) {
+      const end = at + r.v;
+      const tw = textWidth(f.d(r.v), VS) + 9;
+      if (r.v >= 0) over = Math.max(over, X0 + (Math.max(at, end) - d0) * k + tw - ROOM_R);
+      else under = Math.max(under, ROOM_L - (X0 + (Math.min(at, end) - d0) * k - tw));
+      at = end;
+    }
+    if (over <= 0.5 && under <= 0.5) break;
+    if (under > 0) d0 -= (under + 2) / k;
+    if (over > 0) d1 += (over + 2) / k;
+  }
+  const sx = (v) => n1(lin(d0, d1, X0, X1)(v));
+  let back = '', bars = '', front = '';
+  x = unit.league;
+  rows.forEach((r, i) => {
+    const cy = Y0 + i * S + S / 2;
+    const end = x + r.v;
+    const col = good * r.v > 0 ? C.gold : C.teal;
+    const on = r.k === selected;
+    const g = `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}"`;
+    back += `${g} tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`
+      + `<rect class="hit" data-m="hit:${r.k}" x="4" y="${n1(cy - HIT / 2)}" width="${W - 8}" height="${n1(HIT)}" rx="6" fill="${pitchCol}" fill-opacity="${on ? HILITE : 0}"/></g>`;
+    const a = sx(Math.min(x, end)), b = sx(Math.max(x, end));
+    const w = Math.max(1, n1(b - a));
+    bars += `${g}><rect data-m="bar:${r.k}" x="${a}" y="${n1(cy - BAR / 2)}" width="${w}" height="${BAR}" rx="${n1(Math.min(3, w / 2))}" fill="${col}"/>`;
+    if (i) bars += `<line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${CONNECTOR}" stroke-width="1.2"/>`;
+    bars += '</g>';
+    const right = r.v >= 0;
+    const val = f.d(r.v);
+    const tw = textWidth(val, VS), tx = right ? b + 5 : a - 5, ch = VS + 5;
+    front += `${g}><rect data-m="vb:${r.k}" x="${n1(right ? tx - 3 : tx - tw - 3)}" y="${n1(cy - ch / 2)}" width="${n1(tw + 6)}" height="${n1(ch)}" rx="3" fill="${C.card}" fill-opacity=".8"/>`;
+    front += text(tx, cy + VS * 0.35, val, `font-size="${VS}" font-weight="700" fill="${C.ink}" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
+    const sub = subOf(r);
+    front += text(LX, sub ? cy - 1 : cy + FS * 0.35, r.label, `font-size="${FS}" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
+    if (sub) front += text(LX, cy + SUB + 2, sub, `font-size="${SUB}" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
+    front += '</g>';
+    x = end;
+  });
+  s += back;
+  for (const t of niceTicks(d0, d1, 4)) {
+    s += `<line data-m="g:${t}" x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 4}" y2="${Y0 + BH + 2}" stroke="${C.grid}" stroke-width="1" pointer-events="none"/>`;
+    s += text(sx(t), Y0 + BH + 16, f.tick(t), `font-size="${PHONE_MIN}" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
+  }
+  const label = targetName(model, target);
+  s += text((X0 + X1) / 2, Y0 + BH + 32, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="${PHONE_MIN}" fill="${C.muted}" text-anchor="middle"`, 'xlab');
+  const AY = Y0 - 16;
+  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${AY + 7}" y2="${Y0 + BH + 2}" stroke="#fff" stroke-width="1" pointer-events="none"/>`;
+  s += bars;
+  s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${AY}" y2="${Y0 + BH + 2}" stroke="#fff" stroke-width="1.3" stroke-dasharray="4 4" pointer-events="none"/>`;
+  const ax = sx(unit.league), ex = sx(x), aw = textWidth('AVG', PHONE_MIN) + 10;
+  s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - 8}" width="${n1(aw)}" height="16" rx="3" fill="${C.card}" stroke="#fff" stroke-width="1"/>`;
+  s += text(ax, AY + 4, 'AVG', `font-size="${PHONE_MIN}" font-weight="700" fill="#fff" text-anchor="middle"`, 'avg');
+  const dir = ex >= ax ? 1 : -1, from = ax + dir * (aw / 2 + 2);
+  if (dir * (ex - from) > 10) {
+    s += `<line data-m="arrow" x1="${n1(from)}" x2="${n1(ex - dir * 6)}" y1="${AY}" y2="${AY}" stroke="${kcol}" stroke-width="2" stroke-linecap="round"/>`;
+    s += `<path data-m="arrowhead" d="M${ex},${AY}L${n1(ex - dir * 8)},${AY - 5}L${n1(ex - dir * 8)},${AY + 5}Z" fill="${kcol}"/>`;
+  }
+  s += front;
+
+  // ---- footer note, then the wordmark ----
+  const note = ctx.byOutcome ? `${label} points (average 100, SD 15): each predicted outcome rate × its average run value, vs league; an exact split, no proxy.`
+    : f.unit === 'pts' ? `${label} points (average 100, SD 15); feature contributions from a proxy model.`
+    : f.unit === 'wOBA' ? `wOBA on contact, per ball in play (league ${woba(unit.league)}); feature contributions from a proxy model.`
+    : f.unit === 'runs' ? `Runs per 9 innings (league ERA ${unit.league.toFixed(2)}); feature contributions from a proxy model.`
+    : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%); feature contributions from a proxy model.`;
+  const lines = wrapLines(`${note} ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`, PHONE_MIN, W - 2 * P);
+  let fy = Y0 + BH + 54;
+  lines.forEach((l, i) => { s += text(P, fy + i * 15, l, `font-size="${PHONE_MIN}" fill="${C.faint}"`, i ? `foot${i}` : 'foot'); });
+  fy += (lines.length - 1) * 15;
+  const ww = 130;
+  s += wordmark(W - P - ww, fy + 12, ww);
+  const H = fy + 12 + ww * WM_ASPECT + 12;
+  s = s.replace(`viewBox="0 0 ${W} 100"`, `viewBox="0 0 ${W} ${n1(H)}"`).replace('height="100" rx="10"', `height="${n1(H)}" rx="10"`);
+  return s + '</svg>';
+}
+
+// The league card for the selected row, on its own. Drawn 10% narrower than the screen and
+// scaled up to fit, so the card's smallest text (10 units) comes out at 11 px.
+export function phoneCardSvg(ctx, screenW) {
+  const r = ctx.rows.find((x) => x.k === ctx.selected);
+  if (!r) return null;
+  const w = Math.floor(screenW / 1.1), h = Math.round(w * 1.3);
+  let s = svgOpen(w, h, 'fig card-fig');
+  s += panel(ctx, r, 0, 0, w, h, ctx.pool, ctx.poolLabel);
+  return s + '</svg>';
+}
+
+// The desktop figure for an export, leaving the on-screen card's hover lookup as it was.
+export function flowSvgForExport(ctx) {
+  const keep = panelPoints;
+  const s = flowSvg(ctx);
+  panelPoints = keep;
+  return s;
+}
+
+// ======================================================================================
 // swarm: every row's SHAP over the league (shap_analysis.beeswarm, one dot per unit)
 // ======================================================================================
 
