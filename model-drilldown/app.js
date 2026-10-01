@@ -10,7 +10,7 @@ import {
 import {
   flowSvg, swarmSvg, sankeySvg, svgToPng, nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, C,
-} from './charts.js?v=25';
+} from './charts.js?v=28';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -247,7 +247,7 @@ function render() {
   const arsenal = feats.byId.get(state.pitcher).pts.map((u) => ({ pt: u.pt, n: u.n, unit: units.byKey.get(`${state.pitcher}|${u.pt}|${tableTarget(state.target)}`) }));
   const { pool, label, what } = poolFor(info);
   const perTarget = new Map([...TARGETS, ...RV].map((t) => [t, units.byKey.get(`${state.pitcher}|${state.pt}|${t}`)]));
-  view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, poolWhat: what, units: perTarget, kpi: kpiShade(unit) };
+  view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, poolWhat: what, minN: Number(el.minN.value), units: perTarget, kpi: kpiShade(unit) };
   // by outcome, the league charts read each row's run value and the unit's predicted rate
   if (byOutcome) {
     Object.assign(view, {
