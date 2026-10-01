@@ -11,7 +11,7 @@ import {
   flowSvg, phoneFlowSvg, phoneCardSvg, flowSvgForExport, swarmSvg, sankeySvg, svgToPng,
   nearestPanelPoint, nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, titleRight, C,
-} from './charts.js?v=46';
+} from './charts.js?v=50';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -281,10 +281,11 @@ function render() {
   status('');
 }
 
-// The drilldown: the square desktop figure, or on a phone (600 px or narrower) the one-line
+// The drilldown: on a desktop or laptop the 16:9 figure, or on a phone (600 px or narrower) the
 // header and waterfall at the screen's own width, with the league card as its own panel.
 const phoneQuery = window.matchMedia('(max-width: 600px)');
 let drawnAs = null;  // 'desktop', or the phone width it was drawn at
+const flowKey = () => (phoneQuery.matches ? Math.max(280, el.flow.clientWidth) : 'desktop');
 function drawFlow() {
   if (phoneQuery.matches) {
     el.flowCard.hidden = false;
@@ -294,7 +295,7 @@ function drawFlow() {
     const card = phoneCardSvg(view, w);
     if (card) morph(el.flowCard, card); else el.flowCard.replaceChildren();
   } else {
-    drawnAs = 'desktop';
+    drawnAs = flowKey();
     el.flowCard.hidden = true;
     el.flowCard.replaceChildren();
     morph(el.flow, flowSvg(view));
@@ -305,8 +306,7 @@ window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     if (!view) return;
-    const now = phoneQuery.matches ? el.flow.clientWidth : 'desktop';
-    if (now !== drawnAs) { drawFlow(); applyFocus(); }
+    if (flowKey() !== drawnAs) { drawFlow(); applyFocus(); }
   }, 120);
 });
 
@@ -606,7 +606,7 @@ async function copyPng(getSvg, suffix, btn) {
     setTimeout(() => { btn.textContent = label; }, 1600);
   }
 }
-// the drilldown's copy is always the square desktop figure (2400 x 2400), even on a phone
+// the drilldown's copy is always the 16:9 desktop figure (4266 x 2400), even on a phone
 function desktopFlow() {
   const t = document.createElement('template');
   t.innerHTML = flowSvgForExport(view).trim();
