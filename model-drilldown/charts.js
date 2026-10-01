@@ -178,8 +178,9 @@ export const FLOW_ASPECT = 16 / 9;  // the drilldown's shape (width / height), o
 const FLOW_MIN = 18;
 // the league card's text sizes: the phone card (drawn at screen px) and, for the drilldown,
 // FLOW_MIN with the title and highlighted line at the waterfall's label size
-const PANEL_TEXT = { title: 15, sub: 11.5, tick: 10, axis: 10.5, zone: 11, hi: 13, line: 11.5, foot: 10.5, none: 12 };
-const flowPanelText = (FS) => ({ title: FS, sub: FLOW_MIN, tick: FLOW_MIN, axis: FLOW_MIN, zone: FLOW_MIN, hi: FS, line: FLOW_MIN, foot: FLOW_MIN, none: FLOW_MIN });
+// (dot: the pitcher's marker's radius; the desktop card's is twice the phone's, about the same on screen)
+const PANEL_TEXT = { title: 15, sub: 11.5, tick: 10, axis: 10.5, zone: 11, hi: 13, line: 11.5, foot: 10.5, none: 12, dot: 6.5 };
+const flowPanelText = (FS) => ({ title: FS, sub: FLOW_MIN, tick: FLOW_MIN, axis: FLOW_MIN, zone: FLOW_MIN, hi: FS, line: FLOW_MIN, foot: FLOW_MIN, none: FLOW_MIN, dot: 13 });
 const HILITE = 0.16;         // the selected row's tint: the same colour and opacity as its funnel
 const CONNECTOR = '#B4BECC';  // the waterfall's bar-to-bar connectors
 
@@ -537,14 +538,15 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T = PANEL_TEXT) {
     }
   }
   const own = val(r.k, { unit, info });
-  const mcol = good * own > 0 ? C.gold : C.teal;
+  // the marker and its value line share a colour: for Other, the row's full value's (its bar's)
+  const mcol = good * (r.k === 'Other' ? r.v : own) > 0 ? C.gold : C.teal;
   if (zone) {
     const zl = sxr(-ZW / 2), zr = sxr(ZW / 2), zt = syr(1), zb = syr(0);
     s += `<rect data-m="zone" x="${n1(zl)}" y="${n1(zt)}" width="${n1(zr - zl)}" height="${n1(zb - zt)}" fill="none" stroke="#fff" stroke-width="1.6" pointer-events="none"/>`;
     s += text(zl, zb + 5 + T.zone, 'Inside', `font-size="${T.zone}" font-weight="600" fill="${C.muted}" text-anchor="start" pointer-events="none"`, 'zin');
     s += text(zr, zb + 5 + T.zone, 'Away', `font-size="${T.zone}" font-weight="600" fill="${C.muted}" text-anchor="end" pointer-events="none"`, 'zaway');
   }
-  s += `<circle data-m="pme" cx="${cx(me.xv)}" cy="${cy(me.yv)}" r="6.5" fill="${mcol}" stroke="#fff" stroke-width="2"/>`;
+  s += `<circle data-m="pme" cx="${cx(me.xv)}" cy="${cy(me.yv)}" r="${T.dot}" fill="${mcol}" stroke="#fff" stroke-width="${n1(T.dot * 0.3)}"/>`;
   s += `<rect class="panel-hit" x="${px0 - 6}" y="${n1(py0 - 6)}" width="${px1 - px0 + 12}" height="${py1 - py0 + 12}" fill="transparent"/>`;
 
   // the numbers under it
@@ -552,7 +554,7 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T = PANEL_TEXT) {
   // Other: the row's full value (its folded rows and the residual), as its bar shows it; the
   // plot and the percentile are the residual's
   if (r.k === 'Other') {
-    s += text(tx, b1, `${f.d(r.v)} ${f.unit}`, `font-size="${n1(T.hi)}" font-weight="700" fill="${good * r.v > 0 ? C.gold : C.teal}"${ta}`, 'pl1');
+    s += text(tx, b1, `${f.d(r.v)} ${f.unit}`, `font-size="${n1(T.hi)}" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
     s += text(tx, b2a, `Residual ${f.d(own)} ${f.unit} · ${ord(rank)} percentile`, `font-size="${T.line}" fill="${C.muted}"${ta}`, 'pl2a');
   } else {
     s += text(tx, b1, `${f.d(own)} ${f.unit} · ${ord(rank)} percentile`, `font-size="${n1(T.hi)}" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
