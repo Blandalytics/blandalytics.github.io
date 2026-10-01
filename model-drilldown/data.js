@@ -29,6 +29,8 @@ export const PITCH_COLORS = {
 export const MODELS = {
   stuff: { title: 'Stuff+', short: 'Stuff', blurb: 'count-neutral: shape, release and arsenal' },
   pitching: { title: 'PLV+', short: 'PLV', blurb: 'the pitch as thrown: adds location and count' },
+  // PLV minus Stuff at the actual count; split by outcome only (units_location_<season>)
+  location: { title: 'Location+', short: 'Location', blurb: 'what the location adds: PLV minus Stuff', outcomesOnly: true },
 };
 export const OUTCOMES = ['ball', 'called_strike', 'swinging_strike', 'foul', 'field_out', 'single', 'double', 'triple', 'home_run'];
 export const TARGET_NAMES = {
@@ -286,19 +288,25 @@ export function outcomeValue(k, idx, pitcher, pt) {
   return get(k)?.exact ?? NaN;
 }
 
-// A row's input: the unit's predicted rate of that outcome (%); for leverage, its average count
-// in the pitcher's favour (strikes - balls before the pitch)
+// A row's input: the unit's predicted rate of that outcome (%), or for Location the change its
+// location makes to that rate (dp_<outcome>, pp); for leverage, its average count in the
+// pitcher's favour (strikes - balls before the pitch)
 export function outcomeInput(k, idx, info) {
   if (k === 'leverage') return info.strikes - info.balls;
-  return idx.byKey.get(`${info.pitcher}|${info.pt}|p_${k.slice(3)}`)?.exact ?? NaN;
+  const get = (t) => idx.byKey.get(`${info.pitcher}|${info.pt}|${t}`);
+  return (get(`p_${k.slice(3)}`) ?? get(`dp_${k.slice(3)}`))?.exact ?? NaN;
 }
+
+const pp1 = (v) => { const r = Math.round(v * 10) / 10; return `${r < 0 ? '−' : '+'}${Math.abs(r).toFixed(1)}`; };  // +0.0, never −0.0
 
 export function outcomeRows(model, idx, info) {
   const rows = OUTCOMES.map((o) => {
     const p = idx.byKey.get(`${info.pitcher}|${info.pt}|p_${o}`);
+    const dp = idx.byKey.get(`${info.pitcher}|${info.pt}|dp_${o}`);  // Location: the rate's change
     return {
       k: `rv_${o}`, label: OUTCOME_ROWS[o], v: outcomeValue(`rv_${o}`, idx, info.pitcher, info.pt),
-      detail: p ? `${p.exact.toFixed(1)}% vs ${p.league.toFixed(1)}% league` : '',
+      detail: model === 'location' ? (dp ? `${pp1(dp.exact)} pp vs ${pp1(dp.league)} pp league` : '')
+        : p ? `${p.exact.toFixed(1)}% vs ${p.league.toFixed(1)}% league` : '',
     };
   });
   if (model === 'pitching') {
@@ -308,5 +316,6 @@ export function outcomeRows(model, idx, info) {
 }
 
 export const OUTCOME_AXIS = (k) => (k === 'leverage' ? 'Strikes − balls before the pitch (avg)' : `Predicted ${OUTCOME_ROWS[k.slice(3)].toLowerCase()} rate (%)`);
+export const LOCATION_AXIS = (k) => `Location's change in ${OUTCOME_ROWS[k.slice(3)].toLowerCase()} rate (pp)`;
 
 export { sgn };

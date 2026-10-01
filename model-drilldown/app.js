@@ -4,26 +4,30 @@
 
 import {
   loadMeta, loadFeatures, loadUnits, loadFidelity, cardRows, rowValue, minImpact, targetName, targetGood,
-  outcomeRows, outcomeValue, outcomeInput, OUTCOME_AXIS,
+  outcomeRows, outcomeValue, outcomeInput, OUTCOME_AXIS, LOCATION_AXIS,
   MODELS, OUTCOMES, TARGET_NAMES, PITCH_NAMES, LABELS,
-} from './data.js?v=7';
+} from './data.js?v=8';
 import {
-  flowSvg, swarmSvg, sankeySvg, svgToPng, nearestPanelPoint, nearestSwarmPoint, sankeyLink,
-  formats, pctile, ord, niceTicks, C,
-} from './charts.js?v=33';
+  flowSvg, phoneFlowSvg, phoneCardSvg, flowSvgForExport, swarmSvg, sankeySvg, svgToPng,
+  nearestPanelPoint, nearestSwarmPoint, sankeyLink,
+  formats, pctile, ord, niceTicks, titleRight, C,
+} from './charts.js?v=46';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
 // 'outcomes' is the plus score split by outcome (the features split is the default)
 const TARGETS = ['plus', 'outcomes', 'era', ...OUTCOMES.map((o) => `p_${o}`), 'wobacon'];
 const RV = OUTCOMES.map((o) => `rv_${o}`);
+const DP = OUTCOMES.map((o) => `dp_${o}`);  // Location's change in each rate
+// the targets a model offers: Location is split by outcome only
+const targetsFor = (model) => (MODELS[model].outcomesOnly ? ['outcomes'] : TARGETS);
 const tableTarget = (t) => (t === 'outcomes' ? 'plus' : t);  // the row that holds its value
 
 const $ = (id) => document.getElementById(id);
 const el = {
   form: $('form'), season: $('season'), player: $('player'), suggest: $('suggest'), pt: $('pt'),
   model: $('model'), target: $('target'), status: $('status'),
-  out: $('out'), flow: $('flow'), stats: $('stats'), notes: $('notes'),
+  out: $('out'), flow: $('flow'), flowCard: $('flow-card'), stats: $('stats'), notes: $('notes'),
   vs: $('vs'), minN: $('minn'), all: $('all'),
   swarmCard: $('swarm-card'), swarm: $('swarm'), sankeyCard: $('sankey-card'), sankey: $('sankey'),
   tip: $('tip'), copyFlow: $('copy_flow'), copySwarm: $('copy_swarm'), copySankey: $('copy_sankey'), dlCsv: $('dl_csv'),
@@ -44,7 +48,7 @@ function fillTargets() {
   const keep = el.target.value || state.target;
   const menu = (t) => (t === 'plus' ? `${targetName(state.model, t)} (features)`
     : t === 'outcomes' ? `${targetName(state.model, t)} (outcomes)` : targetName(state.model, t));
-  el.target.replaceChildren(...TARGETS.map((t) => new Option(menu(t), t)));
+  el.target.replaceChildren(...targetsFor(state.model).map((t) => new Option(menu(t), t)));
   el.target.value = keep;
 }
 
@@ -132,7 +136,7 @@ async function loadSeason(season) {
 
 async function loadModel() {
   const want = [state.season, state.model];
-  const size = state.model === 'stuff' ? '14' : '17';
+  const size = { stuff: '14', pitching: '17', location: '1' }[state.model];
   if (!units || units._for !== want.join('|')) {
     status(`loading the ${state.season} ${MODELS[state.model].title} SHAP tables (~${size} MB, once per season)…`);
     const u = await loadUnits(...want);
@@ -228,6 +232,12 @@ function kpiShade(unit) {
   return { t: targetGood(state.target) * (2 * p - 1), floor, n: vals.length, pct: Math.round(100 * p) };
 }
 
+// where the season's longest pitcher name ends at the title size, for the KPI box's place
+function seasonTitleRight() {
+  feats._titleRight ??= titleRight(feats.pitchers.map((p) => p.name));
+  return feats._titleRight;
+}
+
 function render() {
   const info = feats.byUnit.get(`${state.pitcher}|${state.pt}`);
   const unit = units.byKey.get(`${state.pitcher}|${state.pt}|${tableTarget(state.target)}`);
@@ -246,21 +256,21 @@ function render() {
   }
   const arsenal = feats.byId.get(state.pitcher).pts.map((u) => ({ pt: u.pt, n: u.n, unit: units.byKey.get(`${state.pitcher}|${u.pt}|${tableTarget(state.target)}`) }));
   const { pool, label, what } = poolFor(info);
-  const perTarget = new Map([...TARGETS, ...RV].map((t) => [t, units.byKey.get(`${state.pitcher}|${state.pt}|${t}`)]));
-  view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, poolWhat: what, minN: Number(el.minN.value), units: perTarget, kpi: kpiShade(unit) };
+  const perTarget = new Map([...TARGETS, ...RV, ...DP].map((t) => [t, units.byKey.get(`${state.pitcher}|${state.pt}|${t}`)]));
+  view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, poolWhat: what, minN: Number(el.minN.value), titleRight: seasonTitleRight(), units: perTarget, kpi: kpiShade(unit) };
   // by outcome, the league charts read each row's run value and the unit's predicted rate
   if (byOutcome) {
     Object.assign(view, {
       byOutcome,
       rowValueOf: (k, p) => outcomeValue(k, units, p.info.pitcher, p.info.pt),
       rowInputOf: (k, p) => outcomeInput(k, units, p.info),
-      axisOf: OUTCOME_AXIS,
+      axisOf: state.model === 'location' ? LOCATION_AXIS : OUTCOME_AXIS,
     });
   }
 
   el.out.hidden = false;
   el.swarmCard.hidden = false;
-  morph(el.flow, flowSvg(view));
+  drawFlow();
   morph(el.swarm, swarmSvg(view));
   const sk = sankeySvg(view);
   el.sankeyCard.hidden = !sk;
@@ -270,6 +280,35 @@ function render() {
   writeHash();
   status('');
 }
+
+// The drilldown: the square desktop figure, or on a phone (600 px or narrower) the one-line
+// header and waterfall at the screen's own width, with the league card as its own panel.
+const phoneQuery = window.matchMedia('(max-width: 600px)');
+let drawnAs = null;  // 'desktop', or the phone width it was drawn at
+function drawFlow() {
+  if (phoneQuery.matches) {
+    el.flowCard.hidden = false;
+    const w = Math.max(280, el.flow.clientWidth);  // never narrower than a small phone
+    drawnAs = w;
+    morph(el.flow, phoneFlowSvg(view, w));
+    const card = phoneCardSvg(view, w);
+    if (card) morph(el.flowCard, card); else el.flowCard.replaceChildren();
+  } else {
+    drawnAs = 'desktop';
+    el.flowCard.hidden = true;
+    el.flowCard.replaceChildren();
+    morph(el.flow, flowSvg(view));
+  }
+}
+let resizeTimer = 0;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (!view) return;
+    const now = phoneQuery.matches ? el.flow.clientWidth : 'desktop';
+    if (now !== drawnAs) { drawFlow(); applyFocus(); }
+  }, 120);
+});
 
 // ---- the numbers under the figure (Swing Profiles' stat tiles, each with its league KDE) ------
 
@@ -399,7 +438,13 @@ el.form.addEventListener('submit', (e) => {
 });
 el.season.addEventListener('change', async () => { state.season = Number(el.season.value); await loadSeason(state.season); draw(); });
 el.pt.addEventListener('change', () => { state.pt = el.pt.value; draw(); });
-el.model.addEventListener('change', () => { state.model = el.model.value; fillTargets(); draw(); });
+el.model.addEventListener('change', () => {
+  state.model = el.model.value;
+  if (!targetsFor(state.model).includes(state.target)) state.target = targetsFor(state.model)[0];
+  fillTargets();
+  el.target.value = state.target;
+  draw();
+});
 el.target.addEventListener('change', () => { state.target = el.target.value; draw(); });
 for (const c of [el.vs, el.minN, el.all]) c.addEventListener('change', () => view && render());
 
@@ -485,6 +530,20 @@ el.flow.addEventListener('pointermove', (e) => {
   hideTip();
 });
 
+el.flowCard.addEventListener('pointermove', (e) => {
+  const svg = el.flowCard.querySelector('svg');
+  if (!svg || !view || !e.target.closest('.panel-hit')) { hideTip(); return; }
+  const p = nearestPanelPoint(...svgPoint(svg, e));
+  if (p) showTip(unitTip(p.info, { k: state.row, v: p.v }, p.me), e); else hideTip();
+});
+el.flowCard.addEventListener('pointerleave', hideTip);
+el.flowCard.addEventListener('click', (e) => {
+  const svg = el.flowCard.querySelector('svg');
+  if (!svg || !e.target.closest('.panel-hit')) return;
+  const p = nearestPanelPoint(...svgPoint(svg, e));
+  if (p && !p.me) { hideTip(); state.pt = p.pt; choosePitcher(p.id); }
+});
+
 el.swarm.addEventListener('pointermove', (e) => {
   const svg = el.swarm.querySelector('svg');
   if (!svg || !view) return;
@@ -529,8 +588,8 @@ const fileStem = () => `${view.info.pitcher_name.toLowerCase().replace(/[^a-z]+/
 // Copy PNG, as Release Angles does: the ClipboardItem is made in the click itself, around the
 // promise of the image, so the copy keeps the click's permission while the image is drawn
 // (Safari insists on it). Where the clipboard is refused, the PNG downloads instead.
-async function copyPng(host, suffix, btn) {
-  const svg = host.querySelector('svg');
+async function copyPng(getSvg, suffix, btn) {
+  const svg = getSvg();
   if (!svg) return;
   const label = btn.textContent;
   const blob = svgToPng(svg);
@@ -547,13 +606,19 @@ async function copyPng(host, suffix, btn) {
     setTimeout(() => { btn.textContent = label; }, 1600);
   }
 }
-el.copyFlow.addEventListener('click', () => copyPng(el.flow, 'waterfall', el.copyFlow));
-el.copySwarm.addEventListener('click', () => copyPng(el.swarm, 'beeswarm', el.copySwarm));
-el.copySankey.addEventListener('click', () => copyPng(el.sankey, 'outcomes', el.copySankey));
+// the drilldown's copy is always the square desktop figure (2400 x 2400), even on a phone
+function desktopFlow() {
+  const t = document.createElement('template');
+  t.innerHTML = flowSvgForExport(view).trim();
+  return t.content.firstElementChild;
+}
+el.copyFlow.addEventListener('click', () => view && copyPng(desktopFlow, 'waterfall', el.copyFlow));
+el.copySwarm.addEventListener('click', () => copyPng(() => el.swarm.querySelector('svg'), 'beeswarm', el.copySwarm));
+el.copySankey.addEventListener('click', () => copyPng(() => el.sankey.querySelector('svg'), 'outcomes', el.copySankey));
 el.dlCsv.addEventListener('click', () => {
   const cols = Object.keys(view.unit);
   const lines = [cols.join(',')];
-  for (const t of [...TARGETS.filter((x) => x !== 'outcomes'), ...RV]) {
+  for (const t of [...TARGETS.filter((x) => x !== 'outcomes'), ...RV, ...DP]) {
     const u = view.units.get(t);
     if (u) lines.push(cols.map((c) => u[c]).join(','));
   }
@@ -564,7 +629,7 @@ el.dlCsv.addEventListener('click', () => {
 
 function writeHash() {
   const q = new URLSearchParams();
-  if (state.model !== 'stuff') q.set('model', 'plv');  // the pitching tables, shown as PLV
+  if (state.model !== 'stuff') q.set('model', state.model === 'pitching' ? 'plv' : state.model);  // the pitching tables, shown as PLV
   if (state.target !== 'plus') q.set('target', state.target);
   if (state.row) q.set('row', state.row);
   if (el.vs.value !== 'pt') q.set('vs', el.vs.value);
@@ -580,8 +645,9 @@ function readHash() {
   state.season = Number(m[1]);
   state.pitcher = Number(m[2]);
   state.pt = m[3];
-  state.model = ['plv', 'pitching'].includes(q.get('model')) ? 'pitching' : 'stuff';  // older links say pitching
-  state.target = TARGETS.includes(q.get('target')) ? q.get('target') : 'plus';
+  const qm = q.get('model');
+  state.model = ['plv', 'pitching'].includes(qm) ? 'pitching' : qm === 'location' ? 'location' : 'stuff';  // older links say pitching
+  state.target = targetsFor(state.model).includes(q.get('target')) ? q.get('target') : targetsFor(state.model)[0];
   state.row = q.get('row') || null;
   if (['pt', 'group', 'all'].includes(q.get('vs'))) el.vs.value = q.get('vs');
   return true;
