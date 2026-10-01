@@ -213,7 +213,7 @@ export function flowSvg(ctx) {
     : f.unit === 'pts' ? `${label} points (average 100, SD 15)`
     : f.unit === 'wOBA' ? `wOBA on contact (league ${woba(unit.league)})`
     : f.unit === 'runs' ? `Expected runs per 9 IP (league ERA ${unit.league.toFixed(2)})`
-      : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%)`;
+      : `Per-pitch probability (league ${unit.league.toFixed(1)}%)`;
   const foot = `${note}; ${ctx.byOutcome ? 'an exact split, no proxy' : 'feature contributions from a proxy model'}. ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`;
   // The body takes whatever height makes H = 1200, or more if the rows, the league card or the
   // arsenal need it. Rows and pitch types are spread evenly
@@ -389,21 +389,23 @@ export function flowSvg(ctx) {
     s += text(sx(t), Y0 + BB + 4 + 8 + FLOW_MIN, f.tick(t), `font-size="${FLOW_MIN}" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
   }
   s += text((X0 + X1) / 2, Y0 + BB + 4 + 8 + FLOW_MIN + 10 + FLOW_MIN, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="${FLOW_MIN}" fill="${C.muted}" text-anchor="middle"`, 'xlab');
-  const AY = Y0 - 22, AH = FLOW_MIN + 8;  // the AVG label's and the arrow's centre line; its box's height
-  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${AY + AH / 2}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.2" pointer-events="none"/>`;
+  // the AVG label at the feature labels' size (FS); its box's height, and its and the arrow's
+  // centre line, the box's bottom 9 over the body
+  const AH = n1(FS * 1.2 + 6), AY = n1(Y0 - 9 - AH / 2);
+  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${n1(AY + AH / 2)}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.2" pointer-events="none"/>`;
   s += bars;
   s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${AY}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.6" stroke-dasharray="6 5" pointer-events="none"/>`;
   // "AVG" boxed over the league line, and an arrow in the KPI box's colour from it to the
   // final value (none when the two nearly meet)
   const ax = sx(unit.league), ex = sx(x);
-  const aw = textWidth('AVG', FLOW_MIN) + 20;
-  s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - AH / 2}" width="${n1(aw)}" height="${AH}" rx="5" fill="${C.card}" stroke="#fff" stroke-width="1.4"/>`;
-  s += text(ax, AY + FLOW_MIN * 0.36, 'AVG', `font-size="${FLOW_MIN}" font-weight="700" letter-spacing="1" fill="#fff" text-anchor="middle"`, 'avg');
+  const aw = textWidth('AVG', FS) + FS * 1.1;
+  s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${n1(AY - AH / 2)}" width="${n1(aw)}" height="${AH}" rx="${n1(FS * 0.2)}" fill="${C.card}" stroke="#fff" stroke-width="1.4"/>`;
+  s += text(ax, AY + FS * 0.36, 'AVG', `font-size="${n1(FS)}" font-weight="700" letter-spacing="${n1(FS * 0.05)}" fill="#fff" text-anchor="middle"`, 'avg');
   const dir = ex >= ax ? 1 : -1, from = ax + dir * (aw / 2 + 3);
-  if (dir * (ex - from) > 12) {
+  if (dir * (ex - from) > 24) {  // line 5 wide, head 20 long and 24 across
     const kcol = kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit));
-    s += `<line data-m="arrow" x1="${n1(from)}" x2="${n1(ex - dir * 8)}" y1="${AY}" y2="${AY}" stroke="${kcol}" stroke-width="2.5" stroke-linecap="round"/>`;
-    s += `<path data-m="arrowhead" d="M${ex},${AY}L${n1(ex - dir * 10)},${AY - 6}L${n1(ex - dir * 10)},${AY + 6}Z" fill="${kcol}"/>`;
+    s += `<line data-m="arrow" x1="${n1(from)}" x2="${n1(ex - dir * 16)}" y1="${AY}" y2="${AY}" stroke="${kcol}" stroke-width="5" stroke-linecap="round"/>`;
+    s += `<path data-m="arrowhead" d="M${ex},${AY}L${n1(ex - dir * 20)},${AY - 12}L${n1(ex - dir * 20)},${AY + 12}Z" fill="${kcol}"/>`;
   }
   s += front;
 
@@ -510,8 +512,10 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T = PANEL_TEXT) {
   const xl = grouped ? (r.k === 'Location' ? 'Horizontal location (ft, + = away)' : 'Balls before the pitch')
     : r.k === 'Other' ? 'Pitches (log scale)' : ctx.axisOf ? ctx.axisOf(r.k) : AXIS[r.k] || LABELS[r.k];
   if (!zone) s += text((px0 + px1) / 2, py1 + xlabGap, xl, `font-size="${T.axis}" fill="${C.muted}" text-anchor="middle"`, 'pxlab');
+  // the y axis is the row's contribution to the target, so it is named for the target ("Stuff+",
+  // "SwStr%", "ERA", "wOBAcon"); Count plots its strikes there instead
   const yl = grouped ? (r.k === 'Location' ? 'Vertical location (zone height)' : 'Strikes before the pitch')
-    : r.k === 'Other' ? `Residual (${f.unit})` : ctx.byOutcome ? `Run value (${f.unit})` : `SHAP (${f.unit})`;
+    : isPlus(target) ? MODELS[ctx.model].title : TARGET_NAMES[target];
   if (!zone) s += `<text data-m="pylab" transform="translate(${n1(ylabX)},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="${T.axis}" fill="${C.muted}" text-anchor="middle">${esc(yl)}</text>`;
 
   // dots, keyed by unit so they glide from one row's chart to the next
@@ -725,7 +729,7 @@ export function phoneFlowSvg(ctx, W) {
     : f.unit === 'pts' ? `${label} points (average 100, SD 15); feature contributions from a proxy model.`
     : f.unit === 'wOBA' ? `wOBA on contact (league ${woba(unit.league)}); feature contributions from a proxy model.`
     : f.unit === 'runs' ? `Expected runs per 9 IP (league ERA ${unit.league.toFixed(2)}); feature contributions from a proxy model.`
-    : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%); feature contributions from a proxy model.`;
+    : `Per-pitch probability (league ${unit.league.toFixed(1)}%); feature contributions from a proxy model.`;
   const lines = wrapLines(`${note} ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`, PHONE_MIN, W - 2 * P);
   let fy = Y0 + BH + 54;
   lines.forEach((l, i) => { s += text(W / 2, fy + i * 15, l, `font-size="${PHONE_MIN}" fill="${C.faint}" text-anchor="middle"`, i ? `foot${i}` : 'foot'); });
