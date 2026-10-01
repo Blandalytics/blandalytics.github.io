@@ -53,6 +53,12 @@ export function kpiColor(t) {
   return `rgb(${to.map((c) => Math.round(255 + (c - 255) * a)).join(',')})`;
 }
 
+// Where the longest title line ends: the longest of these names, or of the pitch type names
+// (the title's second line), at the title's 44 px.
+export function titleRight(names) {
+  return 36 + Math.max(...names.map((n) => textWidth(n, 44)), ...Object.values(PITCH_NAMES).map((n) => textWidth(n, 44)));
+}
+
 // the KPI box's target on one line: "Stuff+", "In-Play Out% (PLV)", "ERA (Stuff)"
 export const kpiName = (model, target) => (isPlus(target) ? MODELS[model].title : `${TARGET_NAMES[target]} (${MODELS[model].short})`);
 
@@ -101,6 +107,20 @@ function valueColor(t) {
 const svgOpen = (W, H, cls) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${n1(H)}" class="${cls}" font-family='${FONT}' role="img">`
   + `<rect class="bg" data-m="bg" width="${W}" height="${n1(H)}" rx="10" fill="${C.card}"/>`;
 const wordmark = (x, y, w) => `<image class="wordmark" data-m="wm" href="${WORDMARK_URL}" x="${x}" y="${n1(y)}" width="${w}" height="${n1(w * WM_ASPECT)}"/>`;
+const WM_W = 300;  // the wordmark's width: twice the old 150
+const corner = (W, H) => wordmark(W - 36 - WM_W, H - 20 - WM_W * WM_ASPECT, WM_W);
+// A footer note, wrapped so it stays clear of the wordmark: its last line on H - 26, the lines
+// before it stacked above.
+function footnote(str, W, H) {
+  const max = W - 36 - WM_W - 24 - 36;
+  const lines = [''];
+  for (const word of str.split(' ')) {
+    const next = lines[lines.length - 1] ? `${lines[lines.length - 1]} ${word}` : word;
+    if (textWidth(next, 11.5) * 0.94 > max && lines[lines.length - 1]) lines.push(word);  // regular, not bold
+    else lines[lines.length - 1] = next;
+  }
+  return lines.map((l, i) => text(36, H - 26 - 16 * (lines.length - 1 - i), l, `font-size="11.5" fill="${C.faint}"`, i ? `foot${i}` : 'foot')).join('');
+}
 const text = (x, y, s, attrs = '', m = null) => `<text${m ? ` data-m="${esc(m)}"` : ''} x="${n1(x)}" y="${n1(y)}" ${attrs}>${esc(s)}</text>`;
 const head = (x, y, s, anchor, m, fill = C.faint, size = 11) => text(x, y, s.toUpperCase(), `font-size="${n1(size)}" font-weight="600" letter-spacing="${n1(size * 0.145)}" fill="${fill}" text-anchor="${anchor}"`, m);
 
@@ -118,7 +138,10 @@ function header(W, ctx, subtitle) {
   const lw = Math.max(...lines.map((l) => textWidth(l, size)));
   const vw = textWidth(val, VS);
   const bw = pad + lw + gap + vw + pad;
-  const kx = W - 36 - bw;
+  // centred between where the season's longest title line ends (ctx.titleRight, so the box
+  // sits still from pitcher to pitcher) and the card's right edge
+  const right = ctx.titleRight ?? titleRight([info.pitcher_name]);
+  const kx = Math.min(W - 12 - bw, (right + W) / 2 - bw / 2);
   const lx = kx + pad + lw / 2, vx = kx + pad + lw + gap;
   const base = one ? [cy + 15] : [cy - 3.5, cy + 18.5];  // one line shares the value's baseline
   const lab = `font-size="${size}" font-weight="700" fill="#fff" text-anchor="middle"`;
@@ -219,13 +242,24 @@ export function flowSvg(ctx) {
   let d0 = lo - pad, d1 = hi + pad * 1.6;
   // Widen the axis until every value, chip and all, fits beside its bar: a drag's number (left
   // of its bar) must clear the row labels, a lift's (right) the funnel.
+  // One font size for every row's label, value and sub-label (at 0.8x): the largest at which
+  // each label and sub-label fits on one line between the funnel's bracket and the bars, and each
+  // label block fits its row's height. Kept between the card's 14.5 and 32 px.
+  const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] ? '' : r.detail);  // Other, Location, Count: name only
+  const per = (str) => textWidth(str, 100) / 100;  // width per px of font size
+  const room = LX - (HX0 + 14);
+  const FS = Math.max(14.5, Math.min(32,
+    room / Math.max(...rows.map((r) => per(r.label))),
+    room / (0.8 * Math.max(1e-9, ...rows.map((r) => per(subOf(r))))),
+    (S * 0.82) / 1.9));
+  const SUB = FS * 0.8;
   const ROOM_L = LX + 10, ROOM_R = HX1 - 6;
   for (let iter = 0; iter < 8; iter++) {
     const k = (X1 - X0) / (d1 - d0);
     let over = 0, under = 0, at = unit.league;
     for (const r of rows) {
       const end = at + r.v;
-      const tw = textWidth(f.d(r.v), 13) + 11;  // gap to the bar, chip padding
+      const tw = textWidth(f.d(r.v), FS) + 11;  // gap to the bar, chip padding
       if (r.v >= 0) over = Math.max(over, X0 + (Math.max(at, end) - d0) * k + tw - ROOM_R);
       else under = Math.max(under, ROOM_L - (X0 + (Math.min(at, end) - d0) * k - tw));
       at = end;
@@ -257,13 +291,13 @@ export function flowSvg(ctx) {
     // the lift, on a translucent chip so it reads over the league and final-value lines
     const right = r.v >= 0;
     const val = f.d(r.v);
-    const tw = textWidth(val, 13), tx = right ? b + 7 : a - 7;
-    front += `${g}><rect data-m="vb:${r.k}" x="${n1(right ? tx - 4 : tx - tw - 4)}" y="${n1(cy - 10)}" width="${n1(tw + 8)}" height="20" rx="4" fill="${C.card}" fill-opacity=".8"/>`;
-    front += text(tx, cy + 4.5, val, `font-size="13" font-weight="700" fill="${C.ink}" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
+    const tw = textWidth(val, FS), tx = right ? b + 7 : a - 7, ch = FS + 7;
+    front += `${g}><rect data-m="vb:${r.k}" x="${n1(right ? tx - 4 : tx - tw - 4)}" y="${n1(cy - ch / 2)}" width="${n1(tw + 8)}" height="${n1(ch)}" rx="4" fill="${C.card}" fill-opacity=".8"/>`;
+    front += text(tx, cy + FS * 0.35, val, `font-size="${n1(FS)}" font-weight="700" fill="${C.ink}" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
     // Other, Location and Count carry no sub-label here (the tooltip and league panel say more)
-    const sub = r.k === 'Other' || GROUPS[r.k] ? '' : r.detail;  // Other, Location, Count: name only
-    front += text(LX, sub ? cy - 1 : cy + 5, r.label, `font-size="14.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
-    if (sub) front += text(LX, cy + 15, sub, `font-size="11.5" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
+    const sub = subOf(r);
+    front += text(LX, sub ? cy - FS * 0.07 : cy + FS * 0.35, r.label, `font-size="${n1(FS)}" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
+    if (sub) front += text(LX, cy + FS * 1.03, sub, `font-size="${n1(SUB)}" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
     front += '</g>';
     if (on) selRow = { cy, col, r };
     x = end;
@@ -313,8 +347,8 @@ export function flowSvg(ctx) {
     : f.unit === 'wOBA' ? `wOBA on contact, per ball in play (league ${woba(unit.league)})`
     : f.unit === 'runs' ? `Runs per 9 innings (league ERA ${unit.league.toFixed(2)}): season constant − 9 × run value per pitch × modelled pitches per inning`
       : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%)`;
-  s += text(36, H - 26, `${note}; ${ctx.byOutcome ? 'an exact split, no proxy' : 'feature contributions from a proxy model'}. ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`, `font-size="11.5" fill="${C.faint}"`, 'foot');
-  s += wordmark(W - 36 - 150, H - 48, 150);
+  s += footnote(`${note}; ${ctx.byOutcome ? 'an exact split, no proxy' : 'feature contributions from a proxy model'}. ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`, W, H);
+  s += corner(W, H);
   return s + '</svg>';
 }
 
@@ -473,7 +507,7 @@ export function swarmSvg(ctx) {
     .filter((r) => !r.season && !(r.k === 'is_primary' && inert))
     .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
   const BH = rows.length * RH;
-  const H = top + BH + 104;
+  const H = top + BH + 180;  // the axis, the colour key, then the wordmark under it
   let s = svgOpen(W, H, 'fig swarm-fig');
   s += header(W, ctx, `${season}  ·  every row's ${ctx.byOutcome ? 'run value' : 'SHAP'}, ${poolLabel.replace(/^vs /, '')}`);
   // One shared axis, clipped to the 0.5th-99.5th percentile of every row's values pooled (so one
@@ -552,13 +586,13 @@ export function swarmSvg(ctx) {
     byRow.push({ k: r.k, cy, pts });
   });
   // colour key
-  const kx = L, ky = H - 36;
+  const kx = L, ky = top + BH + 78;
   s += text(kx - 16, ky + 4, ctx.byOutcome ? 'Unit\'s predicted rate' : 'Unit\'s mean input', `font-size="11.5" fill="${C.muted}" text-anchor="end"`, 'k1');
   for (let i = 0; i <= 20; i++) s += `<rect data-m="kc:${i}" x="${kx + i * 6}" y="${ky - 5}" width="6.5" height="10" fill="${valueColor(i / 20)}"/>`;
   s += text(kx + 134, ky + 4, 'low → high   (grey: no single input)', `font-size="11.5" fill="${C.muted}"`, 'k2');
   s += `<path data-m="kd" d="M${kx + 400},${ky - 11}L${kx + 406},${ky}L${kx + 400},${ky + 11}L${kx + 394},${ky}Z" fill="${C.gold}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>`;
   s += text(kx + 414, ky + 4, `${info.pitcher_name}'s ${PITCH_NAMES[info.pt] || info.pt}`, `font-size="11.5" fill="${C.muted}"`, 'k3');
-  s += wordmark(W - 36 - 150, H - 48, 150);
+  s += corner(W, H);
   swarmPoints = { rows: byRow, RH };
   return s + '</svg>';
 }
@@ -622,7 +656,7 @@ export function sankeySvg(ctx) {
     });
   };
   const left = stack(lossOf), right = stack(gainOf), mid = stack(fh);
-  const H = Math.max(top + avail, ...[left, right, mid].map((c) => c[c.length - 1].y1)) + 100;
+  const H = Math.max(top + avail, ...[left, right, mid].map((c) => c[c.length - 1].y1)) + 130;
   let s = svgOpen(W, H, 'fig sankey-fig');
   s += header(W, ctx, `${season}  ·  ${model === 'stuff' ? 'Stuff' : 'PLV'} model outcome probabilities: what each row moves`);
   s += head(XL + NW, top - 22, 'Takes from', 'end', 'h1') + head(XM + NW / 2, top - 22, 'Row', 'middle', 'h2')
@@ -673,8 +707,8 @@ export function sankeySvg(ctx) {
     s += text(XM + NW + 8, (n.y0 + n.y1) / 2 + 4.5, `${f.label}  ${move(f).toFixed(2)}`, `font-size="13" font-weight="700" fill="${C.ink}" stroke="${C.card}" stroke-width="4" paint-order="stroke"`, `fl:${f.k}`);
     s += '</g>';
   });
-  s += text(36, H - 26, `Percentage points of each per-pitch outcome probability against the league; a row's number is the probability it moves. Ribbons under ${MIN_LINK} pp are left out.`, `font-size="11.5" fill="${C.faint}"`, 'foot');
-  s += wordmark(W - 36 - 150, H - 48, 150);
+  s += footnote(`Percentage points of each per-pitch outcome probability against the league; a row's number is the probability it moves. Ribbons under ${MIN_LINK} pp are left out.`, W, H);
+  s += corner(W, H);
   return s + '</svg>';
 }
 export const sankeyLink = (i) => sankeyLinks[i];

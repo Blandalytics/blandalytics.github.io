@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="modulepreload" href="app.js?v=35">
+<link rel="modulepreload" href="app.js?v=38">
 <link rel="modulepreload" href="data.js?v=7">
-<link rel="modulepreload" href="charts.js?v=33">
+<link rel="modulepreload" href="charts.js?v=36">
 <link rel="modulepreload" href="morph.js?v=1">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/hyparquet@1.31.1/+esm">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -67,6 +67,11 @@ button:disabled{opacity:.45; cursor:default}
 .opts input[type=checkbox]{width:16px; height:16px; margin:0; accent-color:var(--accent)}
 .figure{background:#292C42; border-radius:10px; overflow-x:auto; overscroll-behavior-x:contain}
 .figure svg{display:block; width:100%; min-width:900px; height:auto; user-select:none; -webkit-user-select:none}
+/* the drilldown is square and scales to the screen instead of scrolling: as wide as its card
+   allows, and no taller than the viewport */
+#flow{overflow:hidden}
+#flow svg{min-width:0; width:100%; max-width:min(100%, 100svh); margin:0 auto}
+@media (max-width:600px){ #out{padding:12px 8px} }
 .figure .row,.figure [data-pt],.figure .srow,.figure .fnode{cursor:pointer}
 .figure .panel-hit{cursor:crosshair}
 .figure .fx{transition:opacity .12s}
@@ -200,6 +205,6 @@ details[open] summary{margin-bottom:10px}
   </section>
 </main>
 <div id="tip" hidden role="tooltip"></div>
-<script type="module" src="app.js?v=35"></script>
+<script type="module" src="app.js?v=38"></script>
 </body>
 </html>

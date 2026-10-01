@@ -9,8 +9,8 @@ import {
 } from './data.js?v=7';
 import {
   flowSvg, swarmSvg, sankeySvg, svgToPng, nearestPanelPoint, nearestSwarmPoint, sankeyLink,
-  formats, pctile, ord, niceTicks, C,
-} from './charts.js?v=33';
+  formats, pctile, ord, niceTicks, titleRight, C,
+} from './charts.js?v=36';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -228,6 +228,12 @@ function kpiShade(unit) {
   return { t: targetGood(state.target) * (2 * p - 1), floor, n: vals.length, pct: Math.round(100 * p) };
 }
 
+// where the season's longest pitcher name ends at the title size, for the KPI box's place
+function seasonTitleRight() {
+  feats._titleRight ??= titleRight(feats.pitchers.map((p) => p.name));
+  return feats._titleRight;
+}
+
 function render() {
   const info = feats.byUnit.get(`${state.pitcher}|${state.pt}`);
   const unit = units.byKey.get(`${state.pitcher}|${state.pt}|${tableTarget(state.target)}`);
@@ -247,7 +253,7 @@ function render() {
   const arsenal = feats.byId.get(state.pitcher).pts.map((u) => ({ pt: u.pt, n: u.n, unit: units.byKey.get(`${state.pitcher}|${u.pt}|${tableTarget(state.target)}`) }));
   const { pool, label, what } = poolFor(info);
   const perTarget = new Map([...TARGETS, ...RV].map((t) => [t, units.byKey.get(`${state.pitcher}|${state.pt}|${t}`)]));
-  view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, poolWhat: what, minN: Number(el.minN.value), units: perTarget, kpi: kpiShade(unit) };
+  view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, poolWhat: what, minN: Number(el.minN.value), titleRight: seasonTitleRight(), units: perTarget, kpi: kpiShade(unit) };
   // by outcome, the league charts read each row's run value and the unit's predicted rate
   if (byOutcome) {
     Object.assign(view, {
