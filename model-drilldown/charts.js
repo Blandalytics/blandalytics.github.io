@@ -111,15 +111,19 @@ const WM_W = 300;  // the wordmark's width: twice the old 150
 const corner = (W, H) => wordmark(W - 36 - WM_W, H - 20 - WM_W * WM_ASPECT, WM_W);
 // A footer note, wrapped so it stays clear of the wordmark: its last line on H - 26, the lines
 // before it stacked above.
-function footnote(str, W, H) {
+function footLines(str, W, size) {
   const max = W - 36 - WM_W - 24 - 36;
   const lines = [''];
   for (const word of str.split(' ')) {
     const next = lines[lines.length - 1] ? `${lines[lines.length - 1]} ${word}` : word;
-    if (textWidth(next, 11.5) * 0.94 > max && lines[lines.length - 1]) lines.push(word);  // regular, not bold
+    if (textWidth(next, size) * 0.94 > max && lines[lines.length - 1]) lines.push(word);  // regular, not bold
     else lines[lines.length - 1] = next;
   }
-  return lines.map((l, i) => text(36, H - 26 - 16 * (lines.length - 1 - i), l, `font-size="11.5" fill="${C.faint}"`, i ? `foot${i}` : 'foot')).join('');
+  return lines;
+}
+function footnote(str, W, H, size = 11.5) {
+  const lines = footLines(str, W, size), lh = size * 1.4;
+  return lines.map((l, i) => text(36, H - 26 - lh * (lines.length - 1 - i), l, `font-size="${size}" fill="${C.faint}"`, i ? `foot${i}` : 'foot')).join('');
 }
 const text = (x, y, s, attrs = '', m = null) => `<text${m ? ` data-m="${esc(m)}"` : ''} x="${n1(x)}" y="${n1(y)}" ${attrs}>${esc(s)}</text>`;
 const head = (x, y, s, anchor, m, fill = C.faint, size = 11) => text(x, y, s.toUpperCase(), `font-size="${n1(size)}" font-weight="600" letter-spacing="${n1(size * 0.145)}" fill="${fill}" text-anchor="${anchor}"`, m);
@@ -155,7 +159,7 @@ function header(W, ctx, subtitle, kpiX = null) {
   // the KPI box's height (24-122); the subtitle under both
   return text(36, 55, info.pitcher_name, `font-size="44" font-weight="700" fill="${C.teal}"`, 'title')
     + text(36, 105, PITCH_NAMES[info.pt] || info.pt, `font-size="44" font-weight="700" fill="${PITCH_COLORS[info.pt] || C.ink}"`, 'title2')
-    + text(36, 154, subtitle, `font-size="17" fill="${C.muted}"`, 'sub')
+    + text(36, 154, subtitle, `font-size="18" fill="${C.muted}"`, 'sub')
     + `<rect data-m="kbox" x="${n1(kx)}" y="${BY}" width="${n1(bw)}" height="${BH}" rx="${n1(14 * K)}" fill="${C.card}" stroke="${col}" stroke-width="3"/>`
     + lines.map((l, i) => text(lx, base[i], l, lab, `klabel${i}`)).join('')
     + text(vx, cy + 15 * K, val, `font-size="${n1(VS)}" font-weight="700" fill="${col}"`, 'kval');
@@ -167,6 +171,13 @@ function header(W, ctx, subtitle, kpiX = null) {
 
 export const FLOW = { W: 1200, Y0: 232, RH: 46, PH: 380 };  // PH: the league card's least height
 export const FLOW_ASPECT = 16 / 9;  // the drilldown's shape (width / height), on screen and copied
+// The drilldown's least text size. On a desktop the 16:9 figure (2133 wide at 1200 tall) shows at
+// about 1200 px, so 18 units is 10 px on screen.
+const FLOW_MIN = 18;
+// the league card's text sizes: the phone card (drawn at screen px) and, for the drilldown,
+// FLOW_MIN with the title and highlighted line at the waterfall's label size
+const PANEL_TEXT = { title: 15, sub: 11.5, tick: 10, axis: 10.5, zone: 11, hi: 13, line: 11.5, foot: 10.5, none: 12 };
+const flowPanelText = (FS) => ({ title: FS, sub: FLOW_MIN, tick: FLOW_MIN, axis: FLOW_MIN, zone: FLOW_MIN, hi: FS, line: FLOW_MIN, foot: FLOW_MIN, none: FLOW_MIN });
 const HILITE = 0.16;         // the selected row's tint: the same colour and opacity as its funnel
 const CONNECTOR = '#B4BECC';  // the waterfall's bar-to-bar connectors
 
@@ -194,6 +205,13 @@ export function flowSvg(ctx) {
   const f = formats(target);
   const good = targetGood(target);
   const label = targetName(model, target);
+  const note = ctx.model === 'location' ? `${label} points (average 100, SD 15): location's change in each outcome rate (PLV vs Stuff at the same count) × its run value at the count, vs league`
+    : ctx.byOutcome ? `${label} points (average 100, SD 15): each predicted outcome rate × its average run value, vs league`
+    : f.unit === 'pts' ? `${label} points (average 100, SD 15)`
+    : f.unit === 'wOBA' ? `wOBA on contact, per ball in play (league ${woba(unit.league)})`
+    : f.unit === 'runs' ? `Runs per 9 innings (league ERA ${unit.league.toFixed(2)}): season constant − 9 × run value per pitch × modelled pitches per inning`
+      : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%)`;
+  const foot = `${note}; ${ctx.byOutcome ? 'an exact split, no proxy' : 'feature contributions from a proxy model'}. ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`;
   // The body takes whatever height makes H = 1200, or more if the rows, the league card or the
   // arsenal need it. Rows and pitch types are spread evenly
   // over it; bars thicken a little with the spacing (up to 1.5x the card's), and the league
@@ -202,7 +220,9 @@ export function flowSvg(ctx) {
   const S = BB / rows.length;              // row pitch
   const BAR = Math.min(S * 0.6, RH * 0.9);  // bar thickness
   const HIT = Math.min(S - 4, BAR + 30);   // row highlight / hover band
-  const H = Y0 + BB + 118;
+  // under the body: tick labels, the axis label, then the footnote (a line taller per extra line)
+  const footN = footLines(foot, Math.round((Y0 + BB + 130) * FLOW_ASPECT), FLOW_MIN).length;
+  const H = Y0 + BB + 130 + (footN - 1) * FLOW_MIN * 1.4;
   const W = Math.round(H * FLOW_ASPECT);
   // the arsenal's labels (pitch type over value, or both on one line for a thin band) end at
   // AX - 10, at least 20 from the edge: the columns right of them shift over to make room
@@ -274,11 +294,11 @@ export function flowSvg(ctx) {
   const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] ? '' : r.detail);  // Other, Location, Count: name only
   const per = (str) => textWidth(str, 100) / 100;  // width per px of font size
   const room = LX - (HX0 + 14);
-  const FS = Math.max(14.5, Math.min(32,
+  const FS = Math.max(FLOW_MIN + 4, Math.min(32,
     room / Math.max(...rows.map((r) => per(r.label))),
     room / (0.8 * Math.max(1e-9, ...rows.map((r) => per(subOf(r))))),
     (S * 0.82) / 1.9));
-  const SUB = FS * 0.8;
+  const SUB = Math.max(FLOW_MIN, FS * 0.8);
   const ROOM_L = LX + 10, ROOM_R = HX1 - 6;
   for (let iter = 0; iter < 8; iter++) {
     const k = (X1 - X0) / (d1 - d0);
@@ -341,19 +361,19 @@ export function flowSvg(ctx) {
   s += back;
   for (const t of niceTicks(d0, d1, 6)) {
     s += `<line data-m="g:${t}" x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 6}" y2="${Y0 + BB + 4}" stroke="${C.grid}" stroke-width="1" pointer-events="none"/>`;
-    s += text(sx(t), Y0 + BB + 24, f.tick(t), `font-size="12" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
+    s += text(sx(t), Y0 + BB + 4 + 8 + FLOW_MIN, f.tick(t), `font-size="${FLOW_MIN}" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
   }
-  s += text((X0 + X1) / 2, Y0 + BB + 50, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="13" fill="${C.muted}" text-anchor="middle"`, 'xlab');
-  const AY = Y0 - 18;  // the AVG label's and the arrow's centre line
-  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${AY + 8}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.2" pointer-events="none"/>`;
+  s += text((X0 + X1) / 2, Y0 + BB + 4 + 8 + FLOW_MIN + 10 + FLOW_MIN, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="${FLOW_MIN}" fill="${C.muted}" text-anchor="middle"`, 'xlab');
+  const AY = Y0 - 22, AH = FLOW_MIN + 8;  // the AVG label's and the arrow's centre line; its box's height
+  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${AY + AH / 2}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.2" pointer-events="none"/>`;
   s += bars;
   s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${AY}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.6" stroke-dasharray="6 5" pointer-events="none"/>`;
   // "AVG" boxed over the league line, and an arrow in the KPI box's colour from it to the
   // final value (none when the two nearly meet)
   const ax = sx(unit.league), ex = sx(x);
-  const aw = textWidth('AVG', 11) + 14;
-  s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - 9}" width="${n1(aw)}" height="18" rx="4" fill="${C.card}" stroke="#fff" stroke-width="1.2"/>`;
-  s += text(ax, AY + 4, 'AVG', `font-size="11" font-weight="700" letter-spacing=".6" fill="#fff" text-anchor="middle"`, 'avg');
+  const aw = textWidth('AVG', FLOW_MIN) + 20;
+  s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - AH / 2}" width="${n1(aw)}" height="${AH}" rx="5" fill="${C.card}" stroke="#fff" stroke-width="1.4"/>`;
+  s += text(ax, AY + FLOW_MIN * 0.36, 'AVG', `font-size="${FLOW_MIN}" font-weight="700" letter-spacing="1" fill="#fff" text-anchor="middle"`, 'avg');
   const dir = ex >= ax ? 1 : -1, from = ax + dir * (aw / 2 + 3);
   if (dir * (ex - from) > 12) {
     const kcol = kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit));
@@ -365,16 +385,10 @@ export function flowSvg(ctx) {
   // ---- league panel for the selected row ----
   panelPoints = null;
   if (selRow) {
-    s += panel(ctx, selRow.r, PX, py, PW, CARD, pool, poolLabel);
+    s += panel(ctx, selRow.r, PX, py, PW, CARD, pool, poolLabel, flowPanelText(FS));
   }
 
-  const note = ctx.model === 'location' ? `${label} points (average 100, SD 15): location's change in each outcome rate (PLV vs Stuff at the same count) × its run value at the count, vs league`
-    : ctx.byOutcome ? `${label} points (average 100, SD 15): each predicted outcome rate × its average run value, vs league`
-    : f.unit === 'pts' ? `${label} points (average 100, SD 15)`
-    : f.unit === 'wOBA' ? `wOBA on contact, per ball in play (league ${woba(unit.league)})`
-    : f.unit === 'runs' ? `Runs per 9 innings (league ERA ${unit.league.toFixed(2)}): season constant − 9 × run value per pitch × modelled pitches per inning`
-      : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%)`;
-  s += footnote(`${note}; ${ctx.byOutcome ? 'an exact split, no proxy' : 'feature contributions from a proxy model'}. ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`, W, H);
+  s += footnote(foot, W, H, FLOW_MIN);
   s += corner(W, H);
   return s + '</svg>';
 }
@@ -383,7 +397,9 @@ export function flowSvg(ctx) {
 // dependence plot of shap_analysis.py, one dot per pitcher x pitch type rather than per pitch),
 // a binned mean through it, and the pitcher's own dot. Location and Count plot the two inputs
 // against each other instead, coloured by the row's SHAP.
-function panel(ctx, r, x, y, w, h, pool, poolLabel) {
+// T: the text sizes (PANEL_TEXT, or flowPanelText for the drilldown); the lines and the plot's
+// margins follow from them.
+function panel(ctx, r, x, y, w, h, pool, poolLabel, T = PANEL_TEXT) {
   const { unit, info, target } = ctx;
   const val = ctx.rowValueOf || ((k, p) => rowValue(k, p.unit));
   const inp = ctx.rowInputOf || ((k, p) => rowInput(k, p.info));
@@ -397,11 +413,16 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
   // the Location card plots each unit's average location, and says so
   // the text lines sit left on desktop, centred on the phone card (ctx.centred)
   const tx = ctx.centred ? x + w / 2 : x + 16, ta = ctx.centred ? ' text-anchor="middle"' : '';
-  s += text(tx, y + 28, r.k === 'Location' ? 'Average Location' : r.label, `font-size="15" font-weight="700" fill="${C.ink}"${ta}`, 'ptitle');
-  s += text(tx, y + 46, poolLabel.replace(/ \(\d+\+ pitches\)$/, ''), `font-size="11.5" fill="${C.muted}"${ta}`, 'psub');
+  const t1 = y + 13 + T.title, t2 = t1 + T.sub * 1.55;  // title and pool baselines
+  s += text(tx, t1, r.k === 'Location' ? 'Average Location' : r.label, `font-size="${n1(T.title)}" font-weight="700" fill="${C.ink}"${ta}`, 'ptitle');
+  s += text(tx, t2, poolLabel.replace(/ \(\d+\+ pitches\)$/, ''), `font-size="${n1(T.sub)}" fill="${C.muted}"${ta}`, 'psub');
   const grouped = GROUPS[r.k];
   const zone = r.k === 'Location';  // drawn as a strike zone, no axes
-  const px0 = x + (zone ? 20 : 56), px1 = x + w - (zone ? 20 : 16), py0 = y + 64, py1 = y + h - 110;
+  // the lines under the plot, bottom up: the minimum, the input, the highlighted value
+  const b3 = y + h - 8 - T.foot, b2 = b3 - T.line * 1.6 - 1.6, b1 = b2 - T.hi * 1.4 - 1.8;
+  // the plot: under the pool line; over the x ticks and axis label (or the zone's Inside/Away)
+  const tickGap = 5 + T.tick, xlabGap = tickGap + 6 + T.axis * 1.1;
+  const py0 = t2 + 18, py1 = b1 - T.hi * 1.5 - (zone ? 5 + T.zone : xlabGap);
   const pts = [];
   for (const p of pool) {
     const v = val(r.k, p);
@@ -414,7 +435,7 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
     pts.push({ xv, yv, v, id: p.info.pitcher, name: p.info.pitcher_name, pt: p.info.pt, info: p.info, me: p.info.pitcher === info.pitcher && p.info.pt === info.pt });
   }
   const me = pts.find((p) => p.me);
-  if (!me) return s + text(x + 16, y + 90, 'No league units to compare.', `font-size="12" fill="${C.muted}"`, 'pnone');
+  if (!me) return s + text(x + 16, t2 + 18 + T.none * 2, 'No league units to compare.', `font-size="${T.none}" fill="${C.muted}"`, 'pnone');
   // robust extents: 1st-99th percentile, widened to include the pitcher
   const xs = pts.map((p) => p.xv).sort((a, b) => a - b), ys = pts.map((p) => p.yv).sort((a, b) => a - b);
   let xa = Math.min(quantile(xs, 0.01), me.xv), xb = Math.max(quantile(xs, 0.99), me.xv);
@@ -423,6 +444,11 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
   if (ya === yb) { ya -= 0.5; yb += 0.5; }
   const xpad = (xb - xa) * 0.06, ypad = (yb - ya) * 0.08;
   xa -= xpad; xb += xpad; ya -= ypad; yb += ypad;
+  const yfmt = grouped ? (r.k === 'Location' ? (v) => `${Math.round(v * 100)}%` : (v) => `${+v.toFixed(2)}`) : f.tick;
+  // left of the plot: the rotated y label, then the y ticks (as wide as the widest)
+  const ylabX = x + 8 + T.axis * 0.75;
+  const ytw = Math.max(0, ...niceTicks(ya, yb, 4).map((t) => textWidth(yfmt(t), T.tick) * 0.94));
+  const px0 = zone ? x + 20 : n1(ylabX + T.axis * 0.4 + 8 + ytw + 6), px1 = x + w - (zone ? 20 : 16);
   const ZW = 17 / 12, ZASPECT = 17 / 22;  // the zone's width (ft) and width / height
   if (zone) {
     // a frame round the zone and the league's 1st-99th percentile of locations, at the zone's
@@ -440,20 +466,19 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
   const sxr = lin(xa, xb, px0, px1), syr = lin(ya, yb, py1, py0);
   const cx = (v) => n1(Math.max(px0, Math.min(px1, sxr(v)))), cy = (v) => n1(Math.max(py0, Math.min(py1, syr(v))));
   const xfmt = (v) => (r.k === 'Other' ? String(Math.round(10 ** v)) : PCT.has(r.k) ? `${Math.round(v * 100)}%` : r.k === 'lefty' ? (Math.round(v) ? 'LHP' : 'RHP') : `${+v.toFixed(2)}`);
-  const yfmt = grouped ? (r.k === 'Location' ? (v) => `${Math.round(v * 100)}%` : (v) => `${+v.toFixed(2)}`) : f.tick;
   for (const t of zone ? [] : niceTicks(ya, yb, 4)) {
     s += `<line data-m="pg:${t}" x1="${px0}" x2="${px1}" y1="${n1(syr(t))}" y2="${n1(syr(t))}" stroke="${C.grid}"/>`;
-    s += text(px0 - 6, syr(t) + 3.5, yfmt(t), `font-size="10" fill="${C.faint}" text-anchor="end"`, `py:${t}`);
+    s += text(px0 - 6, syr(t) + T.tick * 0.35, yfmt(t), `font-size="${T.tick}" fill="${C.faint}" text-anchor="end"`, `py:${t}`);
   }
   const xticks = zone ? [] : r.k === 'lefty' ? [0, 1] : niceTicks(xa, xb, 4);
-  for (const t of xticks) s += text(sxr(t), py1 + 15, xfmt(t), `font-size="10" fill="${C.faint}" text-anchor="middle"`, `px:${t}`);
+  for (const t of xticks) s += text(sxr(t), py1 + tickGap, xfmt(t), `font-size="${T.tick}" fill="${C.faint}" text-anchor="middle"`, `px:${t}`);
   if (!grouped && ya < 0 && yb > 0) s += `<line data-m="pzero" x1="${px0}" x2="${px1}" y1="${n1(syr(0))}" y2="${n1(syr(0))}" stroke="#fff" stroke-opacity=".5"/>`;
   const xl = grouped ? (r.k === 'Location' ? 'Horizontal location (ft, + = away)' : 'Balls before the pitch')
     : r.k === 'Other' ? 'Pitches (log scale)' : ctx.axisOf ? ctx.axisOf(r.k) : AXIS[r.k] || LABELS[r.k];
-  if (!zone) s += text((px0 + px1) / 2, py1 + 32, xl, `font-size="10.5" fill="${C.muted}" text-anchor="middle"`, 'pxlab');
+  if (!zone) s += text((px0 + px1) / 2, py1 + xlabGap, xl, `font-size="${T.axis}" fill="${C.muted}" text-anchor="middle"`, 'pxlab');
   const yl = grouped ? (r.k === 'Location' ? 'Vertical location (zone height)' : 'Strikes before the pitch')
     : r.k === 'Other' ? `Residual (${f.unit})` : ctx.byOutcome ? `Run value (${f.unit})` : `SHAP (${f.unit})`;
-  if (!zone) s += `<text data-m="pylab" transform="translate(${x + 16},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="10.5" fill="${C.muted}" text-anchor="middle">${esc(yl)}</text>`;
+  if (!zone) s += `<text data-m="pylab" transform="translate(${n1(ylabX)},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="${T.axis}" fill="${C.muted}" text-anchor="middle">${esc(yl)}</text>`;
 
   // dots, keyed by unit so they glide from one row's chart to the next
   const vs = pts.map((p) => p.v).sort((a, b) => a - b);
@@ -483,15 +508,15 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
   if (zone) {
     const zl = sxr(-ZW / 2), zr = sxr(ZW / 2), zt = syr(1), zb = syr(0);
     s += `<rect data-m="zone" x="${n1(zl)}" y="${n1(zt)}" width="${n1(zr - zl)}" height="${n1(zb - zt)}" fill="none" stroke="#fff" stroke-width="1.6" pointer-events="none"/>`;
-    s += text(zl, zb + 16, 'Inside', `font-size="11" font-weight="600" fill="${C.muted}" text-anchor="start" pointer-events="none"`, 'zin');
-    s += text(zr, zb + 16, 'Away', `font-size="11" font-weight="600" fill="${C.muted}" text-anchor="end" pointer-events="none"`, 'zaway');
+    s += text(zl, zb + 5 + T.zone, 'Inside', `font-size="${T.zone}" font-weight="600" fill="${C.muted}" text-anchor="start" pointer-events="none"`, 'zin');
+    s += text(zr, zb + 5 + T.zone, 'Away', `font-size="${T.zone}" font-weight="600" fill="${C.muted}" text-anchor="end" pointer-events="none"`, 'zaway');
   }
   s += `<circle data-m="pme" cx="${cx(me.xv)}" cy="${cy(me.yv)}" r="6.5" fill="${mcol}" stroke="#fff" stroke-width="2"/>`;
   s += `<rect class="panel-hit" x="${px0 - 6}" y="${n1(py0 - 6)}" width="${px1 - px0 + 12}" height="${py1 - py0 + 12}" fill="transparent"/>`;
 
   // the numbers under it
   const rank = pctile(vs, me.v);
-  s += text(tx, y + h - 58, `${f.d(own)} ${f.unit}${r.k === 'Other' ? ' residual' : ''} · ${ord(rank)} percentile`, `font-size="13" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
+  s += text(tx, b1, `${f.d(own)} ${f.unit}${r.k === 'Other' ? ' residual' : ''} · ${ord(rank)} percentile`, `font-size="${n1(T.hi)}" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
   let line2 = r.detail || '';
   if (grouped) line2 = '';
   else if (r.k !== 'Other' && r.k !== 'lefty') {
@@ -501,9 +526,9 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
       : `${r.k === 'baseline' ? 'Same-hand share' : 'Input'} ${r.k === 'baseline' ? xfmt(xin) : r.detail}`;
     if (Number.isFinite(xin)) line2 = `${what} · ${ord(pctile(pts.map((p) => p.xv), xin))} percentile`;
   }
-  s += text(tx, y + h - 38, line2, `font-size="11.5" fill="${C.muted}"${ta}`, 'pl2');
+  s += text(tx, b2, line2, `font-size="${T.line}" fill="${C.muted}"${ta}`, 'pl2');
   const minN = ctx.minN ?? 1;
-  s += text(tx, y + h - 18, `Min ${minN} pitch${minN === 1 ? '' : 'es'} thrown`, `font-size="10.5" fill="${C.faint}"${ta}`, 'pl3');
+  s += text(tx, b3, `Min ${minN} pitch${minN === 1 ? '' : 'es'} thrown`, `font-size="${T.foot}" fill="${C.faint}"${ta}`, 'pl3');
   panelPoints = { pts: pts.map((p) => ({ ...p, fx: cx(p.xv), fy: cy(p.yv) })) };
   return s;
 }
