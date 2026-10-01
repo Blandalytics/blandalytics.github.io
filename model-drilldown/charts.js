@@ -389,16 +389,18 @@ export function flowSvg(ctx) {
     s += text(sx(t), Y0 + BB + 4 + 8 + FLOW_MIN, f.tick(t), `font-size="${FLOW_MIN}" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
   }
   s += text((X0 + X1) / 2, Y0 + BB + 4 + 8 + FLOW_MIN + 10 + FLOW_MIN, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="${FLOW_MIN}" fill="${C.muted}" text-anchor="middle"`, 'xlab');
-  const AY = Y0 - 22, AH = FLOW_MIN + 8;  // the AVG label's and the arrow's centre line; its box's height
-  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${AY + AH / 2}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.2" pointer-events="none"/>`;
+  // the AVG label at the feature labels' size (FS); its box's height, and its and the arrow's
+  // centre line, the box's bottom 9 over the body
+  const AH = n1(FS * 1.2 + 6), AY = n1(Y0 - 9 - AH / 2);
+  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${n1(AY + AH / 2)}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.2" pointer-events="none"/>`;
   s += bars;
   s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${AY}" y2="${Y0 + BB + 4}" stroke="#fff" stroke-width="1.6" stroke-dasharray="6 5" pointer-events="none"/>`;
   // "AVG" boxed over the league line, and an arrow in the KPI box's colour from it to the
   // final value (none when the two nearly meet)
   const ax = sx(unit.league), ex = sx(x);
-  const aw = textWidth('AVG', FLOW_MIN) + 20;
-  s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - AH / 2}" width="${n1(aw)}" height="${AH}" rx="5" fill="${C.card}" stroke="#fff" stroke-width="1.4"/>`;
-  s += text(ax, AY + FLOW_MIN * 0.36, 'AVG', `font-size="${FLOW_MIN}" font-weight="700" letter-spacing="1" fill="#fff" text-anchor="middle"`, 'avg');
+  const aw = textWidth('AVG', FS) + FS * 1.1;
+  s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${n1(AY - AH / 2)}" width="${n1(aw)}" height="${AH}" rx="${n1(FS * 0.2)}" fill="${C.card}" stroke="#fff" stroke-width="1.4"/>`;
+  s += text(ax, AY + FS * 0.36, 'AVG', `font-size="${n1(FS)}" font-weight="700" letter-spacing="${n1(FS * 0.05)}" fill="#fff" text-anchor="middle"`, 'avg');
   const dir = ex >= ax ? 1 : -1, from = ax + dir * (aw / 2 + 3);
   if (dir * (ex - from) > 24) {  // line 5 wide, head 20 long and 24 across
     const kcol = kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit));
