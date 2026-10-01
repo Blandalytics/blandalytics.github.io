@@ -400,10 +400,10 @@ export function flowSvg(ctx) {
   s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - AH / 2}" width="${n1(aw)}" height="${AH}" rx="5" fill="${C.card}" stroke="#fff" stroke-width="1.4"/>`;
   s += text(ax, AY + FLOW_MIN * 0.36, 'AVG', `font-size="${FLOW_MIN}" font-weight="700" letter-spacing="1" fill="#fff" text-anchor="middle"`, 'avg');
   const dir = ex >= ax ? 1 : -1, from = ax + dir * (aw / 2 + 3);
-  if (dir * (ex - from) > 12) {
+  if (dir * (ex - from) > 24) {  // line 5 wide, head 20 long and 24 across
     const kcol = kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit));
-    s += `<line data-m="arrow" x1="${n1(from)}" x2="${n1(ex - dir * 8)}" y1="${AY}" y2="${AY}" stroke="${kcol}" stroke-width="2.5" stroke-linecap="round"/>`;
-    s += `<path data-m="arrowhead" d="M${ex},${AY}L${n1(ex - dir * 10)},${AY - 6}L${n1(ex - dir * 10)},${AY + 6}Z" fill="${kcol}"/>`;
+    s += `<line data-m="arrow" x1="${n1(from)}" x2="${n1(ex - dir * 16)}" y1="${AY}" y2="${AY}" stroke="${kcol}" stroke-width="5" stroke-linecap="round"/>`;
+    s += `<path data-m="arrowhead" d="M${ex},${AY}L${n1(ex - dir * 20)},${AY - 12}L${n1(ex - dir * 20)},${AY + 12}Z" fill="${kcol}"/>`;
   }
   s += front;
 
