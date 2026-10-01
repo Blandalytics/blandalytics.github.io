@@ -510,8 +510,10 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T = PANEL_TEXT) {
   const xl = grouped ? (r.k === 'Location' ? 'Horizontal location (ft, + = away)' : 'Balls before the pitch')
     : r.k === 'Other' ? 'Pitches (log scale)' : ctx.axisOf ? ctx.axisOf(r.k) : AXIS[r.k] || LABELS[r.k];
   if (!zone) s += text((px0 + px1) / 2, py1 + xlabGap, xl, `font-size="${T.axis}" fill="${C.muted}" text-anchor="middle"`, 'pxlab');
+  // the y axis is the row's contribution to the target, so it is named for the target ("Stuff+",
+  // "SwStr%", "ERA", "wOBAcon"); Count plots its strikes there instead
   const yl = grouped ? (r.k === 'Location' ? 'Vertical location (zone height)' : 'Strikes before the pitch')
-    : r.k === 'Other' ? `Residual (${f.unit})` : ctx.byOutcome ? `Run value (${f.unit})` : `SHAP (${f.unit})`;
+    : isPlus(target) ? MODELS[ctx.model].title : TARGET_NAMES[target];
   if (!zone) s += `<text data-m="pylab" transform="translate(${n1(ylabX)},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="${T.axis}" fill="${C.muted}" text-anchor="middle">${esc(yl)}</text>`;
 
   // dots, keyed by unit so they glide from one row's chart to the next
