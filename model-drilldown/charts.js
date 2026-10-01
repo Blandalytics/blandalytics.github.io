@@ -574,7 +574,7 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T) {
     s += text(tx, b2a, `Residual ${f.d(own)} ${tname} · ${ord(rank)} percentile`, `font-size="${T.line}" fill="${C.muted}"${ta}`, 'pl2a');
   } else {
     // shrunk only if it would run past the card's edge
-    const hi = `${f.d(own)} ${tname} · ${ord(rank)} percentile`;
+    const hi = `${f.d(own)} ${tname} (${ord(rank)} percentile)`;
     const hs = Math.min(T.hi, (T.hi * (w - 32)) / textWidth(hi, T.hi));
     s += text(tx, b1, hi, `font-size="${n1(hs)}" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
   }
