@@ -589,6 +589,13 @@ PLV+, which adds location and count) and a target: the plus score split by featu
 (*Stuff ERA* / *PLV ERA*), any of the nine outcome probabilities, or wOBAcon. The controls are Swing Profiles'. Jacob Misiorowski's 2026 four-seamer
 loads on arrival.
 
+*Location+* (the third model) is PLV minus Stuff at the actual count, from
+`units_location_<season>.parquet`. It is split by outcome only, so its one target is *Location+ (outcomes)*:
+the nine `rv_<outcome>` rows are location's change in each outcome's probability × its run value at
+the pitch's count, and sum exactly to Location+ − 100. The sub-labels give that change (`dp_<outcome>`,
+pp, vs the league's), and the league card and beeswarm plot each run value against it. There is no
+Sankey for Location (it has no feature SHAP).
+
 *Stuff ERA* / *PLV ERA* is the tables' `era` target (`model_era.py --by pt`, runs per 9: a season
 constant − 9 × run value per pitch × modelled pitches per inning), split by feature like the other
 targets. Its reference line is the season's league ERA, lower is better (gold), rows under 0.05 runs

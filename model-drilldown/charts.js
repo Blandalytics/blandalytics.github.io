@@ -16,7 +16,7 @@
 import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, OUTCOME_NAMES, OUTCOME_COLORS, TARGET_NAMES, LABELS, AXIS, PCT,
   GROUPS, MODELS, isPlus, targetGood, targetName, rowValue, rowInput, allRows, sgn,
-} from './data.js?v=7';
+} from './data.js?v=8';
 
 export const C = {
   card: '#292C42', raise: '#30344F', ink: '#E3E9F1', muted: '#8A96A6', faint: '#6B7684', grid: '#3A3E5A',
@@ -342,7 +342,8 @@ export function flowSvg(ctx) {
     s += panel(ctx, selRow.r, PX, py, W - 36 - PX, CARD, pool, poolLabel);
   }
 
-  const note = ctx.byOutcome ? `${label} points (average 100, SD 15): each predicted outcome rate × its average run value, vs league`
+  const note = ctx.model === 'location' ? `${label} points (average 100, SD 15): location's change in each outcome rate (PLV vs Stuff at the same count) × its run value at the count, vs league`
+    : ctx.byOutcome ? `${label} points (average 100, SD 15): each predicted outcome rate × its average run value, vs league`
     : f.unit === 'pts' ? `${label} points (average 100, SD 15)`
     : f.unit === 'wOBA' ? `wOBA on contact, per ball in play (league ${woba(unit.league)})`
     : f.unit === 'runs' ? `Runs per 9 innings (league ERA ${unit.league.toFixed(2)}): season constant − 9 × run value per pitch × modelled pitches per inning`
@@ -470,7 +471,7 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
   else if (r.k !== 'Other' && r.k !== 'lefty') {
     const xin = inp(r.k, { unit, info });
     const what = ctx.byOutcome
-      ? (r.k === 'leverage' ? `Strikes − balls ${sgn(xin, 2)}` : `Predicted rate ${xin.toFixed(1)}%`)
+      ? (r.k === 'leverage' ? `Strikes − balls ${sgn(xin, 2)}` : ctx.model === 'location' ? `Rate change ${sgn(xin, 1)} pp` : `Predicted rate ${xin.toFixed(1)}%`)
       : `${r.k === 'baseline' ? 'Same-hand share' : 'Input'} ${r.k === 'baseline' ? xfmt(xin) : r.detail}`;
     if (Number.isFinite(xin)) line2 = `${what} · ${ord(pctile(pts.map((p) => p.xv), xin))} percentile`;
   }
@@ -626,7 +627,8 @@ export function phoneFlowSvg(ctx, W) {
   s += front;
 
   // ---- footer note, then the wordmark ----
-  const note = ctx.byOutcome ? `${label} points (average 100, SD 15): each predicted outcome rate × its average run value, vs league; an exact split, no proxy.`
+  const note = ctx.model === 'location' ? `${label} points (average 100, SD 15): location's change in each outcome rate (PLV vs Stuff at the same count) × its run value at the count, vs league; an exact split, no proxy.`
+    : ctx.byOutcome ? `${label} points (average 100, SD 15): each predicted outcome rate × its average run value, vs league; an exact split, no proxy.`
     : f.unit === 'pts' ? `${label} points (average 100, SD 15); feature contributions from a proxy model.`
     : f.unit === 'wOBA' ? `wOBA on contact, per ball in play (league ${woba(unit.league)}); feature contributions from a proxy model.`
     : f.unit === 'runs' ? `Runs per 9 innings (league ERA ${unit.league.toFixed(2)}); feature contributions from a proxy model.`
@@ -761,7 +763,7 @@ export function swarmSvg(ctx) {
   });
   // colour key
   const kx = L, ky = top + BH + 78;
-  s += text(kx - 16, ky + 4, ctx.byOutcome ? 'Unit\'s predicted rate' : 'Unit\'s mean input', `font-size="11.5" fill="${C.muted}" text-anchor="end"`, 'k1');
+  s += text(kx - 16, ky + 4, ctx.model === 'location' ? 'Unit\'s rate change' : ctx.byOutcome ? 'Unit\'s predicted rate' : 'Unit\'s mean input', `font-size="11.5" fill="${C.muted}" text-anchor="end"`, 'k1');
   for (let i = 0; i <= 20; i++) s += `<rect data-m="kc:${i}" x="${kx + i * 6}" y="${ky - 5}" width="6.5" height="10" fill="${valueColor(i / 20)}"/>`;
   s += text(kx + 134, ky + 4, 'low → high   (grey: no single input)', `font-size="11.5" fill="${C.muted}"`, 'k2');
   s += `<path data-m="kd" d="M${kx + 400},${ky - 11}L${kx + 406},${ky}L${kx + 400},${ky + 11}L${kx + 394},${ky}Z" fill="${C.gold}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>`;
