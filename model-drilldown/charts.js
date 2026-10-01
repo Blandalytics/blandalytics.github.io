@@ -364,10 +364,14 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
   const good = targetGood(target);
   // square on the left, where the funnel meets it edge to edge; rounded on the right
   const rr = 12, y0 = n1(y), y1 = n1(y + h), x1 = x + w;
-  let s = `<path data-m="pbox" d="M${x},${y0}L${x1 - rr},${y0}Q${x1},${y0} ${x1},${n1(y0 + rr)}L${x1},${n1(y1 - rr)}Q${x1},${y1} ${x1 - rr},${y1}L${x},${y1}Z" fill="${C.raise}"/>`;
+  // (the phone card stands alone, so it is rounded all round)
+  let s = ctx.centred ? `<rect data-m="pbox" x="${x}" y="${y0}" width="${w}" height="${n1(h)}" rx="${rr}" fill="${C.raise}"/>`
+    : `<path data-m="pbox" d="M${x},${y0}L${x1 - rr},${y0}Q${x1},${y0} ${x1},${n1(y0 + rr)}L${x1},${n1(y1 - rr)}Q${x1},${y1} ${x1 - rr},${y1}L${x},${y1}Z" fill="${C.raise}"/>`;
   // the Location card plots each unit's average location, and says so
-  s += text(x + 16, y + 28, r.k === 'Location' ? 'Average Location' : r.label, `font-size="15" font-weight="700" fill="${C.ink}"`, 'ptitle');
-  s += text(x + 16, y + 46, poolLabel.replace(/ \(\d+\+ pitches\)$/, ''), `font-size="11.5" fill="${C.muted}"`, 'psub');
+  // the text lines sit left on desktop, centred on the phone card (ctx.centred)
+  const tx = ctx.centred ? x + w / 2 : x + 16, ta = ctx.centred ? ' text-anchor="middle"' : '';
+  s += text(tx, y + 28, r.k === 'Location' ? 'Average Location' : r.label, `font-size="15" font-weight="700" fill="${C.ink}"${ta}`, 'ptitle');
+  s += text(tx, y + 46, poolLabel.replace(/ \(\d+\+ pitches\)$/, ''), `font-size="11.5" fill="${C.muted}"${ta}`, 'psub');
   const grouped = GROUPS[r.k];
   const zone = r.k === 'Location';  // drawn as a strike zone, no axes
   const px0 = x + (zone ? 20 : 56), px1 = x + w - (zone ? 20 : 16), py0 = y + 64, py1 = y + h - 110;
@@ -460,7 +464,7 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
 
   // the numbers under it
   const rank = pctile(vs, me.v);
-  s += text(x + 16, y + h - 58, `${f.d(own)} ${f.unit}${r.k === 'Other' ? ' residual' : ''} · ${ord(rank)} percentile`, `font-size="13" font-weight="700" fill="${mcol}"`, 'pl1');
+  s += text(tx, y + h - 58, `${f.d(own)} ${f.unit}${r.k === 'Other' ? ' residual' : ''} · ${ord(rank)} percentile`, `font-size="13" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
   let line2 = r.detail || '';
   if (grouped) line2 = '';
   else if (r.k !== 'Other' && r.k !== 'lefty') {
@@ -470,9 +474,9 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel) {
       : `${r.k === 'baseline' ? 'Same-hand share' : 'Input'} ${r.k === 'baseline' ? xfmt(xin) : r.detail}`;
     if (Number.isFinite(xin)) line2 = `${what} · ${ord(pctile(pts.map((p) => p.xv), xin))} percentile`;
   }
-  s += text(x + 16, y + h - 38, line2, `font-size="11.5" fill="${C.muted}"`, 'pl2');
+  s += text(tx, y + h - 38, line2, `font-size="11.5" fill="${C.muted}"${ta}`, 'pl2');
   const minN = ctx.minN ?? 1;
-  s += text(x + 16, y + h - 18, `Min ${minN} pitch${minN === 1 ? '' : 'es'} thrown`, `font-size="10.5" fill="${C.faint}"`, 'pl3');
+  s += text(tx, y + h - 18, `Min ${minN} pitch${minN === 1 ? '' : 'es'} thrown`, `font-size="10.5" fill="${C.faint}"${ta}`, 'pl3');
   panelPoints = { pts: pts.map((p) => ({ ...p, fx: cx(p.xv), fy: cy(p.yv) })) };
   return s;
 }
@@ -629,10 +633,10 @@ export function phoneFlowSvg(ctx, W) {
     : `Percentage points of the per-pitch probability (league ${unit.league.toFixed(1)}%); feature contributions from a proxy model.`;
   const lines = wrapLines(`${note} ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`, PHONE_MIN, W - 2 * P);
   let fy = Y0 + BH + 54;
-  lines.forEach((l, i) => { s += text(P, fy + i * 15, l, `font-size="${PHONE_MIN}" fill="${C.faint}"`, i ? `foot${i}` : 'foot'); });
+  lines.forEach((l, i) => { s += text(W / 2, fy + i * 15, l, `font-size="${PHONE_MIN}" fill="${C.faint}" text-anchor="middle"`, i ? `foot${i}` : 'foot'); });
   fy += (lines.length - 1) * 15;
   const ww = 130;
-  s += wordmark(W - P - ww, fy + 12, ww);
+  s += wordmark((W - ww) / 2, fy + 12, ww);  // centred, like everything on the phone
   const H = fy + 12 + ww * WM_ASPECT + 12;
   s = s.replace(`viewBox="0 0 ${W} 100"`, `viewBox="0 0 ${W} ${n1(H)}"`).replace('height="100" rx="10"', `height="${n1(H)}" rx="10"`);
   return s + '</svg>';
@@ -645,7 +649,7 @@ export function phoneCardSvg(ctx, screenW) {
   if (!r) return null;
   const w = Math.floor(screenW / 1.1), h = Math.round(w * 1.3);
   let s = svgOpen(w, h, 'fig card-fig');
-  s += panel(ctx, r, 0, 0, w, h, ctx.pool, ctx.poolLabel);
+  s += panel({ ...ctx, centred: true }, r, 0, 0, w, h, ctx.pool, ctx.poolLabel);
   return s + '</svg>';
 }
 
