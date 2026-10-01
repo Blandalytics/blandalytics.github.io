@@ -53,10 +53,12 @@ export function kpiColor(t) {
   return `rgb(${to.map((c) => Math.round(255 + (c - 255) * a)).join(',')})`;
 }
 
+// The title's sizes: the pitcher's name over the pitch type
+const NAME_SIZE = 55, PT_SIZE = 44;
 // Where the longest title line ends: the longest of these names, or of the pitch type names
-// (the title's second line), at the title's 44 px.
+// (the title's second line).
 export function titleRight(names) {
-  return 36 + Math.max(...names.map((n) => textWidth(n, 44)), ...Object.values(PITCH_NAMES).map((n) => textWidth(n, 44)));
+  return 36 + Math.max(...names.map((n) => textWidth(n, NAME_SIZE)), ...Object.values(PITCH_NAMES).map((n) => textWidth(n, PT_SIZE)));
 }
 
 // the KPI box's target on one line: "Stuff+", "In-Play Out% (PLV)", "ERA (Stuff)"
@@ -109,10 +111,10 @@ const svgOpen = (W, H, cls) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox=
 const wordmark = (x, y, w) => `<image class="wordmark" data-m="wm" href="${WORDMARK_URL}" x="${x}" y="${n1(y)}" width="${w}" height="${n1(w * WM_ASPECT)}"/>`;
 const WM_W = 300;  // the wordmark's width: twice the old 150
 const corner = (W, H) => wordmark(W - 36 - WM_W, H - 20 - WM_W * WM_ASPECT, WM_W);
-// A footer note, wrapped so it stays clear of the wordmark: its last line on H - 26, the lines
-// before it stacked above.
-function footLines(str, W, size) {
-  const max = W - 36 - WM_W - 24 - 36;
+// A footer note, wrapped so it stays clear of the wordmark (whose left edge is wmX, by default
+// in the corner): its last line on H - 26, the lines before it stacked above.
+function footLines(str, W, size, wmX = W - 36 - WM_W) {
+  const max = wmX - 24 - 36;
   const lines = [''];
   for (const word of str.split(' ')) {
     const next = lines[lines.length - 1] ? `${lines[lines.length - 1]} ${word}` : word;
@@ -121,8 +123,8 @@ function footLines(str, W, size) {
   }
   return lines;
 }
-function footnote(str, W, H, size = 11.5) {
-  const lines = footLines(str, W, size), lh = size * 1.4;
+function footnote(str, W, H, size = 11.5, wmX = W - 36 - WM_W) {
+  const lines = footLines(str, W, size, wmX), lh = size * 1.4;
   return lines.map((l, i) => text(36, H - 26 - lh * (lines.length - 1 - i), l, `font-size="${size}" fill="${C.faint}"`, i ? `foot${i}` : 'foot')).join('');
 }
 const text = (x, y, s, attrs = '', m = null) => `<text${m ? ` data-m="${esc(m)}"` : ''} x="${n1(x)}" y="${n1(y)}" ${attrs}>${esc(s)}</text>`;
@@ -155,10 +157,10 @@ function header(W, ctx, subtitle, kpiX = null) {
   const lx = kx + pad + lw / 2, vx = kx + pad + lw + gap;
   const base = one ? [cy + 15 * K] : [cy - 3.5 * K, cy + 18.5 * K];  // one line shares the value's baseline
   const lab = `font-size="${n1(size)}" font-weight="700" fill="#fff" text-anchor="middle"`;
-  // the title: the pitcher in teal over the pitch type in its own colour, two lines spanning
-  // the KPI box's height (24-122); the subtitle under both
-  return text(36, 55, info.pitcher_name, `font-size="44" font-weight="700" fill="${C.teal}"`, 'title')
-    + text(36, 105, PITCH_NAMES[info.pt] || info.pt, `font-size="44" font-weight="700" fill="${PITCH_COLORS[info.pt] || C.ink}"`, 'title2')
+  // the title: the pitcher in teal (a quarter larger) over the pitch type in its own colour, from
+  // the KPI box's top (24); the subtitle close under both, on the box's bottom (158)
+  return text(36, 63, info.pitcher_name, `font-size="${NAME_SIZE}" font-weight="700" fill="${C.teal}"`, 'title')
+    + text(36, 115, PITCH_NAMES[info.pt] || info.pt, `font-size="${PT_SIZE}" font-weight="700" fill="${PITCH_COLORS[info.pt] || C.ink}"`, 'title2')
     + text(36, 154, subtitle, `font-size="18" fill="${C.muted}"`, 'sub')
     + `<rect data-m="kbox" x="${n1(kx)}" y="${BY}" width="${n1(bw)}" height="${BH}" rx="${n1(14 * K)}" fill="${C.card}" stroke="${col}" stroke-width="3"/>`
     + lines.map((l, i) => text(lx, base[i], l, lab, `klabel${i}`)).join('')
@@ -219,10 +221,6 @@ export function flowSvg(ctx) {
   const BB = Math.max(rows.length * RH, PH, arsenal.length * 22, FLOW.W - Y0 - 118);
   const S = BB / rows.length;              // row pitch
   const BAR = Math.min(S * 0.6, RH * 0.9);  // bar thickness
-  // under the body: tick labels, the axis label, then the footnote (a line taller per extra line)
-  const footN = footLines(foot, Math.round((Y0 + BB + 130) * FLOW_ASPECT), FLOW_MIN).length;
-  const H = Y0 + BB + 130 + (footN - 1) * FLOW_MIN * 1.4;
-  const W = Math.round(H * FLOW_ASPECT);
   // the arsenal's labels (pitch type over value, or both on one line for a thin band) end at
   // AX - 10, at least 20 from the edge: the columns right of them shift over to make room
   const armW = Math.max(0, ...arsenal.map((p) => {
@@ -230,13 +228,23 @@ export function flowSvg(ctx) {
     return Math.max(textWidth(p.pt, 28), textWidth(v, 24), textWidth(`${p.pt} ${v}`, 22));
   }));
   const AX = Math.max(94, Math.ceil(30 + armW)), shift = AX - 94;
-  const extra = W - FLOW.W - shift;
   // columns, at the old square's 1200: arsenal labels | bands 94-108 | ribbon | row names (end 440)
   // | bars 452-832 | ribbon | panel 888-1164. Of the extra width, a quarter goes to the names, a
-  // third or so each to the bars and the card, and the rest to the funnel.
-  const LX = n1(440 + shift + 0.25 * extra), X0 = LX + 12, X1 = n1(832 + shift + 0.6 * extra);
-  const HX0 = 208 + shift, HX1 = X1 + 16;
-  const PX = n1(HX1 + 40 + 0.05 * extra), PW = W - 36 - PX;
+  // third or so each to the bars and the card, and the rest to the funnel. The wordmark is
+  // centred under the card (wmX: its left edge).
+  const columns = (W) => {
+    const extra = W - FLOW.W - shift;
+    const LX = n1(440 + shift + 0.25 * extra), X1 = n1(832 + shift + 0.6 * extra), HX1 = X1 + 16;
+    const PX = n1(HX1 + 40 + 0.05 * extra), PW = W - 36 - PX;
+    return { LX, X0: LX + 12, X1, HX0: 208 + shift, HX1, PX, PW, wmX: n1(PX + PW / 2 - WM_W / 2) };
+  };
+  // under the body: tick labels, the axis label, then the footnote (a line taller per extra line;
+  // counted at the one-line height's width, where the wordmark sits furthest left)
+  const H1 = Y0 + BB + 130;
+  const footN = footLines(foot, Math.round(H1 * FLOW_ASPECT), FLOW_MIN, columns(Math.round(H1 * FLOW_ASPECT)).wmX).length;
+  const H = H1 + (footN - 1) * FLOW_MIN * 1.4;
+  const W = Math.round(H * FLOW_ASPECT);
+  const { LX, X0, X1, HX0, HX1, PX, PW, wmX } = columns(W);
   let s = svgOpen(W, H, 'fig flow-fig');
   s += header(W, ctx, `${season}; Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${kpiName(model, target)}`, PX + PW / 2);
   const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';  // the selected row and its funnel
@@ -402,8 +410,8 @@ export function flowSvg(ctx) {
     s += panel(ctx, selRow.r, PX, py, PW, CARD, pool, poolLabel, flowPanelText(FS));
   }
 
-  s += footnote(foot, W, H, FLOW_MIN);
-  s += corner(W, H);
+  s += footnote(foot, W, H, FLOW_MIN, wmX);
+  s += wordmark(wmX, H - 20 - WM_W * WM_ASPECT, WM_W);
   return s + '</svg>';
 }
 
