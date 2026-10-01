@@ -564,7 +564,9 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T) {
   s += `<rect class="panel-hit" x="${px0 - 6}" y="${n1(py0 - 6)}" width="${px1 - px0 + 12}" height="${py1 - py0 + 12}" fill="transparent"/>`;
 
   // the numbers under it
-  const rank = pctile(vs, me.v);
+  // ranked in the pitcher's favour: the change that helps the pitcher most is the 100th percentile, so a
+  // big drop in ERA or wOBAcon ranks high
+  const rank = pctile(vs.map((v) => good * v).sort((a, b) => a - b), good * me.v);
   // Other: the row's full value (its folded rows and the residual), as its bar shows it; the
   // plot and the percentile are the residual's
   if (r.k === 'Other') {
@@ -572,7 +574,7 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T) {
     s += text(tx, b2a, `Residual ${f.d(own)} ${tname} · ${ord(rank)} percentile`, `font-size="${T.line}" fill="${C.muted}"${ta}`, 'pl2a');
   } else {
     // shrunk only if it would run past the card's edge
-    const hi = `${f.d(own)} ${tname} · ${ord(rank)} percentile`;
+    const hi = `${f.d(own)} ${tname} (${ord(rank)} percentile)`;
     const hs = Math.min(T.hi, (T.hi * (w - 32)) / textWidth(hi, T.hi));
     s += text(tx, b1, hi, `font-size="${n1(hs)}" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
   }
