@@ -1,5 +1,5 @@
 {
- "built": "2026-09-30T16:18:29Z",
+ "built": "2026-10-01T16:55:38Z",
  "games": {
   "822678": {
    "away": "New York Mets",
@@ -34007,6 +34007,34 @@
    "title": "D-backs 9, Tigers 6",
    "venue": "Chase Field"
   },
+  "849841": {
+   "away": "Philadelphia Phillies",
+   "away_abbr": "PHI",
+   "away_nick": "Phillies",
+   "away_r": 4,
+   "date": "2026-09-30",
+   "file": "games/849841.html",
+   "home": "Atlanta Braves",
+   "home_abbr": "ATL",
+   "home_nick": "Braves",
+   "home_r": 3,
+   "title": "Phillies 4, Braves 3",
+   "venue": "Truist Park"
+  },
+  "849842": {
+   "away": "Chicago Cubs",
+   "away_abbr": "CHC",
+   "away_nick": "Cubs",
+   "away_r": 1,
+   "date": "2026-09-30",
+   "file": "games/849842.html",
+   "home": "San Diego Padres",
+   "home_abbr": "SD",
+   "home_nick": "Padres",
+   "home_r": 4,
+   "title": "Padres 4, Cubs 1",
+   "venue": "Petco Park"
+  },
   "849843": {
    "away": "Chicago Cubs",
    "away_abbr": "CHC",
@@ -34034,6 +34062,34 @@
    "home_r": 5,
    "title": "Braves 5, Phillies 3",
    "venue": "Truist Park"
+  },
+  "849846": {
+   "away": "Chicago White Sox",
+   "away_abbr": "CWS",
+   "away_nick": "White Sox",
+   "away_r": 7,
+   "date": "2026-09-30",
+   "file": "games/849846.html",
+   "home": "Houston Astros",
+   "home_abbr": "HOU",
+   "home_nick": "Astros",
+   "home_r": 3,
+   "title": "White Sox 7, Astros 3",
+   "venue": "Daikin Park"
+  },
+  "849848": {
+   "away": "Boston Red Sox",
+   "away_abbr": "BOS",
+   "away_nick": "Red Sox",
+   "away_r": 2,
+   "date": "2026-09-30",
+   "file": "games/849848.html",
+   "home": "New York Yankees",
+   "home_abbr": "NYY",
+   "home_nick": "Yankees",
+   "home_r": 9,
+   "title": "Yankees 9, Red Sox 2",
+   "venue": "Yankee Stadium"
   },
   "849849": {
    "away": "Chicago White Sox",
