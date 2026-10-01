@@ -438,6 +438,8 @@ export function flowSvg(ctx) {
 // margins follow from them.
 function panel(ctx, r, x, y, w, h, pool, poolLabel, T) {
   const { unit, info, target } = ctx;
+  // the target, as the y axis and the value line name it: Stuff+, SwStr%, ERA, wOBAcon
+  const tname = isPlus(target) ? MODELS[ctx.model].title : TARGET_NAMES[target];
   const val = ctx.rowValueOf || ((k, p) => rowValue(k, p.unit));
   const inp = ctx.rowInputOf || ((k, p) => rowInput(k, p.info));
   const f = formats(target);
@@ -523,7 +525,7 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T) {
   // the y axis is the row's contribution to the target, so it is named for the target ("Stuff+",
   // "SwStr%", "ERA", "wOBAcon"); Count plots its strikes there instead
   const yl = grouped ? (r.k === 'Location' ? 'Vertical location (zone height)' : 'Strikes before the pitch')
-    : isPlus(target) ? MODELS[ctx.model].title : TARGET_NAMES[target];
+    : tname;
   if (!zone) s += `<text data-m="pylab" transform="translate(${n1(ylabX)},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="${T.axis}" fill="${C.muted}" text-anchor="middle">${esc(yl)}</text>`;
 
   // dots, keyed by unit so they glide from one row's chart to the next
@@ -566,10 +568,13 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T) {
   // Other: the row's full value (its folded rows and the residual), as its bar shows it; the
   // plot and the percentile are the residual's
   if (r.k === 'Other') {
-    s += text(tx, b1, `${f.d(r.v)} ${f.unit}`, `font-size="${n1(T.hi)}" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
-    s += text(tx, b2a, `Residual ${f.d(own)} ${f.unit} · ${ord(rank)} percentile`, `font-size="${T.line}" fill="${C.muted}"${ta}`, 'pl2a');
+    s += text(tx, b1, `${f.d(r.v)} ${tname}`, `font-size="${n1(T.hi)}" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
+    s += text(tx, b2a, `Residual ${f.d(own)} ${tname} · ${ord(rank)} percentile`, `font-size="${T.line}" fill="${C.muted}"${ta}`, 'pl2a');
   } else {
-    s += text(tx, b1, `${f.d(own)} ${f.unit} · ${ord(rank)} percentile`, `font-size="${n1(T.hi)}" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
+    // shrunk only if it would run past the card's edge
+    const hi = `${f.d(own)} ${tname} · ${ord(rank)} percentile`;
+    const hs = Math.min(T.hi, (T.hi * (w - 32)) / textWidth(hi, T.hi));
+    s += text(tx, b1, hi, `font-size="${n1(hs)}" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
   }
   let line2 = r.detail || '';
   if (grouped) line2 = '';
