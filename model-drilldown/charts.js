@@ -443,7 +443,9 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T = PANEL_TEXT) {
   const grouped = GROUPS[r.k];
   const zone = r.k === 'Location';  // drawn as a strike zone, no axes
   // the lines under the plot, bottom up: the minimum, the input, the highlighted value
-  const b3 = y + h - 8 - T.foot, b2 = b3 - T.line * 1.6 - 1.6, b1 = b2 - T.hi * 1.4 - 1.8;
+  // (Other has two input lines: its residual, then what it folds in)
+  const LH = T.line * 1.6 + 1.6;
+  const b3 = y + h - 8 - T.foot, b2 = b3 - LH, b2a = r.k === 'Other' ? b2 - LH : b2, b1 = b2a - T.hi * 1.4 - 1.8;
   // the plot: under the pool line; over the x ticks and axis label (or the zone's Inside/Away)
   const tickGap = 5 + T.tick, xlabGap = tickGap + 6 + T.axis * 1.1;
   const py0 = t2 + 18, py1 = b1 - T.hi * 1.5 - (zone ? 5 + T.zone : xlabGap);
@@ -547,7 +549,14 @@ function panel(ctx, r, x, y, w, h, pool, poolLabel, T = PANEL_TEXT) {
 
   // the numbers under it
   const rank = pctile(vs, me.v);
-  s += text(tx, b1, `${f.d(own)} ${f.unit}${r.k === 'Other' ? ' residual' : ''} · ${ord(rank)} percentile`, `font-size="${n1(T.hi)}" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
+  // Other: the row's full value (its folded rows and the residual), as its bar shows it; the
+  // plot and the percentile are the residual's
+  if (r.k === 'Other') {
+    s += text(tx, b1, `${f.d(r.v)} ${f.unit}`, `font-size="${n1(T.hi)}" font-weight="700" fill="${good * r.v > 0 ? C.gold : C.teal}"${ta}`, 'pl1');
+    s += text(tx, b2a, `Residual ${f.d(own)} ${f.unit} · ${ord(rank)} percentile`, `font-size="${T.line}" fill="${C.muted}"${ta}`, 'pl2a');
+  } else {
+    s += text(tx, b1, `${f.d(own)} ${f.unit} · ${ord(rank)} percentile`, `font-size="${n1(T.hi)}" font-weight="700" fill="${mcol}"${ta}`, 'pl1');
+  }
   let line2 = r.detail || '';
   if (grouped) line2 = '';
   else if (r.k !== 'Other' && r.k !== 'lefty') {
