@@ -243,7 +243,9 @@ export function flowSvg(ctx) {
   const footN = footLines(foot, Math.round(H1 * FLOW_ASPECT), FLOW_MIN, columns(Math.round(H1 * FLOW_ASPECT)).wmX).length;
   const H = H1 + (footN - 1) * FLOW_MIN * 1.4;
   const W = Math.round(H * FLOW_ASPECT);
-  const { LX, X0, X1, HX0, HX1, PX, PW, wmX } = columns(W);
+  const cols = columns(W);
+  const { X1, HX0, HX1, PX, PW, wmX } = cols;
+  let { LX, X0 } = cols;  // moved left once the labels' size is known (the waterfall section)
   let s = svgOpen(W, H, 'fig flow-fig');
   s += header(W, ctx, `${season}; Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${kpiName(model, target)}`, PX + PW / 2);
   const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';  // the selected row and its funnel
@@ -301,6 +303,12 @@ export function flowSvg(ctx) {
     room / (0.8 * Math.max(1e-9, ...rows.map((r) => per(subOf(r))))),
     (S * 0.82) / 1.9));
   const SUB = Math.max(FLOW_MIN, FS * 0.8);
+  // The labels at that size leave room between the widest of them (label or sub-label) and the
+  // arsenal's bracket (its right edge at 201): the label column moves left until that gap is a
+  // quarter of what it was, and the bars take the width
+  const textW = Math.max(...rows.map((r) => Math.max(textWidth(r.label, FS), subOf(r) ? textWidth(subOf(r), SUB) * 0.94 : 0)));
+  const slack = LX - textW - (201 + shift);
+  if (slack > 0) { LX = n1(LX - 0.75 * slack); X0 = LX + 12; }
   // Each row's highlight / hover band [top, bottom]: it covers the row's label and sub-label and
   // meets the next row's halfway between their text (the end rows reach as far past their text),
   // never short of the bar. Text extents: ascent 0.74 and descent 0.24 of the font size.
