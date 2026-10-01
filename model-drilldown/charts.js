@@ -541,7 +541,7 @@ export function phoneFlowSvg(ctx, W) {
   // the subtitle, wrapped to the width
   const subLines = wrapLines(`${ctx.season}; Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${kpiName(model, target)}`, 12, W - 2 * P);
   const sy0 = Math.max(titleBottom, by + BH0) + 20;
-  subLines.forEach((l, i) => { s += text(P, sy0 + i * 16, l, `font-size="12" fill="${C.muted}"`, i ? `sub${i}` : 'sub'); });
+  subLines.forEach((l, i) => { s += text(W / 2, sy0 + i * 16, l, `font-size="12" fill="${C.muted}" text-anchor="middle"`, i ? `sub${i}` : 'sub'); });  // centred, like the title
   const headerBottom = sy0 + (subLines.length - 1) * 16;
 
   // ---- the waterfall, full width ----
