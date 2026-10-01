@@ -68,9 +68,9 @@ button:disabled{opacity:.45; cursor:default}
 .figure{background:#292C42; border-radius:10px; overflow-x:auto; overscroll-behavior-x:contain}
 .figure svg{display:block; width:100%; min-width:900px; height:auto; user-select:none; -webkit-user-select:none}
 /* the drilldown is square and scales to the screen instead of scrolling: as wide as its card
-   allows, and no taller than the viewport */
+   allows, and short enough to fit on screen whole (the viewport height, less a 40 px margin) */
 #flow{overflow:hidden}
-#flow svg{min-width:0; width:100%; max-width:min(100%, 100svh); margin:0 auto}
+#flow svg{min-width:0; width:100%; max-width:min(100%, calc(100svh - 40px)); margin:0 auto}
 @media (max-width:600px){ #out{padding:12px 8px} }
 /* on a phone the league card sits under the waterfall as its own panel */
 #flow-card{margin-top:12px; overflow:hidden; background:none}
