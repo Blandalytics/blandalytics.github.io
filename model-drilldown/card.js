@@ -12,13 +12,9 @@ import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, LABELS, AXIS, PCT, GROUPS, MODELS, isPlus, targetGood, targetName,
   rowValue, rowInput,
 } from './data.js?v=10';
-import { C, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord } from './charts.js?v=70';
+import { C, K, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord, bar } from './charts.js?v=71';
 
 export const CARD = { W: 1280, H: 720 };
-const K = {
-  ground: '#13263F', panel: '#172D4A', line: '#2A3A57', ink: '#E8EEF7', muted: '#93A3BC', faint: '#6C7C96',
-  sub: '#7F9CD6', dot: '#9FB3CF', conn: '#B4BECC',
-};
 const FONT = '"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
 const WM_ASPECT = 178 / 928;
 
@@ -56,15 +52,6 @@ function textWidth(str, size, weight = 700) {
   return w * size;
 }
 
-// A waterfall bar: square where it starts (the running total before it) and rounded (r) where it
-// ends, on the right for a rise and the left for a drop
-function bar(x, y, w, h, r, right) {
-  const [x1, y1] = [n1(x + w), n1(y + h)];
-  [x, y, r] = [n1(x), n1(y), n1(r)];
-  return right
-    ? `M${x},${y}H${n1(x1 - r)}Q${x1},${y} ${x1},${n1(y + r)}V${n1(y1 - r)}Q${x1},${y1} ${n1(x1 - r)},${y1}H${x}Z`
-    : `M${x1},${y}H${n1(x + r)}Q${x},${y} ${x},${n1(y + r)}V${n1(y1 - r)}Q${x},${y1} ${n1(x + r)},${y1}H${x1}Z`;
-}
 
 // a smooth path through points (Catmull-Rom as cubic Béziers)
 function smooth(p) {
