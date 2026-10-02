@@ -671,7 +671,7 @@ four-hour browser cache.
 | `model-drilldown/morph.js` | the Plotly-style transition between two renders of a figure |
 | `model-drilldown/index.html`, `app.js` | the page: controls, the linked focus, tooltips, downloads, the link hash |
 | `model-drilldown/card.js` | the drilldown as a 16:9 social card (`cardSvg(ctx)`, the same `ctx` as `flowSvg`): arsenal tabs, the waterfall, the selected row against the league, the KPI in the corner |
-| `model-drilldown/card-demo.html` | a demo of the card from the live Stuff+ tables (Brody Hopkins' 2026 four-seamer by default; linked like the drilldown, `#<season>-<pitcher id>-<pitch type>&row=<row>`), or from made-up numbers at `#synthetic`; click a row or a tab, **Download PNG** gives it at 3x |
+| `model-drilldown/card-demo.html` | a demo of the card from the live Stuff+ tables (Brody Hopkins' 2026 four-seamer by default; linked like the drilldown, `#<season>-<pitcher id>-<pitch type>&model=plv&target=wobacon&row=<row>`, any target split by feature), or from made-up numbers at `#synthetic`; click a row or a tab, **Download PNG** gives it at 3x |
 
 Locally, copy the staged tables (`stuff_model/build/shap-values/`) to `model-drilldown/data/shap-values/`
 and open the page with `?data=data/`. After any change to the JavaScript, bump the `?v=` query on the

@@ -94,7 +94,7 @@ export function cardSvg(ctx) {
   const kx = (1066 + W) / 2;
   s += `<line x1="1066" x2="1066" y1="18" y2="112" stroke="${K.line}" stroke-width="1.5"/>`;
   const kname = kpiName(model, target);
-  s += text(kx, 42, kname, `font-size="${Math.min(24, (200 / textWidth(kname, 24)) * 24).toFixed(1)}" font-weight="700" fill="#fff" text-anchor="middle"`);
+  s += text(kx, 42, kname, `font-size="${Math.min(24, (176 / textWidth(kname, 24)) * 24).toFixed(1)}" font-weight="700" fill="#fff" text-anchor="middle"`);
   const kval = f.v(unit.exact);
   s += text(kx, 106, kval, `font-size="${Math.min(74, (196 / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`);
 
@@ -126,7 +126,7 @@ export function cardSvg(ctx) {
 
   // the waterfall: rows spread over the body, the axis under it
   const Y0 = 246, YB = 612;
-  const S = Math.min(58, (YB - Y0) / rows.length);
+  const S = (YB - Y0) / rows.length;  // rows spread over the body, as the drilldown spreads them
   const BAR = Math.min(22, S * 0.45);
   const X0 = 336, X1 = 762, ROOM_L = 300, ROOM_R = 792;
   const FS = 15;  // the values beside the bars
@@ -264,6 +264,8 @@ function leaguePanel(ctx, r, P) {
   const yfmt = grouped || isPlus(target) ? (v) => (+v.toFixed(dp)).toFixed(dp).replace('-', '−') : f.tick;
   for (const t of yt) s += text(px0 - 14, syr(t) + 5, yfmt(t), `font-size="14" fill="${K.muted}" text-anchor="end"`);
   for (const t of niceTicks(xa, xb, 4)) s += text(sxr(t), py1 + 26, xfmt(t), `font-size="14" fill="${K.muted}" text-anchor="middle"`);
+  // no influence on the target: a line across the plot at 0
+  if (!grouped && ya < 0 && yb > 0) s += `<line x1="${px0}" x2="${px1}" y1="${n1(syr(0))}" y2="${n1(syr(0))}" stroke="#fff" stroke-opacity=".45" stroke-width="1.2"/>`;
   const xl = grouped ? (r.k === 'Location' ? 'Horizontal location (ft, + = inside)' : 'Balls before the pitch')
     : r.k === 'Other' ? 'Pitches (log scale)' : ctx.axisOf ? ctx.axisOf(r.k) : AXIS[r.k] || LABELS[r.k];
   s += text((px0 + px1) / 2, py1 + 50, xl, `font-size="13.5" fill="${K.muted}" text-anchor="middle"`);

@@ -32,15 +32,15 @@ button:hover{border-color:#6b7684}
     <h1>Drilldown card (demo)</h1>
     <p>The Model Drilldown's figure laid out as a 16:9 card by <code>card.js</code>, from the same rows, formats and league
       comparison the page builds, read from the live SHAP tables. Click a row or a pitch type. The link works like the
-      drilldown's (<code>#&lt;season&gt;-&lt;pitcher id&gt;-&lt;pitch type&gt;&amp;row=velo</code>); <a href="#synthetic">#synthetic</a> draws made-up numbers instead.</p>
+      drilldown's (<code>#&lt;season&gt;-&lt;pitcher id&gt;-&lt;pitch type&gt;&amp;model=plv&amp;target=wobacon&amp;row=velo</code>); <a href="#synthetic">#synthetic</a> draws made-up numbers instead.</p>
   </header>
   <div id="card"></div>
   <div class="row-actions"><button id="dl" type="button">Download PNG</button><span id="msg" style="color:var(--muted);font-size:13px">loading the SHAP tables…</span></div>
 </main>
 <script type="module">
-import { PITCH_NAMES, cardRows, loadMeta, loadFeatures, loadUnits, minImpact } from './data.js?v=9';
+import { PITCH_NAMES, OUTCOMES, cardRows, loadMeta, loadFeatures, loadUnits, minImpact, targetGood } from './data.js?v=9';
 import { svgToPng } from './charts.js?v=69';
-import { cardSvg } from './card.js?v=4';
+import { cardSvg } from './card.js?v=6';
 
 // ---- a seeded, synthetic league ------------------------------------------------------------
 let seed = 20261002;
@@ -114,7 +114,9 @@ units.FC.unshift(makeUnit(ME.id, ME.name, 'FC', PT.FC, 310, 0.6,
 // ---- the views, built as app.js builds them --------------------------------------------------
 const MIN_N = 20;
 const DEFAULT = { season: 2026, name: 'Brody Hopkins', pt: 'FF', row: 'az' };
-const state = { synthetic: false, season: DEFAULT.season, pitcher: null, pt: DEFAULT.pt, row: DEFAULT.row };
+// the targets split by feature (the drilldown's, less the outcome split and Location)
+const TARGETS = ['plus', 'era', ...OUTCOMES.map((o) => `p_${o}`), 'wobacon'];
+const state = { synthetic: false, season: DEFAULT.season, pitcher: null, pt: DEFAULT.pt, model: 'stuff', target: 'plus', row: DEFAULT.row };
 
 function syntheticView() {
   const pool = units[state.pt];
@@ -137,18 +139,18 @@ const PT_POOL = { CU: 'CU', KC: 'CU', SV: 'CU', FS: 'FS', FO: 'FS' };
 const POOL_NAMES = { CU: 'CU/KC/SV', FS: 'FS/FO' };
 const ptPool = (pt) => PT_POOL[pt] || pt;
 async function liveView() {
-  const [lmeta, feats, lunits] = await Promise.all([loadMeta(), loadFeatures(state.season), loadUnits(state.season, 'stuff')]);
+  const [lmeta, feats, lunits] = await Promise.all([loadMeta(), loadFeatures(state.season), loadUnits(state.season, state.model)]);
   const p = state.pitcher ? feats.byId.get(state.pitcher) : feats.pitchers.find((x) => x.name === DEFAULT.name);
   if (!p) throw new Error(`no ${state.season} pitches for ${state.pitcher || DEFAULT.name}`);
   state.pitcher = p.id;
   if (!p.pts.some((u) => u.pt === state.pt)) state.pt = p.pts[0].pt;
   const info = feats.byUnit.get(`${p.id}|${state.pt}`);
-  const unit = lunits.byKey.get(`${p.id}|${state.pt}|plus`);
+  const unit = lunits.byKey.get(`${p.id}|${state.pt}|${state.target}`);
   if (!info || !unit) throw new Error('no SHAP values for that pitch type');
-  const rows = cardRows(lmeta, 'stuff', unit, info, minImpact('plus'));
+  const rows = cardRows(lmeta, state.model, unit, info, minImpact(state.target));
   if (!rows.some((r) => r.k === state.row)) state.row = rows[0].k;
   const pool = [];
-  for (const u of lunits.byTarget.get('plus') || []) {
+  for (const u of lunits.byTarget.get(state.target) || []) {
     const i = feats.byUnit.get(`${u.pitcher}|${u.pt}`);
     if (!i) continue;
     const me = u.pitcher === p.id && u.pt === state.pt;
@@ -157,17 +159,17 @@ async function liveView() {
   }
   const what = POOL_NAMES[ptPool(state.pt)] || `${PITCH_NAMES[state.pt] || state.pt}s`;
   const floor = Math.max(...feats.rows.map((r) => r.n)) / 4;
-  const vals = (lunits.byTarget.get('plus') || []).filter((u) => (feats.byUnit.get(`${u.pitcher}|${u.pt}`)?.n ?? 0) >= floor).map((u) => u.exact);
+  const vals = (lunits.byTarget.get(state.target) || []).filter((u) => (feats.byUnit.get(`${u.pitcher}|${u.pt}`)?.n ?? 0) >= floor).map((u) => u.exact);
   const below = vals.filter((v) => v < unit.exact).length, same = vals.filter((v) => v === unit.exact).length;
   return {
-    meta: lmeta, model: 'stuff', target: 'plus', season: state.season, info, unit, rows, selected: state.row,
-    arsenal: p.pts.map((u) => ({ pt: u.pt, n: u.n, unit: lunits.byKey.get(`${p.id}|${u.pt}|plus`) })),
+    meta: lmeta, model: state.model, target: state.target, season: state.season, info, unit, rows, selected: state.row,
+    arsenal: p.pts.map((u) => ({ pt: u.pt, n: u.n, unit: lunits.byKey.get(`${p.id}|${u.pt}|${state.target}`) })),
     pool, poolLabel: `vs ${(pool.length - 1).toLocaleString()} ${what}, ${state.season} (${MIN_N}+ pitches)`, poolWhat: what,
-    minN: MIN_N, kpi: { t: vals.length ? 2 * ((below + same / 2) / vals.length) - 1 : 0 },
+    minN: MIN_N, kpi: { t: vals.length ? targetGood(state.target) * (2 * ((below + same / 2) / vals.length) - 1) : 0 },
   };
 }
 
-// the link: #synthetic, or #<season>-<pitcher id>-<pitch type>&row=<row> as on the drilldown
+// the link: #synthetic, or #<season>-<pitcher id>-<pitch type>&model=plv&target=wobacon&row=<row> as on the drilldown
 function readHash() {
   const h = decodeURIComponent(location.hash.slice(1));
   state.synthetic = h === 'synthetic';
@@ -175,10 +177,18 @@ function readHash() {
   const [unit, ...opts] = h.split('&');
   const m = unit.match(/^(\d{4})-(\d+)-([A-Z]{2})$/);
   if (m) { state.season = +m[1]; state.pitcher = +m[2]; state.pt = m[3]; }
-  for (const o of opts) { const [k, v] = o.split('='); if (k === 'row') state.row = v; }
+  const q = new URLSearchParams(opts.join('&'));
+  state.model = ['plv', 'pitching'].includes(q.get('model')) ? 'pitching' : 'stuff';
+  state.target = TARGETS.includes(q.get('target')) ? q.get('target') : 'plus';
+  if (q.get('row')) state.row = q.get('row');
 }
 const writeHash = () => {
-  if (!state.synthetic) history.replaceState(null, '', `#${state.season}-${state.pitcher}-${state.pt}&row=${state.row}`);
+  if (state.synthetic) return;
+  const q = new URLSearchParams();
+  if (state.model !== 'stuff') q.set('model', 'plv');
+  if (state.target !== 'plus') q.set('target', state.target);
+  q.set('row', state.row);
+  history.replaceState(null, '', `#${state.season}-${state.pitcher}-${state.pt}&${q}`);
 };
 
 const box = document.getElementById('card');
