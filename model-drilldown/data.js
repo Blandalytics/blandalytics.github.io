@@ -252,11 +252,19 @@ export function cardRows(meta, model, unit, info, min, all = false) {
   return keep;
 }
 
-// A row's value for any unit of the same model and target (for the league charts).
+// A row's value for any unit of the same model and target (for the league charts). Other is the
+// surrogate's error alone here; otherValue gives it as a card folds it.
 export function rowValue(k, unit) {
-  if (k === 'Other') return unit.residual;  // the league's Other is the surrogate's error alone
+  if (k === 'Other') return unit.residual;
   if (GROUPS[k]) return GROUPS[k].reduce((a, f) => a + unit[f], 0);
   return unit[k];
+}
+
+// Other for any unit, as one card folds it (that card's Other row's `folded` rows): the same rows,
+// plus the unit's residual and, for ERA, its calibration. For the card's own unit it is the bar.
+export function otherValue(folded, unit) {
+  const cal = Number.isFinite(unit.calibration) ? unit.calibration : 0;
+  return folded.reduce((a, k) => a + rowValue(k, unit), 0) + unit.residual + cal;
 }
 
 // A row's input for any unit (the x of the dependence chart); null for rows without one.

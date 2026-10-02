@@ -38,9 +38,9 @@ button:hover{border-color:#6b7684}
   <div class="row-actions"><button id="dl" type="button">Download PNG</button><span id="msg" style="color:var(--muted);font-size:13px">loading the SHAP tables…</span></div>
 </main>
 <script type="module">
-import { PITCH_NAMES, OUTCOMES, cardRows, loadMeta, loadFeatures, loadUnits, minImpact, targetGood } from './data.js?v=10';
-import { svgToPng } from './charts.js?v=73';
-import { cardSvg } from './card.js?v=44';
+import { PITCH_NAMES, OUTCOMES, cardRows, rowValue, otherValue, loadMeta, loadFeatures, loadUnits, minImpact, targetGood } from './data.js?v=11';
+import { svgToPng } from './charts.js?v=74';
+import { cardSvg } from './card.js?v=45';
 
 // ---- a seeded, synthetic league ------------------------------------------------------------
 let seed = 20261002;
@@ -166,6 +166,8 @@ async function liveView() {
     arsenal: p.pts.map((u) => ({ pt: u.pt, n: u.n, unit: lunits.byKey.get(`${p.id}|${u.pt}|${state.target}`) })),
     pool, poolLabel: `vs ${(pool.length - 1).toLocaleString()} ${what}, ${state.season} (${MIN_N}+ pitches)`, poolWhat: what,
     minN: MIN_N, kpi: { t: vals.length ? targetGood(state.target) * (2 * ((below + same / 2) / vals.length) - 1) : 0 },
+    // the league's Other folds the same rows as this card's (as app.js does)
+    rowValueOf: (k, q) => (k === 'Other' ? otherValue(rows.find((r) => r.k === 'Other').folded, q.unit) : rowValue(k, q.unit)),
   };
 }
 
