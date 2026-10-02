@@ -720,6 +720,7 @@ export function phoneFlowSvg(ctx, W) {
   // the rows are static on a phone: no highlight, hover or selection (there is no league card)
   let bars = '', front = '';
   x = unit.league;
+  let rPrev = 0;
   rows.forEach((r, i) => {
     const cy = Y0 + i * S + S / 2;
     const end = x + r.v;
@@ -727,9 +728,12 @@ export function phoneFlowSvg(ctx, W) {
     const g = '<g class="prow"';
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end));
     const w = Math.max(1, n1(b - a));
-    // as the card's: square where it starts, rounded where it ends (the pills' 9, at most half the bar)
-    bars += `${g}><path data-m="bar:${r.k}" d="${bar(a, cy - BAR / 2, w, BAR, Math.min(9, BAR / 2, w), r.v >= 0)}" fill="${col}"/>`;
-    if (i) bars += `<line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${K.conn}" stroke-width="1.2"/>`;
+    // as the card's: square where it starts, rounded where it ends (the pills' 9, at most half the
+    // bar), and the connector running on from the bar above's edge where its corner begins
+    const rr = Math.min(9, BAR / 2, w);
+    bars += `${g}><path data-m="bar:${r.k}" d="${bar(a, cy - BAR / 2, w, BAR, rr, r.v >= 0)}" fill="${col}"/>`;
+    if (i) bars += `<line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2 - rPrev)}" y2="${n1(cy - BAR / 2)}" stroke="${K.conn}" stroke-width="1.2"/>`;
+    rPrev = rr;
     bars += '</g>';
     const right = r.v >= 0;
     const val = f.d(r.v);
