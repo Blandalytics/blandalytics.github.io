@@ -30,10 +30,10 @@ const quantile = (sorted, q) => {
   const i = (sorted.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
 };
-// The drilldown's highlight, as the figure shows it: the pitch type's colour at HILITE over the
-// figure's card colour (C.card), blended here and drawn solid so the navy under it doesn't shift
-// the hue. It tints the chosen pitch type's tab and the selected row.
-const HILITE = 0.16;
+// The highlight: the pitch type's colour at HILITE (10%) over the figure's card colour (C.card),
+// blended here and drawn solid so the navy under it doesn't shift the hue. It tints the chosen
+// pitch type's pill and the selected row.
+const HILITE = 0.1;
 function tint(hex, a, over = C.card) {
   const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const [c, b] = [rgb(hex), rgb(over)];
@@ -122,8 +122,8 @@ export function cardSvg(ctx) {
   // Titled "Pitches", at the other tiles' title size and baseline. Under it a pill per pitch type,
   // stacked, most thrown first, as tall as its share of the pitches but never too short for its
   // one line, "<type> <value>": white, or bold in its colour for the chosen one. Each is outlined
-  // in its colour (the pitcher cards' palette), the chosen one filled with its highlight (the live
-  // drilldown's: its colour at HILITE over the card). The pills span the title, or their widest
+  // in its colour (the pitcher cards' palette), the chosen one filled with its highlight (its
+  // colour at HILITE over the card). The pills span the title, or their widest
   // label.
   const TT = 26, TM = 22;  // the tiles' title size and margin
   const AP = { x: 20, y: 133, h: 530 }, ATL = 'Pitches';
