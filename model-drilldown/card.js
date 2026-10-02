@@ -295,8 +295,10 @@ function leaguePanel(ctx, r, P) {
   const grouped = GROUPS[r.k];
   let s = `<rect data-m="pbox" x="${P.x}" y="${P.y}" width="${P.w}" height="${P.h}" rx="8" fill="${K.panel}"/>`;
   const L = P.x + 22;
-  const title = r.label.length > 22 ? Math.min(26, (P.w - 44) / textWidth(r.label, 26) * 26) : 26;
-  s += text(L, P.y + 41, r.label, `font-size="${n1(title)}" font-weight="700" fill="${K.ink}"`, 'ptitle');
+  // the Location card plots each unit's average location, and says so
+  const ptitle = r.k === 'Location' ? 'Average Location' : r.label;
+  const title = ptitle.length > 22 ? Math.min(26, (P.w - 44) / textWidth(ptitle, 26) * 26) : 26;
+  s += text(L, P.y + 41, ptitle, `font-size="${n1(title)}" font-weight="700" fill="${K.ink}"`, 'ptitle');
   s += text(L, P.y + 68, (ctx.poolLabel || '').replace(/ \(\d+\+ pitches\)$/, ''), `font-size="15" fill="${K.muted}"`, 'psub');
 
   const pts = [];
