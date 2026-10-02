@@ -30,9 +30,9 @@ const quantile = (sorted, q) => {
   const i = (sorted.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
 };
-// The drilldown's tints, as the figure shows them: the pitch type's colour over its card colour
-// (C.card) at the figure's opacity (HILITE for the selected row and its funnel, 0.5 for a pitch
-// type not chosen), blended here and drawn solid so the navy under them doesn't shift the hue
+// The drilldown's highlight, as the figure shows it: the pitch type's colour at HILITE over the
+// figure's card colour (C.card), blended here and drawn solid so the navy under it doesn't shift
+// the hue. It tints the chosen pitch type's tab and the selected row.
 const HILITE = 0.16;
 function tint(hex, a, over = C.card) {
   const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -117,10 +117,10 @@ export function cardSvg(ctx) {
     const val = p.unit ? f.v(p.unit.exact) : '–';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
     s += `<rect x="${n1(tx)}" y="${TY - 2}" width="${n1(w)}" height="${UY + UH - TY + 2}" fill="${on ? tint(col, HILITE) : 'transparent'}"/>`;
-    s += `<rect x="${n1(tx)}" y="${UY}" width="${n1(w)}" height="${UH}" rx="2" fill="${on ? col : tint(col, 0.5)}"/>`;
-    s += `<text x="${n1(tx + w / 2)}" y="${TY + 21}" text-anchor="middle" font-size="17" font-weight="700">`
-      + `<tspan fill="${on ? '#fff' : col}">${esc(p.pt)}</tspan><tspan fill="${on ? '#fff' : K.muted}" font-weight="${on ? 700 : 500}"> ${esc(val)}</tspan>`
-      + '</text></g>';
+    // the pitch mix in full colour, its bars and labels, as the pitcher cards draw it (render.usage)
+    s += `<rect x="${n1(tx)}" y="${UY}" width="${n1(w)}" height="${UH}" rx="2" fill="${col}"/>`;
+    s += `<text x="${n1(tx + w / 2)}" y="${TY + 21}" text-anchor="middle" font-size="17" font-weight="700" fill="${col}">`
+      + `${esc(p.pt)}<tspan font-weight="${on ? 700 : 500}"> ${esc(val)}</tspan></text></g>`;
     tx += w + TGAP;
   });
 
@@ -294,19 +294,24 @@ function leaguePanel(ctx, r, P) {
   const mcol = good * (r.k === 'Other' ? r.v : own) > 0 ? C.gold : C.teal;
   s += `<circle cx="${cx(me.xv)}" cy="${cy(me.yv)}" r="8" fill="${mcol}" stroke="#fff" stroke-width="2.4"/>`;
 
-  // the numbers, two halves over a centred footer: the pitch's value (in the KPI's colour) and its
-  // percentile in the comparison pool; the row's value and its percentile; then the minimum
+  // the numbers, two halves over a centred footer: the row's impact on the target (gold or teal,
+  // as its bar) over its percentile; the row's input (as its sub-label reads) over its percentile
+  // among the dots; then the minimum
   const DY = P.y + 414, mid = P.x + P.w / 2, half = P.w / 2 - 34;
-  s += `<line x1="${L}" x2="${P.x + P.w - 22}" y1="${DY}" y2="${DY}" stroke="${C.teal}" stroke-opacity=".35" stroke-width="1.2"/>`;
+  s += `<line x1="${L}" x2="${P.x + P.w - 22}" y1="${DY}" y2="${DY}" stroke="${K.line}" stroke-width="1.5"/>`;
   s += `<line x1="${mid}" x2="${mid}" y1="${DY + 16}" y2="${DY + 76}" stroke="${K.line}" stroke-width="1.5"/>`;
   const fit = (str, size) => n1(Math.min(size, (half / textWidth(str, size)) * size));
   const seg = (cxs, big, col, sub) => text(cxs, DY + 42, big, `font-size="${fit(big, 27)}" font-weight="700" fill="${col}" text-anchor="middle"`)
     + text(cxs, DY + 67, sub, `font-size="14.5" fill="${K.muted}" text-anchor="middle"`);
-  const others = pool.filter((p) => !(p.info.pitcher === info.pitcher && p.info.pt === info.pt)).map((p) => good * p.unit.exact).sort((a, b) => a - b);
-  const tval = isPlus(target) ? `${f.v(unit.exact)} ${tname}` : `${tname} ${f.v(unit.exact)}`;
-  s += seg((L + mid) / 2, tval, kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit)), `${ord(pctile(others, good * unit.exact))} percentile`);
   const rank = pctile(vs.map((v) => good * v).sort((a, b) => a - b), good * me.v);
-  s += seg((mid + P.x + P.w - 22) / 2, `${f.d(r.k === 'Other' ? r.v : own)} ${tname}`, mcol, `${r.k === 'Other' ? 'Residual: ' : ''}${ord(rank)} percentile`);
+  s += seg((L + mid) / 2, `${f.d(r.k === 'Other' ? r.v : own)} ${tname}`, mcol, `${r.k === 'Other' ? 'Residual: ' : ''}${ord(rank)} percentile`);
+  // the input: Other's is the pitch count (its x axis), the baseline's the same-hand share
+  const xin = grouped || r.k === 'lefty' ? NaN : r.k === 'Other' ? info.n : inp(r.k, { unit, info });
+  const inVal = r.k === 'Other' ? `${info.n.toLocaleString()} pitches`
+    : r.k === 'baseline' ? `${Math.round(100 * xin)}% vs Same Hand`
+    : r.detail || '–';
+  const inPct = Number.isFinite(xin) ? `${ord(pctile(pts.map((p) => p.xv), r.k === 'Other' ? Math.log10(xin) : xin))} percentile` : '';
+  s += seg((mid + P.x + P.w - 22) / 2, inVal, K.ink, inPct);
   const minN = ctx.minN ?? 1;
   s += text(mid, DY + 101, `Min ${minN} pitch${minN === 1 ? '' : 'es'} thrown`, `font-size="14" fill="${K.faint}" text-anchor="middle"`);
   return s;
