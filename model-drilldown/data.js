@@ -11,41 +11,97 @@ import { parquetReadObjects } from 'https://cdn.jsdelivr.net/npm/hyparquet@1.31.
 
 // ?data=data/ reads a local copy (model-drilldown/data/shap-values/) instead of the bucket
 const LOCAL = new URLSearchParams(location.search).get('data');
-export const SOURCE = LOCAL ? new URL(`${LOCAL.replace(/\/?$/, '/')}shap-values/`, location.href).href
+export const SOURCE = LOCAL
+  ? new URL(`${LOCAL.replace(/\/?$/, '/')}shap-values/`, location.href).href
   : 'https://data.blandalytics.com/shap-values/';
 // The zone keeps objects for hours under their exact URL; an hourly key lets a republish through.
 const STAMP = Math.floor(Date.now() / 3.6e6);
 
 export const PITCH_NAMES = {
-  FF: 'Four-Seam Fastball', SI: 'Sinker', FC: 'Cutter', SL: 'Slider', ST: 'Sweeper', SV: 'Slurve',
-  CU: 'Curveball', KC: 'Knuckle Curve', CH: 'Changeup', FS: 'Splitter', FO: 'Forkball',
+  FF: 'Four-Seam Fastball',
+  SI: 'Sinker',
+  FC: 'Cutter',
+  SL: 'Slider',
+  ST: 'Sweeper',
+  SV: 'Slurve',
+  CU: 'Curveball',
+  KC: 'Knuckle Curve',
+  CH: 'Changeup',
+  FS: 'Splitter',
+  FO: 'Forkball',
 };
 // the Sequencing Flow palette
 export const PITCH_COLORS = {
-  FF: '#FF6683', SI: '#F2B24B', FS: '#83D6FF', FC: '#C59C9C', SL: '#CE66FF', ST: '#FFAAF7',
-  CU: '#339cff', KC: '#339cff', SV: '#2A98FF', CH: '#6DE95D', FO: '#83D6FF',
+  FF: '#FF6683',
+  SI: '#F2B24B',
+  FS: '#83D6FF',
+  FC: '#C59C9C',
+  SL: '#CE66FF',
+  ST: '#FFAAF7',
+  CU: '#339cff',
+  KC: '#339cff',
+  SV: '#2A98FF',
+  CH: '#6DE95D',
+  FO: '#83D6FF',
 };
 
 export const MODELS = {
   stuff: { title: 'Stuff+', short: 'Stuff', blurb: 'count-neutral: shape, release and arsenal' },
   pitching: { title: 'PLV+', short: 'PLV', blurb: 'the pitch as thrown: adds location and count' },
   // PLV minus Stuff at the actual count; split by outcome only (units_location_<season>)
-  location: { title: 'Location+', short: 'Location', blurb: 'what the location adds: PLV minus Stuff', outcomesOnly: true },
+  location: {
+    title: 'Location+',
+    short: 'Location',
+    blurb: 'what the location adds: PLV minus Stuff',
+    outcomesOnly: true,
+  },
 };
-export const OUTCOMES = ['ball', 'called_strike', 'swinging_strike', 'foul', 'field_out', 'single', 'double', 'triple', 'home_run'];
+export const OUTCOMES = [
+  'ball',
+  'called_strike',
+  'swinging_strike',
+  'foul',
+  'field_out',
+  'single',
+  'double',
+  'triple',
+  'home_run',
+];
 export const TARGET_NAMES = {
-  p_ball: 'Ball%', p_called_strike: 'CStr%', p_swinging_strike: 'SwStr%', p_foul: 'Foul%',
-  p_field_out: 'In-Play Out%', p_single: 'Single%', p_double: 'Double%', p_triple: 'Triple%',
-  p_home_run: 'Home Run%', wobacon: 'wOBAcon', era: 'ERA',
+  p_ball: 'Ball%',
+  p_called_strike: 'CStr%',
+  p_swinging_strike: 'SwStr%',
+  p_foul: 'Foul%',
+  p_field_out: 'In-Play Out%',
+  p_single: 'Single%',
+  p_double: 'Double%',
+  p_triple: 'Triple%',
+  p_home_run: 'Home Run%',
+  wobacon: 'wOBAcon',
+  era: 'ERA',
 };
 export const OUTCOME_NAMES = {
-  ball: 'Ball', called_strike: 'Called Strike', swinging_strike: 'Swinging Strike', foul: 'Foul',
-  field_out: 'In-Play Out', single: 'Single', double: 'Double', triple: 'Triple', home_run: 'Home Run',
+  ball: 'Ball',
+  called_strike: 'Called Strike',
+  swinging_strike: 'Swinging Strike',
+  foul: 'Foul',
+  field_out: 'In-Play Out',
+  single: 'Single',
+  double: 'Double',
+  triple: 'Triple',
+  home_run: 'Home Run',
 };
 // Sequencing Flow's ending colours: walks amber, strikes green, outs blue, hits red, homers pink
 export const OUTCOME_COLORS = {
-  ball: '#FFC46A', called_strike: '#A6FFC4', swinging_strike: '#65FF9C', foul: '#F4F1EA',
-  field_out: '#65BAFF', single: '#F4707C', double: '#F4707C', triple: '#F4707C', home_run: '#FF5EDC',
+  ball: '#FFC46A',
+  called_strike: '#A6FFC4',
+  swinging_strike: '#65FF9C',
+  foul: '#F4F1EA',
+  field_out: '#65BAFF',
+  single: '#F4707C',
+  double: '#F4707C',
+  triple: '#F4707C',
+  home_run: '#FF5EDC',
 };
 // targets where lower is better for the pitcher: gold and teal swap
 export const LOWER_IS_BETTER = new Set(['p_ball', 'p_single', 'p_double', 'p_triple', 'p_home_run', 'wobacon', 'era']);
@@ -54,16 +110,33 @@ export const targetGood = (t) => (LOWER_IS_BETTER.has(t) ? -1 : 1);
 // figures it is named like the plus score it splits
 export const isPlus = (t) => t === 'plus' || t === 'outcomes';
 // era: pitch type ERA from the model (model_era.py --by pt), named "PLV ERA" / "Stuff ERA"
-export const targetName = (model, t) => (isPlus(t) ? MODELS[model].title
-  : t === 'era' ? `${MODELS[model].short} ERA` : TARGET_NAMES[t]);
+export const targetName = (model, t) =>
+  isPlus(t) ? MODELS[model].title : t === 'era' ? `${MODELS[model].short} ERA` : TARGET_NAMES[t];
 
 export const LABELS = {
-  velo: 'Velocity', ax_m: 'Horizontal Mvmt', az: 'Induced Vertical Mvmt', rel_x_m: 'Release Side',
-  rel_z: 'Release Height', extension: 'Extension', spin_rate: 'Spin Rate', spin_eff: 'Spin Efficiency',
-  axis_diff: 'Seam-Shifted Wake', velo_diff: 'Velo vs FB', ax_diff: 'Horizontal Mvmt vs FB',
-  az_diff: 'Vertical Mvmt vs FB', is_primary: 'Primary Fastball', lefty: 'Handedness',
-  x_b: 'Horizontal Location', z_n: 'Vertical Location', balls: 'Balls', strikes: 'Strikes', season_env: 'Season',
-  baseline: 'Pitch Group & Matchup', Location: 'Location', Count: 'Count', Other: 'Other',
+  velo: 'Velocity',
+  ax_m: 'Horizontal Mvmt',
+  az: 'Induced Vertical Mvmt',
+  rel_x_m: 'Release Side',
+  rel_z: 'Release Height',
+  extension: 'Extension',
+  spin_rate: 'Spin Rate',
+  spin_eff: 'Spin Efficiency',
+  axis_diff: 'Seam-Shifted Wake',
+  velo_diff: 'Velo vs FB',
+  ax_diff: 'Horizontal Mvmt vs FB',
+  az_diff: 'Vertical Mvmt vs FB',
+  is_primary: 'Primary Fastball',
+  lefty: 'Handedness',
+  x_b: 'Horizontal Location',
+  z_n: 'Vertical Location',
+  balls: 'Balls',
+  strikes: 'Strikes',
+  season_env: 'Season',
+  baseline: 'Pitch Group & Matchup',
+  Location: 'Location',
+  Count: 'Count',
+  Other: 'Other',
 };
 // the unit's mean input, as the card prints it under the row name
 const DETAIL = {
@@ -87,20 +160,32 @@ const DETAIL = {
 };
 // the input's unit, for the axes of the league charts
 export const AXIS = {
-  velo: 'Velocity (mph)', ax_m: 'Horizontal Mvmt (ft/s², arm side +)', az: 'Induced Vertical Mvmt (ft/s²)',
-  rel_x_m: 'Release Side (ft, arm side +)', rel_z: 'Release Height (ft)', extension: 'Extension (ft)',
-  spin_rate: 'Spin Rate (rpm)', spin_eff: 'Spin Efficiency', axis_diff: 'Seam-Shifted Wake (°)',
-  velo_diff: 'Velo vs FB (mph)', ax_diff: 'Horizontal Mvmt vs FB (ft/s²)',
-  az_diff: 'Vertical Mvmt vs FB (ft/s²)', is_primary: 'Share thrown as the primary fastball',
-  lefty: 'Handedness (0 = RHP, 1 = LHP)', x_b: 'Horizontal Location (ft, + = inside, toward the batter)',
-  z_n: 'Vertical Location (share of zone height)', balls: 'Balls before the pitch', strikes: 'Strikes before the pitch',
-  baseline: 'Share of pitches vs same-handed batters', Other: 'Pitches',
+  velo: 'Velocity (mph)',
+  ax_m: 'Horizontal Mvmt (ft/s², arm side +)',
+  az: 'Induced Vertical Mvmt (ft/s²)',
+  rel_x_m: 'Release Side (ft, arm side +)',
+  rel_z: 'Release Height (ft)',
+  extension: 'Extension (ft)',
+  spin_rate: 'Spin Rate (rpm)',
+  spin_eff: 'Spin Efficiency',
+  axis_diff: 'Seam-Shifted Wake (°)',
+  velo_diff: 'Velo vs FB (mph)',
+  ax_diff: 'Horizontal Mvmt vs FB (ft/s²)',
+  az_diff: 'Vertical Mvmt vs FB (ft/s²)',
+  is_primary: 'Share thrown as the primary fastball',
+  lefty: 'Handedness (0 = RHP, 1 = LHP)',
+  x_b: 'Horizontal Location (ft, + = inside, toward the batter)',
+  z_n: 'Vertical Location (share of zone height)',
+  balls: 'Balls before the pitch',
+  strikes: 'Strikes before the pitch',
+  baseline: 'Share of pitches vs same-handed batters',
+  Other: 'Pitches',
 };
-export const PCT = new Set(['spin_eff', 'is_primary', 'z_n', 'baseline']);  // axis read as a percentage
+export const PCT = new Set(['spin_eff', 'is_primary', 'z_n', 'baseline']); // axis read as a percentage
 // features drawn as one row: SHAP is additive, so a row's impact is its features' sum
 export const GROUPS = { Location: ['x_b', 'z_n'], Count: ['balls', 'strikes'] };
-const TO_OTHER = new Set(['season_env']);  // always folded into Other, whatever its size
-export const MIN_IMPACT = { plus: 1, outcomes: 1, wobacon: 0.002, era: 0.05 };  // anything else: 0.1 percentage points
+const TO_OTHER = new Set(['season_env']); // always folded into Other, whatever its size
+export const MIN_IMPACT = { plus: 1, outcomes: 1, wobacon: 0.002, era: 0.05 }; // anything else: 0.1 percentage points
 export const minImpact = (t) => MIN_IMPACT[t] ?? 0.1;
 
 function sgn(v, n) {
@@ -110,7 +195,7 @@ function sgn(v, n) {
 
 // ---- reading -----------------------------------------------------------------------------
 
-const seasons = new Map();  // season -> Promise<{ units: {stuff, pitching}, features, pitchers }>
+const seasons = new Map(); // season -> Promise<{ units: {stuff, pitching}, features, pitchers }>
 let metaPromise = null;
 let fidelityPromise = null;
 
@@ -121,10 +206,11 @@ async function fetchBuffer(name) {
 }
 
 // hyparquet hands int64 back as BigInt
-const plain = (rows) => rows.map((r) => {
-  for (const k in r) if (typeof r[k] === 'bigint') r[k] = Number(r[k]);
-  return r;
-});
+const plain = (rows) =>
+  rows.map((r) => {
+    for (const k in r) if (typeof r[k] === 'bigint') r[k] = Number(r[k]);
+    return r;
+  });
 
 async function readParquet(name) {
   const file = await fetchBuffer(name);
@@ -141,11 +227,14 @@ export function loadMeta() {
 
 // fidelity.csv: each surrogate's R^2 on held-out pitchers, per model x target x group model
 export function loadFidelity() {
-  fidelityPromise ??= fetch(`${SOURCE}fidelity.csv?v=${STAMP}`).then((r) => (r.ok ? r.text() : '')).then((text) => {
-    const [head, ...lines] = text.trim().split(/\r?\n/);
-    const cols = head.split(',');
-    return lines.map((l) => Object.fromEntries(l.split(',').map((v, i) => [cols[i], i >= 3 ? Number(v) : v])));
-  }).catch(() => []);
+  fidelityPromise ??= fetch(`${SOURCE}fidelity.csv?v=${STAMP}`)
+    .then((r) => (r.ok ? r.text() : ''))
+    .then((text) => {
+      const [head, ...lines] = text.trim().split(/\r?\n/);
+      const cols = head.split(',');
+      return lines.map((l) => Object.fromEntries(l.split(',').map((v, i) => [cols[i], i >= 3 ? Number(v) : v])));
+    })
+    .catch(() => []);
   return fidelityPromise;
 }
 
@@ -209,10 +298,14 @@ function indexUnits(rows) {
 export function allRows(meta, model, unit, info) {
   const feats = meta.models[model].features;
   const grouped = new Set(Object.values(GROUPS).flat());
-  const rows = [{
-    k: 'baseline', label: LABELS.baseline, v: unit.baseline,
-    detail: `${info.group} · ${Math.round((100 * info.n_same) / info.n)}% vs Same Hand`,
-  }];
+  const rows = [
+    {
+      k: 'baseline',
+      label: LABELS.baseline,
+      v: unit.baseline,
+      detail: `${info.group} · ${Math.round((100 * info.n_same) / info.n)}% vs Same Hand`,
+    },
+  ];
   for (const f of feats) {
     if (grouped.has(f)) continue;
     let detail = '';
@@ -222,9 +315,10 @@ export function allRows(meta, model, unit, info) {
   }
   for (const [g, fs] of Object.entries(GROUPS)) {
     if (!fs.every((f) => feats.includes(f))) continue;
-    const detail = g === 'Location'
-      ? `${sgn(info.x_b, 2)} ft, ${Math.round(100 * info.z_n)}% zone ht`
-      : `${info.balls.toFixed(2)} B, ${info.strikes.toFixed(2)} S avg`;
+    const detail =
+      g === 'Location'
+        ? `${sgn(info.x_b, 2)} ft, ${Math.round(100 * info.z_n)}% zone ht`
+        : `${info.balls.toFixed(2)} B, ${info.strikes.toFixed(2)} S avg`;
     rows.push({ k: g, label: g, v: fs.reduce((a, f) => a + unit[f], 0), detail, group: fs });
   }
   return rows;
@@ -233,7 +327,7 @@ export function allRows(meta, model, unit, info) {
 // The card's rows: impacts of at least min, largest first and at most MAX_ROWS of them, then
 // Other (the rest, Season, the surrogate residual and, for ERA, the season's calibration
 // constant), so the bars always end at the exact value. `all` keeps every row.
-export const MAX_ROWS = 8;  // the most rows shown before Other (unless every row is)
+export const MAX_ROWS = 8; // the most rows shown before Other (unless every row is)
 export function cardRows(meta, model, unit, info, min, all = false) {
   const rows = allRows(meta, model, unit, info);
   let keep = rows.filter((r) => !r.season && (all || Math.abs(r.v) >= min));
@@ -241,7 +335,7 @@ export function cardRows(meta, model, unit, info, min, all = false) {
   if (!all) keep = keep.slice(0, MAX_ROWS);
   const rest = rows.filter((r) => !keep.includes(r));
   const small = rest.filter((r) => !r.season).length;
-  const calibration = Number.isFinite(unit.calibration) ? unit.calibration : 0;  // era only
+  const calibration = Number.isFinite(unit.calibration) ? unit.calibration : 0; // era only
   const other = rest.reduce((a, r) => a + r.v, 0) + unit.residual + calibration;
   const parts = [];
   if (small) parts.push(`${small} smaller impact${small > 1 ? 's' : ''}`);
@@ -283,8 +377,15 @@ export function rowInput(k, info) {
 // its nine sum exactly; Pitching (PLV) prices them at the pitch's count, and the gap is "Count
 // Leverage". An exact split, no proxy. Every outcome is shown: nothing folds into Other.
 export const OUTCOME_ROWS = {
-  ball: 'Balls', called_strike: 'Called Strikes', swinging_strike: 'Swinging Strikes', foul: 'Fouls',
-  field_out: 'In-Play Outs', single: 'Singles', double: 'Doubles', triple: 'Triples', home_run: 'Home Runs',
+  ball: 'Balls',
+  called_strike: 'Called Strikes',
+  swinging_strike: 'Swinging Strikes',
+  foul: 'Fouls',
+  field_out: 'In-Play Outs',
+  single: 'Singles',
+  double: 'Doubles',
+  triple: 'Triples',
+  home_run: 'Home Runs',
 };
 
 // A row's value for one unit, from the units index: rv_<outcome>, or the leverage left over
@@ -307,25 +408,44 @@ export function outcomeInput(k, idx, info) {
   return (get(`p_${k.slice(3)}`) ?? get(`dp_${k.slice(3)}`))?.exact ?? NaN;
 }
 
-const pp1 = (v) => { const r = Math.round(v * 10) / 10; return `${r < 0 ? '−' : '+'}${Math.abs(r).toFixed(1)}`; };  // +0.0, never −0.0
+const pp1 = (v) => {
+  const r = Math.round(v * 10) / 10;
+  return `${r < 0 ? '−' : '+'}${Math.abs(r).toFixed(1)}`;
+}; // +0.0, never −0.0
 
 export function outcomeRows(model, idx, info) {
   const rows = OUTCOMES.map((o) => {
     const p = idx.byKey.get(`${info.pitcher}|${info.pt}|p_${o}`);
-    const dp = idx.byKey.get(`${info.pitcher}|${info.pt}|dp_${o}`);  // Location: the rate's change
+    const dp = idx.byKey.get(`${info.pitcher}|${info.pt}|dp_${o}`); // Location: the rate's change
     return {
-      k: `rv_${o}`, label: OUTCOME_ROWS[o], v: outcomeValue(`rv_${o}`, idx, info.pitcher, info.pt),
-      detail: model === 'location' ? (dp ? `${pp1(dp.exact)} pp vs ${pp1(dp.league)} pp league` : '')
-        : p ? `${p.exact.toFixed(1)}% vs ${p.league.toFixed(1)}% league` : '',
+      k: `rv_${o}`,
+      label: OUTCOME_ROWS[o],
+      v: outcomeValue(`rv_${o}`, idx, info.pitcher, info.pt),
+      detail:
+        model === 'location'
+          ? dp
+            ? `${pp1(dp.exact)} pp vs ${pp1(dp.league)} pp league`
+            : ''
+          : p
+            ? `${p.exact.toFixed(1)}% vs ${p.league.toFixed(1)}% league`
+            : '',
     };
   });
   if (model === 'pitching') {
-    rows.push({ k: 'leverage', label: 'Count Leverage', v: outcomeValue('leverage', idx, info.pitcher, info.pt), detail: '' });
+    rows.push({
+      k: 'leverage',
+      label: 'Count Leverage',
+      v: outcomeValue('leverage', idx, info.pitcher, info.pt),
+      detail: '',
+    });
   }
   return rows.filter((r) => Number.isFinite(r.v)).sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
 }
 
-export const OUTCOME_AXIS = (k) => (k === 'leverage' ? 'Strikes − balls before the pitch (avg)' : `Predicted ${OUTCOME_ROWS[k.slice(3)].toLowerCase()} rate (%)`);
+export const OUTCOME_AXIS = (k) =>
+  k === 'leverage'
+    ? 'Strikes − balls before the pitch (avg)'
+    : `Predicted ${OUTCOME_ROWS[k.slice(3)].toLowerCase()} rate (%)`;
 export const LOCATION_AXIS = (k) => `Location's change in ${OUTCOME_ROWS[k.slice(3)].toLowerCase()} rate (pp)`;
 
 export { sgn };

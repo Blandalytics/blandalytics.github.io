@@ -9,10 +9,33 @@
 // the next, and the league plot's dots are kept for the hover lookup (nearestCardPoint).
 
 import {
-  PITCH_NAMES, PITCH_COLORS, LABELS, AXIS, PCT, GROUPS, MODELS, isPlus, targetGood, targetName,
-  rowValue, rowInput,
-} from './data.js?v=12';
-import { C, K, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord, bar, widestKpiName } from './charts.js?v=76';
+  PITCH_NAMES,
+  PITCH_COLORS,
+  LABELS,
+  AXIS,
+  PCT,
+  GROUPS,
+  MODELS,
+  isPlus,
+  targetGood,
+  targetName,
+  rowValue,
+  rowInput,
+} from './data.js?v=13';
+import {
+  C,
+  K,
+  WORDMARK_URL,
+  formats,
+  kpiColor,
+  kpiT,
+  kpiName,
+  niceTicks,
+  pctile,
+  ord,
+  bar,
+  widestKpiName,
+} from './charts.js?v=78';
 
 export const CARD = { W: 1280, H: 720 };
 const FONT = '"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
@@ -24,7 +47,9 @@ const sum = (a) => a.reduce((x, y) => x + y, 0);
 const lin = (d0, d1, r0, r1) => (v) => r0 + ((v - d0) / (d1 - d0 || 1)) * (r1 - r0);
 const quantile = (sorted, q) => {
   if (!sorted.length) return NaN;
-  const i = (sorted.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
+  const i = (sorted.length - 1) * q,
+    lo = Math.floor(i),
+    hi = Math.ceil(i);
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
 };
 // The highlight: 20% of the pitch type's colour over the tile it sits on (K.panel), blended here and
@@ -35,8 +60,9 @@ function tint(hex, a, over = C.card) {
   const [c, b] = [rgb(hex), rgb(over)];
   return `rgb(${c.map((v, i) => Math.round(b[i] + (v - b[i]) * a)).join(',')})`;
 }
-const text = (x, y, s, attrs = '', m = null) => `<text${m ? ` data-m="${esc(m)}"` : ''} x="${n1(x)}" y="${n1(y)}" ${attrs}>${esc(s)}</text>`;
-let cardPoints = null;  // the league plot's dots in card coordinates, for the hover lookup
+const text = (x, y, s, attrs = '', m = null) =>
+  `<text${m ? ` data-m="${esc(m)}"` : ''} x="${n1(x)}" y="${n1(y)}" ${attrs}>${esc(s)}</text>`;
+let cardPoints = null; // the league plot's dots in card coordinates, for the hover lookup
 
 // bold DM Sans, measured once the font is in, else estimated per character
 let measurer = null;
@@ -50,7 +76,6 @@ function textWidth(str, size, weight = 700) {
   for (const ch of str) w += /[.,:]/.test(ch) ? 0.28 : /[0-9]/.test(ch) ? 0.58 : 0.6;
   return w * size;
 }
-
 
 // a smooth path through points (Catmull-Rom as cubic Béziers)
 function smooth(p) {
@@ -67,14 +92,17 @@ function footnote(ctx) {
   const { target, model, unit } = ctx;
   const f = formats(target);
   const label = targetName(model, target);
-  const note = ctx.byOutcome ? `${label} points (average 100, SD 15); each predicted outcome rate × its run value, an exact split`
-    : f.unit === 'pts' ? `${label} points (average 100, SD 15); feature contributions from a proxy model`
-    : f.unit === 'wOBA' ? `wOBA on contact (league ${f.v(unit.league)}); feature contributions from a proxy model`
-    : f.unit === 'runs' ? `Expected runs per 9 IP (league ERA ${unit.league.toFixed(2)}); feature contributions from a proxy model`
-      : `Per-pitch probability (league ${unit.league.toFixed(1)}%); feature contributions from a proxy model`;
+  const note = ctx.byOutcome
+    ? `${label} points (average 100, SD 15); each predicted outcome rate × its run value, an exact split`
+    : f.unit === 'pts'
+      ? `${label} points (average 100, SD 15); feature contributions from a proxy model`
+      : f.unit === 'wOBA'
+        ? `wOBA on contact (league ${f.v(unit.league)}); feature contributions from a proxy model`
+        : f.unit === 'runs'
+          ? `Expected runs per 9 IP (league ERA ${unit.league.toFixed(2)}); feature contributions from a proxy model`
+          : `Per-pitch probability (league ${unit.league.toFixed(1)}%); feature contributions from a proxy model`;
   return `${note}. ${targetGood(target) > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`;
 }
-
 
 export function cardSvg(ctx) {
   const { W, H } = CARD;
@@ -84,8 +112,9 @@ export function cardSvg(ctx) {
   const good = targetGood(target);
   const kcol = kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit));
   const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';
-  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" class="fig card-fig" font-family='${FONT}' role="img">`
-    + `<rect data-m="bg" width="${W}" height="${H}" fill="${K.ground}"/>`;
+  let s =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" class="fig card-fig" font-family='${FONT}' role="img">` +
+    `<rect data-m="bg" width="${W}" height="${H}" fill="${K.ground}"/>`;
 
   // ---- header: pitcher, pitch type, season; the KPI in the corner ----
   s += text(34, 56, info.pitcher_name, `font-size="46" font-weight="700" fill="${C.teal}"`, 'title');
@@ -93,13 +122,28 @@ export function cardSvg(ctx) {
   s += text(34, 114, String(season), `font-size="17" fill="${K.sub}"`, 'season');
   // the KPI's segment: as wide as the longest label any model and target can give, on one line
   // at full size, so the divider and the value sit still from target to target
-  const KS = 24, KR = W - 16, KL = KR - widestKpiName(KS) - 40, kx = (KL + KR) / 2;
-  const KB = 112;  // the divider's foot
+  const KS = 24,
+    KR = W - 16,
+    KL = KR - widestKpiName(KS) - 40,
+    kx = (KL + KR) / 2;
+  const KB = 112; // the divider's foot
   s += `<line data-m="kdiv" x1="${n1(KL)}" x2="${n1(KL)}" y1="18" y2="${KB}" stroke="${K.line}" stroke-width="1.5"/>`;
-  s += text(kx, 42, kpiName(model, target), `font-size="${KS}" font-weight="700" fill="#fff" text-anchor="middle"`, 'klabel');
+  s += text(
+    kx,
+    42,
+    kpiName(model, target),
+    `font-size="${KS}" font-weight="700" fill="#fff" text-anchor="middle"`,
+    'klabel',
+  );
   const kval = f.v(unit.exact);
   // its baseline (digits sit on it, nothing hangs below) on the divider's foot
-  s += text(kx, KB, kval, `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`, 'kval');
+  s += text(
+    kx,
+    KB,
+    kval,
+    `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`,
+    'kval',
+  );
 
   // ---- the arsenal tile, on the card's left edge, as tall as the others ----
   // Titled "Pitches", at the other tiles' title size and baseline. Under it a pill per pitch type,
@@ -107,19 +151,25 @@ export function cardSvg(ctx) {
   // one line, "<type> <value>", in its colour (the pitcher cards' palette) and outlined in it, both at half
   // opacity; the chosen one outlined in full, filled with 20% of that colour over the tile, its label
   // bold and white. The pills span the title, or their widest label.
-  const TT = 26, TM = 22;  // the tiles' title size and margin
-  const AP = { x: 20, y: 133, h: 530 }, ATL = 'Pitches';
-  const PFS = 17, PG = 6, PR = 9;  // label size, gap, corner radius (less on a pill too short for it)
+  const TT = 26,
+    TM = 22; // the tiles' title size and margin
+  const AP = { x: 20, y: 133, h: 530 },
+    ATL = 'Pitches';
+  const PFS = 17,
+    PG = 6,
+    PR = 9; // label size, gap, corner radius (less on a pill too short for it)
   const pill = (p) => `${p.pt} ${p.unit ? f.v(p.unit.exact) : '–'}`;
-  const PX = AP.x + TM, AB = AP.y + AP.h - TM;
+  const PX = AP.x + TM,
+    AB = AP.y + AP.h - TM;
   const PW = Math.ceil(Math.max(textWidth(ATL, TT), ...arsenal.map((p) => textWidth(pill(p), PFS) + 20)));
-  AP.w = PX + PW + TM - AP.x;  // the tile's margin each side
+  AP.w = PX + PW + TM - AP.x; // the tile's margin each side
   s += `<rect data-m="atile" x="${AP.x}" y="${AP.y}" width="${n1(AP.w)}" height="${AP.h}" rx="8" fill="${K.panel}"/>`;
   s += text(PX, AP.y + 41, ATL, `font-size="${TT}" font-weight="700" fill="${K.ink}"`, 'atitle');
   const AT = n1(AP.y + 41 + TT * 0.24 + 18);
   // heights: each pitch type's share of the column, floored at one line of text; the pills over
   // the floor give up what the floored ones take, in proportion
-  const minH = PFS + 12, avail = AB - AT - PG * (arsenal.length - 1);
+  const minH = PFS + 12,
+    avail = AB - AT - PG * (arsenal.length - 1);
   const total = sum(arsenal.map((p) => p.n));
   let hs = arsenal.map((p) => (avail * p.n) / total);
   for (let it = 0; it < arsenal.length; it++) {
@@ -131,10 +181,18 @@ export function cardSvg(ctx) {
   }
   let py = AT;
   arsenal.forEach((p, i) => {
-    const h = hs[i], on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
+    const h = hs[i],
+      on = p.pt === info.pt,
+      col = PITCH_COLORS[p.pt] || '#c7c7c7';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
     s += `<rect data-m="band:${p.pt}" x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? tint(col, HILITE, K.panel) : K.panel}" stroke="${col}" stroke-opacity="${on ? 1 : 0.5}" stroke-width="${on ? 2.5 : 1.5}"/>`;
-    s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? '#fff' : col}" fill-opacity="${on ? 1 : 0.5}" text-anchor="middle"`, `bl:${p.pt}`);
+    s += text(
+      PX + PW / 2,
+      py + h / 2 + PFS * 0.36,
+      pill(p),
+      `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? '#fff' : col}" fill-opacity="${on ? 1 : 0.5}" text-anchor="middle"`,
+      `bl:${p.pt}`,
+    );
     s += '</g>';
     py += h + PG;
   });
@@ -143,13 +201,22 @@ export function cardSvg(ctx) {
   const LP = { x: n1(AP.x + AP.w + 12), y: 133, h: 530 };
   LP.w = 810 - LP.x;
   s += `<rect data-m="wtile" x="${LP.x}" y="${LP.y}" width="${LP.w}" height="${LP.h}" rx="8" fill="${K.panel}"/>`;
-  s += text(LP.x + TM, LP.y + 41, `${ctx.byOutcome ? 'Outcome' : 'Feature'} Contributions to ${kpiName(model, target)}`, `font-size="${TT}" font-weight="700" fill="${K.ink}"`, 'wtitle');
+  s += text(
+    LP.x + TM,
+    LP.y + 41,
+    `${ctx.byOutcome ? 'Outcome' : 'Feature'} Contributions to ${kpiName(model, target)}`,
+    `font-size="${TT}" font-weight="700" fill="${K.ink}"`,
+    'wtitle',
+  );
 
   // the waterfall: rows spread over the body, the axis under it
-  const Y0 = 246, YB = 612;
-  const S = (YB - Y0) / rows.length;  // rows spread over the body, as the drilldown spreads them
-  const X1 = 762, ROOM_R = 792;
-  const FS = 15, CHIP = FS * 1.4;  // the values beside the bars, and the chip behind each
+  const Y0 = 246,
+    YB = 612;
+  const S = (YB - Y0) / rows.length; // rows spread over the body, as the drilldown spreads them
+  const X1 = 762,
+    ROOM_R = 792;
+  const FS = 15,
+    CHIP = FS * 1.4; // the values beside the bars, and the chip behind each
   // bars half the row pitch, so fewer rows draw thicker bars; never thinner than a value's chip,
   // and always a little gap between rows
   const BAR = Math.min(S - 4, Math.max(CHIP, S * 0.5));
@@ -161,29 +228,45 @@ export function cardSvg(ctx) {
   // baseline.
   // When there are too many rows for that (every row shown), all three shrink together until the
   // pair, the name's cap top to the detail's descender, fits its row with a little room.
-  let LS = Math.min(17, S * 0.46), SS = Math.min(14, S * 0.37);
+  let LS = Math.min(17, S * 0.46),
+    SS = Math.min(14, S * 0.37);
   let LG = Math.max(LS * 0.92, Math.min(20, S * 0.38));
   const fitL = (S - 3) / (0.74 * LS + LG + 0.24 * SS);
-  if (fitL < 1) { LS *= fitL; SS *= fitL; LG *= fitL; }
+  if (fitL < 1) {
+    LS *= fitL;
+    SS *= fitL;
+    LG *= fitL;
+  }
   // names alone (every row shown): as large as leaves a fifth of the row pitch between them, up to 17
   if (ctx.all) LS = Math.min(17, (S - 4) * 0.8);
   const LB = -(LG - 0.72 * LS + 0.22 * SS) / 2;
   // the row names start at the tile's margin; the bars past the widest name or detail
   const TX0 = LP.x + 22;
-  const textW = Math.max(...rows.map((r) => Math.max(textWidth(r.label, LS, 600), subOf(r) ? textWidth(subOf(r), SS, 400) : 0)));
-  const ROOM_L = TX0 + textW + 10, X0 = Math.max(330, Math.min(440, ROOM_L + 20));
+  const textW = Math.max(
+    ...rows.map((r) => Math.max(textWidth(r.label, LS, 600), subOf(r) ? textWidth(subOf(r), SS, 400) : 0)),
+  );
+  const ROOM_L = TX0 + textW + 10,
+    X0 = Math.max(330, Math.min(440, ROOM_L + 20));
   let at = unit.league;
   const path = [at];
-  for (const r of rows) { at += r.v; path.push(at); }
-  const lo = Math.min(...path), hi = Math.max(...path);
+  for (const r of rows) {
+    at += r.v;
+    path.push(at);
+  }
+  const lo = Math.min(...path),
+    hi = Math.max(...path);
   const pad = Math.max(f.pad * 0.4, 0.04 * (hi - lo));
-  let d0 = lo - pad, d1 = hi + pad * 2;
+  let d0 = lo - pad,
+    d1 = hi + pad * 2;
   // widen until each value label clears the row names (left) and the panel's edge (right)
   for (let it = 0; it < 8; it++) {
     const k = (X1 - X0) / (d1 - d0);
-    let under = 0, out = 0, x = unit.league;
+    let under = 0,
+      out = 0,
+      x = unit.league;
     for (const r of rows) {
-      const end = x + r.v, tw = textWidth(f.d(r.v), FS) + 8;
+      const end = x + r.v,
+        tw = textWidth(f.d(r.v), FS) + 8;
       if (r.v >= 0) out = Math.max(out, X0 + (Math.max(x, end) - d0) * k + tw - ROOM_R);
       else under = Math.max(under, ROOM_L - (X0 + (Math.min(x, end) - d0) * k - tw));
       x = end;
@@ -199,7 +282,13 @@ export function cardSvg(ctx) {
     s += text(sx(t), YB + 26, f.tick(t), `font-size="14" fill="${K.muted}" text-anchor="middle"`, `t:${t}`);
   }
   const label = targetName(model, target);
-  s += text((X0 + X1) / 2, YB + 44, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="12" fill="${K.muted}" text-anchor="middle"`, 'xlab');
+  s += text(
+    (X0 + X1) / 2,
+    YB + 44,
+    f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`,
+    `font-size="12" fill="${K.muted}" text-anchor="middle"`,
+    'xlab',
+  );
 
   // the selected row's tint, under everything in the row (clear of the arsenal). It covers the
   // row's name and detail and reaches halfway across the gap to the next row's text each way (the
@@ -207,51 +296,75 @@ export function cardSvg(ctx) {
   // ascent 0.74 and descent 0.24 of the font size.
   const ext = rows.map((r, i) => {
     const cy = Y0 + i * S + S / 2;
-    return subOf(r) ? [cy + LB - LS * 0.74, cy + LB + LG + SS * 0.24] : [cy + LS * 0.35 - LS * 0.74, cy + LS * 0.35 + LS * 0.24];
+    return subOf(r)
+      ? [cy + LB - LS * 0.74, cy + LB + LG + SS * 0.24]
+      : [cy + LS * 0.35 - LS * 0.74, cy + LS * 0.35 + LS * 0.24];
   });
-  const band = ext.map((e, i) => [i ? (ext[i - 1][1] + e[0]) / 2 : null, i < ext.length - 1 ? (e[1] + ext[i + 1][0]) / 2 : null]);
+  const band = ext.map((e, i) => [
+    i ? (ext[i - 1][1] + e[0]) / 2 : null,
+    i < ext.length - 1 ? (e[1] + ext[i + 1][0]) / 2 : null,
+  ]);
   band.forEach((b, i) => {
-    const [t, u] = ext[i], cy = Y0 + i * S + S / 2;
-    if (rows.length === 1) { b[0] = cy - S / 2 + 2; b[1] = cy + S / 2 - 2; return; }
+    const [t, u] = ext[i],
+      cy = Y0 + i * S + S / 2;
+    if (rows.length === 1) {
+      b[0] = cy - S / 2 + 2;
+      b[1] = cy + S / 2 - 2;
+      return;
+    }
     if (b[0] == null) b[0] = t - (b[1] - u);
     if (b[1] == null) b[1] = u + (t - b[0]);
     b[0] = Math.min(b[0], cy - BAR / 2 - 3);
     b[1] = Math.max(b[1], cy + BAR / 2 + 3);
   });
   rows.forEach((r, i) => {
-    const cy = Y0 + i * S + S / 2;
     const on = r.k === selected;
-    s += `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}" tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`
-      + `<rect class="hit" data-m="hit:${r.k}" x="${TX0 - 12}" y="${n1(band[i][0])}" width="${LP.x + LP.w - 6 - (TX0 - 12)}" height="${n1(band[i][1] - band[i][0])}" rx="6" fill="${on ? tint(pitchCol, HILITE, K.panel) : pitchCol}" fill-opacity="${on ? 1 : 0}"/></g>`;
+    s +=
+      `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}" tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">` +
+      `<rect class="hit" data-m="hit:${r.k}" x="${TX0 - 12}" y="${n1(band[i][0])}" width="${LP.x + LP.w - 6 - (TX0 - 12)}" height="${n1(band[i][1] - band[i][0])}" rx="6" fill="${on ? tint(pitchCol, HILITE, K.panel) : pitchCol}" fill-opacity="${on ? 1 : 0}"/></g>`;
   });
 
   // AVG over the league line, an arrow in the KPI's colour to the final value
-  const ax = sx(unit.league), ex = sx(at), AY = Y0 - 26, AH = 28;
+  const ax = sx(unit.league),
+    ex = sx(at),
+    AY = Y0 - 26,
+    AH = 28;
   const aw = textWidth('AVG', 16) + 22;
   s += `<line data-m="league" x1="${ax}" x2="${ax}" y1="${AY + AH / 2}" y2="${YB + 6}" stroke="#fff" stroke-opacity=".8" stroke-width="1.2" stroke-dasharray="5 4" pointer-events="none"/>`;
   s += `<line data-m="exact" x1="${ex}" x2="${ex}" y1="${AY}" y2="${YB + 6}" stroke="#fff" stroke-opacity=".9" stroke-width="1.4" pointer-events="none"/>`;
-  const dir = ex >= ax ? 1 : -1, from = ax + dir * (aw / 2 + 3);
+  const dir = ex >= ax ? 1 : -1,
+    from = ax + dir * (aw / 2 + 3);
   if (dir * (ex - from) > 20) {
     s += `<line data-m="arrow" x1="${n1(from)}" x2="${n1(ex - dir * 12)}" y1="${AY}" y2="${AY}" stroke="${kcol}" stroke-width="3.5" stroke-linecap="round"/>`;
     s += `<path data-m="arrowhead" d="M${ex},${AY}L${n1(ex - dir * 15)},${AY - 8}L${n1(ex - dir * 15)},${AY + 8}Z" fill="${kcol}"/>`;
   }
   s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - AH / 2}" width="${n1(aw)}" height="${AH}" rx="4" fill="${K.ground}" stroke="#fff" stroke-width="1.3"/>`;
-  s += text(ax, AY + 6, 'AVG', `font-size="16" font-weight="700" letter-spacing="1" fill="#fff" text-anchor="middle"`, 'avg');
+  s += text(
+    ax,
+    AY + 6,
+    'AVG',
+    `font-size="16" font-weight="700" letter-spacing="1" fill="#fff" text-anchor="middle"`,
+    'avg',
+  );
 
   // the connectors first, under every bar: each from the middle of one bar to the middle of the
   // next, at the running total between them, so the bars hide its ends
-  const CW = 1.2;  // connector width
+  const CW = 1.2; // connector width
   let x = unit.league;
   rows.forEach((r, i) => {
-    if (i) s += `<g class="row fx" data-k="${r.k}"><line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(Y0 + (i - 1) * S + S / 2)}" y2="${n1(Y0 + i * S + S / 2)}" stroke="${K.conn}" stroke-width="${CW}"/></g>`;
+    if (i)
+      s += `<g class="row fx" data-k="${r.k}"><line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(Y0 + (i - 1) * S + S / 2)}" y2="${n1(Y0 + i * S + S / 2)}" stroke="${K.conn}" stroke-width="${CW}"/></g>`;
     x += r.v;
   });
   // bars, values and row names
   x = unit.league;
   rows.forEach((r, i) => {
-    const cy = Y0 + i * S + S / 2, end = x + r.v;
+    const cy = Y0 + i * S + S / 2,
+      end = x + r.v;
     const col = good * r.v > 0 ? C.gold : C.teal;
-    const a = sx(Math.min(x, end)), b = sx(Math.max(x, end)), w = Math.max(1, n1(b - a));
+    const a = sx(Math.min(x, end)),
+      b = sx(Math.max(x, end)),
+      w = Math.max(1, n1(b - a));
     s += `<g class="row fx" data-k="${r.k}">`;
     // half a connector's width longer at each end, so a connector's outer edge is flush with the
     // bar's edge
@@ -259,11 +372,24 @@ export function cardSvg(ctx) {
     const right = r.v >= 0;
     // on a chip, so it reads over the league and final-value lines; on the selected row the chip
     // is the row's tint, so the value sits straight on the highlight
-    const tw = textWidth(f.d(r.v), FS), vx = right ? b + 7 : a - 7;
+    const tw = textWidth(f.d(r.v), FS),
+      vx = right ? b + 7 : a - 7;
     s += `<rect data-m="vb:${r.k}" x="${n1(right ? vx - 3 : vx - tw - 3)}" y="${n1(cy - CHIP / 2)}" width="${n1(tw + 6)}" height="${n1(CHIP)}" rx="3" fill="${r.k === selected ? tint(pitchCol, HILITE, K.panel) : K.panel}" fill-opacity="${r.k === selected ? 1 : 0.85}"/>`;
-    s += text(vx, cy + FS * 0.35, f.d(r.v), `font-size="${FS}" font-weight="700" fill="#fff" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
+    s += text(
+      vx,
+      cy + FS * 0.35,
+      f.d(r.v),
+      `font-size="${FS}" font-weight="700" fill="#fff" text-anchor="${right ? 'start' : 'end'}"`,
+      `v:${r.k}`,
+    );
     const sub = subOf(r);
-    s += text(TX0, sub ? cy + LB : cy + LS * 0.35, r.label, `font-size="${n1(LS)}" font-weight="600" fill="${r.k === selected ? '#fff' : K.ink}"`, `l:${r.k}`);
+    s += text(
+      TX0,
+      sub ? cy + LB : cy + LS * 0.35,
+      r.label,
+      `font-size="${n1(LS)}" font-weight="600" fill="${r.k === selected ? '#fff' : K.ink}"`,
+      `l:${r.k}`,
+    );
     if (sub) s += text(TX0, cy + LB + LG, sub, `font-size="${n1(SS)}" fill="${K.muted}"`, `dt:${r.k}`);
     s += '</g>';
     x = end;
@@ -294,70 +420,140 @@ function leaguePanel(ctx, r, P) {
   const L = P.x + 22;
   // the Location card plots each unit's average location, and says so
   const ptitle = r.k === 'Location' ? 'Average Location' : r.label;
-  const title = ptitle.length > 22 ? Math.min(26, (P.w - 44) / textWidth(ptitle, 26) * 26) : 26;
+  const title = ptitle.length > 22 ? Math.min(26, ((P.w - 44) / textWidth(ptitle, 26)) * 26) : 26;
   s += text(L, P.y + 41, ptitle, `font-size="${n1(title)}" font-weight="700" fill="${K.ink}"`, 'ptitle');
-  s += text(L, P.y + 68, (ctx.poolLabel || '').replace(/ \(\d+\+ pitches\)$/, ''), `font-size="15" fill="${K.muted}"`, 'psub');
+  s += text(
+    L,
+    P.y + 68,
+    (ctx.poolLabel || '').replace(/ \(\d+\+ pitches\)$/, ''),
+    `font-size="15" fill="${K.muted}"`,
+    'psub',
+  );
 
   const pts = [];
   for (const p of pool) {
     const v = val(r.k, p);
     if (!Number.isFinite(v)) continue;
     let xv, yv;
-    if (grouped) { xv = p.info[grouped[0]]; yv = p.info[grouped[1]]; } else { xv = inp(r.k, p); yv = v; }
+    if (grouped) {
+      xv = p.info[grouped[0]];
+      yv = p.info[grouped[1]];
+    } else {
+      xv = inp(r.k, p);
+      yv = v;
+    }
     if (!Number.isFinite(xv) || !Number.isFinite(yv)) continue;
     if (r.k === 'Other') xv = Math.log10(xv);
     // x_b is + = inside, drawn as it reads: inside on the right, as a pitcher sees a right-handed batter
     // strip-plot jitter, fixed per pitcher: each strip spans a fifth of the plot's width, as in the
     // drilldown's earlier league card
     if (r.k === 'lefty') xv += (((p.info.pitcher * 2654435761) % 1000) / 1000) * 0.4 - 0.2;
-    pts.push({ xv, yv, v, id: p.info.pitcher, pt: p.info.pt, info: p.info, me: p.info.pitcher === info.pitcher && p.info.pt === info.pt });
+    pts.push({
+      xv,
+      yv,
+      v,
+      id: p.info.pitcher,
+      pt: p.info.pt,
+      info: p.info,
+      me: p.info.pitcher === info.pitcher && p.info.pt === info.pt,
+    });
   }
   const me = pts.find((p) => p.me);
   if (!me) return s + text(L, P.y + 110, 'No league units to compare.', `font-size="15" fill="${K.muted}"`, 'pnone');
 
   // Location is drawn as a strike zone, with no axes (the drilldown's league card)
   const zone = r.k === 'Location';
-  const px0 = zone ? L : P.x + 82, px1 = P.x + P.w - (zone ? 22 : 26), py0 = P.y + 100, py1 = P.y + (zone ? 370 : 348);
-  const xs = pts.map((p) => p.xv).sort((a, b) => a - b), ys = pts.map((p) => p.yv).sort((a, b) => a - b);
-  let xa = Math.min(quantile(xs, 0.01), me.xv), xb = Math.max(quantile(xs, 0.99), me.xv);
-  let ya = Math.min(quantile(ys, 0.01), me.yv), yb = Math.max(quantile(ys, 0.99), me.yv);
-  if (xa === xb) { xa -= 0.5; xb += 0.5; }
-  if (ya === yb) { ya -= 0.5; yb += 0.5; }
-  const xp = (xb - xa) * 0.06, yp = (yb - ya) * 0.08;
-  xa -= xp; xb += xp; ya -= yp; yb += yp;
-  const ZW = 17 / 12, ZASPECT = 17 / 22;  // the zone's width (ft) and width / height
+  const px0 = zone ? L : P.x + 82,
+    px1 = P.x + P.w - (zone ? 22 : 26),
+    py0 = P.y + 100,
+    py1 = P.y + (zone ? 370 : 348);
+  const xs = pts.map((p) => p.xv).sort((a, b) => a - b),
+    ys = pts.map((p) => p.yv).sort((a, b) => a - b);
+  let xa = Math.min(quantile(xs, 0.01), me.xv),
+    xb = Math.max(quantile(xs, 0.99), me.xv);
+  let ya = Math.min(quantile(ys, 0.01), me.yv),
+    yb = Math.max(quantile(ys, 0.99), me.yv);
+  if (xa === xb) {
+    xa -= 0.5;
+    xb += 0.5;
+  }
+  if (ya === yb) {
+    ya -= 0.5;
+    yb += 0.5;
+  }
+  const xp = (xb - xa) * 0.06,
+    yp = (yb - ya) * 0.08;
+  xa -= xp;
+  xb += xp;
+  ya -= yp;
+  yb += yp;
+  const ZW = 17 / 12,
+    ZASPECT = 17 / 22; // the zone's width (ft) and width / height
   if (zone) {
     // a frame round the zone and the league's 1st-99th percentile of locations, at the zone's
     // true proportions (x in ft, y in zone heights), centred on the plate
-    const pw = px1 - px0, ph = py1 - py0;
-    const lo = Math.min(quantile(ys, 0.01), me.yv, -0.05) - 0.08, hi = Math.max(quantile(ys, 0.99), me.yv, 1.05) + 0.08;
+    const pw = px1 - px0,
+      ph = py1 - py0;
+    const lo = Math.min(quantile(ys, 0.01), me.yv, -0.05) - 0.08,
+      hi = Math.max(quantile(ys, 0.99), me.yv, 1.05) + 0.08;
     const halfW = Math.max(Math.abs(quantile(xs, 0.01)), Math.abs(quantile(xs, 0.99)), Math.abs(me.xv), ZW / 2) * 1.15;
-    let zh = ph / (hi - lo);                              // px per zone height
-    let k = (zh * ZASPECT) / ZW;                          // px per ft, at the zone's proportions
-    if (pw / k < 2 * halfW) { k = pw / (2 * halfW); zh = (ZW * k) / ZASPECT; }  // too narrow: fit x
+    let zh = ph / (hi - lo); // px per zone height
+    let k = (zh * ZASPECT) / ZW; // px per ft, at the zone's proportions
+    if (pw / k < 2 * halfW) {
+      k = pw / (2 * halfW);
+      zh = (ZW * k) / ZASPECT;
+    } // too narrow: fit x
     const midY = (lo + hi) / 2;
     [xa, xb] = [-pw / (2 * k), pw / (2 * k)];
     [ya, yb] = [midY - ph / (2 * zh), midY + ph / (2 * zh)];
   }
   // Handedness: two strips, LHP (1) at a quarter of the width and RHP (0) at three quarters
   if (r.k === 'lefty') [xa, xb] = [1.5, -0.5];
-  const sxr = lin(xa, xb, px0, px1), syr = lin(ya, yb, py1, py0);
-  const cx = (v) => n1(Math.max(px0, Math.min(px1, sxr(v)))), cy = (v) => n1(Math.max(py0, Math.min(py1, syr(v))));
-  const xfmt = (v) => (r.k === 'Other' ? String(Math.round(10 ** v)) : PCT.has(r.k) ? `${Math.round(v * 100)}%` : `${+v.toFixed(2)}`);
+  const sxr = lin(xa, xb, px0, px1),
+    syr = lin(ya, yb, py1, py0);
+  const cx = (v) => n1(Math.max(px0, Math.min(px1, sxr(v)))),
+    cy = (v) => n1(Math.max(py0, Math.min(py1, syr(v))));
+  const xfmt = (v) =>
+    r.k === 'Other' ? String(Math.round(10 ** v)) : PCT.has(r.k) ? `${Math.round(v * 100)}%` : `${+v.toFixed(2)}`;
   // as many decimals as the tick step needs (a 2.5 step mustn't round to "3"), minus as "−"
   const yt = niceTicks(ya, yb, 4);
-  const dp = yt.length > 1 ? Math.max(0, -Math.floor(Math.log10(yt[1] - yt[0]) + 1e-9), (yt[1] - yt[0]) % 1 ? 1 : 0) : 0;
+  const dp =
+    yt.length > 1 ? Math.max(0, -Math.floor(Math.log10(yt[1] - yt[0]) + 1e-9), (yt[1] - yt[0]) % 1 ? 1 : 0) : 0;
   const yfmt = grouped || isPlus(target) ? (v) => (+v.toFixed(dp)).toFixed(dp).replace('-', '−') : f.tick;
-  for (const t of zone ? [] : yt) s += text(px0 - 14, syr(t) + 5, yfmt(t), `font-size="14" fill="${K.muted}" text-anchor="end"`, `py:${t}`);
-  for (const [t, l] of r.k === 'lefty' ? [[1, 'LHP'], [0, 'RHP']] : []) s += text(sxr(t), py1 + 26, l, `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="middle"`, `px:${l}`);
-  for (const t of zone || r.k === 'lefty' ? [] : niceTicks(xa, xb, 4)) s += text(sxr(t), py1 + 26, xfmt(t), `font-size="14" fill="${K.muted}" text-anchor="middle"`, `px:${t}`);
+  for (const t of zone ? [] : yt)
+    s += text(px0 - 14, syr(t) + 5, yfmt(t), `font-size="14" fill="${K.muted}" text-anchor="end"`, `py:${t}`);
+  for (const [t, l] of r.k === 'lefty'
+    ? [
+        [1, 'LHP'],
+        [0, 'RHP'],
+      ]
+    : [])
+    s += text(
+      sxr(t),
+      py1 + 26,
+      l,
+      `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="middle"`,
+      `px:${l}`,
+    );
+  for (const t of zone || r.k === 'lefty' ? [] : niceTicks(xa, xb, 4))
+    s += text(sxr(t), py1 + 26, xfmt(t), `font-size="14" fill="${K.muted}" text-anchor="middle"`, `px:${t}`);
   // no influence on the target: a line across the plot at 0
-  if (!grouped && ya < 0 && yb > 0) s += `<line data-m="pzero" x1="${px0}" x2="${px1}" y1="${n1(syr(0))}" y2="${n1(syr(0))}" stroke="#fff" stroke-opacity=".45" stroke-width="1.2"/>`;
-  const xl = grouped ? (r.k === 'Location' ? 'Horizontal location (ft, + = inside)' : 'Balls before the pitch')
-    : r.k === 'Other' ? 'Pitches (log scale)' : ctx.axisOf ? ctx.axisOf(r.k) : AXIS[r.k] || LABELS[r.k];
-  if (!zone && r.k !== 'lefty') s += text((px0 + px1) / 2, py1 + 50, xl, `font-size="13.5" fill="${K.muted}" text-anchor="middle"`, 'pxlab');
+  if (!grouped && ya < 0 && yb > 0)
+    s += `<line data-m="pzero" x1="${px0}" x2="${px1}" y1="${n1(syr(0))}" y2="${n1(syr(0))}" stroke="#fff" stroke-opacity=".45" stroke-width="1.2"/>`;
+  const xl = grouped
+    ? r.k === 'Location'
+      ? 'Horizontal location (ft, + = inside)'
+      : 'Balls before the pitch'
+    : r.k === 'Other'
+      ? 'Pitches (log scale)'
+      : ctx.axisOf
+        ? ctx.axisOf(r.k)
+        : AXIS[r.k] || LABELS[r.k];
+  if (!zone && r.k !== 'lefty')
+    s += text((px0 + px1) / 2, py1 + 50, xl, `font-size="13.5" fill="${K.muted}" text-anchor="middle"`, 'pxlab');
   const yl = grouped ? (r.k === 'Location' ? 'Vertical location' : 'Strikes before the pitch') : tname;
-  if (!zone) s += `<text data-m="pylab" transform="translate(${P.x + 24},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="13.5" fill="${K.muted}" text-anchor="middle">${esc(yl)}</text>`;
+  if (!zone)
+    s += `<text data-m="pylab" transform="translate(${P.x + 24},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="13.5" fill="${K.muted}" text-anchor="middle">${esc(yl)}</text>`;
 
   const vs = pts.map((p) => p.v).sort((a, b) => a - b);
   const vmax = Math.max(Math.abs(quantile(vs, 0.02)), Math.abs(quantile(vs, 0.98)), 1e-9);
@@ -382,10 +578,25 @@ function leaguePanel(ctx, r, P) {
   const own = val(r.k, { unit, info });
   const mcol = good * (r.k === 'Other' ? r.v : own) > 0 ? C.gold : C.teal;
   if (zone) {
-    const zl = sxr(-ZW / 2), zr = sxr(ZW / 2), zt = syr(1), zb = syr(0);
+    const zl = sxr(-ZW / 2),
+      zr = sxr(ZW / 2),
+      zt = syr(1),
+      zb = syr(0);
     s += `<rect data-m="zone" x="${n1(zl)}" y="${n1(zt)}" width="${n1(zr - zl)}" height="${n1(zb - zt)}" fill="none" stroke="#fff" stroke-width="1.6" pointer-events="none"/>`;
-    s += text(zl, zb + 20, 'Away', `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="start" pointer-events="none"`, 'zaway');
-    s += text(zr, zb + 20, 'Inside', `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="end" pointer-events="none"`, 'zin');
+    s += text(
+      zl,
+      zb + 20,
+      'Away',
+      `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="start" pointer-events="none"`,
+      'zaway',
+    );
+    s += text(
+      zr,
+      zb + 20,
+      'Inside',
+      `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="end" pointer-events="none"`,
+      'zin',
+    );
   }
   s += `<circle data-m="pme" cx="${cx(me.xv)}" cy="${cy(me.yv)}" r="8" fill="${mcol}" stroke="#fff" stroke-width="2.4"/>`;
   // the plot's hover and click area (the page looks up the nearest dot: nearestCardPoint)
@@ -396,33 +607,71 @@ function leaguePanel(ctx, r, P) {
   // reads) over its percentile among the dots; on the right its impact on the target (gold or
   // teal, as its bar) over its percentile; then the minimum. Location and Count have no one input,
   // so their impact spans the tile alone.
-  const DY = P.y + 414, mid = P.x + P.w / 2, half = grouped ? P.w - 68 : P.w / 2 - 34;
+  const DY = P.y + 414,
+    mid = P.x + P.w / 2,
+    half = grouped ? P.w - 68 : P.w / 2 - 34;
   s += `<line data-m="pdiv" x1="${L}" x2="${P.x + P.w - 22}" y1="${DY}" y2="${DY}" stroke="${K.line}" stroke-width="1.5"/>`;
-  if (!grouped) s += `<line data-m="pdiv2" x1="${mid}" x2="${mid}" y1="${DY + 16}" y2="${DY + 76}" stroke="${K.line}" stroke-width="1.5"/>`;
+  if (!grouped)
+    s += `<line data-m="pdiv2" x1="${mid}" x2="${mid}" y1="${DY + 16}" y2="${DY + 76}" stroke="${K.line}" stroke-width="1.5"/>`;
   const fit = (str, size) => n1(Math.min(size, (half / textWidth(str, size)) * size));
-  const seg = (cxs, big, col, sub, m) => text(cxs, DY + 42, big, `font-size="${fit(big, 27)}" font-weight="700" fill="${col}" text-anchor="middle"`, `${m}1`)
-    + text(cxs, DY + 67, sub, `font-size="14.5" fill="${K.muted}" text-anchor="middle"`, `${m}2`);
-  const rank = pctile(vs.map((v) => good * v).sort((a, b) => a - b), good * me.v);
-  s += seg(grouped ? mid : (mid + P.x + P.w - 22) / 2, `${f.d(r.k === 'Other' ? r.v : own)} ${tname}`, mcol, `${ord(rank)} percentile`, 'pr');
+  const seg = (cxs, big, col, sub, m) =>
+    text(
+      cxs,
+      DY + 42,
+      big,
+      `font-size="${fit(big, 27)}" font-weight="700" fill="${col}" text-anchor="middle"`,
+      `${m}1`,
+    ) + text(cxs, DY + 67, sub, `font-size="14.5" fill="${K.muted}" text-anchor="middle"`, `${m}2`);
+  const rank = pctile(
+    vs.map((v) => good * v).sort((a, b) => a - b),
+    good * me.v,
+  );
+  s += seg(
+    grouped ? mid : (mid + P.x + P.w - 22) / 2,
+    `${f.d(r.k === 'Other' ? r.v : own)} ${tname}`,
+    mcol,
+    `${ord(rank)} percentile`,
+    'pr',
+  );
   // the input: Other's is the pitch count (its x axis), the baseline's the same-hand share
   const xin = grouped || r.k === 'lefty' ? NaN : r.k === 'Other' ? info.n : inp(r.k, { unit, info });
-  const inVal = r.k === 'Other' ? `${info.n.toLocaleString()} pitches`
-    : r.k === 'baseline' ? `${Math.round(100 * xin)}% vs Same Hand`
-    : r.detail || '–';
-  const inPct = Number.isFinite(xin) ? `${ord(pctile(pts.map((p) => p.xv), r.k === 'Other' ? Math.log10(xin) : xin))} percentile` : '';
+  const inVal =
+    r.k === 'Other'
+      ? `${info.n.toLocaleString()} pitches`
+      : r.k === 'baseline'
+        ? `${Math.round(100 * xin)}% vs Same Hand`
+        : r.detail || '–';
+  const inPct = Number.isFinite(xin)
+    ? `${ord(
+        pctile(
+          pts.map((p) => p.xv),
+          r.k === 'Other' ? Math.log10(xin) : xin,
+        ),
+      )} percentile`
+    : '';
   if (!grouped) s += seg((L + mid) / 2, inVal, K.ink, inPct, 'pl');
   const minN = ctx.minN ?? 1;
-  s += text(mid, DY + 101, `Min ${minN} pitch${minN === 1 ? '' : 'es'} thrown`, `font-size="14" fill="${K.faint}" text-anchor="middle"`, 'pl3');
+  s += text(
+    mid,
+    DY + 101,
+    `Min ${minN} pitch${minN === 1 ? '' : 'es'} thrown`,
+    `font-size="14" fill="${K.faint}" text-anchor="middle"`,
+    'pl3',
+  );
   return s;
 }
 
 // the nearest league dot to a point in card coordinates, within maxDist
 export function nearestCardPoint(fx, fy, maxDist = 12) {
   if (!cardPoints) return null;
-  let best = null, bd = maxDist * maxDist;
+  let best = null,
+    bd = maxDist * maxDist;
   for (const p of cardPoints) {
     const d = (p.fx - fx) ** 2 + (p.fy - fy) ** 2;
-    if (d < bd) { bd = d; best = p; }
+    if (d < bd) {
+      bd = d;
+      best = p;
+    }
   }
   return best;
 }
