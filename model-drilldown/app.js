@@ -3,16 +3,16 @@
 // to the next. A view is linkable as #<season>-<pitcher id>-<pitch type>&model=&target=&row=.
 
 import {
-  loadMeta, loadFeatures, loadUnits, loadFidelity, cardRows, rowValue, minImpact, targetName, targetGood,
+  loadMeta, loadFeatures, loadUnits, loadFidelity, cardRows, rowValue, otherValue, minImpact, targetName, targetGood,
   outcomeRows, outcomeValue, outcomeInput, OUTCOME_AXIS, LOCATION_AXIS,
   MODELS, OUTCOMES, TARGET_NAMES, PITCH_NAMES, LABELS,
-} from './data.js?v=10';
+} from './data.js?v=11';
 import {
   phoneFlowSvg, swarmSvg, sankeySvg, svgToPng,
   nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, titleRight, C,
-} from './charts.js?v=73';
-import { cardSvg, cardSvgForExport, nearestCardPoint } from './card.js?v=44';
+} from './charts.js?v=74';
+import { cardSvg, cardSvgForExport, nearestCardPoint } from './card.js?v=45';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -282,6 +282,10 @@ function render() {
       rowInputOf: (k, p) => outcomeInput(k, units, p.info),
       axisOf: state.model === 'location' ? LOCATION_AXIS : OUTCOME_AXIS,
     });
+  } else {
+    // the league's Other folds the same rows as this card's, so its dots compare with the bar
+    const folded = rows.find((r) => r.k === 'Other')?.folded || [];
+    view.rowValueOf = (k, p) => (k === 'Other' ? otherValue(folded, p.unit) : rowValue(k, p.unit));
   }
 
   el.out.hidden = false;
