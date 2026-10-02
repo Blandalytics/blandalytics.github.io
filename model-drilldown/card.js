@@ -120,39 +120,39 @@ export function cardSvg(ctx) {
 
   // ---- the arsenal tile, on the card's left edge, as tall as the others ----
   // Titled "Pitch Mix", at the other tiles' title size and baseline. Under it a pill per pitch
-  // type, stacked, most thrown first: the type over its value, white, outlined in its colour (the
-  // pitcher cards' palette); the chosen one filled with it. Beside them the pitch usage as one
-  // vertical bar (the mockup's horizontal one, at least 12 wide, wider if the title needs the
-  // room): a segment per pitch type as tall as its share of the pitches, the chosen one filled in
-  // its colour, the rest outlined.
+  // type, stacked, most thrown first, as tall as its share of the pitches but never too short for
+  // its one line, "<type>: <value>", in white; outlined in its colour (the pitcher cards' palette),
+  // the chosen one filled with it. The pills span the title (or their widest label).
   const TT = 26, TM = 22;  // the tiles' title size and margin
   const AP = { x: 20, y: 133, h: 530 }, ATL = 'Pitch Mix';
-  const PX = AP.x + TM, PW = 62, UX = PX + PW + 8, PG = 8, AB = AP.y + AP.h - TM;
-  const UW = Math.max(12, Math.ceil(textWidth(ATL, TT)) - (UX - PX));  // pills and bar span the title
-  AP.w = UX + UW + TM - AP.x;  // the tile's margin each side
+  const PFS = 17, PG = 6, PR = 9;  // label size, gap, corner radius (less on a pill too short for it)
+  const pill = (p) => `${p.pt}: ${p.unit ? f.v(p.unit.exact) : '–'}`;
+  const PX = AP.x + TM, AB = AP.y + AP.h - TM;
+  const PW = Math.ceil(Math.max(textWidth(ATL, TT), ...arsenal.map((p) => textWidth(pill(p), PFS) + 20)));
+  AP.w = PX + PW + TM - AP.x;  // the tile's margin each side
   s += `<rect x="${AP.x}" y="${AP.y}" width="${n1(AP.w)}" height="${AP.h}" rx="8" fill="${K.panel}"/>`;
   s += text(PX, AP.y + 41, ATL, `font-size="${TT}" font-weight="700" fill="${K.ink}"`);
   const AT = n1(AP.y + 41 + TT * 0.24 + 18);
-  const PH = (AB - AT - PG * (arsenal.length - 1)) / arsenal.length;  // the pills fill the column
-  const PR = 9;  // the pills' corner radius; a usage segment shares it, less where it's too short for it
-  const SB = AT + arsenal.length * PH + PG * (arsenal.length - 1);  // the stack's foot
-  const PFS = Math.min(17, PH * 0.34);
+  // heights: each pitch type's share of the column, floored at one line of text; the pills over
+  // the floor give up what the floored ones take, in proportion
+  const minH = PFS + 12, avail = AB - AT - PG * (arsenal.length - 1);
+  const total = sum(arsenal.map((p) => p.n));
+  let hs = arsenal.map((p) => (avail * p.n) / total);
+  for (let it = 0; it < arsenal.length; it++) {
+    const low = hs.map((h) => h <= minH + 1e-9);
+    const need = sum(hs.map((h, k) => (low[k] ? minH - h : 0)));
+    if (need <= 1e-9) break;
+    const roomW = sum(hs.filter((_, k) => !low[k]));
+    hs = hs.map((h, k) => (low[k] ? minH : h - (need * h) / roomW));
+  }
+  let py = AT;
   arsenal.forEach((p, i) => {
-    const y = AT + i * (PH + PG), on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
-    const val = p.unit ? f.v(p.unit.exact) : '–';
+    const h = hs[i], on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
-    s += `<rect x="${PX + 1}" y="${n1(y + 1)}" width="${PW - 2}" height="${n1(PH - 2)}" rx="${PR}" fill="${on ? col : 'transparent'}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
-    s += text(PX + PW / 2, y + PH / 2 - PFS * 0.18, p.pt, `font-size="${n1(PFS)}" font-weight="700" fill="#fff" text-anchor="middle"`);
-    s += text(PX + PW / 2, y + PH / 2 + PFS * 0.98, val, `font-size="${n1(PFS * 0.92)}" font-weight="${on ? 700 : 500}" fill="#fff" text-anchor="middle"`);
+    s += `<rect x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? col : 'transparent'}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
+    s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 600}" fill="#fff" text-anchor="middle"`);
     s += '</g>';
-  });
-  const total = sum(arsenal.map((p) => p.n)), UG = 3;
-  let uy = AT;
-  arsenal.forEach((p) => {
-    const h = Math.max(5, ((SB - AT - UG * (arsenal.length - 1)) * p.n) / total), on = p.pt === info.pt;  // a rare pitch type stays visible
-    const col = PITCH_COLORS[p.pt] || '#c7c7c7';
-    s += `<rect class="usage" data-pt="${p.pt}" x="${on ? UX : UX + 0.75}" y="${n1(on ? uy : uy + 0.75)}" width="${on ? UW : UW - 1.5}" height="${n1(on ? h : h - 1.5)}" rx="${n1(Math.min(PR, (on ? h : h - 1.5) / 2))}" fill="${on ? col : 'none'}" stroke="${on ? 'none' : col}" stroke-width="1.5"/>`;
-    uy += h + UG;
+    py += h + PG;
   });
 
   // ---- the waterfall tile, titled, right of the arsenal's (the tiles' 12 apart) ----
