@@ -611,20 +611,23 @@ only in the Target menu.
 
 Three figures, in the Swing Profiles card colours:
 
-- **The drilldown.** Three columns joined by ribbons. On the left is the pitcher's arsenal, one
-  band per pitch type sized by pitches thrown; click a band to switch pitch types. In the middle is
-  the chosen pitch type's SHAP waterfall, drawn as `shap_values_card.py` draws it: the same rows,
-  folding, gold/teal bars, connectors, league line, dashed finish and KPI box. On the right, the
+- **The drilldown.** The card drawn by `card.js`, 16:9 on a navy ground: the pitcher, pitch type
+  and season over three tiles, with the KPI alone in the top right corner. On the left, **Pitches**:
+  a pill per pitch type, as tall as its share of the pitches; click one to switch pitch types. In
+  the middle, the chosen pitch type's SHAP waterfall, as `shap_values_card.py` draws it (the same
+  rows, folding, gold/teal bars and connectors), from AVG to the final value. On the right, the
   selected row (click any row) against the league: each dot is another pitcher's version of the
-  pitch, with its mean input on x and that row's SHAP on y, the binned mean as a white line (the
-  dependence plot of `shap_analysis.py`, per unit rather than per pitch). Location and Count plot
-  their two inputs against each other, coloured by the row's SHAP. The three numbers below carry
-  Swing Profiles' league KDEs: the value, the biggest lift and the biggest drag.
-  The figure is 16:9, on screen and copied (**Copy PNG** gives 4266 × 2400), and on a desktop or
-  laptop it scales to fit the card's width and the screen's height (less 40 px). The KPI box sits
-  over the league card. On a phone (600 px or narrower) the page shows only the waterfall, drawn
-  at the screen's width with static rows, and the three numbers with their KDEs: no league card,
-  beeswarm or Sankey (**Copy PNG** still gives the full desktop figure).
+  pitch, with its mean input on x and that row's value on y, the binned mean as a white line (the
+  dependence plot of `shap_analysis.py`, per unit rather than per pitch); under it, the row's input
+  and its impact on the target, each with its percentile (the best change for the pitcher is the
+  100th). Location and Count plot their two inputs against each other, coloured by the row's
+  value. Hover a dot for the pitcher; click it to open them. Changing any input morphs the card
+  from one draw to the next. The three numbers below carry Swing Profiles' league KDEs: the value,
+  the biggest lift and the biggest drag. On a desktop or laptop the card scales to fit the page's
+  width and the screen's height (less 40 px); **Copy PNG** gives it at 2560 × 1440. On a phone
+  (600 px or narrower) the page shows only the waterfall, drawn at the screen's width with static
+  rows, and the three numbers with their KDEs: no league card, beeswarm or Sankey (**Copy PNG**
+  still gives the full card).
 - **Against the league.** A beeswarm of every row's SHAP over the comparison group, coloured by
   each unit's input, with the pitcher marked.
 - **Where the probability goes.** A Sankey of the nine outcome probabilities. They sum to 100%, so
@@ -670,6 +673,8 @@ four-hour browser cache.
 | `model-drilldown/charts.js` | the three figures as SVG, their hover lookups, and the PNG export |
 | `model-drilldown/morph.js` | the Plotly-style transition between two renders of a figure |
 | `model-drilldown/index.html`, `app.js` | the page: controls, the linked focus, tooltips, downloads, the link hash |
+| `model-drilldown/card.js` | the page's desktop drilldown, a 16:9 card (`cardSvg(ctx)`, from app.js's `view`): pitch type pills, the waterfall, the selected row against the league, the KPI in the corner; morph keys, and the league dots' hover lookup (`nearestCardPoint`) |
+| `model-drilldown/card-demo.html` | a demo of the card from the live Stuff+ tables (Brody Hopkins' 2026 four-seamer by default; linked like the drilldown, `#<season>-<pitcher id>-<pitch type>&model=plv&target=wobacon&row=<row>`, any target split by feature), or from made-up numbers at `#synthetic`; click a row or a tab, **Download PNG** gives it at 3x |
 
 Locally, copy the staged tables (`stuff_model/build/shap-values/`) to `model-drilldown/data/shap-values/`
 and open the page with `?data=data/`. After any change to the JavaScript, bump the `?v=` query on the

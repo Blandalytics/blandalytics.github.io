@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<title>Drilldown Card Demo · Blandalytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{--ground:#0d1117; --surface:#151b23; --ink:#e3e9f1; --muted:#8a96a6; --rule:#242c37}
+*{box-sizing:border-box}
+body{margin:0; background:var(--ground); color:var(--ink); font-family:"DM Sans",system-ui,sans-serif; font-size:15px; padding:24px 16px}
+main{max-width:1280px; margin:0 auto; display:flex; flex-direction:column; gap:14px}
+h1{margin:0; font-size:26px}
+p{margin:0; color:var(--muted); font-size:14px; max-width:860px}
+a{color:#6cb4ff}
+#card svg{display:block; width:100%; height:auto; border-radius:6px}
+#card .row,#card .tab{cursor:pointer}
+#card .row:focus,#card .tab:focus{outline:none}
+.row-actions{display:flex; gap:10px; align-items:center}
+button{font:inherit; color:var(--ink); background:#1b222c; border:1px solid var(--rule); border-radius:6px; padding:7px 12px; cursor:pointer}
+button:hover{border-color:#6b7684}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <a href="./" style="color:var(--muted);text-decoration:none;font-size:14px">← Model Drilldown</a>
+    <h1>Drilldown card (demo)</h1>
+    <p>The Model Drilldown's figure laid out as a 16:9 card by <code>card.js</code>, from the same rows, formats and league
+      comparison the page builds, read from the live SHAP tables. Click a row or a pitch type. The link works like the
+      drilldown's (<code>#&lt;season&gt;-&lt;pitcher id&gt;-&lt;pitch type&gt;&amp;model=plv&amp;target=wobacon&amp;row=velo</code>); <a href="#synthetic">#synthetic</a> draws made-up numbers instead.</p>
+  </header>
+  <div id="card"></div>
+  <div class="row-actions"><button id="dl" type="button">Download PNG</button><span id="msg" style="color:var(--muted);font-size:13px">loading the SHAP tables…</span></div>
+</main>
+<script type="module">
+import { PITCH_NAMES, OUTCOMES, cardRows, loadMeta, loadFeatures, loadUnits, minImpact, targetGood } from './data.js?v=9';
+import { svgToPng } from './charts.js?v=69';
+import { cardSvg } from './card.js?v=30';
+
+// ---- a seeded, synthetic league ------------------------------------------------------------
+let seed = 20261002;
+const rand = () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const normal = (m, sd) => m + sd * Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
+
+const FEATURES = ['velo', 'az', 'ax_m', 'rel_z', 'extension', 'spin_rate', 'spin_eff', 'axis_diff'];
+const meta = { models: { stuff: { features: FEATURES } }, labels: {} };
+// per pitch type: each input's league spread [mean, sd] and its SHAP (Stuff+ points) as a
+// function of it; the baseline as a function of the same-hand share
+const PT = {
+  FF: {
+    group: 'Fastball', count: 689,
+    in: { velo: [94.3, 2], az: [16.3, 2.1], ax_m: [8, 4], rel_z: [5.8, 0.45], extension: [6.4, 0.35], spin_rate: [2290, 140], spin_eff: [0.93, 0.05], axis_diff: [0, 8] },
+    shap: {
+      velo: (v) => 3.3 * (v - 94.3), az: (v) => (v < 16.5 ? 0.075 : 0.2) * (v - 16.5) ** 2 - 2.7, ax_m: (v) => 0.15 * (v - 8),
+      rel_z: (v) => 3.5 * (5.8 - v), extension: (v) => 1.5 * (v - 6.4), spin_rate: (v) => 0.02 * (v - 2290),
+      spin_eff: (v) => 10 * (v - 0.93), axis_diff: (v) => 0.6 * v,
+    },
+    baseline: (share) => -6 * (share - 0.45),
+  },
+  CU: {
+    group: 'Breaking', count: 402,
+    in: { velo: [79, 3], az: [-11, 4], ax_m: [-7, 4], rel_z: [5.8, 0.45], extension: [6.3, 0.35], spin_rate: [2550, 250], spin_eff: [0.7, 0.12], axis_diff: [0, 10] },
+    shap: {
+      velo: (v) => 1.2 * (v - 79), az: (v) => -0.9 * (v + 11), ax_m: (v) => -0.4 * (v + 7), rel_z: (v) => 1.5 * (5.8 - v),
+      extension: (v) => 1.2 * (v - 6.3), spin_rate: (v) => 0.018 * (v - 2550), spin_eff: (v) => 6 * (v - 0.7), axis_diff: (v) => 0.15 * v,
+    },
+    baseline: (share) => 2 + 4 * (share - 0.5),
+  },
+  FC: {
+    group: 'Fastball', count: 356,
+    in: { velo: [89, 2.2], az: [8, 3], ax_m: [-2, 3], rel_z: [5.8, 0.45], extension: [6.4, 0.35], spin_rate: [2400, 160], spin_eff: [0.5, 0.15], axis_diff: [0, 9] },
+    shap: {
+      velo: (v) => 2.4 * (v - 89), az: (v) => 0.5 * (v - 8), ax_m: (v) => -0.5 * (v + 2), rel_z: (v) => 2 * (5.8 - v),
+      extension: (v) => 1.3 * (v - 6.4), spin_rate: (v) => 0.01 * (v - 2400), spin_eff: (v) => -3 * (v - 0.5), axis_diff: (v) => 0.2 * v,
+    },
+    baseline: (share) => -1 - 3 * (share - 0.5),
+  },
+};
+
+function makeUnit(id, name, pt, cfg, n, share, inputs, shapOverride = {}, exact = null) {
+  const info = { pitcher: id, pitcher_name: name, pt, n, n_same: Math.round(share * n), group: cfg.group, p_throws: 'R', ...inputs };
+  const unit = { league: 100, baseline: shapOverride.baseline ?? cfg.baseline(share) };
+  for (const f of FEATURES) unit[f] = shapOverride[f] ?? cfg.shap[f](inputs[f]) + normal(0, 0.8);
+  const parts = unit.baseline + FEATURES.reduce((a, f) => a + unit[f], 0);
+  unit.residual = exact == null ? normal(0, 1.5) : exact - 100 - parts;
+  unit.exact = 100 + parts + unit.residual;
+  return { unit, info };
+}
+
+const ME = { id: 900001, name: 'Demo Pitcher', season: 2026 };
+const units = {};  // pt -> [{unit, info}], the pitcher's own first
+for (const [pt, cfg] of Object.entries(PT)) {
+  const list = [];
+  for (let i = 0; i < cfg.count; i++) {
+    const inputs = Object.fromEntries(Object.entries(cfg.in).map(([f, [m, sd]]) => [f, normal(m, sd)]));
+    list.push(makeUnit(100000 + i, `Pitcher ${i + 1}`, pt, cfg, Math.round(20 + 1200 * rand() ** 2), Math.min(0.85, Math.max(0.2, normal(0.5, 0.1))), inputs));
+  }
+  units[pt] = list;
+}
+// a four-seamer built to the mockup's rows: 100 + 21.6 + 8.9 + 8.5 + 6.8 + 3.6 − 1.7 − 2.0 = 145.7
+const ffIn = { velo: 100.2, az: 22.3, ax_m: 6.1, rel_z: 5.02, extension: 6.55, spin_rate: 2694, spin_eff: 0.97, axis_diff: 11 };
+units.FF.unshift(makeUnit(ME.id, ME.name, 'FF', PT.FF, 1180, 0.73, ffIn,
+  { velo: 21.6, axis_diff: 8.9, spin_rate: 8.5, rel_z: 6.8, az: 3.6, baseline: -1.7, extension: 0.6, ax_m: -0.8, spin_eff: 0.3 }, 145.7));
+units.CU.unshift(makeUnit(ME.id, ME.name, 'CU', PT.CU, 640, 0.55,
+  { velo: 82.4, az: -16.8, ax_m: -10.5, rel_z: 5.1, extension: 6.6, spin_rate: 2980, spin_eff: 0.78, axis_diff: 6 }, {}, 130.2));
+units.FC.unshift(makeUnit(ME.id, ME.name, 'FC', PT.FC, 310, 0.6,
+  { velo: 93.1, az: 11.2, ax_m: -3.1, rel_z: 5.05, extension: 6.6, spin_rate: 2590, spin_eff: 0.45, axis_diff: 4 }, {}, 120.1));
+
+// ---- the views, built as app.js builds them --------------------------------------------------
+const MIN_N = 20;
+const DEFAULT = { season: 2026, name: 'Brody Hopkins', pt: 'FF', row: 'az' };
+// the targets split by feature (the drilldown's, less the outcome split and Location)
+const TARGETS = ['plus', 'era', ...OUTCOMES.map((o) => `p_${o}`), 'wobacon'];
+const state = { synthetic: false, season: DEFAULT.season, pitcher: null, pt: DEFAULT.pt, model: 'stuff', target: 'plus', row: DEFAULT.row };
+
+function syntheticView() {
+  const pool = units[state.pt];
+  const { unit, info } = pool[0];
+  const rows = cardRows(meta, 'stuff', unit, info, 1);
+  if (!rows.some((r) => r.k === state.row)) state.row = rows[0].k;
+  const others = pool.slice(1).map((p) => p.unit.exact);
+  const p = others.filter((v) => v < unit.exact).length / others.length;
+  const what = `${PITCH_NAMES[state.pt]}s`;
+  return {
+    meta, model: 'stuff', target: 'plus', season: ME.season, info, unit, rows, selected: state.row,
+    arsenal: ['FF', 'CU', 'FC'].map((pt) => ({ pt, n: units[pt][0].info.n, unit: units[pt][0].unit })),
+    pool, poolLabel: `vs ${(pool.length - 1).toLocaleString()} ${what}, ${ME.season} (${MIN_N}+ pitches)`, poolWhat: what,
+    minN: MIN_N, kpi: { t: 2 * p - 1 },
+  };
+}
+
+// app.js poolFor ("the same pitch type") and kpiShade, for Stuff+
+const PT_POOL = { CU: 'CU', KC: 'CU', SV: 'CU', FS: 'FS', FO: 'FS' };
+const POOL_NAMES = { CU: 'CU/KC/SV', FS: 'FS/FO' };
+const ptPool = (pt) => PT_POOL[pt] || pt;
+async function liveView() {
+  const [lmeta, feats, lunits] = await Promise.all([loadMeta(), loadFeatures(state.season), loadUnits(state.season, state.model)]);
+  const p = state.pitcher ? feats.byId.get(state.pitcher) : feats.pitchers.find((x) => x.name === DEFAULT.name);
+  if (!p) throw new Error(`no ${state.season} pitches for ${state.pitcher || DEFAULT.name}`);
+  state.pitcher = p.id;
+  if (!p.pts.some((u) => u.pt === state.pt)) state.pt = p.pts[0].pt;
+  const info = feats.byUnit.get(`${p.id}|${state.pt}`);
+  const unit = lunits.byKey.get(`${p.id}|${state.pt}|${state.target}`);
+  if (!info || !unit) throw new Error('no SHAP values for that pitch type');
+  const rows = cardRows(lmeta, state.model, unit, info, minImpact(state.target));
+  if (!rows.some((r) => r.k === state.row)) state.row = rows[0].k;
+  const pool = [];
+  for (const u of lunits.byTarget.get(state.target) || []) {
+    const i = feats.byUnit.get(`${u.pitcher}|${u.pt}`);
+    if (!i) continue;
+    const me = u.pitcher === p.id && u.pt === state.pt;
+    if (!me && (i.n < MIN_N || ptPool(i.pt) !== ptPool(state.pt))) continue;
+    pool.push({ unit: u, info: i });
+  }
+  const what = POOL_NAMES[ptPool(state.pt)] || `${PITCH_NAMES[state.pt] || state.pt}s`;
+  const floor = Math.max(...feats.rows.map((r) => r.n)) / 4;
+  const vals = (lunits.byTarget.get(state.target) || []).filter((u) => (feats.byUnit.get(`${u.pitcher}|${u.pt}`)?.n ?? 0) >= floor).map((u) => u.exact);
+  const below = vals.filter((v) => v < unit.exact).length, same = vals.filter((v) => v === unit.exact).length;
+  return {
+    meta: lmeta, model: state.model, target: state.target, season: state.season, info, unit, rows, selected: state.row,
+    arsenal: p.pts.map((u) => ({ pt: u.pt, n: u.n, unit: lunits.byKey.get(`${p.id}|${u.pt}|${state.target}`) })),
+    pool, poolLabel: `vs ${(pool.length - 1).toLocaleString()} ${what}, ${state.season} (${MIN_N}+ pitches)`, poolWhat: what,
+    minN: MIN_N, kpi: { t: vals.length ? targetGood(state.target) * (2 * ((below + same / 2) / vals.length) - 1) : 0 },
+  };
+}
+
+// the link: #synthetic, or #<season>-<pitcher id>-<pitch type>&model=plv&target=wobacon&row=<row> as on the drilldown
+function readHash() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  state.synthetic = h === 'synthetic';
+  if (state.synthetic) { state.pt = 'FF'; state.row = DEFAULT.row; return; }
+  const [unit, ...opts] = h.split('&');
+  const m = unit.match(/^(\d{4})-(\d+)-([A-Z]{2})$/);
+  if (m) { state.season = +m[1]; state.pitcher = +m[2]; state.pt = m[3]; }
+  const q = new URLSearchParams(opts.join('&'));
+  state.model = ['plv', 'pitching'].includes(q.get('model')) ? 'pitching' : 'stuff';
+  state.target = TARGETS.includes(q.get('target')) ? q.get('target') : 'plus';
+  if (q.get('row')) state.row = q.get('row');
+}
+const writeHash = () => {
+  if (state.synthetic) return;
+  const q = new URLSearchParams();
+  if (state.model !== 'stuff') q.set('model', 'plv');
+  if (state.target !== 'plus') q.set('target', state.target);
+  q.set('row', state.row);
+  history.replaceState(null, '', `#${state.season}-${state.pitcher}-${state.pt}&${q}`);
+};
+
+const box = document.getElementById('card');
+const msg = document.getElementById('msg');
+let drawing = 0;
+async function draw() {
+  const ticket = ++drawing;
+  try {
+    const v = state.synthetic ? syntheticView() : await liveView();
+    if (ticket !== drawing) return;
+    box.innerHTML = cardSvg(v);
+    writeHash();
+    msg.textContent = state.synthetic ? 'synthetic numbers' : `${v.info.pitcher_name}, ${v.season}: live SHAP tables`;
+  } catch (e) {
+    console.error(e);
+    msg.textContent = e.message || String(e);
+  }
+}
+box.addEventListener('click', (e) => {
+  const tab = e.target.closest('[data-pt]'), row = e.target.closest('[data-k]');
+  if (tab) state.pt = tab.dataset.pt;
+  else if (row) state.row = row.dataset.k;
+  else return;
+  draw();
+});
+window.addEventListener('hashchange', () => { readHash(); draw(); });
+document.getElementById('dl').addEventListener('click', async () => {
+  const blob = await svgToPng(box.querySelector('svg'), 3);
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `drilldown-card-${state.pitcher || 'demo'}-${state.pt}-${state.row}.png` });
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+await document.fonts.load('700 20px "DM Sans"');
+await document.fonts.load('400 20px "DM Sans"');
+readHash();
+await draw();
+document.body.dataset.ready = '1';
+</script>
+</body>
+</html>

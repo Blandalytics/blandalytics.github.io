@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="modulepreload" href="app.js?v=75">
+<link rel="modulepreload" href="app.js?v=76">
 <link rel="modulepreload" href="data.js?v=9">
 <link rel="modulepreload" href="charts.js?v=69">
+<link rel="modulepreload" href="card.js?v=30">
 <link rel="modulepreload" href="morph.js?v=1">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/hyparquet@1.31.1/+esm">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -198,7 +199,7 @@ details[open] summary{margin-bottom:10px}
       <div class="method">
         <p><b>The models:</b> <em>Stuff+</em> grades a pitch on its shape, release, spin and how it plays off the pitcher's primary fastball, at a league-average location and count. <em>PLV+</em> adds where the pitch was thrown (<code>x_b</code>, <code>z_n</code>) and the count it was thrown in. Both are on a 100 ± 15 scale per pitcher, season and pitch type. Each also gives nine outcome probabilities (ball, called strike, swinging strike, foul, in-play out, single, double, triple, home run), and wOBA on contact is built from the batted-ball ones.</p>
         <p><b>SHAP values:</b> neither model is a single tree model, so for each model, target and pitch group × matchup, an XGBoost proxy is trained to reproduce it from the same inputs. Its held-out R² is 0.965 or higher for Stuff+ and PLV+ and 0.906 or higher for every probability. TreeSHAP on that proxy splits every pitch's value into one contribution per input, and a pitcher's pitch type is the average over its pitches. Its value then adds up exactly: <code>league + pitch group &amp; matchup + Σ features + residual</code>, where the residual is the proxy's miss.</p>
-        <p><b>The waterfall:</b> it starts at the league reference (100, or the league rate), adds <em>Pitch Group &amp; Matchup</em> (what that pitch type is worth given its share of same-handed batters), then each input, largest first. Rows smaller than 1 point (0.1 percentage points, or .002 of wOBAcon) are folded into <em>Other</em>, along with the season and the residual, so the bars end on the actual value. Gold helps the pitcher and teal hurts. Click a row to see it against the league. Each dot is another pitcher's version of the same pitch, with its input on the x-axis and its SHAP on the y-axis, and the white line is the binned mean. Click a band in the arsenal to switch pitch types.</p>
+        <p><b>The waterfall:</b> it starts at the league reference (100, or the league rate), adds <em>Pitch Group &amp; Matchup</em> (what that pitch type is worth given its share of same-handed batters), then each input, largest first. Rows smaller than 1 point (0.1 percentage points, or .002 of wOBAcon) are folded into <em>Other</em>, along with the season and the residual, so the bars end on the actual value. Gold helps the pitcher and teal hurts. Click a row to see it against the league. Each dot is another pitcher's version of the same pitch, with its input on the x-axis and its SHAP on the y-axis, and the white line is the binned mean. Click a pitch type under <em>Pitches</em> to switch to it.</p>
         <p><b>Location+:</b> what the location adds: PLV minus Stuff at the count the pitch was thrown in, on the same 100 ± 15 scale. It is split by outcome only. Each outcome's bar is how much the location changed that outcome's probability, priced at its run value in that count, and the nine add up to the score.</p>
         <p><b>Model ERA:</b> <em>Stuff ERA</em> and <em>PLV ERA</em> turn each model's run values into runs per nine innings: a season constant, minus nine times the pitch's run value per pitch times the pitches per inning its predicted outcomes imply. The waterfall starts at the season's league ERA, and lower is better, so the bars that lower ERA are gold.</p>
         <p><b>By outcome:</b> the <em>(outcomes)</em> target splits the same Stuff+ or PLV+ score another way, with no proxy. Each of the nine outcomes contributes its predicted rate times its average run value, in plus points against the league, and the nine add up to the score. PLV+ prices outcomes at the count each pitch was thrown in, and the difference is shown as <em>Count Leverage</em>. Every outcome gets a bar, and the league charts plot each one against the pitch's predicted rate of it.</p>
@@ -208,6 +209,6 @@ details[open] summary{margin-bottom:10px}
   </section>
 </main>
 <div id="tip" hidden role="tooltip"></div>
-<script type="module" src="app.js?v=75"></script>
+<script type="module" src="app.js?v=76"></script>
 </body>
 </html>

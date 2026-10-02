@@ -8,10 +8,11 @@ import {
   MODELS, OUTCOMES, TARGET_NAMES, PITCH_NAMES, LABELS,
 } from './data.js?v=9';
 import {
-  flowSvg, phoneFlowSvg, flowSvgForExport, swarmSvg, sankeySvg, svgToPng,
-  nearestPanelPoint, nearestSwarmPoint, sankeyLink,
+  phoneFlowSvg, swarmSvg, sankeySvg, svgToPng,
+  nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, titleRight, C,
 } from './charts.js?v=69';
+import { cardSvg, cardSvgForExport, nearestCardPoint } from './card.js?v=30';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -287,7 +288,7 @@ function render() {
   status('');
 }
 
-// The drilldown: on a desktop or laptop the 16:9 figure, or on a phone (600 px or narrower) the
+// The drilldown: on a desktop or laptop the 16:9 card (card.js), or on a phone (600 px or narrower) the
 // header and waterfall at the screen's own width: no league card, and the rows are static.
 const phoneQuery = window.matchMedia('(max-width: 600px)');
 let drawnAs = null;  // 'desktop', or the phone width it was drawn at
@@ -299,7 +300,7 @@ function drawFlow() {
     morph(el.flow, phoneFlowSvg(view, w));
   } else {
     drawnAs = flowKey();
-    morph(el.flow, flowSvg(view));
+    morph(el.flow, cardSvg(view));
   }
 }
 let resizeTimer = 0;
@@ -491,7 +492,7 @@ el.flow.addEventListener('click', (e) => {
   const pt = e.target.closest('[data-pt]');
   if (pt) { state.pt = pt.dataset.pt; el.pt.value = state.pt; draw(); return; }
   if (e.target.closest('.panel-hit')) {
-    const p = nearestPanelPoint(...svgPoint(el.flow.querySelector('svg'), e));
+    const p = nearestCardPoint(...svgPoint(el.flow.querySelector('svg'), e));
     if (p && !p.me) { hideTip(); state.pt = p.pt; choosePitcher(p.id); }
     return;
   }
@@ -516,7 +517,7 @@ el.flow.addEventListener('pointermove', (e) => {
     return;
   }
   if (e.target.closest('.panel-hit')) {
-    const p = nearestPanelPoint(...svgPoint(svg, e));
+    const p = nearestCardPoint(...svgPoint(svg, e));
     if (p) { showTip(unitTip(p.info, { k: state.row, v: p.v }, p.me), e); return; }
   }
   const row = e.target.closest('.row');
@@ -593,10 +594,10 @@ async function copyPng(getSvg, suffix, btn) {
     setTimeout(() => { btn.textContent = label; }, 1600);
   }
 }
-// the drilldown's copy is always the 16:9 desktop figure (4266 x 2400), even on a phone
+// the drilldown's copy is always the 16:9 card (2560 x 1440), even on a phone
 function desktopFlow() {
   const t = document.createElement('template');
-  t.innerHTML = flowSvgForExport(view).trim();
+  t.innerHTML = cardSvgForExport(view).trim();
   return t.content.firstElementChild;
 }
 el.copyFlow.addEventListener('click', () => view && copyPng(desktopFlow, 'waterfall', el.copyFlow));
