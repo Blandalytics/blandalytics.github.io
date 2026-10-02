@@ -8,7 +8,7 @@
 // rows and tabs clickable the same way.
 
 import {
-  PITCH_NAMES, PITCH_COLORS, LABELS, AXIS, PCT, GROUPS, MODELS, isPlus, targetGood, targetName,
+  PITCH_NAMES, PITCH_COLORS, OUTCOMES, LABELS, AXIS, PCT, GROUPS, MODELS, isPlus, targetGood, targetName,
   rowValue, rowInput,
 } from './data.js?v=9';
 import { C, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord } from './charts.js?v=69';
@@ -77,6 +77,13 @@ function footnote(ctx) {
   return `${note}. ${targetGood(target) > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`;
 }
 
+// the widest KPI label ("In-Play Out% (Stuff)"): every model's targets, Location+ its one
+const KPI_TARGETS = ['plus', 'outcomes', 'era', 'wobacon', ...OUTCOMES.map((o) => `p_${o}`)];
+function widestKpiName(size) {
+  return Math.max(...Object.entries(MODELS).flatMap(([m, d]) => (d.outcomesOnly ? ['outcomes'] : KPI_TARGETS)
+    .map((t) => textWidth(kpiName(m, t), size))));
+}
+
 export function cardSvg(ctx) {
   const { W, H } = CARD;
   const { rows, unit, target, model, season, info, arsenal, selected } = ctx;
@@ -91,12 +98,13 @@ export function cardSvg(ctx) {
   s += text(34, 56, info.pitcher_name, `font-size="46" font-weight="700" fill="${C.teal}"`);
   s += text(34, 90, PITCH_NAMES[info.pt] || info.pt, `font-size="29" font-weight="700" fill="${pitchCol}"`);
   s += text(34, 114, `${season}, ${ctx.byOutcome ? 'Outcome' : 'Feature'} Contributions to ${kpiName(model, target)}`, `font-size="17" fill="${K.sub}"`);
-  const kx = (1066 + W) / 2;
-  s += `<line x1="1066" x2="1066" y1="18" y2="112" stroke="${K.line}" stroke-width="1.5"/>`;
-  const kname = kpiName(model, target);
-  s += text(kx, 42, kname, `font-size="${Math.min(24, (176 / textWidth(kname, 24)) * 24).toFixed(1)}" font-weight="700" fill="#fff" text-anchor="middle"`);
+  // the KPI's segment: as wide as the longest label any model and target can give, on one line
+  // at full size, so the divider and the value sit still from target to target
+  const KS = 24, KR = W - 16, KL = KR - widestKpiName(KS) - 40, kx = (KL + KR) / 2;
+  s += `<line x1="${n1(KL)}" x2="${n1(KL)}" y1="18" y2="112" stroke="${K.line}" stroke-width="1.5"/>`;
+  s += text(kx, 42, kpiName(model, target), `font-size="${KS}" font-weight="700" fill="#fff" text-anchor="middle"`);
   const kval = f.v(unit.exact);
-  s += text(kx, 106, kval, `font-size="${Math.min(74, (196 / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`);
+  s += text(kx, 106, kval, `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`);
 
   // ---- left panel: arsenal tabs over the waterfall ----
   const LP = { x: 20, y: 133, w: 790, h: 530 };
