@@ -137,9 +137,11 @@ export function cardSvg(ctx) {
   // the waterfall: rows spread over the body, the axis under it
   const Y0 = 246, YB = 612;
   const S = (YB - Y0) / rows.length;  // rows spread over the body, as the drilldown spreads them
-  const BAR = Math.min(22, S * 0.45);
   const X0 = 336, X1 = 762, ROOM_L = 300, ROOM_R = 792;
-  const FS = 15;  // the values beside the bars
+  const FS = 15, CHIP = FS * 1.4;  // the values beside the bars, and the chip behind each
+  // bars half the row pitch, so fewer rows draw thicker bars; never thinner than a value's chip,
+  // and always a little gap between rows
+  const BAR = Math.min(S - 4, Math.max(CHIP, S * 0.5));
   // a row's name over its detail, sized and spaced to the row pitch (17 / 14 with room, as in a
   // seven-row card), the pair centred on the bar: LB the name's baseline, LG the gap to the detail's
   const LS = Math.max(12.5, Math.min(17, S * 0.46)), SS = Math.max(11, Math.min(14, S * 0.37));
@@ -187,7 +189,7 @@ export function cardSvg(ctx) {
   const ax = sx(unit.league), ex = sx(at), AY = Y0 - 26, AH = 28;
   const aw = textWidth('AVG', 16) + 22;
   s += `<line x1="${ax}" x2="${ax}" y1="${AY + AH / 2}" y2="${YB + 6}" stroke="#fff" stroke-opacity=".8" stroke-width="1.2" stroke-dasharray="5 4"/>`;
-  s += `<line x1="${ex}" x2="${ex}" y1="${AY}" y2="${YB + 6}" stroke="#fff" stroke-opacity=".9" stroke-width="1.4" stroke-dasharray="5 4"/>`;
+  s += `<line x1="${ex}" x2="${ex}" y1="${AY}" y2="${YB + 6}" stroke="#fff" stroke-opacity=".9" stroke-width="1.4"/>`;
   const dir = ex >= ax ? 1 : -1, from = ax + dir * (aw / 2 + 3);
   if (dir * (ex - from) > 20) {
     s += `<line x1="${n1(from)}" x2="${n1(ex - dir * 12)}" y1="${AY}" y2="${AY}" stroke="${kcol}" stroke-width="3.5" stroke-linecap="round"/>`;
@@ -196,19 +198,19 @@ export function cardSvg(ctx) {
   s += `<rect x="${n1(ax - aw / 2)}" y="${AY - AH / 2}" width="${n1(aw)}" height="${AH}" rx="4" fill="${K.ground}" stroke="#fff" stroke-width="1.3"/>`;
   s += text(ax, AY + 6, 'AVG', `font-size="16" font-weight="700" letter-spacing="1" fill="#fff" text-anchor="middle"`);
 
-  // bars, dashed connectors, values and row names
+  // bars, connectors, values and row names
   let x = unit.league;
   rows.forEach((r, i) => {
     const cy = Y0 + i * S + S / 2, end = x + r.v;
     const col = good * r.v > 0 ? C.gold : C.teal;
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end)), w = Math.max(1, n1(b - a));
     s += `<g class="row fx" data-k="${r.k}">`;
-    if (i) s += `<line x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${K.conn}" stroke-width="1.2" stroke-dasharray="3 3"/>`;
+    if (i) s += `<line x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${K.conn}" stroke-width="1.2"/>`;
     s += `<rect x="${a}" y="${n1(cy - BAR / 2)}" width="${w}" height="${n1(BAR)}" rx="${n1(Math.min(3, w / 2))}" fill="${col}"/>`;
     const right = r.v >= 0;
     // on a chip, so it reads over the league and final-value lines
     const tw = textWidth(f.d(r.v), FS), vx = right ? b + 7 : a - 7;
-    s += `<rect x="${n1(right ? vx - 3 : vx - tw - 3)}" y="${n1(cy - FS * 0.7)}" width="${n1(tw + 6)}" height="${n1(FS * 1.4)}" rx="3" fill="${K.panel}" fill-opacity=".85"/>`;
+    s += `<rect x="${n1(right ? vx - 3 : vx - tw - 3)}" y="${n1(cy - CHIP / 2)}" width="${n1(tw + 6)}" height="${n1(CHIP)}" rx="3" fill="${K.panel}" fill-opacity=".85"/>`;
     s += text(vx, cy + FS * 0.35, f.d(r.v), `font-size="${FS}" font-weight="700" fill="#fff" text-anchor="${right ? 'start' : 'end'}"`);
     const sub = subOf(r);
     s += text(TX0, sub ? cy + LB : cy + LS * 0.35, r.label, `font-size="${n1(LS)}" font-weight="600" fill="${K.ink}"`);
