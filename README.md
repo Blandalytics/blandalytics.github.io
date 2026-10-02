@@ -630,6 +630,9 @@ Three figures, in the Swing Profiles card colours:
   lines and row labels), drawn at the screen's width with static
   rows, and the three numbers with their KDEs: no league card, beeswarm or Sankey (**Copy PNG**
   still gives the full card).
+The next two are hidden for now (`SHOW_LEAGUE_FIGS` in `app.js`): their cards stay hidden and
+they are not drawn.
+
 - **Against the league.** A beeswarm of every row's SHAP over the comparison group, coloured by
   each unit's input, with the pitcher marked.
 - **Where the probability goes.** A Sankey of the nine outcome probabilities. They sum to 100%, so

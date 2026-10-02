@@ -16,6 +16,9 @@ import { cardSvg, cardSvgForExport, nearestCardPoint } from './card.js?v=52';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
+// Against the league (the beeswarm) and Where the probability goes (the Sankey) are hidden for now:
+// their cards stay hidden and they are not drawn. Set true to bring them back.
+const SHOW_LEAGUE_FIGS = false;
 // 'outcomes' is the plus score split by outcome (the features split is the default)
 const TARGETS = ['plus', 'outcomes', 'era', ...OUTCOMES.map((o) => `p_${o}`), 'wobacon'];
 const RV = OUTCOMES.map((o) => `rv_${o}`);
@@ -289,12 +292,14 @@ function render() {
   }
 
   el.out.hidden = false;
-  el.swarmCard.hidden = false;
   drawFlow();
-  morph(el.swarm, swarmSvg(view));
-  const sk = sankeySvg(view);
-  el.sankeyCard.hidden = !sk;
-  if (sk) morph(el.sankey, sk);
+  if (SHOW_LEAGUE_FIGS) {
+    el.swarmCard.hidden = false;
+    morph(el.swarm, swarmSvg(view));
+    const sk = sankeySvg(view);
+    el.sankeyCard.hidden = !sk;
+    if (sk) morph(el.sankey, sk);
+  }
   renderStats();
   applyFocus();
   writeHash();
