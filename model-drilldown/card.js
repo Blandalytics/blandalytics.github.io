@@ -101,10 +101,12 @@ export function cardSvg(ctx) {
   // the KPI's segment: as wide as the longest label any model and target can give, on one line
   // at full size, so the divider and the value sit still from target to target
   const KS = 24, KR = W - 16, KL = KR - widestKpiName(KS) - 40, kx = (KL + KR) / 2;
-  s += `<line x1="${n1(KL)}" x2="${n1(KL)}" y1="18" y2="112" stroke="${K.line}" stroke-width="1.5"/>`;
+  const KB = 112;  // the divider's foot
+  s += `<line x1="${n1(KL)}" x2="${n1(KL)}" y1="18" y2="${KB}" stroke="${K.line}" stroke-width="1.5"/>`;
   s += text(kx, 42, kpiName(model, target), `font-size="${KS}" font-weight="700" fill="#fff" text-anchor="middle"`);
   const kval = f.v(unit.exact);
-  s += text(kx, 106, kval, `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`);
+  // its baseline (digits sit on it, nothing hangs below) on the divider's foot
+  s += text(kx, KB, kval, `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`);
 
   // ---- left panel: the arsenal over the waterfall ----
   const LP = { x: 20, y: 133, w: 790, h: 530 };
