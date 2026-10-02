@@ -256,7 +256,7 @@ export function cardSvg(ctx) {
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end)), w = Math.max(1, n1(b - a));
     s += `<g class="row fx" data-k="${r.k}">`;
     if (i) s += `<line x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${K.conn}" stroke-width="1.2"/>`;
-    s += `<path d="${bar(a, cy - BAR / 2, w, BAR, Math.min(3, w), r.v >= 0)}" fill="${col}"/>`;
+    s += `<path d="${bar(a, cy - BAR / 2, w, BAR, Math.min(PR, BAR / 2, w), r.v >= 0)}" fill="${col}"/>`;
     const right = r.v >= 0;
     // on a chip, so it reads over the league and final-value lines
     const tw = textWidth(f.d(r.v), FS), vx = right ? b + 7 : a - 7;
