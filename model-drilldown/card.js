@@ -119,14 +119,15 @@ export function cardSvg(ctx) {
   s += text(kx, KB, kval, `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`);
 
   // ---- the arsenal tile, on the card's left edge, as tall as the others ----
-  // Titled "Pitch Mix", at the other tiles' title size and baseline. Under it a pill per pitch
+  // Titled "Pitches", at the other tiles' title size and baseline. Under it a pill per pitch
   // type, stacked, most thrown first, as tall as its share of the pitches but never too short for
-  // its one line, "<type>: <value>", in white; outlined in its colour (the pitcher cards' palette),
-  // the chosen one filled with it. The pills span the title (or their widest label).
+  // its one line, "<type> <value>", in white; outlined in its colour (the pitcher cards' palette),
+  // the chosen one filled with its highlight (the live drilldown's: its colour at HILITE over the
+  // card). The pills span the title, or their widest label.
   const TT = 26, TM = 22;  // the tiles' title size and margin
-  const AP = { x: 20, y: 133, h: 530 }, ATL = 'Pitch Mix';
+  const AP = { x: 20, y: 133, h: 530 }, ATL = 'Pitches';
   const PFS = 17, PG = 6, PR = 9;  // label size, gap, corner radius (less on a pill too short for it)
-  const pill = (p) => `${p.pt}: ${p.unit ? f.v(p.unit.exact) : '–'}`;
+  const pill = (p) => `${p.pt} ${p.unit ? f.v(p.unit.exact) : '–'}`;
   const PX = AP.x + TM, AB = AP.y + AP.h - TM;
   const PW = Math.ceil(Math.max(textWidth(ATL, TT), ...arsenal.map((p) => textWidth(pill(p), PFS) + 20)));
   AP.w = PX + PW + TM - AP.x;  // the tile's margin each side
@@ -149,7 +150,7 @@ export function cardSvg(ctx) {
   arsenal.forEach((p, i) => {
     const h = hs[i], on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
-    s += `<rect x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? col : 'transparent'}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
+    s += `<rect x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? tint(col, HILITE) : 'transparent'}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
     s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 600}" fill="#fff" text-anchor="middle"`);
     s += '</g>';
     py += h + PG;
