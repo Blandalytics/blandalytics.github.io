@@ -15,7 +15,7 @@ import { C, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, o
 
 export const CARD = { W: 1280, H: 720 };
 const K = {
-  ground: '#121D31', panel: '#182740', line: '#2A3A57', ink: '#E8EEF7', muted: '#93A3BC', faint: '#6C7C96',
+  ground: '#13263F', panel: '#172D4A', line: '#2A3A57', ink: '#E8EEF7', muted: '#93A3BC', faint: '#6C7C96',
   sub: '#7F9CD6', dot: '#9FB3CF', conn: '#B4BECC',
 };
 const FONT = '"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
