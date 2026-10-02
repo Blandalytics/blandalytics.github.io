@@ -7,6 +7,9 @@ Source for [blandalytics.com](https://blandalytics.com).
 [blandalytics.com](https://blandalytics.com) — a tile for each tool, built on the
 [Phantom](https://html5up.net/phantom) template by HTML5 UP (CCA 3.0; the footer carries the
 credit) with the site's dark palette. Each tile's picture is real output from its tool.
+Model Drilldown leads the Baseball tiles, the menu and the footer's tool list. PLV Pitcher Game
+Cards is hidden from all three for now: its tile and links are commented out in `index.html`, and
+`/pitcher-cards/` itself is still live.
 
 | file | role |
 |---|---|
