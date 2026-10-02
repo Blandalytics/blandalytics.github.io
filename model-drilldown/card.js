@@ -27,10 +27,9 @@ const quantile = (sorted, q) => {
   const i = (sorted.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
 };
-// The highlight: the pitch type's colour at HILITE (10%) over the figure's card colour (C.card),
-// blended here and drawn solid so the navy under it doesn't shift the hue. It tints the chosen
-// pitch type's pill and the selected row.
-const HILITE = 0.1;
+// The highlight: 20% of the pitch type's colour over the tile it sits on (K.panel), blended here and
+// drawn solid. It fills the chosen pitch type's pill and the selected row alike.
+const HILITE = 0.2;
 function tint(hex, a, over = C.card) {
   const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const [c, b] = [rgb(hex), rgb(over)];
@@ -134,7 +133,7 @@ export function cardSvg(ctx) {
   arsenal.forEach((p, i) => {
     const h = hs[i], on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
-    s += `<rect data-m="band:${p.pt}" x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? tint(col, 0.2, K.panel) : K.panel}" stroke="${col}" stroke-opacity="${on ? 1 : 0.5}" stroke-width="${on ? 2.5 : 1.5}"/>`;
+    s += `<rect data-m="band:${p.pt}" x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? tint(col, HILITE, K.panel) : K.panel}" stroke="${col}" stroke-opacity="${on ? 1 : 0.5}" stroke-width="${on ? 2.5 : 1.5}"/>`;
     s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? '#fff' : col}" text-anchor="middle"`, `bl:${p.pt}`);
     s += '</g>';
     py += h + PG;
@@ -223,7 +222,7 @@ export function cardSvg(ctx) {
     const cy = Y0 + i * S + S / 2;
     const on = r.k === selected;
     s += `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}" tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`
-      + `<rect class="hit" data-m="hit:${r.k}" x="${TX0 - 12}" y="${n1(band[i][0])}" width="${LP.x + LP.w - 6 - (TX0 - 12)}" height="${n1(band[i][1] - band[i][0])}" rx="6" fill="${on ? tint(pitchCol, HILITE) : pitchCol}" fill-opacity="${on ? 1 : 0}"/></g>`;
+      + `<rect class="hit" data-m="hit:${r.k}" x="${TX0 - 12}" y="${n1(band[i][0])}" width="${LP.x + LP.w - 6 - (TX0 - 12)}" height="${n1(band[i][1] - band[i][0])}" rx="6" fill="${on ? tint(pitchCol, HILITE, K.panel) : pitchCol}" fill-opacity="${on ? 1 : 0}"/></g>`;
   });
 
   // AVG over the league line, an arrow in the KPI's colour to the final value
