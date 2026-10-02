@@ -94,10 +94,10 @@ export function cardSvg(ctx) {
   let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" class="fig card-fig" font-family='${FONT}' role="img">`
     + `<rect width="${W}" height="${H}" fill="${K.ground}"/>`;
 
-  // ---- header: pitcher, pitch type, subtitle; the KPI in the corner ----
+  // ---- header: pitcher, pitch type, season; the KPI in the corner ----
   s += text(34, 56, info.pitcher_name, `font-size="46" font-weight="700" fill="${C.teal}"`);
   s += text(34, 90, PITCH_NAMES[info.pt] || info.pt, `font-size="29" font-weight="700" fill="${pitchCol}"`);
-  s += text(34, 114, `${season}, ${ctx.byOutcome ? 'Outcome' : 'Feature'} Contributions to ${kpiName(model, target)}`, `font-size="17" fill="${K.sub}"`);
+  s += text(34, 114, String(season), `font-size="17" fill="${K.sub}"`);
   // the KPI's segment: as wide as the longest label any model and target can give, on one line
   // at full size, so the divider and the value sit still from target to target
   const KS = 24, KR = W - 16, KL = KR - widestKpiName(KS) - 40, kx = (KL + KR) / 2;
@@ -108,36 +108,42 @@ export function cardSvg(ctx) {
   // its baseline (digits sit on it, nothing hangs below) on the divider's foot
   s += text(kx, KB, kval, `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`);
 
-  // ---- left panel: the arsenal over the waterfall ----
+  // ---- left panel: titled; the arsenal down its left side, then the waterfall ----
   const LP = { x: 20, y: 133, w: 790, h: 530 };
   s += `<rect x="${LP.x}" y="${LP.y}" width="${LP.w}" height="${LP.h}" rx="8" fill="${K.panel}"/>`;
-  const TX0 = 44, TX1 = 786, TGAP = 8, TY = 146, TH = 40;
-  const minW = (p) => textWidth(`${p.pt} ${p.unit ? f.v(p.unit.exact) : '–'}`, 17) + 24;
-  const avail = TX1 - TX0 - TGAP * (arsenal.length - 1);
-  const total = sum(arsenal.map((p) => p.n));
-  // as wide as the pitch type's share of the pitches, but never narrower than its label
-  const fixed = arsenal.map((p) => Math.max(minW(p), (avail * p.n) / total));
-  const over = sum(fixed) - avail;
-  const roomy = arsenal.map((p, i) => fixed[i] > minW(p));
-  const roomyW = sum(fixed.filter((_, i) => roomy[i]));
-  const widths = fixed.map((w, i) => (over > 0 && roomy[i] ? w - (over * w) / roomyW : w));
-  let tx = TX0;
+  s += text(LP.x + 22, LP.y + 41, `${ctx.byOutcome ? 'Outcome' : 'Feature'} Contributions to ${kpiName(model, target)}`, `font-size="26" font-weight="700" fill="${K.ink}"`);
+  // A pill per pitch type, stacked, most thrown first: the type over its value, white, outlined in
+  // its colour (the pitcher cards' palette); the chosen one on a raised fill. Beside them, between
+  // the pills and the waterfall, the pitch usage as one vertical bar (the mockup's horizontal one,
+  // 12 wide): a segment per pitch type as tall as its share of the pitches, the chosen one filled
+  // in its colour, the rest outlined.
+  const AT = 214, AB = 618, PX = 40, PW = 66, UX = PX + PW + 10, UW = 12, PG = 8;
+  const PH = Math.min(58, (AB - AT - PG * (arsenal.length - 1)) / arsenal.length);
+  const SB = AT + arsenal.length * PH + PG * (arsenal.length - 1);  // the stack's foot
+  const PFS = Math.min(17, PH * 0.34);
   arsenal.forEach((p, i) => {
-    const w = widths[i], on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
+    const y = AT + i * (PH + PG), on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
     const val = p.unit ? f.v(p.unit.exact) : '–';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
-    // a box per pitch type, outlined in its colour (the pitcher cards' palette); the chosen one
-    // filled with its highlight, as its rows are
-    s += `<rect x="${n1(tx + 1)}" y="${TY + 1}" width="${n1(w - 2)}" height="${TH - 2}" rx="9" fill="${on ? tint(col, HILITE) : 'transparent'}" stroke="${col}" stroke-width="2"/>`;
-    s += `<text x="${n1(tx + w / 2)}" y="${TY + TH / 2 + 6}" text-anchor="middle" font-size="17" font-weight="700" fill="#fff">`
-      + `${esc(p.pt)}<tspan font-weight="${on ? 700 : 500}"> ${esc(val)}</tspan></text></g>`;
-    tx += w + TGAP;
+    s += `<rect x="${PX + 1}" y="${n1(y + 1)}" width="${PW - 2}" height="${n1(PH - 2)}" rx="9" fill="${on ? tint('#FFFFFF', 0.1, K.panel) : 'transparent'}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
+    s += text(PX + PW / 2, y + PH / 2 - PFS * 0.18, p.pt, `font-size="${n1(PFS)}" font-weight="700" fill="#fff" text-anchor="middle"`);
+    s += text(PX + PW / 2, y + PH / 2 + PFS * 0.98, val, `font-size="${n1(PFS * 0.92)}" font-weight="${on ? 700 : 500}" fill="#fff" text-anchor="middle"`);
+    s += '</g>';
   });
+  const total = sum(arsenal.map((p) => p.n)), UG = 3;
+  let uy = AT;
+  arsenal.forEach((p) => {
+    const h = Math.max(5, ((SB - AT - UG * (arsenal.length - 1)) * p.n) / total), on = p.pt === info.pt;  // a rare pitch type stays visible
+    const col = PITCH_COLORS[p.pt] || '#c7c7c7';
+    s += `<rect class="usage" data-pt="${p.pt}" x="${on ? UX : UX + 0.75}" y="${n1(on ? uy : uy + 0.75)}" width="${on ? UW : UW - 1.5}" height="${n1(on ? h : h - 1.5)}" rx="${n1(Math.min(3, h / 2 - 0.75))}" fill="${on ? col : 'none'}" stroke="${on ? 'none' : col}" stroke-width="1.5"/>`;
+    uy += h + UG;
+  });
+  s += `<text transform="translate(${UX + UW + 14},${n1((AT + SB) / 2)}) rotate(-90)" font-size="12" fill="${K.muted}" text-anchor="middle">Pitch usage</text>`;
 
   // the waterfall: rows spread over the body, the axis under it
   const Y0 = 246, YB = 612;
   const S = (YB - Y0) / rows.length;  // rows spread over the body, as the drilldown spreads them
-  const X0 = 336, X1 = 762, ROOM_L = 300, ROOM_R = 792;
+  const X1 = 762, ROOM_R = 792;
   const FS = 15, CHIP = FS * 1.4;  // the values beside the bars, and the chip behind each
   // bars half the row pitch, so fewer rows draw thicker bars; never thinner than a value's chip,
   // and always a little gap between rows
@@ -147,6 +153,12 @@ export function cardSvg(ctx) {
   const LS = Math.max(12.5, Math.min(17, S * 0.46)), SS = Math.max(11, Math.min(14, S * 0.37));
   const LG = Math.max(LS * 0.92, Math.min(20, S * 0.38));
   const LB = -(LG - 0.72 * LS + 0.22 * SS) / 2;
+  // Other, Location and Count rows, and every row of the Location model: name only
+  const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] || ctx.model === 'location' ? '' : r.detail);
+  // the row names start past the usage bar's label; the bars past the widest name or detail
+  const TX0 = UX + UW + 30;
+  const textW = Math.max(...rows.map((r) => Math.max(textWidth(r.label, LS, 600), subOf(r) ? textWidth(subOf(r), SS, 400) : 0)));
+  const ROOM_L = TX0 + textW + 10, X0 = Math.max(330, Math.min(440, ROOM_L + 20));
   let at = unit.league;
   const path = [at];
   for (const r of rows) { at += r.v; path.push(at); }
@@ -176,13 +188,12 @@ export function cardSvg(ctx) {
   const label = targetName(model, target);
   s += text((X0 + X1) / 2, YB + 44, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="12" fill="${K.muted}" text-anchor="middle"`);
 
-  // the selected row's tint, under everything in the row
-  const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] || ctx.model === 'location' ? '' : r.detail);
+  // the selected row's tint, under everything in the row (clear of the arsenal)
   rows.forEach((r, i) => {
     const cy = Y0 + i * S + S / 2;
     const on = r.k === selected;
     s += `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}" tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`
-      + `<rect class="hit" x="${LP.x + 6}" y="${n1(cy - S / 2 + 2)}" width="${LP.w - 12}" height="${n1(S - 4)}" rx="6" fill="${on ? tint(pitchCol, HILITE) : 'transparent'}"/></g>`;
+      + `<rect class="hit" x="${TX0 - 12}" y="${n1(cy - S / 2 + 2)}" width="${LP.x + LP.w - 6 - (TX0 - 12)}" height="${n1(S - 4)}" rx="6" fill="${on ? tint(pitchCol, HILITE) : 'transparent'}"/></g>`;
   });
 
   // AVG over the league line, an arrow in the KPI's colour to the final value
