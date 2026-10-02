@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="modulepreload" href="app.js?v=90">
+<link rel="modulepreload" href="app.js?v=91">
 <link rel="modulepreload" href="data.js?v=10">
 <link rel="modulepreload" href="charts.js?v=73">
 <link rel="modulepreload" href="card.js?v=44">
@@ -115,6 +115,8 @@ body.focusing .figure .link.hot{opacity:.85}
   padding:8px 11px; font-size:12.5px; line-height:1.4; box-shadow:0 6px 20px rgba(0,0,0,.45)}
 #tip .name{font-weight:600}
 #tip .meta{color:var(--muted)}
+#tip .parts{display:grid; grid-template-columns:1fr auto; gap:1px 16px; margin-top:4px; color:var(--muted)}
+#tip .parts .v{text-align:right; font-variant-numeric:tabular-nums; color:var(--ink)}
 .method{color:var(--muted); font-size:14px}
 .method p{margin:0 0 10px}
 .method p:last-child{margin-bottom:0}
@@ -211,6 +213,6 @@ details[open] summary{margin-bottom:10px}
   </section>
 </main>
 <div id="tip" hidden role="tooltip"></div>
-<script type="module" src="app.js?v=90"></script>
+<script type="module" src="app.js?v=91"></script>
 </body>
 </html>

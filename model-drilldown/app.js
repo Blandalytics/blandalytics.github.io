@@ -524,9 +524,12 @@ el.flow.addEventListener('pointermove', (e) => {
   if (row && row.dataset.k === 'Other') {
     const r = view.rows.find((x) => x.k === 'Other');
     const f = formats(state.target);
-    const parts = r.folded.map((k) => `${LABELS[k] || k} ${f.d(rowValue(k, view.unit))}`);
-    const cal = Number.isFinite(view.unit.calibration) && view.unit.calibration ? [`calibration ${f.d(view.unit.calibration)}`] : [];
-    showTip(`<div class="name">Other ${esc(f.d(r.v))}</div><div class="meta">${esc([...parts, `residual ${f.d(view.unit.residual)}`, ...cal].join(' · '))}</div>`, e);
+    // what Other folds in, one per line, largest first, then the residual (and ERA's calibration)
+    const parts = r.folded.map((k) => [LABELS[k] || k, rowValue(k, view.unit)]).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+    parts.push(['Residual', view.unit.residual]);
+    if (Number.isFinite(view.unit.calibration) && view.unit.calibration) parts.push(['Calibration', view.unit.calibration]);
+    const list = parts.map(([l, v]) => `<span>${esc(l)}</span><span class="v">${esc(f.d(v))}</span>`).join('');
+    showTip(`<div class="name">Other ${esc(f.d(r.v))}</div><div class="parts">${list}</div>`, e);
     return;
   }
   hideTip();
