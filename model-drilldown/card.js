@@ -4,8 +4,9 @@
 // KPI stands alone in the top right corner.
 //
 // Text, rows, formats, colours and percentiles all come from data.js and charts.js; this file
-// only lays them out. Elements carry data-k / data-pt like the drilldown's, so a page can make
-// rows and tabs clickable the same way.
+// only lays them out. It is the page's desktop drilldown: rows and tabs carry data-k / data-pt
+// (clicks, the linked focus), elements carry data-m keys so morph.js carries them from one draw to
+// the next, and the league plot's dots are kept for the hover lookup (nearestCardPoint).
 
 import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, LABELS, AXIS, PCT, GROUPS, MODELS, isPlus, targetGood, targetName,
@@ -39,7 +40,8 @@ function tint(hex, a, over = C.card) {
   const [c, b] = [rgb(hex), rgb(over)];
   return `rgb(${c.map((v, i) => Math.round(b[i] + (v - b[i]) * a)).join(',')})`;
 }
-const text = (x, y, s, attrs = '') => `<text x="${n1(x)}" y="${n1(y)}" ${attrs}>${esc(s)}</text>`;
+const text = (x, y, s, attrs = '', m = null) => `<text${m ? ` data-m="${esc(m)}"` : ''} x="${n1(x)}" y="${n1(y)}" ${attrs}>${esc(s)}</text>`;
+let cardPoints = null;  // the league plot's dots in card coordinates, for the hover lookup
 
 // bold DM Sans, measured once the font is in, else estimated per character
 let measurer = null;
@@ -96,27 +98,28 @@ function widestKpiName(size) {
 
 export function cardSvg(ctx) {
   const { W, H } = CARD;
+  cardPoints = null;
   const { rows, unit, target, model, season, info, arsenal, selected } = ctx;
   const f = formats(target);
   const good = targetGood(target);
   const kcol = kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit));
   const pitchCol = PITCH_COLORS[info.pt] || '#c7c7c7';
   let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" class="fig card-fig" font-family='${FONT}' role="img">`
-    + `<rect width="${W}" height="${H}" fill="${K.ground}"/>`;
+    + `<rect data-m="bg" width="${W}" height="${H}" fill="${K.ground}"/>`;
 
   // ---- header: pitcher, pitch type, season; the KPI in the corner ----
-  s += text(34, 56, info.pitcher_name, `font-size="46" font-weight="700" fill="${C.teal}"`);
-  s += text(34, 90, PITCH_NAMES[info.pt] || info.pt, `font-size="29" font-weight="700" fill="${pitchCol}"`);
-  s += text(34, 114, String(season), `font-size="17" fill="${K.sub}"`);
+  s += text(34, 56, info.pitcher_name, `font-size="46" font-weight="700" fill="${C.teal}"`, 'title');
+  s += text(34, 90, PITCH_NAMES[info.pt] || info.pt, `font-size="29" font-weight="700" fill="${pitchCol}"`, 'title2');
+  s += text(34, 114, String(season), `font-size="17" fill="${K.sub}"`, 'season');
   // the KPI's segment: as wide as the longest label any model and target can give, on one line
   // at full size, so the divider and the value sit still from target to target
   const KS = 24, KR = W - 16, KL = KR - widestKpiName(KS) - 40, kx = (KL + KR) / 2;
   const KB = 112;  // the divider's foot
-  s += `<line x1="${n1(KL)}" x2="${n1(KL)}" y1="18" y2="${KB}" stroke="${K.line}" stroke-width="1.5"/>`;
-  s += text(kx, 42, kpiName(model, target), `font-size="${KS}" font-weight="700" fill="#fff" text-anchor="middle"`);
+  s += `<line data-m="kdiv" x1="${n1(KL)}" x2="${n1(KL)}" y1="18" y2="${KB}" stroke="${K.line}" stroke-width="1.5"/>`;
+  s += text(kx, 42, kpiName(model, target), `font-size="${KS}" font-weight="700" fill="#fff" text-anchor="middle"`, 'klabel');
   const kval = f.v(unit.exact);
   // its baseline (digits sit on it, nothing hangs below) on the divider's foot
-  s += text(kx, KB, kval, `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`);
+  s += text(kx, KB, kval, `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`, 'kval');
 
   // ---- the arsenal tile, on the card's left edge, as tall as the others ----
   // Titled "Pitches", at the other tiles' title size and baseline. Under it a pill per pitch type,
@@ -132,8 +135,8 @@ export function cardSvg(ctx) {
   const PX = AP.x + TM, AB = AP.y + AP.h - TM;
   const PW = Math.ceil(Math.max(textWidth(ATL, TT), ...arsenal.map((p) => textWidth(pill(p), PFS) + 20)));
   AP.w = PX + PW + TM - AP.x;  // the tile's margin each side
-  s += `<rect x="${AP.x}" y="${AP.y}" width="${n1(AP.w)}" height="${AP.h}" rx="8" fill="${K.panel}"/>`;
-  s += text(PX, AP.y + 41, ATL, `font-size="${TT}" font-weight="700" fill="${K.ink}"`);
+  s += `<rect data-m="atile" x="${AP.x}" y="${AP.y}" width="${n1(AP.w)}" height="${AP.h}" rx="8" fill="${K.panel}"/>`;
+  s += text(PX, AP.y + 41, ATL, `font-size="${TT}" font-weight="700" fill="${K.ink}"`, 'atitle');
   const AT = n1(AP.y + 41 + TT * 0.24 + 18);
   // heights: each pitch type's share of the column, floored at one line of text; the pills over
   // the floor give up what the floored ones take, in proportion
@@ -151,8 +154,8 @@ export function cardSvg(ctx) {
   arsenal.forEach((p, i) => {
     const h = hs[i], on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
-    s += `<rect x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? tint(col, HILITE) : 'transparent'}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
-    s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? col : '#fff'}" text-anchor="middle"`);
+    s += `<rect data-m="band:${p.pt}" x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? tint(col, HILITE) : K.panel}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
+    s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? col : '#fff'}" text-anchor="middle"`, `bl:${p.pt}`);
     s += '</g>';
     py += h + PG;
   });
@@ -160,8 +163,8 @@ export function cardSvg(ctx) {
   // ---- the waterfall tile, titled, right of the arsenal's (the tiles' 12 apart) ----
   const LP = { x: n1(AP.x + AP.w + 12), y: 133, h: 530 };
   LP.w = 810 - LP.x;
-  s += `<rect x="${LP.x}" y="${LP.y}" width="${LP.w}" height="${LP.h}" rx="8" fill="${K.panel}"/>`;
-  s += text(LP.x + TM, LP.y + 41, `${ctx.byOutcome ? 'Outcome' : 'Feature'} Contributions to ${kpiName(model, target)}`, `font-size="${TT}" font-weight="700" fill="${K.ink}"`);
+  s += `<rect data-m="wtile" x="${LP.x}" y="${LP.y}" width="${LP.w}" height="${LP.h}" rx="8" fill="${K.panel}"/>`;
+  s += text(LP.x + TM, LP.y + 41, `${ctx.byOutcome ? 'Outcome' : 'Feature'} Contributions to ${kpiName(model, target)}`, `font-size="${TT}" font-weight="700" fill="${K.ink}"`, 'wtitle');
 
   // the waterfall: rows spread over the body, the axis under it
   const Y0 = 246, YB = 612;
@@ -205,11 +208,11 @@ export function cardSvg(ctx) {
   const sx = (v) => n1(lin(d0, d1, X0, X1)(v));
   for (const t of niceTicks(d0, d1, 6)) {
     if (sx(t) < X0 - 1 || sx(t) > X1 + 30) continue;
-    s += `<line x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 6}" y2="${YB + 6}" stroke="${K.line}" stroke-width="1"/>`;
-    s += text(sx(t), YB + 26, f.tick(t), `font-size="14" fill="${K.muted}" text-anchor="middle"`);
+    s += `<line data-m="g:${t}" x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 6}" y2="${YB + 6}" stroke="${K.line}" stroke-width="1" pointer-events="none"/>`;
+    s += text(sx(t), YB + 26, f.tick(t), `font-size="14" fill="${K.muted}" text-anchor="middle"`, `t:${t}`);
   }
   const label = targetName(model, target);
-  s += text((X0 + X1) / 2, YB + 44, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="12" fill="${K.muted}" text-anchor="middle"`);
+  s += text((X0 + X1) / 2, YB + 44, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="12" fill="${K.muted}" text-anchor="middle"`, 'xlab');
 
   // the selected row's tint, under everything in the row (clear of the arsenal). It covers the
   // row's name and detail and reaches halfway across the gap to the next row's text each way (the
@@ -232,21 +235,21 @@ export function cardSvg(ctx) {
     const cy = Y0 + i * S + S / 2;
     const on = r.k === selected;
     s += `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}" tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`
-      + `<rect class="hit" x="${TX0 - 12}" y="${n1(band[i][0])}" width="${LP.x + LP.w - 6 - (TX0 - 12)}" height="${n1(band[i][1] - band[i][0])}" rx="6" fill="${on ? tint(pitchCol, HILITE) : 'transparent'}"/></g>`;
+      + `<rect class="hit" data-m="hit:${r.k}" x="${TX0 - 12}" y="${n1(band[i][0])}" width="${LP.x + LP.w - 6 - (TX0 - 12)}" height="${n1(band[i][1] - band[i][0])}" rx="6" fill="${on ? tint(pitchCol, HILITE) : pitchCol}" fill-opacity="${on ? 1 : 0}"/></g>`;
   });
 
   // AVG over the league line, an arrow in the KPI's colour to the final value
   const ax = sx(unit.league), ex = sx(at), AY = Y0 - 26, AH = 28;
   const aw = textWidth('AVG', 16) + 22;
-  s += `<line x1="${ax}" x2="${ax}" y1="${AY + AH / 2}" y2="${YB + 6}" stroke="#fff" stroke-opacity=".8" stroke-width="1.2" stroke-dasharray="5 4"/>`;
-  s += `<line x1="${ex}" x2="${ex}" y1="${AY}" y2="${YB + 6}" stroke="#fff" stroke-opacity=".9" stroke-width="1.4"/>`;
+  s += `<line data-m="league" x1="${ax}" x2="${ax}" y1="${AY + AH / 2}" y2="${YB + 6}" stroke="#fff" stroke-opacity=".8" stroke-width="1.2" stroke-dasharray="5 4" pointer-events="none"/>`;
+  s += `<line data-m="exact" x1="${ex}" x2="${ex}" y1="${AY}" y2="${YB + 6}" stroke="#fff" stroke-opacity=".9" stroke-width="1.4" pointer-events="none"/>`;
   const dir = ex >= ax ? 1 : -1, from = ax + dir * (aw / 2 + 3);
   if (dir * (ex - from) > 20) {
-    s += `<line x1="${n1(from)}" x2="${n1(ex - dir * 12)}" y1="${AY}" y2="${AY}" stroke="${kcol}" stroke-width="3.5" stroke-linecap="round"/>`;
-    s += `<path d="M${ex},${AY}L${n1(ex - dir * 15)},${AY - 8}L${n1(ex - dir * 15)},${AY + 8}Z" fill="${kcol}"/>`;
+    s += `<line data-m="arrow" x1="${n1(from)}" x2="${n1(ex - dir * 12)}" y1="${AY}" y2="${AY}" stroke="${kcol}" stroke-width="3.5" stroke-linecap="round"/>`;
+    s += `<path data-m="arrowhead" d="M${ex},${AY}L${n1(ex - dir * 15)},${AY - 8}L${n1(ex - dir * 15)},${AY + 8}Z" fill="${kcol}"/>`;
   }
-  s += `<rect x="${n1(ax - aw / 2)}" y="${AY - AH / 2}" width="${n1(aw)}" height="${AH}" rx="4" fill="${K.ground}" stroke="#fff" stroke-width="1.3"/>`;
-  s += text(ax, AY + 6, 'AVG', `font-size="16" font-weight="700" letter-spacing="1" fill="#fff" text-anchor="middle"`);
+  s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - AH / 2}" width="${n1(aw)}" height="${AH}" rx="4" fill="${K.ground}" stroke="#fff" stroke-width="1.3"/>`;
+  s += text(ax, AY + 6, 'AVG', `font-size="16" font-weight="700" letter-spacing="1" fill="#fff" text-anchor="middle"`, 'avg');
 
   // bars, connectors, values and row names
   let x = unit.league;
@@ -255,16 +258,16 @@ export function cardSvg(ctx) {
     const col = good * r.v > 0 ? C.gold : C.teal;
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end)), w = Math.max(1, n1(b - a));
     s += `<g class="row fx" data-k="${r.k}">`;
-    if (i) s += `<line x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${K.conn}" stroke-width="1.2"/>`;
-    s += `<path d="${bar(a, cy - BAR / 2, w, BAR, Math.min(PR, BAR / 2, w), r.v >= 0)}" fill="${col}"/>`;
+    if (i) s += `<line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${K.conn}" stroke-width="1.2"/>`;
+    s += `<path data-m="bar:${r.k}" d="${bar(a, cy - BAR / 2, w, BAR, Math.min(PR, BAR / 2, w), r.v >= 0)}" fill="${col}"/>`;
     const right = r.v >= 0;
     // on a chip, so it reads over the league and final-value lines
     const tw = textWidth(f.d(r.v), FS), vx = right ? b + 7 : a - 7;
-    s += `<rect x="${n1(right ? vx - 3 : vx - tw - 3)}" y="${n1(cy - CHIP / 2)}" width="${n1(tw + 6)}" height="${n1(CHIP)}" rx="3" fill="${K.panel}" fill-opacity=".85"/>`;
-    s += text(vx, cy + FS * 0.35, f.d(r.v), `font-size="${FS}" font-weight="700" fill="#fff" text-anchor="${right ? 'start' : 'end'}"`);
+    s += `<rect data-m="vb:${r.k}" x="${n1(right ? vx - 3 : vx - tw - 3)}" y="${n1(cy - CHIP / 2)}" width="${n1(tw + 6)}" height="${n1(CHIP)}" rx="3" fill="${K.panel}" fill-opacity=".85"/>`;
+    s += text(vx, cy + FS * 0.35, f.d(r.v), `font-size="${FS}" font-weight="700" fill="#fff" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
     const sub = subOf(r);
-    s += text(TX0, sub ? cy + LB : cy + LS * 0.35, r.label, `font-size="${n1(LS)}" font-weight="600" fill="${K.ink}"`);
-    if (sub) s += text(TX0, cy + LB + LG, sub, `font-size="${n1(SS)}" fill="${K.muted}"`);
+    s += text(TX0, sub ? cy + LB : cy + LS * 0.35, r.label, `font-size="${n1(LS)}" font-weight="600" fill="${K.ink}"`, `l:${r.k}`);
+    if (sub) s += text(TX0, cy + LB + LG, sub, `font-size="${n1(SS)}" fill="${K.muted}"`, `dt:${r.k}`);
     s += '</g>';
     x = end;
   });
@@ -273,9 +276,9 @@ export function cardSvg(ctx) {
   const sel = rows.find((r) => r.k === selected) || rows[0];
   s += leaguePanel(ctx, sel, { x: 822, y: 133, w: 440, h: 530 });
 
-  s += text(24, 694, footnote(ctx), `font-size="12.5" fill="${K.muted}"`);
+  s += text(24, 694, footnote(ctx), `font-size="12.5" fill="${K.muted}"`, 'foot');
   const WMW = 180;
-  s += `<image class="wordmark" href="${WORDMARK_URL}" x="${W - 18 - WMW}" y="${n1(H - 14 - WMW * WM_ASPECT)}" width="${WMW}" height="${n1(WMW * WM_ASPECT)}"/>`;
+  s += `<image class="wordmark" data-m="wm" href="${WORDMARK_URL}" x="${W - 18 - WMW}" y="${n1(H - 14 - WMW * WM_ASPECT)}" width="${WMW}" height="${n1(WMW * WM_ASPECT)}"/>`;
   return s + '</svg>';
 }
 
@@ -290,11 +293,11 @@ function leaguePanel(ctx, r, P) {
   const val = ctx.rowValueOf || ((k, p) => rowValue(k, p.unit));
   const inp = ctx.rowInputOf || ((k, p) => rowInput(k, p.info));
   const grouped = GROUPS[r.k];
-  let s = `<rect x="${P.x}" y="${P.y}" width="${P.w}" height="${P.h}" rx="8" fill="${K.panel}"/>`;
+  let s = `<rect data-m="pbox" x="${P.x}" y="${P.y}" width="${P.w}" height="${P.h}" rx="8" fill="${K.panel}"/>`;
   const L = P.x + 22;
   const title = r.label.length > 22 ? Math.min(26, (P.w - 44) / textWidth(r.label, 26) * 26) : 26;
-  s += text(L, P.y + 41, r.label, `font-size="${n1(title)}" font-weight="700" fill="${K.ink}"`);
-  s += text(L, P.y + 68, (ctx.poolLabel || '').replace(/ \(\d+\+ pitches\)$/, ''), `font-size="15" fill="${K.muted}"`);
+  s += text(L, P.y + 41, r.label, `font-size="${n1(title)}" font-weight="700" fill="${K.ink}"`, 'ptitle');
+  s += text(L, P.y + 68, (ctx.poolLabel || '').replace(/ \(\d+\+ pitches\)$/, ''), `font-size="15" fill="${K.muted}"`, 'psub');
 
   const pts = [];
   for (const p of pool) {
@@ -304,10 +307,10 @@ function leaguePanel(ctx, r, P) {
     if (grouped) { xv = p.info[grouped[0]]; yv = p.info[grouped[1]]; } else { xv = inp(r.k, p); yv = v; }
     if (!Number.isFinite(xv) || !Number.isFinite(yv)) continue;
     if (r.k === 'Other') xv = Math.log10(xv);
-    pts.push({ xv, yv, v, me: p.info.pitcher === info.pitcher && p.info.pt === info.pt });
+    pts.push({ xv, yv, v, id: p.info.pitcher, pt: p.info.pt, info: p.info, me: p.info.pitcher === info.pitcher && p.info.pt === info.pt });
   }
   const me = pts.find((p) => p.me);
-  if (!me) return s + text(L, P.y + 110, 'No league units to compare.', `font-size="15" fill="${K.muted}"`);
+  if (!me) return s + text(L, P.y + 110, 'No league units to compare.', `font-size="15" fill="${K.muted}"`, 'pnone');
 
   const px0 = P.x + 82, px1 = P.x + P.w - 26, py0 = P.y + 100, py1 = P.y + 348;
   const xs = pts.map((p) => p.xv).sort((a, b) => a - b), ys = pts.map((p) => p.yv).sort((a, b) => a - b);
@@ -324,22 +327,22 @@ function leaguePanel(ctx, r, P) {
   const yt = niceTicks(ya, yb, 4);
   const dp = yt.length > 1 ? Math.max(0, -Math.floor(Math.log10(yt[1] - yt[0]) + 1e-9), (yt[1] - yt[0]) % 1 ? 1 : 0) : 0;
   const yfmt = grouped || isPlus(target) ? (v) => (+v.toFixed(dp)).toFixed(dp).replace('-', '−') : f.tick;
-  for (const t of yt) s += text(px0 - 14, syr(t) + 5, yfmt(t), `font-size="14" fill="${K.muted}" text-anchor="end"`);
-  for (const t of niceTicks(xa, xb, 4)) s += text(sxr(t), py1 + 26, xfmt(t), `font-size="14" fill="${K.muted}" text-anchor="middle"`);
+  for (const t of yt) s += text(px0 - 14, syr(t) + 5, yfmt(t), `font-size="14" fill="${K.muted}" text-anchor="end"`, `py:${t}`);
+  for (const t of niceTicks(xa, xb, 4)) s += text(sxr(t), py1 + 26, xfmt(t), `font-size="14" fill="${K.muted}" text-anchor="middle"`, `px:${t}`);
   // no influence on the target: a line across the plot at 0
-  if (!grouped && ya < 0 && yb > 0) s += `<line x1="${px0}" x2="${px1}" y1="${n1(syr(0))}" y2="${n1(syr(0))}" stroke="#fff" stroke-opacity=".45" stroke-width="1.2"/>`;
+  if (!grouped && ya < 0 && yb > 0) s += `<line data-m="pzero" x1="${px0}" x2="${px1}" y1="${n1(syr(0))}" y2="${n1(syr(0))}" stroke="#fff" stroke-opacity=".45" stroke-width="1.2"/>`;
   const xl = grouped ? (r.k === 'Location' ? 'Horizontal location (ft, + = inside)' : 'Balls before the pitch')
     : r.k === 'Other' ? 'Pitches (log scale)' : ctx.axisOf ? ctx.axisOf(r.k) : AXIS[r.k] || LABELS[r.k];
-  s += text((px0 + px1) / 2, py1 + 50, xl, `font-size="13.5" fill="${K.muted}" text-anchor="middle"`);
+  s += text((px0 + px1) / 2, py1 + 50, xl, `font-size="13.5" fill="${K.muted}" text-anchor="middle"`, 'pxlab');
   const yl = grouped ? (r.k === 'Location' ? 'Vertical location' : 'Strikes before the pitch') : tname;
-  s += `<text transform="translate(${P.x + 24},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="13.5" fill="${K.muted}" text-anchor="middle">${esc(yl)}</text>`;
+  s += `<text data-m="pylab" transform="translate(${P.x + 24},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="13.5" fill="${K.muted}" text-anchor="middle">${esc(yl)}</text>`;
 
   const vs = pts.map((p) => p.v).sort((a, b) => a - b);
   const vmax = Math.max(Math.abs(quantile(vs, 0.02)), Math.abs(quantile(vs, 0.98)), 1e-9);
   let dots = '';
   for (const p of pts) {
     if (p.me) continue;
-    dots += `<circle cx="${cx(p.xv)}" cy="${cy(p.yv)}" r="1.9" fill="${grouped ? kpiColor((good * p.v) / vmax) : K.dot}" fill-opacity="${grouped ? 0.75 : 0.45}"/>`;
+    dots += `<circle data-m="d:${p.id}|${p.pt}" cx="${cx(p.xv)}" cy="${cy(p.yv)}" r="1.9" fill="${grouped ? kpiColor((good * p.v) / vmax) : K.dot}" fill-opacity="${grouped ? 0.75 : 0.45}"/>`;
   }
   s += `<g class="dots">${dots}</g>`;
   if (!grouped && r.k !== 'lefty') {
@@ -351,32 +354,54 @@ function leaguePanel(ctx, r, P) {
         const part = sorted.slice(Math.floor((b * sorted.length) / nb), Math.floor(((b + 1) * sorted.length) / nb));
         line.push([cx(sum(part.map((p) => p.xv)) / part.length), cy(sum(part.map((p) => p.yv)) / part.length)]);
       }
-      s += `<path d="${smooth(line)}" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="2" stroke-linejoin="round"/>`;
+      s += `<path data-f="1" d="${smooth(line)}" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="2" stroke-linejoin="round"/>`;
     }
   }
   const own = val(r.k, { unit, info });
   const mcol = good * (r.k === 'Other' ? r.v : own) > 0 ? C.gold : C.teal;
-  s += `<circle cx="${cx(me.xv)}" cy="${cy(me.yv)}" r="8" fill="${mcol}" stroke="#fff" stroke-width="2.4"/>`;
+  s += `<circle data-m="pme" cx="${cx(me.xv)}" cy="${cy(me.yv)}" r="8" fill="${mcol}" stroke="#fff" stroke-width="2.4"/>`;
+  // the plot's hover and click area (the page looks up the nearest dot: nearestCardPoint)
+  s += `<rect class="panel-hit" x="${px0 - 6}" y="${py0 - 6}" width="${px1 - px0 + 12}" height="${py1 - py0 + 12}" fill="transparent"/>`;
+  cardPoints = pts.map((p) => ({ ...p, fx: cx(p.xv), fy: cy(p.yv) }));
 
   // the numbers, two halves over a centred footer: on the left the row's input (as its sub-label
   // reads) over its percentile among the dots; on the right its impact on the target (gold or
   // teal, as its bar) over its percentile; then the minimum
   const DY = P.y + 414, mid = P.x + P.w / 2, half = P.w / 2 - 34;
-  s += `<line x1="${L}" x2="${P.x + P.w - 22}" y1="${DY}" y2="${DY}" stroke="${K.line}" stroke-width="1.5"/>`;
-  s += `<line x1="${mid}" x2="${mid}" y1="${DY + 16}" y2="${DY + 76}" stroke="${K.line}" stroke-width="1.5"/>`;
+  s += `<line data-m="pdiv" x1="${L}" x2="${P.x + P.w - 22}" y1="${DY}" y2="${DY}" stroke="${K.line}" stroke-width="1.5"/>`;
+  s += `<line data-m="pdiv2" x1="${mid}" x2="${mid}" y1="${DY + 16}" y2="${DY + 76}" stroke="${K.line}" stroke-width="1.5"/>`;
   const fit = (str, size) => n1(Math.min(size, (half / textWidth(str, size)) * size));
-  const seg = (cxs, big, col, sub) => text(cxs, DY + 42, big, `font-size="${fit(big, 27)}" font-weight="700" fill="${col}" text-anchor="middle"`)
-    + text(cxs, DY + 67, sub, `font-size="14.5" fill="${K.muted}" text-anchor="middle"`);
+  const seg = (cxs, big, col, sub, m) => text(cxs, DY + 42, big, `font-size="${fit(big, 27)}" font-weight="700" fill="${col}" text-anchor="middle"`, `${m}1`)
+    + text(cxs, DY + 67, sub, `font-size="14.5" fill="${K.muted}" text-anchor="middle"`, `${m}2`);
   const rank = pctile(vs.map((v) => good * v).sort((a, b) => a - b), good * me.v);
-  s += seg((mid + P.x + P.w - 22) / 2, `${f.d(r.k === 'Other' ? r.v : own)} ${tname}`, mcol, `${r.k === 'Other' ? 'Residual: ' : ''}${ord(rank)} percentile`);
+  s += seg((mid + P.x + P.w - 22) / 2, `${f.d(r.k === 'Other' ? r.v : own)} ${tname}`, mcol, `${r.k === 'Other' ? 'Residual: ' : ''}${ord(rank)} percentile`, 'pr');
   // the input: Other's is the pitch count (its x axis), the baseline's the same-hand share
   const xin = grouped || r.k === 'lefty' ? NaN : r.k === 'Other' ? info.n : inp(r.k, { unit, info });
   const inVal = r.k === 'Other' ? `${info.n.toLocaleString()} pitches`
     : r.k === 'baseline' ? `${Math.round(100 * xin)}% vs Same Hand`
     : r.detail || '–';
   const inPct = Number.isFinite(xin) ? `${ord(pctile(pts.map((p) => p.xv), r.k === 'Other' ? Math.log10(xin) : xin))} percentile` : '';
-  s += seg((L + mid) / 2, inVal, K.ink, inPct);
+  s += seg((L + mid) / 2, inVal, K.ink, inPct, 'pl');
   const minN = ctx.minN ?? 1;
-  s += text(mid, DY + 101, `Min ${minN} pitch${minN === 1 ? '' : 'es'} thrown`, `font-size="14" fill="${K.faint}" text-anchor="middle"`);
+  s += text(mid, DY + 101, `Min ${minN} pitch${minN === 1 ? '' : 'es'} thrown`, `font-size="14" fill="${K.faint}" text-anchor="middle"`, 'pl3');
+  return s;
+}
+
+// the nearest league dot to a point in card coordinates, within maxDist
+export function nearestCardPoint(fx, fy, maxDist = 12) {
+  if (!cardPoints) return null;
+  let best = null, bd = maxDist * maxDist;
+  for (const p of cardPoints) {
+    const d = (p.fx - fx) ** 2 + (p.fy - fy) ** 2;
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+
+// The card for an export, leaving the on-screen card's hover lookup as it was.
+export function cardSvgForExport(ctx) {
+  const keep = cardPoints;
+  const s = cardSvg(ctx);
+  cardPoints = keep;
   return s;
 }
