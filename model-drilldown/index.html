@@ -69,9 +69,11 @@ button:disabled{opacity:.45; cursor:default}
 .figure{background:#292C42; border-radius:10px; overflow-x:auto; overscroll-behavior-x:contain}
 .figure svg{display:block; width:100%; min-width:900px; height:auto; user-select:none; -webkit-user-select:none}
 /* the drilldown is 16:9 and scales to the screen instead of scrolling: as wide as its card allows,
-   and short enough to fit on screen whole (the viewport height, less a 40 px margin) */
-#flow{overflow:hidden}
-#flow svg{min-width:0; width:100%; max-width:min(100%, calc((100svh - 40px) * 16 / 9)); margin:0 auto}
+   and short enough to fit on screen whole (the viewport height, less a 40 px margin). The box is
+   the card's own size, centred, so no background shows either side of it. */
+#flow{overflow:hidden; background:none; width:min(100%, calc((100svh - 40px) * 16 / 9)); margin:0 auto}
+#flow svg{min-width:0; width:100%}
+@media (max-width:600px){ #flow{width:auto} }
 @media (max-width:600px){ #out{padding:12px 8px} }
 /* a phone shows only the waterfall and the stat tiles: no beeswarm or outcome Sankey */
 @media (max-width:600px){ #swarm-card, #sankey-card{display:none !important} }
