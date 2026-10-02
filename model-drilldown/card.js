@@ -104,7 +104,7 @@ export function cardSvg(ctx) {
   // ---- the arsenal tile, on the card's left edge, as tall as the others ----
   // Titled "Pitches", at the other tiles' title size and baseline. Under it a pill per pitch type,
   // stacked, most thrown first, as tall as its share of the pitches but never too short for its
-  // one line, "<type> <value>", in its colour (the pitcher cards' palette) and outlined in it at half
+  // one line, "<type> <value>", in its colour (the pitcher cards' palette) and outlined in it, both at half
   // opacity; the chosen one outlined in full, filled with 20% of that colour over the tile, its label
   // bold and white. The pills span the title, or their widest label.
   const TT = 26, TM = 22;  // the tiles' title size and margin
@@ -134,7 +134,7 @@ export function cardSvg(ctx) {
     const h = hs[i], on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
     s += `<rect data-m="band:${p.pt}" x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? tint(col, HILITE, K.panel) : K.panel}" stroke="${col}" stroke-opacity="${on ? 1 : 0.5}" stroke-width="${on ? 2.5 : 1.5}"/>`;
-    s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? '#fff' : col}" text-anchor="middle"`, `bl:${p.pt}`);
+    s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? '#fff' : col}" fill-opacity="${on ? 1 : 0.5}" text-anchor="middle"`, `bl:${p.pt}`);
     s += '</g>';
     py += h + PG;
   });
