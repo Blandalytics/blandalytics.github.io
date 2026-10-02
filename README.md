@@ -615,8 +615,9 @@ Three figures, in the Swing Profiles card colours:
   and season over three tiles, with the KPI alone in the top right corner. On the left, **Pitches**:
   a pill per pitch type, as tall as its share of the pitches; click one to switch pitch types. In
   the middle, the chosen pitch type's SHAP waterfall, as `shap_values_card.py` draws it (the same
-  rows, folding, gold/teal bars and connectors), from AVG to the final value. On the right, the
-  selected row (click any row) against the league: each dot is another pitcher's version of the
+  rows, folding, gold/teal bars and connectors), from AVG to the final value: at most the ten
+  largest rows (`MAX_ROWS` in `data.js`), the rest in Other, unless *Show every row* is on. On the
+  right, the selected row (click any row) against the league: each dot is another pitcher's version of the
   pitch, with its mean input on x and that row's value on y, the binned mean as a white line (the
   dependence plot of `shap_analysis.py`, per unit rather than per pitch); under it, the row's input
   and its impact on the target, each with its percentile (the best change for the pitcher is the
