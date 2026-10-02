@@ -210,12 +210,28 @@ export function cardSvg(ctx) {
   const label = targetName(model, target);
   s += text((X0 + X1) / 2, YB + 44, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="12" fill="${K.muted}" text-anchor="middle"`);
 
-  // the selected row's tint, under everything in the row (clear of the arsenal)
+  // the selected row's tint, under everything in the row (clear of the arsenal). It covers the
+  // row's name and detail and reaches halfway across the gap to the next row's text each way (the
+  // end rows as far past their text as they reach inside), never short of the bar. Text extents:
+  // ascent 0.74 and descent 0.24 of the font size.
+  const ext = rows.map((r, i) => {
+    const cy = Y0 + i * S + S / 2;
+    return subOf(r) ? [cy + LB - LS * 0.74, cy + LB + LG + SS * 0.24] : [cy + LS * 0.35 - LS * 0.74, cy + LS * 0.35 + LS * 0.24];
+  });
+  const band = ext.map((e, i) => [i ? (ext[i - 1][1] + e[0]) / 2 : null, i < ext.length - 1 ? (e[1] + ext[i + 1][0]) / 2 : null]);
+  band.forEach((b, i) => {
+    const [t, u] = ext[i], cy = Y0 + i * S + S / 2;
+    if (rows.length === 1) { b[0] = cy - S / 2 + 2; b[1] = cy + S / 2 - 2; return; }
+    if (b[0] == null) b[0] = t - (b[1] - u);
+    if (b[1] == null) b[1] = u + (t - b[0]);
+    b[0] = Math.min(b[0], cy - BAR / 2 - 3);
+    b[1] = Math.max(b[1], cy + BAR / 2 + 3);
+  });
   rows.forEach((r, i) => {
     const cy = Y0 + i * S + S / 2;
     const on = r.k === selected;
     s += `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}" tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`
-      + `<rect class="hit" x="${TX0 - 12}" y="${n1(cy - S / 2 + 2)}" width="${LP.x + LP.w - 6 - (TX0 - 12)}" height="${n1(S - 4)}" rx="6" fill="${on ? tint(pitchCol, HILITE) : 'transparent'}"/></g>`;
+      + `<rect class="hit" x="${TX0 - 12}" y="${n1(band[i][0])}" width="${LP.x + LP.w - 6 - (TX0 - 12)}" height="${n1(band[i][1] - band[i][0])}" rx="6" fill="${on ? tint(pitchCol, HILITE) : 'transparent'}"/></g>`;
   });
 
   // AVG over the league line, an arrow in the KPI's colour to the final value
