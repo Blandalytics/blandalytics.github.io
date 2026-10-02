@@ -7,6 +7,9 @@ Source for [blandalytics.com](https://blandalytics.com).
 [blandalytics.com](https://blandalytics.com) — a tile for each tool, built on the
 [Phantom](https://html5up.net/phantom) template by HTML5 UP (CCA 3.0; the footer carries the
 credit) with the site's dark palette. Each tile's picture is real output from its tool.
+Model Drilldown leads the Baseball tiles, the menu and the footer's tool list. PLV Pitcher Game
+Cards is hidden from all three for now: its tile and links are commented out in `index.html`, and
+`/pitcher-cards/` itself is still live.
 
 | file | role |
 |---|---|
@@ -679,11 +682,17 @@ four-hour browser cache.
 | `model-drilldown/morph.js` | the Plotly-style transition between two renders of a figure |
 | `model-drilldown/index.html`, `app.js` | the page: controls, the linked focus, tooltips, downloads, the link hash |
 | `model-drilldown/card.js` | the page's desktop drilldown, a 16:9 card (`cardSvg(ctx)`, from app.js's `view`): pitch type pills, the waterfall, the selected row against the league, the KPI in the corner; morph keys, and the league dots' hover lookup (`nearestCardPoint`) |
+| `model-drilldown/package.json`, `eslint.config.mjs`, `.prettierrc.json` | the lint and format tooling (the page never loads them) |
 | `model-drilldown/card-demo.html` | a demo of the card from the live Stuff+ tables (Brody Hopkins' 2026 four-seamer by default; linked like the drilldown, `#<season>-<pitcher id>-<pitch type>&model=plv&target=wobacon&row=<row>`, any target split by feature), or from made-up numbers at `#synthetic`; click a row or a tab, **Download PNG** gives it at 3x |
 
 Locally, copy the staged tables (`stuff_model/build/shap-values/`) to `model-drilldown/data/shap-values/`
 and open the page with `?data=data/`. After any change to the JavaScript, bump the `?v=` query on the
 module imports in `index.html` and the `.js` files so browsers fetch the new files.
+
+The code is linted with ESLint (its recommended rules, for browser modules) and formatted with
+Prettier (120 columns, single quotes). There is no build step; `package.json` holds only the tooling.
+In `model-drilldown/`, run `npm install`, then `npm run check` (lint plus a format check),
+`npm run lint` or `npm run format`.
 
 ## NHL Draft Tool
 

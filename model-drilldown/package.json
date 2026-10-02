@@ -1,0 +1,17 @@
+{
+  "name": "model-drilldown",
+  "private": true,
+  "type": "module",
+  "description": "Lint and format tooling for the Model Drilldown page (the page itself has no build step)",
+  "scripts": {
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "check": "eslint . && prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10",
+    "eslint": "^10",
+    "globals": "^17",
+    "prettier": "^3.8.1"
+  }
+}

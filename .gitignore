@@ -24,3 +24,5 @@ release-angles/data/
 
 # a local copy of the SHAP tables (they live in the bucket)
 model-drilldown/data/
+# the Model Drilldown's lint and format toolchain
+model-drilldown/node_modules
