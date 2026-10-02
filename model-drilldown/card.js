@@ -357,9 +357,9 @@ function leaguePanel(ctx, r, P) {
   const mcol = good * (r.k === 'Other' ? r.v : own) > 0 ? C.gold : C.teal;
   s += `<circle cx="${cx(me.xv)}" cy="${cy(me.yv)}" r="8" fill="${mcol}" stroke="#fff" stroke-width="2.4"/>`;
 
-  // the numbers, two halves over a centred footer: the row's impact on the target (gold or teal,
-  // as its bar) over its percentile; the row's input (as its sub-label reads) over its percentile
-  // among the dots; then the minimum
+  // the numbers, two halves over a centred footer: on the left the row's input (as its sub-label
+  // reads) over its percentile among the dots; on the right its impact on the target (gold or
+  // teal, as its bar) over its percentile; then the minimum
   const DY = P.y + 414, mid = P.x + P.w / 2, half = P.w / 2 - 34;
   s += `<line x1="${L}" x2="${P.x + P.w - 22}" y1="${DY}" y2="${DY}" stroke="${K.line}" stroke-width="1.5"/>`;
   s += `<line x1="${mid}" x2="${mid}" y1="${DY + 16}" y2="${DY + 76}" stroke="${K.line}" stroke-width="1.5"/>`;
@@ -367,14 +367,14 @@ function leaguePanel(ctx, r, P) {
   const seg = (cxs, big, col, sub) => text(cxs, DY + 42, big, `font-size="${fit(big, 27)}" font-weight="700" fill="${col}" text-anchor="middle"`)
     + text(cxs, DY + 67, sub, `font-size="14.5" fill="${K.muted}" text-anchor="middle"`);
   const rank = pctile(vs.map((v) => good * v).sort((a, b) => a - b), good * me.v);
-  s += seg((L + mid) / 2, `${f.d(r.k === 'Other' ? r.v : own)} ${tname}`, mcol, `${r.k === 'Other' ? 'Residual: ' : ''}${ord(rank)} percentile`);
+  s += seg((mid + P.x + P.w - 22) / 2, `${f.d(r.k === 'Other' ? r.v : own)} ${tname}`, mcol, `${r.k === 'Other' ? 'Residual: ' : ''}${ord(rank)} percentile`);
   // the input: Other's is the pitch count (its x axis), the baseline's the same-hand share
   const xin = grouped || r.k === 'lefty' ? NaN : r.k === 'Other' ? info.n : inp(r.k, { unit, info });
   const inVal = r.k === 'Other' ? `${info.n.toLocaleString()} pitches`
     : r.k === 'baseline' ? `${Math.round(100 * xin)}% vs Same Hand`
     : r.detail || '–';
   const inPct = Number.isFinite(xin) ? `${ord(pctile(pts.map((p) => p.xv), r.k === 'Other' ? Math.log10(xin) : xin))} percentile` : '';
-  s += seg((mid + P.x + P.w - 22) / 2, inVal, K.ink, inPct);
+  s += seg((L + mid) / 2, inVal, K.ink, inPct);
   const minN = ctx.minN ?? 1;
   s += text(mid, DY + 101, `Min ${minN} pitch${minN === 1 ? '' : 'es'} thrown`, `font-size="14" fill="${K.faint}" text-anchor="middle"`);
   return s;
