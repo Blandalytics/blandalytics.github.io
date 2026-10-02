@@ -124,13 +124,14 @@ export function cardSvg(ctx) {
   s += text(PX, AP.y + 41, ATL, `font-size="${TT}" font-weight="700" fill="${K.ink}"`);
   const AT = n1(AP.y + 41 + TT * 0.24 + 18);
   const PH = (AB - AT - PG * (arsenal.length - 1)) / arsenal.length;  // the pills fill the column
+  const PR = 9;  // the pills' corner radius; a usage segment shares it, less where it's too short for it
   const SB = AT + arsenal.length * PH + PG * (arsenal.length - 1);  // the stack's foot
   const PFS = Math.min(17, PH * 0.34);
   arsenal.forEach((p, i) => {
     const y = AT + i * (PH + PG), on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
     const val = p.unit ? f.v(p.unit.exact) : '–';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
-    s += `<rect x="${PX + 1}" y="${n1(y + 1)}" width="${PW - 2}" height="${n1(PH - 2)}" rx="9" fill="${on ? col : 'transparent'}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
+    s += `<rect x="${PX + 1}" y="${n1(y + 1)}" width="${PW - 2}" height="${n1(PH - 2)}" rx="${PR}" fill="${on ? col : 'transparent'}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
     s += text(PX + PW / 2, y + PH / 2 - PFS * 0.18, p.pt, `font-size="${n1(PFS)}" font-weight="700" fill="#fff" text-anchor="middle"`);
     s += text(PX + PW / 2, y + PH / 2 + PFS * 0.98, val, `font-size="${n1(PFS * 0.92)}" font-weight="${on ? 700 : 500}" fill="#fff" text-anchor="middle"`);
     s += '</g>';
@@ -140,7 +141,7 @@ export function cardSvg(ctx) {
   arsenal.forEach((p) => {
     const h = Math.max(5, ((SB - AT - UG * (arsenal.length - 1)) * p.n) / total), on = p.pt === info.pt;  // a rare pitch type stays visible
     const col = PITCH_COLORS[p.pt] || '#c7c7c7';
-    s += `<rect class="usage" data-pt="${p.pt}" x="${on ? UX : UX + 0.75}" y="${n1(on ? uy : uy + 0.75)}" width="${on ? UW : UW - 1.5}" height="${n1(on ? h : h - 1.5)}" rx="${n1(Math.min(3, h / 2 - 0.75))}" fill="${on ? col : 'none'}" stroke="${on ? 'none' : col}" stroke-width="1.5"/>`;
+    s += `<rect class="usage" data-pt="${p.pt}" x="${on ? UX : UX + 0.75}" y="${n1(on ? uy : uy + 0.75)}" width="${on ? UW : UW - 1.5}" height="${n1(on ? h : h - 1.5)}" rx="${n1(Math.min(PR, (on ? h : h - 1.5) / 2))}" fill="${on ? col : 'none'}" stroke="${on ? 'none' : col}" stroke-width="1.5"/>`;
     uy += h + UG;
   });
 
