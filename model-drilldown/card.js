@@ -118,7 +118,7 @@ export function cardSvg(ctx) {
   // 12 wide): a segment per pitch type as tall as its share of the pitches, the chosen one filled
   // in its colour, the rest outlined.
   const AT = 214, AB = 618, PX = 40, PW = 66, UX = PX + PW + 10, UW = 12, PG = 8;
-  const PH = Math.min(58, (AB - AT - PG * (arsenal.length - 1)) / arsenal.length);
+  const PH = (AB - AT - PG * (arsenal.length - 1)) / arsenal.length;  // the pills fill the column
   const SB = AT + arsenal.length * PH + PG * (arsenal.length - 1);  // the stack's foot
   const PFS = Math.min(17, PH * 0.34);
   arsenal.forEach((p, i) => {
