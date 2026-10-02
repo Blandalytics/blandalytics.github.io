@@ -176,8 +176,13 @@ export function cardSvg(ctx) {
   const BAR = Math.min(S - 4, Math.max(CHIP, S * 0.5));
   // a row's name over its detail, sized and spaced to the row pitch (17 / 14 with room, as in a
   // seven-row card), the pair centred on the bar: LB the name's baseline, LG the gap to the detail's
-  const LS = Math.max(12.5, Math.min(17, S * 0.46)), SS = Math.max(11, Math.min(14, S * 0.37));
-  const LG = Math.max(LS * 0.92, Math.min(20, S * 0.38));
+  // baseline.
+  // When there are too many rows for that (every row shown), all three shrink together until the
+  // pair, the name's cap top to the detail's descender, fits its row with a little room.
+  let LS = Math.min(17, S * 0.46), SS = Math.min(14, S * 0.37);
+  let LG = Math.max(LS * 0.92, Math.min(20, S * 0.38));
+  const fitL = (S - 3) / (0.74 * LS + LG + 0.24 * SS);
+  if (fitL < 1) { LS *= fitL; SS *= fitL; LG *= fitL; }
   const LB = -(LG - 0.72 * LS + 0.22 * SS) / 2;
   // Other, Location and Count rows, and every row of the Location model: name only
   const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] || ctx.model === 'location' ? '' : r.detail);
