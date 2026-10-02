@@ -9,10 +9,10 @@
 // the next, and the league plot's dots are kept for the hover lookup (nearestCardPoint).
 
 import {
-  PITCH_NAMES, PITCH_COLORS, OUTCOMES, LABELS, AXIS, PCT, GROUPS, MODELS, isPlus, targetGood, targetName,
+  PITCH_NAMES, PITCH_COLORS, LABELS, AXIS, PCT, GROUPS, MODELS, isPlus, targetGood, targetName,
   rowValue, rowInput,
 } from './data.js?v=11';
-import { C, K, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord, bar } from './charts.js?v=74';
+import { C, K, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord, bar, widestKpiName } from './charts.js?v=75';
 
 export const CARD = { W: 1280, H: 720 };
 const FONT = '"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
@@ -27,10 +27,9 @@ const quantile = (sorted, q) => {
   const i = (sorted.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
 };
-// The highlight: the pitch type's colour at HILITE (10%) over the figure's card colour (C.card),
-// blended here and drawn solid so the navy under it doesn't shift the hue. It tints the chosen
-// pitch type's pill and the selected row.
-const HILITE = 0.1;
+// The highlight: 20% of the pitch type's colour over the tile it sits on (K.panel), blended here and
+// drawn solid. It fills the chosen pitch type's pill and the selected row alike.
+const HILITE = 0.2;
 function tint(hex, a, over = C.card) {
   const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const [c, b] = [rgb(hex), rgb(over)];
@@ -76,12 +75,6 @@ function footnote(ctx) {
   return `${note}. ${targetGood(target) > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`;
 }
 
-// the widest KPI label ("In-Play Out% (Stuff)"): every model's targets, Location+ its one
-const KPI_TARGETS = ['plus', 'outcomes', 'era', 'wobacon', ...OUTCOMES.map((o) => `p_${o}`)];
-function widestKpiName(size) {
-  return Math.max(...Object.entries(MODELS).flatMap(([m, d]) => (d.outcomesOnly ? ['outcomes'] : KPI_TARGETS)
-    .map((t) => textWidth(kpiName(m, t), size))));
-}
 
 export function cardSvg(ctx) {
   const { W, H } = CARD;
@@ -111,9 +104,9 @@ export function cardSvg(ctx) {
   // ---- the arsenal tile, on the card's left edge, as tall as the others ----
   // Titled "Pitches", at the other tiles' title size and baseline. Under it a pill per pitch type,
   // stacked, most thrown first, as tall as its share of the pitches but never too short for its
-  // one line, "<type> <value>", in its colour (the pitcher cards' palette) and outlined in it; the
-  // chosen one filled with that colour, its label bold in the tile's colour. The pills span the title, or
-  // their widest label.
+  // one line, "<type> <value>", in its colour (the pitcher cards' palette) and outlined in it, both at half
+  // opacity; the chosen one outlined in full, filled with 20% of that colour over the tile, its label
+  // bold and white. The pills span the title, or their widest label.
   const TT = 26, TM = 22;  // the tiles' title size and margin
   const AP = { x: 20, y: 133, h: 530 }, ATL = 'Pitches';
   const PFS = 17, PG = 6, PR = 9;  // label size, gap, corner radius (less on a pill too short for it)
@@ -140,8 +133,8 @@ export function cardSvg(ctx) {
   arsenal.forEach((p, i) => {
     const h = hs[i], on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
-    s += `<rect data-m="band:${p.pt}" x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? col : K.panel}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
-    s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? K.panel : col}" text-anchor="middle"`, `bl:${p.pt}`);
+    s += `<rect data-m="band:${p.pt}" x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? tint(col, HILITE, K.panel) : K.panel}" stroke="${col}" stroke-opacity="${on ? 1 : 0.5}" stroke-width="${on ? 2.5 : 1.5}"/>`;
+    s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? '#fff' : col}" fill-opacity="${on ? 1 : 0.5}" text-anchor="middle"`, `bl:${p.pt}`);
     s += '</g>';
     py += h + PG;
   });
@@ -229,7 +222,7 @@ export function cardSvg(ctx) {
     const cy = Y0 + i * S + S / 2;
     const on = r.k === selected;
     s += `<g class="row fx${on ? ' sel' : ''}" data-k="${r.k}" tabindex="0" role="button" aria-label="${esc(`${r.label} ${f.d(r.v)}`)}">`
-      + `<rect class="hit" data-m="hit:${r.k}" x="${TX0 - 12}" y="${n1(band[i][0])}" width="${LP.x + LP.w - 6 - (TX0 - 12)}" height="${n1(band[i][1] - band[i][0])}" rx="6" fill="${on ? tint(pitchCol, HILITE) : pitchCol}" fill-opacity="${on ? 1 : 0}"/></g>`;
+      + `<rect class="hit" data-m="hit:${r.k}" x="${TX0 - 12}" y="${n1(band[i][0])}" width="${LP.x + LP.w - 6 - (TX0 - 12)}" height="${n1(band[i][1] - band[i][0])}" rx="6" fill="${on ? tint(pitchCol, HILITE, K.panel) : pitchCol}" fill-opacity="${on ? 1 : 0}"/></g>`;
   });
 
   // AVG over the league line, an arrow in the KPI's colour to the final value
