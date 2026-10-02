@@ -111,10 +111,9 @@ export function cardSvg(ctx) {
   // ---- the arsenal tile, on the card's left edge, as tall as the others ----
   // Titled "Pitches", at the other tiles' title size and baseline. Under it a pill per pitch type,
   // stacked, most thrown first, as tall as its share of the pitches but never too short for its
-  // one line, "<type> <value>": white, or bold in its colour for the chosen one. Each is outlined
-  // in its colour (the pitcher cards' palette), the chosen one filled with its highlight (its
-  // colour at HILITE over the card). The pills span the title, or their widest
-  // label.
+  // one line, "<type> <value>", in its colour (the pitcher cards' palette) and outlined in it; the
+  // chosen one filled with that colour, its label bold and white. The pills span the title, or
+  // their widest label.
   const TT = 26, TM = 22;  // the tiles' title size and margin
   const AP = { x: 20, y: 133, h: 530 }, ATL = 'Pitches';
   const PFS = 17, PG = 6, PR = 9;  // label size, gap, corner radius (less on a pill too short for it)
@@ -141,8 +140,8 @@ export function cardSvg(ctx) {
   arsenal.forEach((p, i) => {
     const h = hs[i], on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
-    s += `<rect data-m="band:${p.pt}" x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? tint(col, HILITE) : K.panel}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
-    s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? col : '#fff'}" text-anchor="middle"`, `bl:${p.pt}`);
+    s += `<rect data-m="band:${p.pt}" x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? col : K.panel}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
+    s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? '#fff' : col}" text-anchor="middle"`, `bl:${p.pt}`);
     s += '</g>';
     py += h + PG;
   });
