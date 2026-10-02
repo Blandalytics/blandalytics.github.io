@@ -108,16 +108,13 @@ export function cardSvg(ctx) {
   // its baseline (digits sit on it, nothing hangs below) on the divider's foot
   s += text(kx, KB, kval, `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`);
 
-  // ---- left panel: titled; the arsenal down its left side, then the waterfall ----
-  const LP = { x: 20, y: 133, w: 790, h: 530 };
-  s += `<rect x="${LP.x}" y="${LP.y}" width="${LP.w}" height="${LP.h}" rx="8" fill="${K.panel}"/>`;
-  s += text(LP.x + 22, LP.y + 41, `${ctx.byOutcome ? 'Outcome' : 'Feature'} Contributions to ${kpiName(model, target)}`, `font-size="26" font-weight="700" fill="${K.ink}"`);
+  // ---- the arsenal down the card's left edge, outside the tiles, as tall as they are ----
   // A pill per pitch type, stacked, most thrown first: the type over its value, white, outlined in
   // its colour (the pitcher cards' palette); the chosen one on a raised fill. Beside them, between
-  // the pills and the waterfall, the pitch usage as one vertical bar (the mockup's horizontal one,
-  // 12 wide): a segment per pitch type as tall as its share of the pitches, the chosen one filled
-  // in its colour, the rest outlined.
-  const AT = 214, AB = 618, PX = 40, PW = 66, UX = PX + PW + 10, UW = 12, PG = 8;
+  // the pills and the waterfall tile, the pitch usage as one vertical bar (the mockup's horizontal
+  // one, 12 wide): a segment per pitch type as tall as its share of the pitches, the chosen one
+  // filled in its colour, the rest outlined.
+  const AT = 133, AB = 663, PX = 20, PW = 66, UX = PX + PW + 8, UW = 12, PG = 8;
   const PH = (AB - AT - PG * (arsenal.length - 1)) / arsenal.length;  // the pills fill the column
   const SB = AT + arsenal.length * PH + PG * (arsenal.length - 1);  // the stack's foot
   const PFS = Math.min(17, PH * 0.34);
@@ -140,6 +137,11 @@ export function cardSvg(ctx) {
   });
   s += `<text transform="translate(${UX + UW + 14},${n1((AT + SB) / 2)}) rotate(-90)" font-size="12" fill="${K.muted}" text-anchor="middle">Pitch usage</text>`;
 
+  // ---- the waterfall tile, titled, right of the arsenal ----
+  const LP = { x: UX + UW + 24, y: 133, w: 810 - (UX + UW + 24), h: 530 };
+  s += `<rect x="${LP.x}" y="${LP.y}" width="${LP.w}" height="${LP.h}" rx="8" fill="${K.panel}"/>`;
+  s += text(LP.x + 22, LP.y + 41, `${ctx.byOutcome ? 'Outcome' : 'Feature'} Contributions to ${kpiName(model, target)}`, `font-size="26" font-weight="700" fill="${K.ink}"`);
+
   // the waterfall: rows spread over the body, the axis under it
   const Y0 = 246, YB = 612;
   const S = (YB - Y0) / rows.length;  // rows spread over the body, as the drilldown spreads them
@@ -155,8 +157,8 @@ export function cardSvg(ctx) {
   const LB = -(LG - 0.72 * LS + 0.22 * SS) / 2;
   // Other, Location and Count rows, and every row of the Location model: name only
   const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] || ctx.model === 'location' ? '' : r.detail);
-  // the row names start past the usage bar's label; the bars past the widest name or detail
-  const TX0 = UX + UW + 30;
+  // the row names start at the tile's margin; the bars past the widest name or detail
+  const TX0 = LP.x + 22;
   const textW = Math.max(...rows.map((r) => Math.max(textWidth(r.label, LS, 600), subOf(r) ? textWidth(subOf(r), SS, 400) : 0)));
   const ROOM_L = TX0 + textW + 10, X0 = Math.max(330, Math.min(440, ROOM_L + 20));
   let at = unit.league;
