@@ -22,6 +22,11 @@ export const C = {
   card: '#292C42', raise: '#30344F', ink: '#E3E9F1', muted: '#8A96A6', faint: '#6B7684', grid: '#3A3E5A',
   gold: '#F1C647', teal: '#00D4FF',
 };
+// the card's navy palette (card.js, and the phone's drilldown): the ground, its tiles, rules and text
+export const K = {
+  ground: '#13263F', panel: '#172D4A', line: '#2A3A57', ink: '#E8EEF7', muted: '#93A3BC', faint: '#6C7C96',
+  sub: '#7F9CD6', dot: '#9FB3CF', conn: '#B4BECC',
+};
 const FONT = '"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
 export const WORDMARK_URL = 'https://res.cloudinary.com/dduabusaf/image/upload/v1772839288/PitcherList_Stats_watermark_with_logo_k9e3xa.webp';
 const WM_ASPECT = 178 / 928;
@@ -91,6 +96,16 @@ const quantile = (sorted, q) => {
 export const pctile = (values, x) => Math.round((100 * values.filter((v) => v < x).length) / Math.max(values.length, 1));
 export const ord = (n) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] || 'th'}`;
 const sum = (a) => a.reduce((x, y) => x + y, 0);
+
+// A waterfall bar: square where it starts (the running total before it) and rounded (r) where it
+// ends, on the right for a rise and the left for a drop
+export function bar(x, y, w, h, r, right) {
+  const [x1, y1] = [n1(x + w), n1(y + h)];
+  [x, y, r] = [n1(x), n1(y), n1(r)];
+  return right
+    ? `M${x},${y}H${n1(x1 - r)}Q${x1},${y} ${x1},${n1(y + r)}V${n1(y1 - r)}Q${x1},${y1} ${n1(x1 - r)},${y1}H${x}Z`
+    : `M${x1},${y}H${n1(x + r)}Q${x},${y} ${x},${n1(y + r)}V${n1(y1 - r)}Q${x},${y1} ${n1(x + r)},${y1}H${x1}Z`;
+}
 
 // a horizontal Sankey ribbon from (x0, a0..a1) to (x1, b0..b1)
 function ribbon(x0, a0, a1, x1, b0, b1) {
@@ -649,35 +664,44 @@ export function phoneFlowSvg(ctx, W) {
   const t1 = T0 + NS * 0.74, t2 = t1 + NS * 1.12;  // the title's baselines
   const titleBottom = t2 + NS * 0.26;
   const bx = (W - BW) / 2, by = titleBottom + 8;
-  let s = svgOpen(W, 100, 'fig flow-fig phone');  // height set at the end
+  // the card's navy ground (svgOpen's first fill is its background)
+  let s = svgOpen(W, 100, 'fig flow-fig phone').replace(`fill="${C.card}"`, `fill="${K.ground}"`);  // height set at the end
   s += text(W / 2, t1, info.pitcher_name, `font-size="${NS}" font-weight="700" fill="${C.teal}" text-anchor="middle"`, 'title');
   s += text(W / 2, t2, ptName, `font-size="${NS}" font-weight="700" fill="${pitchCol}" text-anchor="middle"`, 'title2');
   const bcy = by + BH0 / 2;
-  s += `<rect data-m="kbox" x="${n1(bx)}" y="${n1(by)}" width="${n1(BW)}" height="${BH0}" rx="10" fill="${C.card}" stroke="${kcol}" stroke-width="2"/>`;
+  s += `<rect data-m="kbox" x="${n1(bx)}" y="${n1(by)}" width="${n1(BW)}" height="${BH0}" rx="10" fill="${K.ground}" stroke="${kcol}" stroke-width="2"/>`;
   const lbase = one ? [bcy + KVS * 0.36] : [bcy - 2, bcy + KLS + 1];
   kLines.forEach((l, i) => { s += text(bx + 12 + klw / 2, lbase[i], l, `font-size="${KLSZ}" font-weight="700" fill="#fff" text-anchor="middle"`, `klabel${i}`); });
   s += text(bx + 12 + klw + 10, bcy + KVS * 0.36, kv, `font-size="${KVS}" font-weight="700" fill="${kcol}"`, 'kval');
-  // the subtitle, wrapped to the width
-  const subLines = wrapLines(`${ctx.season}; Each ${ctx.byOutcome ? 'Outcome' : 'Feature'}'s Contribution to ${kpiName(model, target)}`, 12, W - 2 * P);
+  // the season under it, as the card's header has it
   const sy0 = Math.max(titleBottom, by + BH0) + 20;
-  subLines.forEach((l, i) => { s += text(W / 2, sy0 + i * 16, l, `font-size="12" fill="${C.muted}" text-anchor="middle"`, i ? `sub${i}` : 'sub'); });  // centred, like the title
-  const headerBottom = sy0 + (subLines.length - 1) * 16;
+  s += text(W / 2, sy0, String(ctx.season), `font-size="12" fill="${K.sub}" text-anchor="middle"`, 'sub');
+  const headerBottom = sy0;
+
+  // ---- the waterfall's tile, as the card's: titled, its edges TP in from the figure's ----
+  const TP = 6, TY = headerBottom + 14;
+  const tLines = wrapLines(`${ctx.byOutcome ? 'Outcome' : 'Feature'} Contributions to ${kpiName(model, target)}`, 15, W - 2 * TP - 24);
+  const tile = s.length;  // the tile's rect goes in here, once its height is known
+  tLines.forEach((l, i) => { s += text(TP + 12, TY + 24 + i * 19, l, `font-size="15" font-weight="700" fill="${K.ink}"`, i ? `wtitle${i}` : 'wtitle'); });
+  const tTop = TY + 24 + (tLines.length - 1) * 19;
 
   // ---- the waterfall, full width ----
   const FS = 12.5, SUB = PHONE_MIN, VS = 12;
-  const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] || ctx.model === 'location' ? '' : r.detail);  // as the desktop's
+  // as the card's: names only for Other, Location and Count, the Location model, and every row shown
+  const subOf = (r) => (ctx.all || r.k === 'Other' || GROUPS[r.k] || ctx.model === 'location' ? '' : r.detail);
   const LW = Math.max(...rows.map((r) => Math.max(textWidth(r.label, FS), subOf(r) ? textWidth(subOf(r), SUB) * 0.95 : 0)));
-  const LX = P + LW, X0 = LX + 12, X1 = W - P - 4;
-  const S = FS + SUB + 16;  // row pitch
+  const PI = TP + 12;  // the tile's inner margin
+  const LX = PI + LW, X0 = LX + 12, X1 = W - PI - 4;
+  const S = ctx.all ? FS + 12 : FS + SUB + 16;  // row pitch (names alone pack closer)
   const BAR = 14;
-  const Y0 = headerBottom + 42, BH = rows.length * S;  // room for the AVG label above the bars
+  const Y0 = tTop + 40, BH = rows.length * S;  // room for the AVG label above the bars
   let x = unit.league;
   const path = [x];
   for (const r of rows) { x += r.v; path.push(x); }
   const lo = Math.min(...path), hi = Math.max(...path);
   const pad = Math.max(f.pad, 0.06 * (hi - lo));
   let d0 = lo - pad, d1 = hi + pad * 1.6;
-  const ROOM_L = LX + 6, ROOM_R = W - P;
+  const ROOM_L = LX + 6, ROOM_R = W - PI;
   for (let iter = 0; iter < 8; iter++) {  // widen until every value's chip fits beside its bar
     const k = (X1 - X0) / (d1 - d0);
     let over = 0, under = 0, at = unit.league;
@@ -703,34 +727,36 @@ export function phoneFlowSvg(ctx, W) {
     const g = '<g class="prow"';
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end));
     const w = Math.max(1, n1(b - a));
-    bars += `${g}><rect data-m="bar:${r.k}" x="${a}" y="${n1(cy - BAR / 2)}" width="${w}" height="${BAR}" rx="${n1(Math.min(3, w / 2))}" fill="${col}"/>`;
-    if (i) bars += `<line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${CONNECTOR}" stroke-width="1.2"/>`;
+    // as the card's: square where it starts, rounded where it ends (the pills' 9, at most half the bar)
+    bars += `${g}><path data-m="bar:${r.k}" d="${bar(a, cy - BAR / 2, w, BAR, Math.min(9, BAR / 2, w), r.v >= 0)}" fill="${col}"/>`;
+    if (i) bars += `<line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${K.conn}" stroke-width="1.2"/>`;
     bars += '</g>';
     const right = r.v >= 0;
     const val = f.d(r.v);
     const tw = textWidth(val, VS), tx = right ? b + 5 : a - 5, ch = VS + 5;
-    front += `${g}><rect data-m="vb:${r.k}" x="${n1(right ? tx - 3 : tx - tw - 3)}" y="${n1(cy - ch / 2)}" width="${n1(tw + 6)}" height="${n1(ch)}" rx="3" fill="${C.card}" fill-opacity=".8"/>`;
-    front += text(tx, cy + VS * 0.35, val, `font-size="${VS}" font-weight="700" fill="${C.ink}" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
+    front += `${g}><rect data-m="vb:${r.k}" x="${n1(right ? tx - 3 : tx - tw - 3)}" y="${n1(cy - ch / 2)}" width="${n1(tw + 6)}" height="${n1(ch)}" rx="3" fill="${K.panel}" fill-opacity=".85"/>`;
+    front += text(tx, cy + VS * 0.35, val, `font-size="${VS}" font-weight="700" fill="#fff" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
     const sub = subOf(r);
     // label and sub-label centred together on the bar (cap top to descender; sub baseline SUB + 3 lower)
     const lb = FS * 0.74 - (FS * 0.74 + SUB + 3 + SUB * 0.24) / 2;
-    front += text(LX, sub ? cy + lb : cy + FS * 0.35, r.label, `font-size="${FS}" font-weight="700" fill="${C.ink}" text-anchor="end"`, `l:${r.k}`);
-    if (sub) front += text(LX, cy + lb + SUB + 3, sub, `font-size="${SUB}" fill="${C.muted}" text-anchor="end"`, `dt:${r.k}`);
+    front += text(LX, sub ? cy + lb : cy + FS * 0.35, r.label, `font-size="${FS}" font-weight="600" fill="${K.ink}" text-anchor="end"`, `l:${r.k}`);
+    if (sub) front += text(LX, cy + lb + SUB + 3, sub, `font-size="${SUB}" fill="${K.muted}" text-anchor="end"`, `dt:${r.k}`);
     front += '</g>';
     x = end;
   });
   for (const t of niceTicks(d0, d1, 4)) {
-    s += `<line data-m="g:${t}" x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 4}" y2="${Y0 + BH + 2}" stroke="${C.grid}" stroke-width="1" pointer-events="none"/>`;
-    s += text(sx(t), Y0 + BH + 16, f.tick(t), `font-size="${PHONE_MIN}" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
+    s += `<line data-m="g:${t}" x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 4}" y2="${Y0 + BH + 2}" stroke="${K.line}" stroke-width="1" pointer-events="none"/>`;
+    s += text(sx(t), Y0 + BH + 16, f.tick(t), `font-size="${PHONE_MIN}" fill="${K.muted}" text-anchor="middle"`, `t:${t}`);
   }
   const label = targetName(model, target);
-  s += text((X0 + X1) / 2, Y0 + BH + 32, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="${PHONE_MIN}" fill="${C.muted}" text-anchor="middle"`, 'xlab');
+  s += text((X0 + X1) / 2, Y0 + BH + 32, f.unit !== 'pp' || label.includes('%') ? label : `${label}, %`, `font-size="${PHONE_MIN}" fill="${K.muted}" text-anchor="middle"`, 'xlab');
   const AY = Y0 - 16;
-  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${AY + 7}" y2="${Y0 + BH + 2}" stroke="#fff" stroke-width="1" pointer-events="none"/>`;
+  // as the card's: the league line dashed, the final value's solid
+  s += `<line data-m="league" x1="${sx(unit.league)}" x2="${sx(unit.league)}" y1="${AY + 7}" y2="${Y0 + BH + 2}" stroke="#fff" stroke-opacity=".8" stroke-width="1" stroke-dasharray="4 3" pointer-events="none"/>`;
   s += bars;
-  s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${AY}" y2="${Y0 + BH + 2}" stroke="#fff" stroke-width="1.3" stroke-dasharray="4 4" pointer-events="none"/>`;
+  s += `<line data-m="exact" x1="${sx(x)}" x2="${sx(x)}" y1="${AY}" y2="${Y0 + BH + 2}" stroke="#fff" stroke-opacity=".9" stroke-width="1.2" pointer-events="none"/>`;
   const ax = sx(unit.league), ex = sx(x), aw = textWidth('AVG', PHONE_MIN) + 10;
-  s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - 8}" width="${n1(aw)}" height="16" rx="3" fill="${C.card}" stroke="#fff" stroke-width="1"/>`;
+  s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - 8}" width="${n1(aw)}" height="16" rx="3" fill="${K.panel}" stroke="#fff" stroke-width="1"/>`;
   s += text(ax, AY + 4, 'AVG', `font-size="${PHONE_MIN}" font-weight="700" fill="#fff" text-anchor="middle"`, 'avg');
   const dir = ex >= ax ? 1 : -1, from = ax + dir * (aw / 2 + 2);
   if (dir * (ex - from) > 10) {
@@ -747,8 +773,10 @@ export function phoneFlowSvg(ctx, W) {
     : f.unit === 'runs' ? `Expected runs per 9 IP (league ERA ${unit.league.toFixed(2)}); feature contributions from a proxy model.`
     : `Per-pitch probability (league ${unit.league.toFixed(1)}%); feature contributions from a proxy model.`;
   const lines = wrapLines(`${note} ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`, PHONE_MIN, W - 2 * P);
-  let fy = Y0 + BH + 54;
-  lines.forEach((l, i) => { s += text(W / 2, fy + i * 15, l, `font-size="${PHONE_MIN}" fill="${C.faint}" text-anchor="middle"`, i ? `foot${i}` : 'foot'); });
+  const tBottom = Y0 + BH + 44;  // the tile's foot, under the axis label
+  s = s.slice(0, tile) + `<rect data-m="wtile" x="${TP}" y="${n1(TY)}" width="${W - 2 * TP}" height="${n1(tBottom - TY)}" rx="8" fill="${K.panel}"/>` + s.slice(tile);
+  let fy = tBottom + 20;
+  lines.forEach((l, i) => { s += text(W / 2, fy + i * 15, l, `font-size="${PHONE_MIN}" fill="${K.muted}" text-anchor="middle"`, i ? `foot${i}` : 'foot'); });
   fy += (lines.length - 1) * 15;
   const ww = 130;
   s += wordmark((W - ww) / 2, fy + 12, ww);  // centred, like everything on the phone

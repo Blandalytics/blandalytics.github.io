@@ -626,7 +626,8 @@ Three figures, in the Swing Profiles card colours:
   from one draw to the next. The three numbers below carry Swing Profiles' league KDEs: the value,
   the biggest lift and the biggest drag. On a desktop or laptop the card scales to fit the page's
   width and the screen's height (less 40 px); **Copy PNG** gives it at 2560 × 1440. On a phone
-  (600 px or narrower) the page shows only the waterfall, drawn at the screen's width with static
+  (600 px or narrower) the page shows only the waterfall (in the card's style: its navy ground and titled tile, its bars,
+  lines and row labels), drawn at the screen's width with static
   rows, and the three numbers with their KDEs: no league card, beeswarm or Sankey (**Copy PNG**
   still gives the full card).
 - **Against the league.** A beeswarm of every row's SHAP over the comparison group, coloured by
