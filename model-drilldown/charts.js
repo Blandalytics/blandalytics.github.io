@@ -144,6 +144,49 @@ function footnote(str, W, H, size = 11.5, wmX = W - 36 - WM_W) {
 }
 const text = (x, y, s, attrs = '', m = null) => `<text${m ? ` data-m="${esc(m)}"` : ''} x="${n1(x)}" y="${n1(y)}" ${attrs}>${esc(s)}</text>`;
 const head = (x, y, s, anchor, m, fill = C.faint, size = 11) => text(x, y, s.toUpperCase(), `font-size="${n1(size)}" font-weight="600" letter-spacing="${n1(size * 0.145)}" fill="${fill}" text-anchor="${anchor}"`, m);
+// the widest KPI label ("In-Play Out% (Stuff)"): every model's targets, Location+ its one
+const KPI_TARGETS = ['plus', 'outcomes', 'era', 'wobacon', ...OUTCOMES.map((o) => `p_${o}`)];
+export function widestKpiName(size) {
+  return Math.max(...Object.entries(MODELS).flatMap(([m, d]) => (d.outcomesOnly ? ['outcomes'] : KPI_TARGETS)
+    .map((t) => textWidth(kpiName(m, t), size))));
+}
+
+// The drilldown card's frame (card.js), for the page's other figures: the navy ground; the pitcher,
+// pitch type and season, with the KPI alone in its corner segment; and one titled tile from the
+// card's tile top (133) to tileBottom, its subtitle under the title. Returns the SVG so far.
+export const CARD_TILE = { x: 20, y: 133, title: 41, sub: 68 };  // the tile's left, top and text baselines
+function cardFrame(W, H, ctx, cls, title, sub, tileBottom) {
+  const { unit, target, model, info, season } = ctx;
+  const f = formats(target);
+  const kcol = kpiColor(ctx.kpi ? ctx.kpi.t : kpiT(target, unit));
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${n1(H)}" class="${cls}" font-family='${FONT}' role="img">`
+    + `<rect class="bg" data-m="bg" width="${W}" height="${n1(H)}" fill="${K.ground}"/>`;
+  s += text(34, 56, info.pitcher_name, `font-size="46" font-weight="700" fill="${C.teal}"`, 'title');
+  s += text(34, 90, PITCH_NAMES[info.pt] || info.pt, `font-size="29" font-weight="700" fill="${PITCH_COLORS[info.pt] || C.ink}"`, 'title2');
+  s += text(34, 114, String(season), `font-size="17" fill="${K.sub}"`, 'season');
+  const KS = 24, KR = W - 16, KL = KR - widestKpiName(KS) - 40, kx = (KL + KR) / 2, KB = 112;
+  s += `<line data-m="kdiv" x1="${n1(KL)}" x2="${n1(KL)}" y1="18" y2="${KB}" stroke="${K.line}" stroke-width="1.5"/>`;
+  s += text(kx, 42, kpiName(model, target), `font-size="${KS}" font-weight="700" fill="#fff" text-anchor="middle"`, 'klabel');
+  const kval = f.v(unit.exact);
+  s += text(kx, KB, kval, `font-size="${n1(Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74))}" font-weight="700" fill="${kcol}" text-anchor="middle"`, 'kval');
+  const T = CARD_TILE;
+  s += `<rect data-m="tile" x="${T.x}" y="${T.y}" width="${W - 2 * T.x}" height="${n1(tileBottom - T.y)}" rx="8" fill="${K.panel}"/>`;
+  s += text(T.x + 22, T.y + T.title, title, `font-size="26" font-weight="700" fill="${K.ink}"`, 'ttitle');
+  if (sub) s += text(T.x + 22, T.y + T.sub, sub, `font-size="15" fill="${K.muted}"`, 'tsub');
+  return s;
+}
+// under the card's tile: a note on the left (wrapped clear of the wordmark), the wordmark on the right
+const CARD_WM = 180;
+const cardFootH = () => 14 + CARD_WM * WM_ASPECT + 8;  // from the tile's foot to the figure's
+function cardFoot(W, H, note = '') {
+  const wmX = W - 18 - CARD_WM;
+  let s = '';
+  if (note) {
+    const lines = footLines(note, W, 12.5, wmX + 12);
+    lines.forEach((l, i) => { s += text(24, H - 26 - 17 * (lines.length - 1 - i), l, `font-size="12.5" fill="${K.muted}"`, i ? `foot${i}` : 'foot'); });
+  }
+  return s + wordmark(wmX, H - 14 - CARD_WM * WM_ASPECT, CARD_WM);
+}
 
 // kpiX: where to centre the KPI box (the drilldown puts it over the league card); otherwise it
 // is centred between the season's longest title line and the right edge
@@ -811,7 +854,7 @@ export function swarmSvg(ctx) {
   const { meta, model, target, unit, info, pool, poolLabel, season } = ctx;
   const f = formats(target);
   const good = targetGood(target);
-  const W = 1200, RH = 36, top = 226, L = 330, R = 1070;
+  const W = 1200, RH = 36, top = 250, L = 330, R = 1070;
   const val = ctx.rowValueOf || ((k, p) => rowValue(k, p.unit));
   const inp = ctx.rowInputOf || ((k, p) => rowInput(k, p.info));
   // Primary Fastball stays while its SHAP varies anywhere in the comparison group; it goes when
@@ -821,9 +864,9 @@ export function swarmSvg(ctx) {
     .filter((r) => !r.season && !(r.k === 'is_primary' && inert))
     .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
   const BH = rows.length * RH;
-  const H = top + BH + 180;  // the axis, the colour key, then the wordmark under it
-  let s = svgOpen(W, H, 'fig swarm-fig');
-  s += header(W, ctx, `${season}  ·  every row's ${ctx.byOutcome ? 'run value' : 'SHAP'}, ${poolLabel.replace(/^vs /, '')}`);
+  // the card's frame: one tile holding the rows, the axis and the colour key; the wordmark under it
+  const tileBottom = top + BH + 100, H = tileBottom + cardFootH();
+  let s = cardFrame(W, H, ctx, 'fig swarm-fig', 'Against the League', poolLabel, tileBottom);
   // One shared axis, clipped to the 0.5th-99.5th percentile of every row's values pooled (so one
   // heavy-tailed row, like Location, can't stretch it), always including the pitcher's own
   // values. The dots beyond it are pinned at the edge.
@@ -836,14 +879,14 @@ export function swarmSvg(ctx) {
   lo -= pad; hi += pad;
   const sx = lin(lo, hi, L, R);
   for (const t of niceTicks(lo, hi, 8)) {
-    s += `<line data-m="g:${t}" x1="${n1(sx(t))}" x2="${n1(sx(t))}" y1="${top - 8}" y2="${top + BH}" stroke="${C.grid}"/>`;
-    s += text(sx(t), top + BH + 20, t === 0 ? '0' : `${t > 0 ? '+' : '−'}${f.tick(Math.abs(t))}`, `font-size="12" fill="${C.muted}" text-anchor="middle"`, `t:${t}`);
+    s += `<line data-m="g:${t}" x1="${n1(sx(t))}" x2="${n1(sx(t))}" y1="${top - 8}" y2="${top + BH}" stroke="${K.line}"/>`;
+    s += text(sx(t), top + BH + 20, t === 0 ? '0' : `${t > 0 ? '+' : '−'}${f.tick(Math.abs(t))}`, `font-size="12" fill="${K.muted}" text-anchor="middle"`, `t:${t}`);
   }
   s += `<line data-m="zero" x1="${n1(sx(0))}" x2="${n1(sx(0))}" y1="${top - 8}" y2="${top + BH}" stroke="#fff" stroke-opacity=".6"/>`;
   const unitWord = f.unit === 'pts' ? 'points' : f.unit === 'pp' ? 'percentage points' : f.unit === 'runs' ? 'runs per 9' : 'wOBA';
-  s += text((L + R) / 2, top + BH + 44, `${ctx.byOutcome ? 'Run value' : 'SHAP value'} (${targetName(model, target)}, ${unitWord})`, `font-size="13" fill="${C.muted}" text-anchor="middle"`, 'xlab');
-  s += head(L - 16, top - 22, 'Row', 'end', 'h1') + head(L, top - 22, poolLabel.replace(/^vs /, 'League: '), 'start', 'h2')
-    + head(R + 20, top - 22, `This ${info.pt}`, 'start', 'h3');
+  s += text((L + R) / 2, top + BH + 44, `${ctx.byOutcome ? 'Run value' : 'SHAP value'} (${targetName(model, target)}, ${unitWord})`, `font-size="13" fill="${K.muted}" text-anchor="middle"`, 'xlab');
+  s += head(L - 16, top - 22, 'Row', 'end', 'h1', K.faint) + head(L, top - 22, 'League', 'start', 'h2', K.faint)
+    + head(R + 20, top - 22, `This ${info.pt}`, 'start', 'h3', K.faint);
 
   const byRow = [];
   rows.forEach((r, i) => {
@@ -851,10 +894,10 @@ export function swarmSvg(ctx) {
     // the row's contents are drawn about 0 and the group moved into place, so a re-sorted row
     // slides to its new position whole
     s += `<g class="srow fx" data-k="${r.k}" data-m="sr:${r.k}" transform="translate(0,${n1(cy)})">`;
-    s += `<rect class="hit" x="16" y="${-RH / 2 + 1}" width="${W - 32}" height="${RH - 2}" rx="6" fill="transparent"/>`;
+    s += `<rect class="hit" x="${CARD_TILE.x + 8}" y="${-RH / 2 + 1}" width="${W - 2 * CARD_TILE.x - 16}" height="${RH - 2}" rx="6" fill="transparent"/>`;
     const sub = GROUPS[r.k] || ctx.model === 'location' ? '' : r.detail;  // Location and Count, and the Location model, go without one here
-    s += text(L - 16, sub ? -1 : 4.5, r.label, `font-size="13.5" font-weight="700" fill="${C.ink}" text-anchor="end"`, `sl:${r.k}`);
-    if (sub) s += text(L - 16, 13, sub, `font-size="11" fill="${C.muted}" text-anchor="end"`, `sd:${r.k}`);
+    s += text(L - 16, sub ? -1 : 4.5, r.label, `font-size="13.5" font-weight="600" fill="${K.ink}" text-anchor="end"`, `sl:${r.k}`);
+    if (sub) s += text(L - 16, 13, sub, `font-size="11" fill="${K.muted}" text-anchor="end"`, `sd:${r.k}`);
     // colour by the unit's input, 2nd-98th percentile within the pool
     const xin = pool.map((p) => inp(r.k, p));
     const fin = xin.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
@@ -889,7 +932,7 @@ export function swarmSvg(ctx) {
       const key = q.c == null ? 'n' : Math.round(q.c * 10);
       buckets.set(key, (buckets.get(key) || '') + `M${(q.x - 1.9).toFixed(1)},${q.y.toFixed(1)}a1.9,1.9 0 1,0 3.8,0a1.9,1.9 0 1,0 -3.8,0`);
     }
-    for (const [key, d] of buckets) s += `<path data-f="1" d="${d}" fill="${key === 'n' ? C.muted : valueColor(key / 10)}" opacity=".8"/>`;
+    for (const [key, d] of buckets) s += `<path data-f="1" d="${d}" fill="${key === 'n' ? K.dot : valueColor(key / 10)}" opacity=".8"/>`;
     const mx = n1(Math.max(L, Math.min(R, sx(r.v))));
     const col = good * r.v > 0 ? C.gold : C.teal;
     // the pitcher's marker: a diamond as tall as the row
@@ -901,12 +944,12 @@ export function swarmSvg(ctx) {
   });
   // colour key
   const kx = L, ky = top + BH + 78;
-  s += text(kx - 16, ky + 4, ctx.model === 'location' ? 'Unit\'s rate change' : ctx.byOutcome ? 'Unit\'s predicted rate' : 'Unit\'s mean input', `font-size="11.5" fill="${C.muted}" text-anchor="end"`, 'k1');
+  s += text(kx - 16, ky + 4, ctx.model === 'location' ? 'Unit\'s rate change' : ctx.byOutcome ? 'Unit\'s predicted rate' : 'Unit\'s mean input', `font-size="11.5" fill="${K.muted}" text-anchor="end"`, 'k1');
   for (let i = 0; i <= 20; i++) s += `<rect data-m="kc:${i}" x="${kx + i * 6}" y="${ky - 5}" width="6.5" height="10" fill="${valueColor(i / 20)}"/>`;
-  s += text(kx + 134, ky + 4, 'low → high   (grey: no single input)', `font-size="11.5" fill="${C.muted}"`, 'k2');
+  s += text(kx + 134, ky + 4, 'low → high   (grey: no single input)', `font-size="11.5" fill="${K.muted}"`, 'k2');
   s += `<path data-m="kd" d="M${kx + 400},${ky - 11}L${kx + 406},${ky}L${kx + 400},${ky + 11}L${kx + 394},${ky}Z" fill="${C.gold}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>`;
-  s += text(kx + 414, ky + 4, `${info.pitcher_name}'s ${PITCH_NAMES[info.pt] || info.pt}`, `font-size="11.5" fill="${C.muted}"`, 'k3');
-  s += corner(W, H);
+  s += text(kx + 414, ky + 4, `${info.pitcher_name}'s ${PITCH_NAMES[info.pt] || info.pt}`, `font-size="11.5" fill="${K.muted}"`, 'k3');
+  s += cardFoot(W, H);
   swarmPoints = { rows: byRow, RH };
   return s + '</svg>';
 }
@@ -949,7 +992,7 @@ export function sankeySvg(ctx) {
   const exact = per.map((u) => u.exact), league = per.map((u) => u.league);
   const hl = target.startsWith('p_') ? target.slice(2) : null;
 
-  const W = 1200, top = 226, avail = 500, gap = 10, NW = 14;
+  const W = 1200, top = 250, avail = 500, gap = 10, NW = 14;
   const XL = 250, XM = 560, XR = 870;
   const lossOf = OUTCOMES.map((_, j) => sum(feats.map((f) => Math.max(0, -f.s[j]))));
   const gainOf = OUTCOMES.map((_, j) => sum(feats.map((f) => Math.max(0, f.s[j]))));
@@ -970,11 +1013,13 @@ export function sankeySvg(ctx) {
     });
   };
   const left = stack(lossOf), right = stack(gainOf), mid = stack(fh);
-  const H = Math.max(top + avail, ...[left, right, mid].map((c) => c[c.length - 1].y1)) + 130;
-  let s = svgOpen(W, H, 'fig sankey-fig');
-  s += header(W, ctx, `${season}  ·  ${model === 'stuff' ? 'Stuff' : 'PLV'} model outcome probabilities: what each row moves`);
-  s += head(XL + NW, top - 22, 'Takes from', 'end', 'h1') + head(XM + NW / 2, top - 22, 'Row', 'middle', 'h2')
-    + head(XR, top - 22, 'Gives to', 'start', 'h3') + head(W - 36, top - 22, 'Net vs league', 'end', 'h4');
+  // the card's frame: one tile holding the flows; the note and the wordmark under it
+  const tileBottom = Math.max(top + avail, ...[left, right, mid].map((c) => c[c.length - 1].y1)) + 40;
+  const H = tileBottom + cardFootH();
+  const NR = W - CARD_TILE.x - 22;  // the net column's right edge, at the tile's margin
+  let s = cardFrame(W, H, ctx, 'fig sankey-fig', 'Where the Probability Goes', `${season} ${model === 'stuff' ? 'Stuff' : 'PLV'} model outcome probabilities: what each row moves`, tileBottom);
+  s += head(XL + NW, top - 22, 'Takes from', 'end', 'h1', K.faint) + head(XM + NW / 2, top - 22, 'Row', 'middle', 'h2', K.faint)
+    + head(XR, top - 22, 'Gives to', 'start', 'h3', K.faint) + head(NR, top - 22, 'Net vs league', 'end', 'h4', K.faint);
 
   // ribbons: outcome (left) -> row -> outcome (right), each end stacked in the order of the
   // other end so they cross as little as possible. Plotly-style: redrawn, then faded in.
@@ -1008,21 +1053,20 @@ export function sankeySvg(ctx) {
     const d = exact[j] - league[j];
     const tip = esc(`${OUTCOME_NAMES[o]}: ${exact[j].toFixed(1)}% (league ${league[j].toFixed(1)}%)`);
     s += `<rect class="onode" data-o="${o}" data-m="ol:${o}" x="${XL}" y="${n1(L.y0)}" width="${NW}" height="${n1(L.y1 - L.y0)}" fill="${OUTCOME_COLORS[o]}" rx="1.5"><title>${tip}</title></rect>`;
-    s += text(XL - 10, (L.y0 + L.y1) / 2 + 4.5, `${name}  −${lossOf[j].toFixed(2)}`, `font-size="13" font-weight="${on ? 700 : 500}" fill="${on ? C.ink : C.muted}" text-anchor="end"`, `oll:${o}`);
+    s += text(XL - 10, (L.y0 + L.y1) / 2 + 4.5, `${name}  −${lossOf[j].toFixed(2)}`, `font-size="13" font-weight="${on ? 700 : 500}" fill="${on ? K.ink : K.muted}" text-anchor="end"`, `oll:${o}`);
     s += `<rect class="onode" data-o="${o}" data-m="or:${o}" x="${XR}" y="${n1(R.y0)}" width="${NW}" height="${n1(R.y1 - R.y0)}" fill="${OUTCOME_COLORS[o]}" rx="1.5"><title>${tip}</title></rect>`;
-    s += text(XR + NW + 10, (R.y0 + R.y1) / 2 + 4.5, `${name}  +${gainOf[j].toFixed(2)}`, `font-size="13" font-weight="${on ? 700 : 500}" fill="${on ? C.ink : C.muted}"`, `orl:${o}`);
+    s += text(XR + NW + 10, (R.y0 + R.y1) / 2 + 4.5, `${name}  +${gainOf[j].toFixed(2)}`, `font-size="13" font-weight="${on ? 700 : 500}" fill="${on ? K.ink : K.muted}"`, `orl:${o}`);
     const g = targetGood(`p_${o}`) * d > 0;
-    s += text(W - 36, (R.y0 + R.y1) / 2 + 4.5, `${exact[j].toFixed(1)}%  ${sgn(d, 2)}`, `font-size="13" font-weight="700" fill="${Math.abs(d) < 0.05 ? C.muted : g ? C.gold : C.teal}" text-anchor="end"`, `net:${o}`);
+    s += text(NR, (R.y0 + R.y1) / 2 + 4.5, `${exact[j].toFixed(1)}%  ${sgn(d, 2)}`, `font-size="13" font-weight="700" fill="${Math.abs(d) < 0.05 ? K.muted : g ? C.gold : C.teal}" text-anchor="end"`, `net:${o}`);
   });
   feats.forEach((f, i) => {
     const n = mid[i];
     s += `<g class="fnode fx" data-k="${f.k}" tabindex="0" role="button">`;
-    s += `<rect data-m="fn:${f.k}" x="${XM}" y="${n1(n.y0)}" width="${NW}" height="${n1(n.y1 - n.y0)}" fill="${C.ink}" rx="1.5"/>`;
-    s += text(XM + NW + 8, (n.y0 + n.y1) / 2 + 4.5, `${f.label}  ${move(f).toFixed(2)}`, `font-size="13" font-weight="700" fill="${C.ink}" stroke="${C.card}" stroke-width="4" paint-order="stroke"`, `fl:${f.k}`);
+    s += `<rect data-m="fn:${f.k}" x="${XM}" y="${n1(n.y0)}" width="${NW}" height="${n1(n.y1 - n.y0)}" fill="${K.ink}" rx="1.5"/>`;
+    s += text(XM + NW + 8, (n.y0 + n.y1) / 2 + 4.5, `${f.label}  ${move(f).toFixed(2)}`, `font-size="13" font-weight="600" fill="${K.ink}" stroke="${K.panel}" stroke-width="4" paint-order="stroke"`, `fl:${f.k}`);
     s += '</g>';
   });
-  s += footnote(`Percentage points of each per-pitch outcome probability against the league; a row's number is the probability it moves. Ribbons under ${MIN_LINK} pp are left out.`, W, H);
-  s += corner(W, H);
+  s += cardFoot(W, H, `Percentage points of each per-pitch outcome probability against the league; a row's number is the probability it moves. Ribbons under ${MIN_LINK} pp are left out.`);
   return s + '</svg>';
 }
 export const sankeyLink = (i) => sankeyLinks[i];

@@ -9,10 +9,10 @@
 // the next, and the league plot's dots are kept for the hover lookup (nearestCardPoint).
 
 import {
-  PITCH_NAMES, PITCH_COLORS, OUTCOMES, LABELS, AXIS, PCT, GROUPS, MODELS, isPlus, targetGood, targetName,
+  PITCH_NAMES, PITCH_COLORS, LABELS, AXIS, PCT, GROUPS, MODELS, isPlus, targetGood, targetName,
   rowValue, rowInput,
 } from './data.js?v=11';
-import { C, K, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord, bar } from './charts.js?v=74';
+import { C, K, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord, bar, widestKpiName } from './charts.js?v=75';
 
 export const CARD = { W: 1280, H: 720 };
 const FONT = '"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
@@ -76,12 +76,6 @@ function footnote(ctx) {
   return `${note}. ${targetGood(target) > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`;
 }
 
-// the widest KPI label ("In-Play Out% (Stuff)"): every model's targets, Location+ its one
-const KPI_TARGETS = ['plus', 'outcomes', 'era', 'wobacon', ...OUTCOMES.map((o) => `p_${o}`)];
-function widestKpiName(size) {
-  return Math.max(...Object.entries(MODELS).flatMap(([m, d]) => (d.outcomesOnly ? ['outcomes'] : KPI_TARGETS)
-    .map((t) => textWidth(kpiName(m, t), size))));
-}
 
 export function cardSvg(ctx) {
   const { W, H } = CARD;
