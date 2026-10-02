@@ -307,12 +307,15 @@ function leaguePanel(ctx, r, P) {
     if (grouped) { xv = p.info[grouped[0]]; yv = p.info[grouped[1]]; } else { xv = inp(r.k, p); yv = v; }
     if (!Number.isFinite(xv) || !Number.isFinite(yv)) continue;
     if (r.k === 'Other') xv = Math.log10(xv);
+    if (r.k === 'Location') xv = -xv;  // x_b is + = inside: drawn with inside on the left (the zone's "Inside" side)
     pts.push({ xv, yv, v, id: p.info.pitcher, pt: p.info.pt, info: p.info, me: p.info.pitcher === info.pitcher && p.info.pt === info.pt });
   }
   const me = pts.find((p) => p.me);
   if (!me) return s + text(L, P.y + 110, 'No league units to compare.', `font-size="15" fill="${K.muted}"`, 'pnone');
 
-  const px0 = P.x + 82, px1 = P.x + P.w - 26, py0 = P.y + 100, py1 = P.y + 348;
+  // Location is drawn as a strike zone, with no axes (the drilldown's league card)
+  const zone = r.k === 'Location';
+  const px0 = zone ? L : P.x + 82, px1 = P.x + P.w - (zone ? 22 : 26), py0 = P.y + 100, py1 = P.y + (zone ? 370 : 348);
   const xs = pts.map((p) => p.xv).sort((a, b) => a - b), ys = pts.map((p) => p.yv).sort((a, b) => a - b);
   let xa = Math.min(quantile(xs, 0.01), me.xv), xb = Math.max(quantile(xs, 0.99), me.xv);
   let ya = Math.min(quantile(ys, 0.01), me.yv), yb = Math.max(quantile(ys, 0.99), me.yv);
@@ -320,6 +323,20 @@ function leaguePanel(ctx, r, P) {
   if (ya === yb) { ya -= 0.5; yb += 0.5; }
   const xp = (xb - xa) * 0.06, yp = (yb - ya) * 0.08;
   xa -= xp; xb += xp; ya -= yp; yb += yp;
+  const ZW = 17 / 12, ZASPECT = 17 / 22;  // the zone's width (ft) and width / height
+  if (zone) {
+    // a frame round the zone and the league's 1st-99th percentile of locations, at the zone's
+    // true proportions (x in ft, y in zone heights), centred on the plate
+    const pw = px1 - px0, ph = py1 - py0;
+    const lo = Math.min(quantile(ys, 0.01), me.yv, -0.05) - 0.08, hi = Math.max(quantile(ys, 0.99), me.yv, 1.05) + 0.08;
+    const halfW = Math.max(Math.abs(quantile(xs, 0.01)), Math.abs(quantile(xs, 0.99)), Math.abs(me.xv), ZW / 2) * 1.15;
+    let zh = ph / (hi - lo);                              // px per zone height
+    let k = (zh * ZASPECT) / ZW;                          // px per ft, at the zone's proportions
+    if (pw / k < 2 * halfW) { k = pw / (2 * halfW); zh = (ZW * k) / ZASPECT; }  // too narrow: fit x
+    const midY = (lo + hi) / 2;
+    [xa, xb] = [-pw / (2 * k), pw / (2 * k)];
+    [ya, yb] = [midY - ph / (2 * zh), midY + ph / (2 * zh)];
+  }
   const sxr = lin(xa, xb, px0, px1), syr = lin(ya, yb, py1, py0);
   const cx = (v) => n1(Math.max(px0, Math.min(px1, sxr(v)))), cy = (v) => n1(Math.max(py0, Math.min(py1, syr(v))));
   const xfmt = (v) => (r.k === 'Other' ? String(Math.round(10 ** v)) : PCT.has(r.k) ? `${Math.round(v * 100)}%` : `${+v.toFixed(2)}`);
@@ -327,15 +344,15 @@ function leaguePanel(ctx, r, P) {
   const yt = niceTicks(ya, yb, 4);
   const dp = yt.length > 1 ? Math.max(0, -Math.floor(Math.log10(yt[1] - yt[0]) + 1e-9), (yt[1] - yt[0]) % 1 ? 1 : 0) : 0;
   const yfmt = grouped || isPlus(target) ? (v) => (+v.toFixed(dp)).toFixed(dp).replace('-', '−') : f.tick;
-  for (const t of yt) s += text(px0 - 14, syr(t) + 5, yfmt(t), `font-size="14" fill="${K.muted}" text-anchor="end"`, `py:${t}`);
-  for (const t of niceTicks(xa, xb, 4)) s += text(sxr(t), py1 + 26, xfmt(t), `font-size="14" fill="${K.muted}" text-anchor="middle"`, `px:${t}`);
+  for (const t of zone ? [] : yt) s += text(px0 - 14, syr(t) + 5, yfmt(t), `font-size="14" fill="${K.muted}" text-anchor="end"`, `py:${t}`);
+  for (const t of zone ? [] : niceTicks(xa, xb, 4)) s += text(sxr(t), py1 + 26, xfmt(t), `font-size="14" fill="${K.muted}" text-anchor="middle"`, `px:${t}`);
   // no influence on the target: a line across the plot at 0
   if (!grouped && ya < 0 && yb > 0) s += `<line data-m="pzero" x1="${px0}" x2="${px1}" y1="${n1(syr(0))}" y2="${n1(syr(0))}" stroke="#fff" stroke-opacity=".45" stroke-width="1.2"/>`;
   const xl = grouped ? (r.k === 'Location' ? 'Horizontal location (ft, + = inside)' : 'Balls before the pitch')
     : r.k === 'Other' ? 'Pitches (log scale)' : ctx.axisOf ? ctx.axisOf(r.k) : AXIS[r.k] || LABELS[r.k];
-  s += text((px0 + px1) / 2, py1 + 50, xl, `font-size="13.5" fill="${K.muted}" text-anchor="middle"`, 'pxlab');
+  if (!zone) s += text((px0 + px1) / 2, py1 + 50, xl, `font-size="13.5" fill="${K.muted}" text-anchor="middle"`, 'pxlab');
   const yl = grouped ? (r.k === 'Location' ? 'Vertical location' : 'Strikes before the pitch') : tname;
-  s += `<text data-m="pylab" transform="translate(${P.x + 24},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="13.5" fill="${K.muted}" text-anchor="middle">${esc(yl)}</text>`;
+  if (!zone) s += `<text data-m="pylab" transform="translate(${P.x + 24},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="13.5" fill="${K.muted}" text-anchor="middle">${esc(yl)}</text>`;
 
   const vs = pts.map((p) => p.v).sort((a, b) => a - b);
   const vmax = Math.max(Math.abs(quantile(vs, 0.02)), Math.abs(quantile(vs, 0.98)), 1e-9);
@@ -359,6 +376,12 @@ function leaguePanel(ctx, r, P) {
   }
   const own = val(r.k, { unit, info });
   const mcol = good * (r.k === 'Other' ? r.v : own) > 0 ? C.gold : C.teal;
+  if (zone) {
+    const zl = sxr(-ZW / 2), zr = sxr(ZW / 2), zt = syr(1), zb = syr(0);
+    s += `<rect data-m="zone" x="${n1(zl)}" y="${n1(zt)}" width="${n1(zr - zl)}" height="${n1(zb - zt)}" fill="none" stroke="#fff" stroke-width="1.6" pointer-events="none"/>`;
+    s += text(zl, zb + 20, 'Inside', `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="start" pointer-events="none"`, 'zin');
+    s += text(zr, zb + 20, 'Away', `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="end" pointer-events="none"`, 'zaway');
+  }
   s += `<circle data-m="pme" cx="${cx(me.xv)}" cy="${cy(me.yv)}" r="8" fill="${mcol}" stroke="#fff" stroke-width="2.4"/>`;
   // the plot's hover and click area (the page looks up the nearest dot: nearestCardPoint)
   s += `<rect class="panel-hit" x="${px0 - 6}" y="${py0 - 6}" width="${px1 - px0 + 12}" height="${py1 - py0 + 12}" fill="transparent"/>`;
