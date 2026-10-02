@@ -122,6 +122,11 @@ export function cardSvg(ctx) {
   const BAR = Math.min(22, S * 0.45);
   const X0 = 336, X1 = 762, ROOM_L = 300, ROOM_R = 792;
   const FS = 15;  // the values beside the bars
+  // a row's name over its detail, sized and spaced to the row pitch (17 / 14 with room, as in a
+  // seven-row card), the pair centred on the bar: LB the name's baseline, LG the gap to the detail's
+  const LS = Math.max(12.5, Math.min(17, S * 0.46)), SS = Math.max(11, Math.min(14, S * 0.37));
+  const LG = Math.max(LS * 0.92, Math.min(20, S * 0.38));
+  const LB = -(LG - 0.72 * LS + 0.22 * SS) / 2;
   let at = unit.league;
   const path = [at];
   for (const r of rows) { at += r.v; path.push(at); }
@@ -188,8 +193,8 @@ export function cardSvg(ctx) {
     s += `<rect x="${n1(right ? vx - 3 : vx - tw - 3)}" y="${n1(cy - FS * 0.7)}" width="${n1(tw + 6)}" height="${n1(FS * 1.4)}" rx="3" fill="${K.panel}" fill-opacity=".85"/>`;
     s += text(vx, cy + FS * 0.35, f.d(r.v), `font-size="${FS}" font-weight="700" fill="#fff" text-anchor="${right ? 'start' : 'end'}"`);
     const sub = subOf(r);
-    s += text(TX0, sub ? cy - 3 : cy + 6, r.label, `font-size="17" font-weight="600" fill="${K.ink}"`);
-    if (sub) s += text(TX0, cy + 17, sub, `font-size="14" fill="${K.muted}"`);
+    s += text(TX0, sub ? cy + LB : cy + LS * 0.35, r.label, `font-size="${n1(LS)}" font-weight="600" fill="${K.ink}"`);
+    if (sub) s += text(TX0, cy + LB + LG, sub, `font-size="${n1(SS)}" fill="${K.muted}"`);
     s += '</g>';
     x = end;
   });

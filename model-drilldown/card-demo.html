@@ -31,15 +31,16 @@ button:hover{border-color:#6b7684}
     <a href="./" style="color:var(--muted);text-decoration:none;font-size:14px">← Model Drilldown</a>
     <h1>Drilldown card (demo)</h1>
     <p>The Model Drilldown's figure laid out as a 16:9 card by <code>card.js</code>, from the same rows, formats and league
-      comparison the page builds. The numbers here are synthetic: one made-up pitcher and a seeded league. Click a row or a pitch type.</p>
+      comparison the page builds, read from the live SHAP tables. Click a row or a pitch type. The link works like the
+      drilldown's (<code>#&lt;season&gt;-&lt;pitcher id&gt;-&lt;pitch type&gt;&amp;row=velo</code>); <a href="#synthetic">#synthetic</a> draws made-up numbers instead.</p>
   </header>
   <div id="card"></div>
-  <div class="row-actions"><button id="dl" type="button">Download PNG</button><span id="msg" style="color:var(--muted);font-size:13px"></span></div>
+  <div class="row-actions"><button id="dl" type="button">Download PNG</button><span id="msg" style="color:var(--muted);font-size:13px">loading the SHAP tables…</span></div>
 </main>
 <script type="module">
-import { PITCH_NAMES, cardRows } from './data.js?v=9';
+import { PITCH_NAMES, cardRows, loadMeta, loadFeatures, loadUnits, minImpact } from './data.js?v=9';
 import { svgToPng } from './charts.js?v=69';
-import { cardSvg } from './card.js?v=1';
+import { cardSvg } from './card.js?v=2';
 
 // ---- a seeded, synthetic league ------------------------------------------------------------
 let seed = 20261002;
@@ -91,7 +92,7 @@ function makeUnit(id, name, pt, cfg, n, share, inputs, shapOverride = {}, exact 
   return { unit, info };
 }
 
-const ME = { id: 900001, name: 'Brody Hopkins', season: 2026 };
+const ME = { id: 900001, name: 'Demo Pitcher', season: 2026 };
 const units = {};  // pt -> [{unit, info}], the pitcher's own first
 for (const [pt, cfg] of Object.entries(PT)) {
   const list = [];
@@ -101,7 +102,7 @@ for (const [pt, cfg] of Object.entries(PT)) {
   }
   units[pt] = list;
 }
-// the mockup's four-seamer, row for row: 100 + 21.6 + 8.9 + 8.5 + 6.8 + 3.6 − 1.7 − 2.0 = 145.7
+// a four-seamer built to the mockup's rows: 100 + 21.6 + 8.9 + 8.5 + 6.8 + 3.6 − 1.7 − 2.0 = 145.7
 const ffIn = { velo: 100.2, az: 22.3, ax_m: 6.1, rel_z: 5.02, extension: 6.55, spin_rate: 2694, spin_eff: 0.97, axis_diff: 11 };
 units.FF.unshift(makeUnit(ME.id, ME.name, 'FF', PT.FF, 1180, 0.73, ffIn,
   { velo: 21.6, axis_diff: 8.9, spin_rate: 8.5, rel_z: 6.8, az: 3.6, baseline: -1.7, extension: 0.6, ax_m: -0.8, spin_eff: 0.3 }, 145.7));
@@ -110,10 +111,12 @@ units.CU.unshift(makeUnit(ME.id, ME.name, 'CU', PT.CU, 640, 0.55,
 units.FC.unshift(makeUnit(ME.id, ME.name, 'FC', PT.FC, 310, 0.6,
   { velo: 93.1, az: 11.2, ax_m: -3.1, rel_z: 5.05, extension: 6.6, spin_rate: 2590, spin_eff: 0.45, axis_diff: 4 }, {}, 120.1));
 
-// ---- the view, built as app.js builds it ----------------------------------------------------
+// ---- the views, built as app.js builds them --------------------------------------------------
 const MIN_N = 20;
-const state = { pt: 'FF', row: 'az' };
-function view() {
+const DEFAULT = { season: 2026, name: 'Brody Hopkins', pt: 'FF', row: 'az' };
+const state = { synthetic: false, season: DEFAULT.season, pitcher: null, pt: DEFAULT.pt, row: DEFAULT.row };
+
+function syntheticView() {
   const pool = units[state.pt];
   const { unit, info } = pool[0];
   const rows = cardRows(meta, 'stuff', unit, info, 1);
@@ -129,8 +132,71 @@ function view() {
   };
 }
 
+// app.js poolFor ("the same pitch type") and kpiShade, for Stuff+
+const PT_POOL = { CU: 'CU', KC: 'CU', SV: 'CU', FS: 'FS', FO: 'FS' };
+const POOL_NAMES = { CU: 'CU/KC/SV', FS: 'FS/FO' };
+const ptPool = (pt) => PT_POOL[pt] || pt;
+async function liveView() {
+  const [lmeta, feats, lunits] = await Promise.all([loadMeta(), loadFeatures(state.season), loadUnits(state.season, 'stuff')]);
+  const p = state.pitcher ? feats.byId.get(state.pitcher) : feats.pitchers.find((x) => x.name === DEFAULT.name);
+  if (!p) throw new Error(`no ${state.season} pitches for ${state.pitcher || DEFAULT.name}`);
+  state.pitcher = p.id;
+  if (!p.pts.some((u) => u.pt === state.pt)) state.pt = p.pts[0].pt;
+  const info = feats.byUnit.get(`${p.id}|${state.pt}`);
+  const unit = lunits.byKey.get(`${p.id}|${state.pt}|plus`);
+  if (!info || !unit) throw new Error('no SHAP values for that pitch type');
+  const rows = cardRows(lmeta, 'stuff', unit, info, minImpact('plus'));
+  if (!rows.some((r) => r.k === state.row)) state.row = rows[0].k;
+  const pool = [];
+  for (const u of lunits.byTarget.get('plus') || []) {
+    const i = feats.byUnit.get(`${u.pitcher}|${u.pt}`);
+    if (!i) continue;
+    const me = u.pitcher === p.id && u.pt === state.pt;
+    if (!me && (i.n < MIN_N || ptPool(i.pt) !== ptPool(state.pt))) continue;
+    pool.push({ unit: u, info: i });
+  }
+  const what = POOL_NAMES[ptPool(state.pt)] || `${PITCH_NAMES[state.pt] || state.pt}s`;
+  const floor = Math.max(...feats.rows.map((r) => r.n)) / 4;
+  const vals = (lunits.byTarget.get('plus') || []).filter((u) => (feats.byUnit.get(`${u.pitcher}|${u.pt}`)?.n ?? 0) >= floor).map((u) => u.exact);
+  const below = vals.filter((v) => v < unit.exact).length, same = vals.filter((v) => v === unit.exact).length;
+  return {
+    meta: lmeta, model: 'stuff', target: 'plus', season: state.season, info, unit, rows, selected: state.row,
+    arsenal: p.pts.map((u) => ({ pt: u.pt, n: u.n, unit: lunits.byKey.get(`${p.id}|${u.pt}|plus`) })),
+    pool, poolLabel: `vs ${(pool.length - 1).toLocaleString()} ${what}, ${state.season} (${MIN_N}+ pitches)`, poolWhat: what,
+    minN: MIN_N, kpi: { t: vals.length ? 2 * ((below + same / 2) / vals.length) - 1 : 0 },
+  };
+}
+
+// the link: #synthetic, or #<season>-<pitcher id>-<pitch type>&row=<row> as on the drilldown
+function readHash() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  state.synthetic = h === 'synthetic';
+  if (state.synthetic) { state.pt = 'FF'; state.row = DEFAULT.row; return; }
+  const [unit, ...opts] = h.split('&');
+  const m = unit.match(/^(\d{4})-(\d+)-([A-Z]{2})$/);
+  if (m) { state.season = +m[1]; state.pitcher = +m[2]; state.pt = m[3]; }
+  for (const o of opts) { const [k, v] = o.split('='); if (k === 'row') state.row = v; }
+}
+const writeHash = () => {
+  if (!state.synthetic) history.replaceState(null, '', `#${state.season}-${state.pitcher}-${state.pt}&row=${state.row}`);
+};
+
 const box = document.getElementById('card');
-const draw = () => { box.innerHTML = cardSvg(view()); };
+const msg = document.getElementById('msg');
+let drawing = 0;
+async function draw() {
+  const ticket = ++drawing;
+  try {
+    const v = state.synthetic ? syntheticView() : await liveView();
+    if (ticket !== drawing) return;
+    box.innerHTML = cardSvg(v);
+    writeHash();
+    msg.textContent = state.synthetic ? 'synthetic numbers' : `${v.info.pitcher_name}, ${v.season}: live SHAP tables`;
+  } catch (e) {
+    console.error(e);
+    msg.textContent = e.message || String(e);
+  }
+}
 box.addEventListener('click', (e) => {
   const tab = e.target.closest('[data-pt]'), row = e.target.closest('[data-k]');
   if (tab) state.pt = tab.dataset.pt;
@@ -138,15 +204,17 @@ box.addEventListener('click', (e) => {
   else return;
   draw();
 });
+window.addEventListener('hashchange', () => { readHash(); draw(); });
 document.getElementById('dl').addEventListener('click', async () => {
   const blob = await svgToPng(box.querySelector('svg'), 3);
-  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `drilldown-card-${state.pt}-${state.row}.png` });
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `drilldown-card-${state.pitcher || 'demo'}-${state.pt}-${state.row}.png` });
   a.click();
   URL.revokeObjectURL(a.href);
 });
 await document.fonts.load('700 20px "DM Sans"');
 await document.fonts.load('400 20px "DM Sans"');
-draw();
+readHash();
+await draw();
 document.body.dataset.ready = '1';
 </script>
 </body>
