@@ -106,10 +106,10 @@ export function cardSvg(ctx) {
   const kval = f.v(unit.exact);
   s += text(kx, 106, kval, `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`);
 
-  // ---- left panel: arsenal tabs over the waterfall ----
+  // ---- left panel: the arsenal over the waterfall ----
   const LP = { x: 20, y: 133, w: 790, h: 530 };
   s += `<rect x="${LP.x}" y="${LP.y}" width="${LP.w}" height="${LP.h}" rx="8" fill="${K.panel}"/>`;
-  const TX0 = 44, TX1 = 786, TGAP = 4, TY = 145, TH = 30, UY = 177, UH = 10;
+  const TX0 = 44, TX1 = 786, TGAP = 8, TY = 146, TH = 40;
   const minW = (p) => textWidth(`${p.pt} ${p.unit ? f.v(p.unit.exact) : '–'}`, 17) + 24;
   const avail = TX1 - TX0 - TGAP * (arsenal.length - 1);
   const total = sum(arsenal.map((p) => p.n));
@@ -124,10 +124,10 @@ export function cardSvg(ctx) {
     const w = widths[i], on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
     const val = p.unit ? f.v(p.unit.exact) : '–';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
-    s += `<rect x="${n1(tx)}" y="${TY - 2}" width="${n1(w)}" height="${UY + UH - TY + 2}" fill="${on ? tint(col, HILITE) : 'transparent'}"/>`;
-    // the pitch mix in full colour, its bars and labels, as the pitcher cards draw it (render.usage)
-    s += `<rect x="${n1(tx)}" y="${UY}" width="${n1(w)}" height="${UH}" rx="2" fill="${col}"/>`;
-    s += `<text x="${n1(tx + w / 2)}" y="${TY + 21}" text-anchor="middle" font-size="17" font-weight="700" fill="${col}">`
+    // a box per pitch type, outlined in its colour (the pitcher cards' palette); the chosen one
+    // filled with its highlight, as its rows are
+    s += `<rect x="${n1(tx + 1)}" y="${TY + 1}" width="${n1(w - 2)}" height="${TH - 2}" rx="9" fill="${on ? tint(col, HILITE) : 'transparent'}" stroke="${col}" stroke-width="2"/>`;
+    s += `<text x="${n1(tx + w / 2)}" y="${TY + TH / 2 + 6}" text-anchor="middle" font-size="17" font-weight="700" fill="#fff">`
       + `${esc(p.pt)}<tspan font-weight="${on ? 700 : 500}"> ${esc(val)}</tspan></text></g>`;
     tx += w + TGAP;
   });
