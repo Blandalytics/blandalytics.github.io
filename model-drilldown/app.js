@@ -6,13 +6,13 @@ import {
   loadMeta, loadFeatures, loadUnits, loadFidelity, cardRows, rowValue, otherValue, minImpact, targetName, targetGood,
   outcomeRows, outcomeValue, outcomeInput, OUTCOME_AXIS, LOCATION_AXIS,
   MODELS, OUTCOMES, TARGET_NAMES, PITCH_NAMES, LABELS,
-} from './data.js?v=11';
+} from './data.js?v=12';
 import {
   phoneFlowSvg, swarmSvg, sankeySvg, svgToPng,
   nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, titleRight, C,
-} from './charts.js?v=75';
-import { cardSvg, cardSvgForExport, nearestCardPoint } from './card.js?v=49';
+} from './charts.js?v=76';
+import { cardSvg, cardSvgForExport, nearestCardPoint } from './card.js?v=50';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer

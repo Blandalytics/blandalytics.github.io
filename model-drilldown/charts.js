@@ -16,7 +16,7 @@
 import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, OUTCOME_NAMES, OUTCOME_COLORS, TARGET_NAMES, LABELS, AXIS, PCT,
   GROUPS, MODELS, isPlus, targetGood, targetName, rowValue, rowInput, allRows, sgn,
-} from './data.js?v=11';
+} from './data.js?v=12';
 
 export const C = {
   card: '#292C42', raise: '#30344F', ink: '#E3E9F1', muted: '#8A96A6', faint: '#6B7684', grid: '#3A3E5A',

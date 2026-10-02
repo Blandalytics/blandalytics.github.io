@@ -233,7 +233,7 @@ export function allRows(meta, model, unit, info) {
 // The card's rows: impacts of at least min, largest first and at most MAX_ROWS of them, then
 // Other (the rest, Season, the surrogate residual and, for ERA, the season's calibration
 // constant), so the bars always end at the exact value. `all` keeps every row.
-export const MAX_ROWS = 10;  // the most rows shown before Other (unless every row is)
+export const MAX_ROWS = 8;  // the most rows shown before Other (unless every row is)
 export function cardRows(meta, model, unit, info, min, all = false) {
   const rows = allRows(meta, model, unit, info);
   let keep = rows.filter((r) => !r.season && (all || Math.abs(r.v) >= min));
