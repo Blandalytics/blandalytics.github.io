@@ -54,6 +54,16 @@ function textWidth(str, size, weight = 700) {
   return w * size;
 }
 
+// A waterfall bar: square where it starts (the running total before it) and rounded (r) where it
+// ends, on the right for a rise and the left for a drop
+function bar(x, y, w, h, r, right) {
+  const [x1, y1] = [n1(x + w), n1(y + h)];
+  [x, y, r] = [n1(x), n1(y), n1(r)];
+  return right
+    ? `M${x},${y}H${n1(x1 - r)}Q${x1},${y} ${x1},${n1(y + r)}V${n1(y1 - r)}Q${x1},${y1} ${n1(x1 - r)},${y1}H${x}Z`
+    : `M${x1},${y}H${n1(x + r)}Q${x},${y} ${x},${n1(y + r)}V${n1(y1 - r)}Q${x},${y1} ${n1(x + r)},${y1}H${x1}Z`;
+}
+
 // a smooth path through points (Catmull-Rom as cubic Béziers)
 function smooth(p) {
   if (p.length < 3) return `M${p.map(([x, y]) => `${x},${y}`).join('L')}`;
@@ -228,7 +238,7 @@ export function cardSvg(ctx) {
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end)), w = Math.max(1, n1(b - a));
     s += `<g class="row fx" data-k="${r.k}">`;
     if (i) s += `<line x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${K.conn}" stroke-width="1.2"/>`;
-    s += `<rect x="${a}" y="${n1(cy - BAR / 2)}" width="${w}" height="${n1(BAR)}" rx="${n1(Math.min(3, w / 2))}" fill="${col}"/>`;
+    s += `<path d="${bar(a, cy - BAR / 2, w, BAR, Math.min(3, w), r.v >= 0)}" fill="${col}"/>`;
     const right = r.v >= 0;
     // on a chip, so it reads over the league and final-value lines
     const tw = textWidth(f.d(r.v), FS), vx = right ? b + 7 : a - 7;
