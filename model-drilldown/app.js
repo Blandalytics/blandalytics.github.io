@@ -12,7 +12,7 @@ import {
   nearestSwarmPoint, sankeyLink,
   formats, pctile, ord, niceTicks, titleRight, C,
 } from './charts.js?v=69';
-import { cardSvg, cardSvgForExport, nearestCardPoint } from './card.js?v=33';
+import { cardSvg, cardSvgForExport, nearestCardPoint } from './card.js?v=34';
 import { morph } from './morph.js?v=1';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' };  // Jacob Misiorowski's four-seamer
@@ -264,7 +264,7 @@ function render() {
   const arsenal = feats.byId.get(state.pitcher).pts.map((u) => ({ pt: u.pt, n: u.n, unit: units.byKey.get(`${state.pitcher}|${u.pt}|${tableTarget(state.target)}`) }));
   const { pool, label, what } = poolFor(info);
   const perTarget = new Map([...TARGETS, ...RV, ...DP].map((t) => [t, units.byKey.get(`${state.pitcher}|${state.pt}|${t}`)]));
-  view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, poolWhat: what, minN: Number(el.minN.value), titleRight: seasonTitleRight(), units: perTarget, kpi: kpiShade(unit) };
+  view = { meta, model: state.model, target: state.target, season: state.season, info, unit, rows, arsenal, selected: row, pool, poolLabel: label, poolWhat: what, minN: Number(el.minN.value), titleRight: seasonTitleRight(), units: perTarget, kpi: kpiShade(unit), all: el.all.checked };
   // by outcome, the league charts read each row's run value and the unit's predicted rate
   if (byOutcome) {
     Object.assign(view, {

@@ -174,6 +174,9 @@ export function cardSvg(ctx) {
   // bars half the row pitch, so fewer rows draw thicker bars; never thinner than a value's chip,
   // and always a little gap between rows
   const BAR = Math.min(S - 4, Math.max(CHIP, S * 0.5));
+  // Other, Location and Count rows, every row of the Location model, and every row when every row
+  // is shown (ctx.all): name only
+  const subOf = (r) => (ctx.all || r.k === 'Other' || GROUPS[r.k] || ctx.model === 'location' ? '' : r.detail);
   // a row's name over its detail, sized and spaced to the row pitch (17 / 14 with room, as in a
   // seven-row card), the pair centred on the bar: LB the name's baseline, LG the gap to the detail's
   // baseline.
@@ -183,9 +186,9 @@ export function cardSvg(ctx) {
   let LG = Math.max(LS * 0.92, Math.min(20, S * 0.38));
   const fitL = (S - 3) / (0.74 * LS + LG + 0.24 * SS);
   if (fitL < 1) { LS *= fitL; SS *= fitL; LG *= fitL; }
+  // names alone (every row shown): as large as leaves a fifth of the row pitch between them, up to 17
+  if (ctx.all) LS = Math.min(17, (S - 4) * 0.8);
   const LB = -(LG - 0.72 * LS + 0.22 * SS) / 2;
-  // Other, Location and Count rows, and every row of the Location model: name only
-  const subOf = (r) => (r.k === 'Other' || GROUPS[r.k] || ctx.model === 'location' ? '' : r.detail);
   // the row names start at the tile's margin; the bars past the widest name or detail
   const TX0 = LP.x + 22;
   const textW = Math.max(...rows.map((r) => Math.max(textWidth(r.label, LS, 600), subOf(r) ? textWidth(subOf(r), SS, 400) : 0)));
