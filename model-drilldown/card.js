@@ -317,7 +317,7 @@ function leaguePanel(ctx, r, P) {
     if (grouped) { xv = p.info[grouped[0]]; yv = p.info[grouped[1]]; } else { xv = inp(r.k, p); yv = v; }
     if (!Number.isFinite(xv) || !Number.isFinite(yv)) continue;
     if (r.k === 'Other') xv = Math.log10(xv);
-    if (r.k === 'Location') xv = -xv;  // x_b is + = inside: drawn with inside on the left (the zone's "Inside" side)
+    // x_b is + = inside, drawn as it reads: inside on the right, as a pitcher sees a right-handed batter
     pts.push({ xv, yv, v, id: p.info.pitcher, pt: p.info.pt, info: p.info, me: p.info.pitcher === info.pitcher && p.info.pt === info.pt });
   }
   const me = pts.find((p) => p.me);
@@ -389,8 +389,8 @@ function leaguePanel(ctx, r, P) {
   if (zone) {
     const zl = sxr(-ZW / 2), zr = sxr(ZW / 2), zt = syr(1), zb = syr(0);
     s += `<rect data-m="zone" x="${n1(zl)}" y="${n1(zt)}" width="${n1(zr - zl)}" height="${n1(zb - zt)}" fill="none" stroke="#fff" stroke-width="1.6" pointer-events="none"/>`;
-    s += text(zl, zb + 20, 'Inside', `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="start" pointer-events="none"`, 'zin');
-    s += text(zr, zb + 20, 'Away', `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="end" pointer-events="none"`, 'zaway');
+    s += text(zl, zb + 20, 'Away', `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="start" pointer-events="none"`, 'zaway');
+    s += text(zr, zb + 20, 'Inside', `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="end" pointer-events="none"`, 'zin');
   }
   s += `<circle data-m="pme" cx="${cx(me.xv)}" cy="${cy(me.yv)}" r="8" fill="${mcol}" stroke="#fff" stroke-width="2.4"/>`;
   // the plot's hover and click area (the page looks up the nearest dot: nearestCardPoint)
@@ -399,22 +399,23 @@ function leaguePanel(ctx, r, P) {
 
   // the numbers, two halves over a centred footer: on the left the row's input (as its sub-label
   // reads) over its percentile among the dots; on the right its impact on the target (gold or
-  // teal, as its bar) over its percentile; then the minimum
-  const DY = P.y + 414, mid = P.x + P.w / 2, half = P.w / 2 - 34;
+  // teal, as its bar) over its percentile; then the minimum. Location and Count have no one input,
+  // so their impact spans the tile alone.
+  const DY = P.y + 414, mid = P.x + P.w / 2, half = grouped ? P.w - 68 : P.w / 2 - 34;
   s += `<line data-m="pdiv" x1="${L}" x2="${P.x + P.w - 22}" y1="${DY}" y2="${DY}" stroke="${K.line}" stroke-width="1.5"/>`;
-  s += `<line data-m="pdiv2" x1="${mid}" x2="${mid}" y1="${DY + 16}" y2="${DY + 76}" stroke="${K.line}" stroke-width="1.5"/>`;
+  if (!grouped) s += `<line data-m="pdiv2" x1="${mid}" x2="${mid}" y1="${DY + 16}" y2="${DY + 76}" stroke="${K.line}" stroke-width="1.5"/>`;
   const fit = (str, size) => n1(Math.min(size, (half / textWidth(str, size)) * size));
   const seg = (cxs, big, col, sub, m) => text(cxs, DY + 42, big, `font-size="${fit(big, 27)}" font-weight="700" fill="${col}" text-anchor="middle"`, `${m}1`)
     + text(cxs, DY + 67, sub, `font-size="14.5" fill="${K.muted}" text-anchor="middle"`, `${m}2`);
   const rank = pctile(vs.map((v) => good * v).sort((a, b) => a - b), good * me.v);
-  s += seg((mid + P.x + P.w - 22) / 2, `${f.d(r.k === 'Other' ? r.v : own)} ${tname}`, mcol, `${r.k === 'Other' ? 'Residual: ' : ''}${ord(rank)} percentile`, 'pr');
+  s += seg(grouped ? mid : (mid + P.x + P.w - 22) / 2, `${f.d(r.k === 'Other' ? r.v : own)} ${tname}`, mcol, `${r.k === 'Other' ? 'Residual: ' : ''}${ord(rank)} percentile`, 'pr');
   // the input: Other's is the pitch count (its x axis), the baseline's the same-hand share
   const xin = grouped || r.k === 'lefty' ? NaN : r.k === 'Other' ? info.n : inp(r.k, { unit, info });
   const inVal = r.k === 'Other' ? `${info.n.toLocaleString()} pitches`
     : r.k === 'baseline' ? `${Math.round(100 * xin)}% vs Same Hand`
     : r.detail || '–';
   const inPct = Number.isFinite(xin) ? `${ord(pctile(pts.map((p) => p.xv), r.k === 'Other' ? Math.log10(xin) : xin))} percentile` : '';
-  s += seg((L + mid) / 2, inVal, K.ink, inPct, 'pl');
+  if (!grouped) s += seg((L + mid) / 2, inVal, K.ink, inPct, 'pl');
   const minN = ctx.minN ?? 1;
   s += text(mid, DY + 101, `Min ${minN} pitch${minN === 1 ? '' : 'es'} thrown`, `font-size="14" fill="${K.faint}" text-anchor="middle"`, 'pl3');
   return s;
