@@ -80,7 +80,7 @@ const DETAIL = {
   ax_diff: (v) => `${sgn(v, 1)} ft/s²`,
   az_diff: (v) => `${sgn(v, 1)} ft/s²`,
   is_primary: (v) => `${Math.round(100 * v)}%`,
-  x_b: (v) => `${sgn(v, 2)} ft, + = away`,
+  x_b: (v) => `${sgn(v, 2)} ft, + = inside`,
   z_n: (v) => `${Math.round(100 * v)}% of zone height`,
   balls: (v) => `${v.toFixed(2)} before the pitch`,
   strikes: (v) => `${v.toFixed(2)} before the pitch`,
@@ -92,7 +92,7 @@ export const AXIS = {
   spin_rate: 'Spin Rate (rpm)', spin_eff: 'Spin Efficiency', axis_diff: 'Seam-Shifted Wake (°)',
   velo_diff: 'Velo vs FB (mph)', ax_diff: 'Horizontal Mvmt vs FB (ft/s²)',
   az_diff: 'Vertical Mvmt vs FB (ft/s²)', is_primary: 'Share thrown as the primary fastball',
-  lefty: 'Handedness (0 = RHP, 1 = LHP)', x_b: 'Horizontal Location (ft, + = away from the batter)',
+  lefty: 'Handedness (0 = RHP, 1 = LHP)', x_b: 'Horizontal Location (ft, + = inside, toward the batter)',
   z_n: 'Vertical Location (share of zone height)', balls: 'Balls before the pitch', strikes: 'Strikes before the pitch',
   baseline: 'Share of pitches vs same-handed batters', Other: 'Pitches',
 };
