@@ -320,7 +320,7 @@ function leaguePanel(ctx, r, P) {
     // x_b is + = inside, drawn as it reads: inside on the right, as a pitcher sees a right-handed batter
     // strip-plot jitter, fixed per pitcher: each strip spans a fifth of the plot's width, as in the
     // drilldown's earlier league card
-    if (r.k === 'lefty') xv += (((p.info.pitcher * 2654435761) % 1000) / 1000) * 0.6 - 0.3;
+    if (r.k === 'lefty') xv += (((p.info.pitcher * 2654435761) % 1000) / 1000) * 0.4 - 0.2;
     pts.push({ xv, yv, v, id: p.info.pitcher, pt: p.info.pt, info: p.info, me: p.info.pitcher === info.pitcher && p.info.pt === info.pt });
   }
   const me = pts.find((p) => p.me);
@@ -350,8 +350,8 @@ function leaguePanel(ctx, r, P) {
     [xa, xb] = [-pw / (2 * k), pw / (2 * k)];
     [ya, yb] = [midY - ph / (2 * zh), midY + ph / (2 * zh)];
   }
-  // Handedness: two strips, LHP (1) at a third of the width and RHP (0) at two thirds
-  if (r.k === 'lefty') [xa, xb] = [2, -1];
+  // Handedness: two strips, LHP (1) at a quarter of the width and RHP (0) at three quarters
+  if (r.k === 'lefty') [xa, xb] = [1.5, -0.5];
   const sxr = lin(xa, xb, px0, px1), syr = lin(ya, yb, py1, py0);
   const cx = (v) => n1(Math.max(px0, Math.min(px1, sxr(v)))), cy = (v) => n1(Math.max(py0, Math.min(py1, syr(v))));
   const xfmt = (v) => (r.k === 'Other' ? String(Math.round(10 ** v)) : PCT.has(r.k) ? `${Math.round(v * 100)}%` : `${+v.toFixed(2)}`);
