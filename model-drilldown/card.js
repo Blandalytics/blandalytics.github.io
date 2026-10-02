@@ -11,8 +11,8 @@
 import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, LABELS, AXIS, PCT, GROUPS, MODELS, isPlus, targetGood, targetName,
   rowValue, rowInput,
-} from './data.js?v=9';
-import { C, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord } from './charts.js?v=69';
+} from './data.js?v=10';
+import { C, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord } from './charts.js?v=70';
 
 export const CARD = { W: 1280, H: 720 };
 const K = {

@@ -230,14 +230,16 @@ export function allRows(meta, model, unit, info) {
   return rows;
 }
 
-// The card's rows: impacts of at least min, largest first, then Other (the rest, Season, the
-// surrogate residual and, for ERA, the season's calibration constant), so the bars always end
-// at the exact value. `all` keeps every row.
+// The card's rows: impacts of at least min, largest first and at most MAX_ROWS of them, then
+// Other (the rest, Season, the surrogate residual and, for ERA, the season's calibration
+// constant), so the bars always end at the exact value. `all` keeps every row.
+export const MAX_ROWS = 10;  // the most rows shown before Other (unless every row is)
 export function cardRows(meta, model, unit, info, min, all = false) {
   const rows = allRows(meta, model, unit, info);
-  const keep = rows.filter((r) => !r.season && (all || Math.abs(r.v) >= min));
-  const rest = rows.filter((r) => !keep.includes(r));
+  let keep = rows.filter((r) => !r.season && (all || Math.abs(r.v) >= min));
   keep.sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+  if (!all) keep = keep.slice(0, MAX_ROWS);
+  const rest = rows.filter((r) => !keep.includes(r));
   const small = rest.filter((r) => !r.season).length;
   const calibration = Number.isFinite(unit.calibration) ? unit.calibration : 0;  // era only
   const other = rest.reduce((a, r) => a + r.v, 0) + unit.residual + calibration;
