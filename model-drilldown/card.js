@@ -108,19 +108,19 @@ export function cardSvg(ctx) {
   // its baseline (digits sit on it, nothing hangs below) on the divider's foot
   s += text(kx, KB, kval, `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`);
 
-  // ---- the arsenal down the card's left edge, outside the tiles, as tall as they are ----
-  // A pill per pitch type, stacked, most thrown first: the type over its value, white, outlined in
-  // its colour (the pitcher cards' palette); the chosen one filled with it. Beside them, between
-  // the pills and the waterfall tile, the pitch usage as one vertical bar (the mockup's horizontal
-  // one, 12 wide): a segment per pitch type as tall as its share of the pitches, the chosen one
-  // filled in its colour, the rest outlined.
-  const PX = 20, PW = 66, UX = PX + PW + 8, UW = 12, PG = 8, AB = 663;
-  // its title, "Type &" over "Usage", from the tiles' top, sized so its wider line spans the
-  // column (the pills' left edge to the usage label's); the pills start under it
-  const AR = UX + UW + 14, AL = ['Type &', 'Usage'];
-  const ATS = (AR - PX) / Math.max(...AL.map((l) => textWidth(l, 100) / 100));
-  AL.forEach((l, i) => { s += text(PX, 133 + ATS * 0.74 + i * ATS * 1.05, l, `font-size="${n1(ATS)}" font-weight="700" fill="${K.ink}"`); });
-  const AT = n1(133 + ATS * (0.74 + 1.05 + 0.24) + 12);
+  // ---- the arsenal tile, on the card's left edge, as tall as the others ----
+  // Titled "Type &" over "Usage", at the other tiles' title size and baseline. Under it a pill per
+  // pitch type, stacked, most thrown first: the type over its value, white, outlined in its colour
+  // (the pitcher cards' palette); the chosen one filled with it. Beside them the pitch usage as one
+  // vertical bar (the mockup's horizontal one, 12 wide): a segment per pitch type as tall as its
+  // share of the pitches, the chosen one filled in its colour, the rest outlined.
+  const TT = 26, TM = 22;  // the tiles' title size and margin
+  const AP = { x: 20, y: 133, h: 530 }, AL = ['Type &', 'Usage'];
+  const PX = AP.x + TM, PW = 62, UX = PX + PW + 8, UW = 12, PG = 8, AB = AP.y + AP.h - TM;
+  AP.w = Math.max(UX + UW + TM, PX + Math.max(...AL.map((l) => textWidth(l, TT))) + 16) - AP.x;  // the tile's margin each side
+  s += `<rect x="${AP.x}" y="${AP.y}" width="${n1(AP.w)}" height="${AP.h}" rx="8" fill="${K.panel}"/>`;
+  AL.forEach((l, i) => { s += text(PX, AP.y + 41 + i * TT * 1.15, l, `font-size="${TT}" font-weight="700" fill="${K.ink}"`); });
+  const AT = n1(AP.y + 41 + TT * 1.15 + TT * 0.24 + 18);
   const PH = (AB - AT - PG * (arsenal.length - 1)) / arsenal.length;  // the pills fill the column
   const SB = AT + arsenal.length * PH + PG * (arsenal.length - 1);  // the stack's foot
   const PFS = Math.min(17, PH * 0.34);
@@ -141,12 +141,12 @@ export function cardSvg(ctx) {
     s += `<rect class="usage" data-pt="${p.pt}" x="${on ? UX : UX + 0.75}" y="${n1(on ? uy : uy + 0.75)}" width="${on ? UW : UW - 1.5}" height="${n1(on ? h : h - 1.5)}" rx="${n1(Math.min(3, h / 2 - 0.75))}" fill="${on ? col : 'none'}" stroke="${on ? 'none' : col}" stroke-width="1.5"/>`;
     uy += h + UG;
   });
-  s += `<text transform="translate(${UX + UW + 14},${n1((AT + SB) / 2)}) rotate(-90)" font-size="12" fill="${K.muted}" text-anchor="middle">Pitch usage</text>`;
 
-  // ---- the waterfall tile, titled, right of the arsenal ----
-  const LP = { x: UX + UW + 24, y: 133, w: 810 - (UX + UW + 24), h: 530 };
+  // ---- the waterfall tile, titled, right of the arsenal's (the tiles' 12 apart) ----
+  const LP = { x: n1(AP.x + AP.w + 12), y: 133, h: 530 };
+  LP.w = 810 - LP.x;
   s += `<rect x="${LP.x}" y="${LP.y}" width="${LP.w}" height="${LP.h}" rx="8" fill="${K.panel}"/>`;
-  s += text(LP.x + 22, LP.y + 41, `${ctx.byOutcome ? 'Outcome' : 'Feature'} Contributions to ${kpiName(model, target)}`, `font-size="26" font-weight="700" fill="${K.ink}"`);
+  s += text(LP.x + TM, LP.y + 41, `${ctx.byOutcome ? 'Outcome' : 'Feature'} Contributions to ${kpiName(model, target)}`, `font-size="${TT}" font-weight="700" fill="${K.ink}"`);
 
   // the waterfall: rows spread over the body, the axis under it
   const Y0 = 246, YB = 612;
