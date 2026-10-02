@@ -257,9 +257,10 @@ export function cardSvg(ctx) {
     // bar's edge
     s += `<path data-m="bar:${r.k}" d="${bar(a - CW / 2, cy - BAR / 2, w + CW, BAR, Math.min(PR, BAR / 2, w), r.v >= 0)}" fill="${col}"/>`;
     const right = r.v >= 0;
-    // on a chip, so it reads over the league and final-value lines
+    // on a chip, so it reads over the league and final-value lines; on the selected row the chip
+    // is the row's tint, so the value sits straight on the highlight
     const tw = textWidth(f.d(r.v), FS), vx = right ? b + 7 : a - 7;
-    s += `<rect data-m="vb:${r.k}" x="${n1(right ? vx - 3 : vx - tw - 3)}" y="${n1(cy - CHIP / 2)}" width="${n1(tw + 6)}" height="${n1(CHIP)}" rx="3" fill="${K.panel}" fill-opacity=".85"/>`;
+    s += `<rect data-m="vb:${r.k}" x="${n1(right ? vx - 3 : vx - tw - 3)}" y="${n1(cy - CHIP / 2)}" width="${n1(tw + 6)}" height="${n1(CHIP)}" rx="3" fill="${r.k === selected ? tint(pitchCol, HILITE, K.panel) : K.panel}" fill-opacity="${r.k === selected ? 1 : 0.85}"/>`;
     s += text(vx, cy + FS * 0.35, f.d(r.v), `font-size="${FS}" font-weight="700" fill="#fff" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
     const sub = subOf(r);
     s += text(TX0, sub ? cy + LB : cy + LS * 0.35, r.label, `font-size="${n1(LS)}" font-weight="600" fill="${r.k === selected ? '#fff' : K.ink}"`, `l:${r.k}`);
