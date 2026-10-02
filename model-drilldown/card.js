@@ -110,11 +110,17 @@ export function cardSvg(ctx) {
 
   // ---- the arsenal down the card's left edge, outside the tiles, as tall as they are ----
   // A pill per pitch type, stacked, most thrown first: the type over its value, white, outlined in
-  // its colour (the pitcher cards' palette); the chosen one on a raised fill. Beside them, between
+  // its colour (the pitcher cards' palette); the chosen one filled with it. Beside them, between
   // the pills and the waterfall tile, the pitch usage as one vertical bar (the mockup's horizontal
   // one, 12 wide): a segment per pitch type as tall as its share of the pitches, the chosen one
   // filled in its colour, the rest outlined.
-  const AT = 133, AB = 663, PX = 20, PW = 66, UX = PX + PW + 8, UW = 12, PG = 8;
+  const PX = 20, PW = 66, UX = PX + PW + 8, UW = 12, PG = 8, AB = 663;
+  // its title, "Type &" over "Usage", from the tiles' top, sized so its wider line spans the
+  // column (the pills' left edge to the usage label's); the pills start under it
+  const AR = UX + UW + 14, AL = ['Type &', 'Usage'];
+  const ATS = (AR - PX) / Math.max(...AL.map((l) => textWidth(l, 100) / 100));
+  AL.forEach((l, i) => { s += text(PX, 133 + ATS * 0.74 + i * ATS * 1.05, l, `font-size="${n1(ATS)}" font-weight="700" fill="${K.ink}"`); });
+  const AT = n1(133 + ATS * (0.74 + 1.05 + 0.24) + 12);
   const PH = (AB - AT - PG * (arsenal.length - 1)) / arsenal.length;  // the pills fill the column
   const SB = AT + arsenal.length * PH + PG * (arsenal.length - 1);  // the stack's foot
   const PFS = Math.min(17, PH * 0.34);
@@ -122,7 +128,7 @@ export function cardSvg(ctx) {
     const y = AT + i * (PH + PG), on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
     const val = p.unit ? f.v(p.unit.exact) : '–';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
-    s += `<rect x="${PX + 1}" y="${n1(y + 1)}" width="${PW - 2}" height="${n1(PH - 2)}" rx="9" fill="${on ? tint('#FFFFFF', 0.1, K.panel) : 'transparent'}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
+    s += `<rect x="${PX + 1}" y="${n1(y + 1)}" width="${PW - 2}" height="${n1(PH - 2)}" rx="9" fill="${on ? col : 'transparent'}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
     s += text(PX + PW / 2, y + PH / 2 - PFS * 0.18, p.pt, `font-size="${n1(PFS)}" font-weight="700" fill="#fff" text-anchor="middle"`);
     s += text(PX + PW / 2, y + PH / 2 + PFS * 0.98, val, `font-size="${n1(PFS * 0.92)}" font-weight="${on ? 700 : 500}" fill="#fff" text-anchor="middle"`);
     s += '</g>';
