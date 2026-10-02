@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="modulepreload" href="app.js?v=90">
+<link rel="modulepreload" href="app.js?v=93">
 <link rel="modulepreload" href="data.js?v=10">
 <link rel="modulepreload" href="charts.js?v=73">
 <link rel="modulepreload" href="card.js?v=44">
@@ -69,9 +69,11 @@ button:disabled{opacity:.45; cursor:default}
 .figure{background:#292C42; border-radius:10px; overflow-x:auto; overscroll-behavior-x:contain}
 .figure svg{display:block; width:100%; min-width:900px; height:auto; user-select:none; -webkit-user-select:none}
 /* the drilldown is 16:9 and scales to the screen instead of scrolling: as wide as its card allows,
-   and short enough to fit on screen whole (the viewport height, less a 40 px margin) */
-#flow{overflow:hidden}
-#flow svg{min-width:0; width:100%; max-width:min(100%, calc((100svh - 40px) * 16 / 9)); margin:0 auto}
+   and short enough to fit on screen whole (the viewport height, less a 40 px margin). The box is
+   the card's own size, centred, so no background shows either side of it. */
+#flow{overflow:hidden; background:none; width:min(100%, calc((100svh - 40px) * 16 / 9)); margin:0 auto}
+#flow svg{min-width:0; width:100%}
+@media (max-width:600px){ #flow{width:auto} }
 @media (max-width:600px){ #out{padding:12px 8px} }
 /* a phone shows only the waterfall and the stat tiles: no beeswarm or outcome Sankey */
 @media (max-width:600px){ #swarm-card, #sankey-card{display:none !important} }
@@ -113,6 +115,8 @@ body.focusing .figure .link.hot{opacity:.85}
   padding:8px 11px; font-size:12.5px; line-height:1.4; box-shadow:0 6px 20px rgba(0,0,0,.45)}
 #tip .name{font-weight:600}
 #tip .meta{color:var(--muted)}
+#tip .parts{display:grid; grid-template-columns:1fr auto; gap:1px 16px; margin-top:4px; color:var(--ink)}
+#tip .parts .v{text-align:right; font-variant-numeric:tabular-nums; color:var(--ink)}
 .method{color:var(--muted); font-size:14px}
 .method p{margin:0 0 10px}
 .method p:last-child{margin-bottom:0}
@@ -209,6 +213,6 @@ details[open] summary{margin-bottom:10px}
   </section>
 </main>
 <div id="tip" hidden role="tooltip"></div>
-<script type="module" src="app.js?v=90"></script>
+<script type="module" src="app.js?v=93"></script>
 </body>
 </html>
