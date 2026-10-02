@@ -25,7 +25,7 @@ export const C = {
 // the card's navy palette (card.js, and the phone's drilldown): the ground, its tiles, rules and text
 export const K = {
   ground: '#13263F', panel: '#172D4A', line: '#2A3A57', ink: '#E8EEF7', muted: '#93A3BC', faint: '#6C7C96',
-  sub: '#7F9CD6', dot: '#9FB3CF', conn: '#B4BECC',
+  sub: '#7F9CD6', dot: '#9FB3CF',
 };
 const FONT = '"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
 export const WORDMARK_URL = 'https://res.cloudinary.com/dduabusaf/image/upload/v1772839288/PitcherList_Stats_watermark_with_logo_k9e3xa.webp';
@@ -762,15 +762,6 @@ export function phoneFlowSvg(ctx, W) {
   const sx = (v) => n1(lin(d0, d1, X0, X1)(v));
   // the rows are static on a phone: no highlight, hover or selection (there is no league card)
   let bars = '', front = '';
-  // the connectors first, under every bar (as the card's): each from the middle of one bar to the
-  // middle of the next, and the bars half a connector's width longer at each end, so its outer
-  // edge is flush with theirs
-  const CW = 1.2;
-  x = unit.league;
-  rows.forEach((r, i) => {
-    if (i) bars += `<g class="prow"><line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(Y0 + (i - 1) * S + S / 2)}" y2="${n1(Y0 + i * S + S / 2)}" stroke="${K.conn}" stroke-width="${CW}"/></g>`;
-    x += r.v;
-  });
   x = unit.league;
   rows.forEach((r, i) => {
     const cy = Y0 + i * S + S / 2;
@@ -780,7 +771,7 @@ export function phoneFlowSvg(ctx, W) {
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end));
     const w = Math.max(1, n1(b - a));
     // as the card's: square where it starts, rounded where it ends (the pills' 9, at most half the bar)
-    bars += `${g}><path data-m="bar:${r.k}" d="${bar(a - CW / 2, cy - BAR / 2, w + CW, BAR, Math.min(9, BAR / 2, w), r.v >= 0)}" fill="${col}"/>`;
+    bars += `${g}><path data-m="bar:${r.k}" d="${bar(a, cy - BAR / 2, w, BAR, Math.min(9, BAR / 2, w), r.v >= 0)}" fill="${col}"/>`;
     bars += '</g>';
     const right = r.v >= 0;
     const val = f.d(r.v);
