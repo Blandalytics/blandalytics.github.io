@@ -12,7 +12,7 @@ import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, LABELS, AXIS, PCT, GROUPS, MODELS, isPlus, targetGood, targetName,
   rowValue, rowInput,
 } from './data.js?v=10';
-import { C, K, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord, bar } from './charts.js?v=72';
+import { C, K, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord, bar } from './charts.js?v=73';
 
 export const CARD = { W: 1280, H: 720 };
 const FONT = '"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
@@ -246,19 +246,24 @@ export function cardSvg(ctx) {
   s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - AH / 2}" width="${n1(aw)}" height="${AH}" rx="4" fill="${K.ground}" stroke="#fff" stroke-width="1.3"/>`;
   s += text(ax, AY + 6, 'AVG', `font-size="16" font-weight="700" letter-spacing="1" fill="#fff" text-anchor="middle"`, 'avg');
 
-  // bars, connectors, values and row names
-  let x = unit.league, rPrev = 0;
+  // the connectors first, under every bar: each from the middle of one bar to the middle of the
+  // next, at the running total between them, so the bars hide its ends
+  const CW = 1.2;  // connector width
+  let x = unit.league;
+  rows.forEach((r, i) => {
+    if (i) s += `<g class="row fx" data-k="${r.k}"><line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(Y0 + (i - 1) * S + S / 2)}" y2="${n1(Y0 + i * S + S / 2)}" stroke="${K.conn}" stroke-width="${CW}"/></g>`;
+    x += r.v;
+  });
+  // bars, values and row names
+  x = unit.league;
   rows.forEach((r, i) => {
     const cy = Y0 + i * S + S / 2, end = x + r.v;
     const col = good * r.v > 0 ? C.gold : C.teal;
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end)), w = Math.max(1, n1(b - a));
-    const rr = Math.min(PR, BAR / 2, w);  // the bar's corner radius, at its finishing end
     s += `<g class="row fx" data-k="${r.k}">`;
-    // the connector runs on from the bar above's finishing edge, where its rounded corner begins,
-    // so it meets the bar however round the corner
-    if (i) s += `<line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2 - rPrev)}" y2="${n1(cy - BAR / 2)}" stroke="${K.conn}" stroke-width="1.2"/>`;
-    s += `<path data-m="bar:${r.k}" d="${bar(a, cy - BAR / 2, w, BAR, rr, r.v >= 0)}" fill="${col}"/>`;
-    rPrev = rr;
+    // half a connector's width longer at each end, so a connector's outer edge is flush with the
+    // bar's edge
+    s += `<path data-m="bar:${r.k}" d="${bar(a - CW / 2, cy - BAR / 2, w + CW, BAR, Math.min(PR, BAR / 2, w), r.v >= 0)}" fill="${col}"/>`;
     const right = r.v >= 0;
     // on a chip, so it reads over the league and final-value lines
     const tw = textWidth(f.d(r.v), FS), vx = right ? b + 7 : a - 7;
