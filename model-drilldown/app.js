@@ -25,6 +25,15 @@ const targetsFor = (model) => (MODELS[model].outcomesOnly ? ['outcomes'] : TARGE
 const tableTarget = (t) => (t === 'outcomes' ? 'plus' : t);  // the row that holds its value
 
 const $ = (id) => document.getElementById(id);
+// the tooltip's colours (index.html's --raise, --ink, --muted). fade() dims a colour toward the
+// tooltip's background by as much as its grey (--muted) is dimmed from its white (--ink), channel
+// by channel.
+const TIP = { bg: '#1b222c', ink: '#e3e9f1', muted: '#8a96a6' };
+const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+function fade(hex) {
+  const [b, w, m, c] = [TIP.bg, TIP.ink, TIP.muted, hex].map(rgb);
+  return `rgb(${c.map((v, i) => Math.round(b[i] + ((m[i] - b[i]) / (w[i] - b[i])) * (v - b[i]))).join(',')})`;
+}
 const el = {
   form: $('form'), season: $('season'), player: $('player'), suggest: $('suggest'), pt: $('pt'),
   model: $('model'), target: $('target'), status: $('status'),
@@ -528,8 +537,15 @@ el.flow.addEventListener('pointermove', (e) => {
     const parts = r.folded.map((k) => [LABELS[k] || k, rowValue(k, view.unit)]).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
     parts.push(['Residual', view.unit.residual]);
     if (Number.isFinite(view.unit.calibration) && view.unit.calibration) parts.push(['Calibration', view.unit.calibration]);
-    const list = parts.map(([l, v]) => `<span>${esc(l)}</span><span class="v">${esc(f.d(v))}</span>`).join('');
-    showTip(`<div class="name">Other ${esc(f.d(r.v))}</div><div class="parts">${list}</div>`, e);
+    // Other in its bar's colour; each part gold (good for the pitcher), teal (bad) or, where it rounds
+    // to zero, white, the gold and teal faded as far as the tip's grey is from its white
+    const good = targetGood(state.target);
+    const tone = (v) => (good * v > 0 ? C.gold : C.teal);
+    const list = parts.map(([l, v]) => {
+      const d = f.d(v), zero = !/^[+−-]/.test(d);
+      return `<span>${esc(l)}</span><span class="v" style="color:${zero ? TIP.ink : fade(tone(v))}">${esc(d)}</span>`;
+    }).join('');
+    showTip(`<div class="name" style="color:${tone(r.v)}">Other ${esc(f.d(r.v))}</div><div class="parts">${list}</div>`, e);
     return;
   }
   hideTip();
