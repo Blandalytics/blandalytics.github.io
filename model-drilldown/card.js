@@ -262,7 +262,7 @@ export function cardSvg(ctx) {
     s += `<rect data-m="vb:${r.k}" x="${n1(right ? vx - 3 : vx - tw - 3)}" y="${n1(cy - CHIP / 2)}" width="${n1(tw + 6)}" height="${n1(CHIP)}" rx="3" fill="${K.panel}" fill-opacity=".85"/>`;
     s += text(vx, cy + FS * 0.35, f.d(r.v), `font-size="${FS}" font-weight="700" fill="#fff" text-anchor="${right ? 'start' : 'end'}"`, `v:${r.k}`);
     const sub = subOf(r);
-    s += text(TX0, sub ? cy + LB : cy + LS * 0.35, r.label, `font-size="${n1(LS)}" font-weight="600" fill="${K.ink}"`, `l:${r.k}`);
+    s += text(TX0, sub ? cy + LB : cy + LS * 0.35, r.label, `font-size="${n1(LS)}" font-weight="600" fill="${r.k === selected ? '#fff' : K.ink}"`, `l:${r.k}`);
     if (sub) s += text(TX0, cy + LB + LG, sub, `font-size="${n1(SS)}" fill="${K.muted}"`, `dt:${r.k}`);
     s += '</g>';
     x = end;
