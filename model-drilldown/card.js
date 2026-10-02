@@ -318,6 +318,9 @@ function leaguePanel(ctx, r, P) {
     if (!Number.isFinite(xv) || !Number.isFinite(yv)) continue;
     if (r.k === 'Other') xv = Math.log10(xv);
     // x_b is + = inside, drawn as it reads: inside on the right, as a pitcher sees a right-handed batter
+    // strip-plot jitter, fixed per pitcher: each strip spans a fifth of the plot's width, as in the
+    // drilldown's earlier league card
+    if (r.k === 'lefty') xv += (((p.info.pitcher * 2654435761) % 1000) / 1000) * 0.6 - 0.3;
     pts.push({ xv, yv, v, id: p.info.pitcher, pt: p.info.pt, info: p.info, me: p.info.pitcher === info.pitcher && p.info.pt === info.pt });
   }
   const me = pts.find((p) => p.me);
@@ -347,6 +350,8 @@ function leaguePanel(ctx, r, P) {
     [xa, xb] = [-pw / (2 * k), pw / (2 * k)];
     [ya, yb] = [midY - ph / (2 * zh), midY + ph / (2 * zh)];
   }
+  // Handedness: two strips, LHP (1) at a third of the width and RHP (0) at two thirds
+  if (r.k === 'lefty') [xa, xb] = [2, -1];
   const sxr = lin(xa, xb, px0, px1), syr = lin(ya, yb, py1, py0);
   const cx = (v) => n1(Math.max(px0, Math.min(px1, sxr(v)))), cy = (v) => n1(Math.max(py0, Math.min(py1, syr(v))));
   const xfmt = (v) => (r.k === 'Other' ? String(Math.round(10 ** v)) : PCT.has(r.k) ? `${Math.round(v * 100)}%` : `${+v.toFixed(2)}`);
@@ -355,12 +360,13 @@ function leaguePanel(ctx, r, P) {
   const dp = yt.length > 1 ? Math.max(0, -Math.floor(Math.log10(yt[1] - yt[0]) + 1e-9), (yt[1] - yt[0]) % 1 ? 1 : 0) : 0;
   const yfmt = grouped || isPlus(target) ? (v) => (+v.toFixed(dp)).toFixed(dp).replace('-', '−') : f.tick;
   for (const t of zone ? [] : yt) s += text(px0 - 14, syr(t) + 5, yfmt(t), `font-size="14" fill="${K.muted}" text-anchor="end"`, `py:${t}`);
-  for (const t of zone ? [] : niceTicks(xa, xb, 4)) s += text(sxr(t), py1 + 26, xfmt(t), `font-size="14" fill="${K.muted}" text-anchor="middle"`, `px:${t}`);
+  for (const [t, l] of r.k === 'lefty' ? [[1, 'LHP'], [0, 'RHP']] : []) s += text(sxr(t), py1 + 26, l, `font-size="14" font-weight="600" fill="${K.muted}" text-anchor="middle"`, `px:${l}`);
+  for (const t of zone || r.k === 'lefty' ? [] : niceTicks(xa, xb, 4)) s += text(sxr(t), py1 + 26, xfmt(t), `font-size="14" fill="${K.muted}" text-anchor="middle"`, `px:${t}`);
   // no influence on the target: a line across the plot at 0
   if (!grouped && ya < 0 && yb > 0) s += `<line data-m="pzero" x1="${px0}" x2="${px1}" y1="${n1(syr(0))}" y2="${n1(syr(0))}" stroke="#fff" stroke-opacity=".45" stroke-width="1.2"/>`;
   const xl = grouped ? (r.k === 'Location' ? 'Horizontal location (ft, + = inside)' : 'Balls before the pitch')
     : r.k === 'Other' ? 'Pitches (log scale)' : ctx.axisOf ? ctx.axisOf(r.k) : AXIS[r.k] || LABELS[r.k];
-  if (!zone) s += text((px0 + px1) / 2, py1 + 50, xl, `font-size="13.5" fill="${K.muted}" text-anchor="middle"`, 'pxlab');
+  if (!zone && r.k !== 'lefty') s += text((px0 + px1) / 2, py1 + 50, xl, `font-size="13.5" fill="${K.muted}" text-anchor="middle"`, 'pxlab');
   const yl = grouped ? (r.k === 'Location' ? 'Vertical location' : 'Strikes before the pitch') : tname;
   if (!zone) s += `<text data-m="pylab" transform="translate(${P.x + 24},${n1((py0 + py1) / 2)}) rotate(-90)" font-size="13.5" fill="${K.muted}" text-anchor="middle">${esc(yl)}</text>`;
 
