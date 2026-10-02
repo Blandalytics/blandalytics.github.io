@@ -109,18 +109,20 @@ export function cardSvg(ctx) {
   s += text(kx, KB, kval, `font-size="${Math.min(74, ((KR - KL - 20) / textWidth(kval, 74)) * 74).toFixed(1)}" font-weight="700" fill="${kcol}" text-anchor="middle"`);
 
   // ---- the arsenal tile, on the card's left edge, as tall as the others ----
-  // Titled "Type &" over "Usage", at the other tiles' title size and baseline. Under it a pill per
-  // pitch type, stacked, most thrown first: the type over its value, white, outlined in its colour
-  // (the pitcher cards' palette); the chosen one filled with it. Beside them the pitch usage as one
-  // vertical bar (the mockup's horizontal one, 12 wide): a segment per pitch type as tall as its
-  // share of the pitches, the chosen one filled in its colour, the rest outlined.
+  // Titled "Pitch Mix", at the other tiles' title size and baseline. Under it a pill per pitch
+  // type, stacked, most thrown first: the type over its value, white, outlined in its colour (the
+  // pitcher cards' palette); the chosen one filled with it. Beside them the pitch usage as one
+  // vertical bar (the mockup's horizontal one, at least 12 wide, wider if the title needs the
+  // room): a segment per pitch type as tall as its share of the pitches, the chosen one filled in
+  // its colour, the rest outlined.
   const TT = 26, TM = 22;  // the tiles' title size and margin
-  const AP = { x: 20, y: 133, h: 530 }, AL = ['Type &', 'Usage'];
-  const PX = AP.x + TM, PW = 62, UX = PX + PW + 8, UW = 12, PG = 8, AB = AP.y + AP.h - TM;
-  AP.w = Math.max(UX + UW + TM, PX + Math.max(...AL.map((l) => textWidth(l, TT))) + 16) - AP.x;  // the tile's margin each side
+  const AP = { x: 20, y: 133, h: 530 }, ATL = 'Pitch Mix';
+  const PX = AP.x + TM, PW = 62, UX = PX + PW + 8, PG = 8, AB = AP.y + AP.h - TM;
+  const UW = Math.max(12, Math.ceil(textWidth(ATL, TT)) - (UX - PX));  // pills and bar span the title
+  AP.w = UX + UW + TM - AP.x;  // the tile's margin each side
   s += `<rect x="${AP.x}" y="${AP.y}" width="${n1(AP.w)}" height="${AP.h}" rx="8" fill="${K.panel}"/>`;
-  AL.forEach((l, i) => { s += text(PX, AP.y + 41 + i * TT * 1.15, l, `font-size="${TT}" font-weight="700" fill="${K.ink}"`); });
-  const AT = n1(AP.y + 41 + TT * 1.15 + TT * 0.24 + 18);
+  s += text(PX, AP.y + 41, ATL, `font-size="${TT}" font-weight="700" fill="${K.ink}"`);
+  const AT = n1(AP.y + 41 + TT * 0.24 + 18);
   const PH = (AB - AT - PG * (arsenal.length - 1)) / arsenal.length;  // the pills fill the column
   const SB = AT + arsenal.length * PH + PG * (arsenal.length - 1);  // the stack's foot
   const PFS = Math.min(17, PH * 0.34);
