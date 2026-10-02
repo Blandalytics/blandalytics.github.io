@@ -12,7 +12,7 @@ import {
   PITCH_NAMES, PITCH_COLORS, OUTCOMES, LABELS, AXIS, PCT, GROUPS, MODELS, isPlus, targetGood, targetName,
   rowValue, rowInput,
 } from './data.js?v=10';
-import { C, K, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord, bar } from './charts.js?v=71';
+import { C, K, WORDMARK_URL, formats, kpiColor, kpiT, kpiName, niceTicks, pctile, ord, bar } from './charts.js?v=73';
 
 export const CARD = { W: 1280, H: 720 };
 const FONT = '"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
@@ -111,10 +111,9 @@ export function cardSvg(ctx) {
   // ---- the arsenal tile, on the card's left edge, as tall as the others ----
   // Titled "Pitches", at the other tiles' title size and baseline. Under it a pill per pitch type,
   // stacked, most thrown first, as tall as its share of the pitches but never too short for its
-  // one line, "<type> <value>": white, or bold in its colour for the chosen one. Each is outlined
-  // in its colour (the pitcher cards' palette), the chosen one filled with its highlight (its
-  // colour at HILITE over the card). The pills span the title, or their widest
-  // label.
+  // one line, "<type> <value>", in its colour (the pitcher cards' palette) and outlined in it; the
+  // chosen one filled with that colour, its label bold in the tile's colour. The pills span the title, or
+  // their widest label.
   const TT = 26, TM = 22;  // the tiles' title size and margin
   const AP = { x: 20, y: 133, h: 530 }, ATL = 'Pitches';
   const PFS = 17, PG = 6, PR = 9;  // label size, gap, corner radius (less on a pill too short for it)
@@ -141,8 +140,8 @@ export function cardSvg(ctx) {
   arsenal.forEach((p, i) => {
     const h = hs[i], on = p.pt === info.pt, col = PITCH_COLORS[p.pt] || '#c7c7c7';
     s += `<g class="tab${on ? ' on' : ''}" data-pt="${p.pt}" tabindex="0" role="button" aria-label="${esc(`${PITCH_NAMES[p.pt] || p.pt}, ${p.n} pitches`)}">`;
-    s += `<rect data-m="band:${p.pt}" x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? tint(col, HILITE) : K.panel}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
-    s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? col : '#fff'}" text-anchor="middle"`, `bl:${p.pt}`);
+    s += `<rect data-m="band:${p.pt}" x="${PX + 1}" y="${n1(py + 1)}" width="${PW - 2}" height="${n1(h - 2)}" rx="${n1(Math.min(PR, (h - 2) / 2))}" fill="${on ? col : K.panel}" stroke="${col}" stroke-width="${on ? 2.5 : 1.5}"/>`;
+    s += text(PX + PW / 2, py + h / 2 + PFS * 0.36, pill(p), `font-size="${PFS}" font-weight="${on ? 700 : 500}" fill="${on ? K.panel : col}" text-anchor="middle"`, `bl:${p.pt}`);
     s += '</g>';
     py += h + PG;
   });
@@ -246,15 +245,24 @@ export function cardSvg(ctx) {
   s += `<rect data-m="avgbox" x="${n1(ax - aw / 2)}" y="${AY - AH / 2}" width="${n1(aw)}" height="${AH}" rx="4" fill="${K.ground}" stroke="#fff" stroke-width="1.3"/>`;
   s += text(ax, AY + 6, 'AVG', `font-size="16" font-weight="700" letter-spacing="1" fill="#fff" text-anchor="middle"`, 'avg');
 
-  // bars, connectors, values and row names
+  // the connectors first, under every bar: each from the middle of one bar to the middle of the
+  // next, at the running total between them, so the bars hide its ends
+  const CW = 1.2;  // connector width
   let x = unit.league;
+  rows.forEach((r, i) => {
+    if (i) s += `<g class="row fx" data-k="${r.k}"><line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(Y0 + (i - 1) * S + S / 2)}" y2="${n1(Y0 + i * S + S / 2)}" stroke="${K.conn}" stroke-width="${CW}"/></g>`;
+    x += r.v;
+  });
+  // bars, values and row names
+  x = unit.league;
   rows.forEach((r, i) => {
     const cy = Y0 + i * S + S / 2, end = x + r.v;
     const col = good * r.v > 0 ? C.gold : C.teal;
     const a = sx(Math.min(x, end)), b = sx(Math.max(x, end)), w = Math.max(1, n1(b - a));
     s += `<g class="row fx" data-k="${r.k}">`;
-    if (i) s += `<line data-m="c:${r.k}" x1="${sx(x)}" x2="${sx(x)}" y1="${n1(cy - S + BAR / 2)}" y2="${n1(cy - BAR / 2)}" stroke="${K.conn}" stroke-width="1.2"/>`;
-    s += `<path data-m="bar:${r.k}" d="${bar(a, cy - BAR / 2, w, BAR, Math.min(PR, BAR / 2, w), r.v >= 0)}" fill="${col}"/>`;
+    // half a connector's width longer at each end, so a connector's outer edge is flush with the
+    // bar's edge
+    s += `<path data-m="bar:${r.k}" d="${bar(a - CW / 2, cy - BAR / 2, w + CW, BAR, Math.min(PR, BAR / 2, w), r.v >= 0)}" fill="${col}"/>`;
     const right = r.v >= 0;
     // on a chip, so it reads over the league and final-value lines
     const tw = textWidth(f.d(r.v), FS), vx = right ? b + 7 : a - 7;
