@@ -537,13 +537,13 @@ el.flow.addEventListener('pointermove', (e) => {
     const parts = r.folded.map((k) => [LABELS[k] || k, rowValue(k, view.unit)]).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
     parts.push(['Residual', view.unit.residual]);
     if (Number.isFinite(view.unit.calibration) && view.unit.calibration) parts.push(['Calibration', view.unit.calibration]);
-    // Other in its bar's colour; each part gold (good for the pitcher), teal (bad) or, where it rounds
-    // to zero, white, the gold and teal faded as far as the tip's grey is from its white
+    // Other in its bar's colour; each part gold (good for the pitcher) or teal (bad), faded as far as
+    // the tip's grey is from its white, or, where it rounds to zero, that grey
     const good = targetGood(state.target);
     const tone = (v) => (good * v > 0 ? C.gold : C.teal);
     const list = parts.map(([l, v]) => {
       const d = f.d(v), zero = !/^[+−-]/.test(d);
-      return `<span>${esc(l)}</span><span class="v" style="color:${zero ? TIP.ink : fade(tone(v))}">${esc(d)}</span>`;
+      return `<span>${esc(l)}</span><span class="v" style="color:${zero ? TIP.muted : fade(tone(v))}">${esc(d)}</span>`;
     }).join('');
     showTip(`<div class="name" style="color:${tone(r.v)}">Other ${esc(f.d(r.v))}</div><div class="parts">${list}</div>`, e);
     return;
