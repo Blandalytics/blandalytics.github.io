@@ -1,7 +1,10 @@
 # Proposal: DML swing-path model for swing outcomes (whiff / foul / in play)
 
-**Status:** proposal. Nothing here is implemented yet. The numbers under *Prototype* come from a
-10-day 2026 sample, not from the full pipeline.
+**Status:** proposal. The DML model itself is not implemented yet. The feature layer is built:
+`swing_path/features.py` has location mirroring, the convention check, the attack-angle match
+and the fooled-swing filter. The numbers under *Prototype* come from a 10-day 2026 sample. The
+numbers under *Attack-angle match* and *Fooled-swing filter* come from June 2026 (52,918 tracked
+swings), using `features.py`'s own output. None come from the full pipeline.
 
 This is the hitter-side mirror of the swing-outcome model in `model_README.md`. That model asks
 *how much does the pitch's stuff move whiff / foul / in play, at a fixed location and count?* This
@@ -64,7 +67,8 @@ bat-path fields relative to the batter.
 **Make the conventions an assertion, not an assumption.** At load time, compute the per-hand
 correlations above (attack_direction vs spray on balls in play, and intercept_x vs `x_in`).
 Fail if a sign differs between hands. Savant has changed columns before (`miss_distance` was
-inserted mid-frame), so this check should not be skipped.
+inserted mid-frame), so this check should not be skipped. `features.check_conventions` does
+this and raises if either sign is not clearly positive for both hands.
 
 ## Method
 
@@ -95,12 +99,20 @@ q_2^PLV = p_foul_full / (1 − p_whiff_full)
   * `z_n` (0 = bottom of the zone, 1 = top);
   * pre-pitch balls and strikes;
   * platoon;
+  * the pitch's vertical approach angle `vaa`;
   * season.
 
   **g_s(W)** is LightGBM boosted from the PLV offset on W. It corrects PLV on the tracked-swing
   subsample and for any batter-side location effects PLV doesn't model. Expect it to be small.
-* **S (treatment):** the seven bat-path fields, in the conventions above. No batter identity,
-  hand or pitch inputs.
+* **S (treatment):** the seven bat-path fields, in the conventions above, plus `aa_match` (see
+  *Attack-angle match*). No batter identity, hand or pitch inputs.
+  * `aa_match` is the one input that mixes in a pitch property. That is still valid under DML:
+    `vaa` is in W, so step 3 removes the part of D that `vaa` alone explains.
+  * What remains is the bat's plane *relative to* the pitch's, which D cannot build from the raw
+    attack angle once it is barred from seeing the pitch.
+* **Sample:** D_s and theta are fitted on **committed swings only**, with fooled swings removed
+  (see *Fooled-swing filter*). Every swing is still scored. Fooled swings get their own term in
+  the hitter decomposition (*Outputs*).
 
 Steps, following the README's logit link:
 
@@ -140,8 +152,12 @@ That is negligible, but it is not zero.
 **Per hitter** (season, plus `_vSame` / `_vOpp` and pitch-group splits):
 
 * swing-weighted `p_<class>_path` and `x<class>_plus`, on the 100 / 15 scale;
-* **observed − PLV expected**, split into the bat-path part (mean `path_effect`) and the
-  remainder (luck plus anything the path doesn't capture).
+* **observed − PLV expected**, split three ways:
+  * **path:** the mean `path_effect` over committed swings;
+  * **fooled:** the fooled share × (observed − PLV on fooled swings). This is recognition and
+    timing, kept apart from swing quality;
+  * **remainder:** luck, plus anything the path doesn't capture.
+* fooled%, with the `early` / `late` / `decel` shares (see *Fooled-swing filter*).
 * **Optional run-value view:** a count-neutral run value per 100 swings, using
   `runvalue.py`'s weights. Price whiff and foul directly. Price in play at the league in-play
   value until a batted-ball stage is added (see *Extensions*).
@@ -192,11 +208,133 @@ Mean feature values by class show *how* the path separates the classes:
 
 So whiffs are early and around the ball: pulled, out front and steep.
 
+## Attack-angle match (`features.add_attack_angle_match`)
+
+```
+vaa      = vertical approach angle at the front of the plate (negative = descending)
+aa_match = attack_angle + vaa
+```
+
+* **Meaning.** A pitch arriving at −6° is met exactly on its plane by a +6° attack angle, which
+  gives `aa_match` = 0. Positive values are steeper than the pitch (uppercut through it);
+  negative values are flatter (chopping across it).
+* **No mirroring.** Both angles are vertical, so neither is flipped.
+* **VAA calculation.** `vaa` is the same calculation as `pitcher_card/prep.py`'s
+  `approach_angles`, on Savant's `vy0`/`vz0`/`ay`/`az`.
+  * Per-type means look right: SI −5.7°, FC −6.1°, CH −7.2°, SL −7.5°, CU −9.5°.
+  * VAA changes by under 0.1° per foot of depth, so the plate-front value stands in for the
+    contact point.
+
+**Hitters partly match the plane already:** attack angle correlates −0.41 with VAA. The two
+binnings show the difference (June 2026, all tracked swings):
+
+| attack_angle | ≤ −5° | −5–0 | 0–5 | 5–10 | 10–15 | 15–20 | 20–25 | > 25° |
+|---|---|---|---|---|---|---|---|---|
+| whiff | .243 | .215 | .194 | .173 | .181 | .246 | .386 | .637 |
+| in play / contact | .317 | .426 | .502 | .575 | .585 | .512 | .365 | .229 |
+
+| aa_match | ≤ −10° | −10–−5 | −5–0 | 0–5 | 5–10 | 10–15 | 15–20 | > 20° |
+|---|---|---|---|---|---|---|---|---|
+| whiff | .228 | .205 | .188 | .187 | .213 | .304 | .439 | .646 |
+| in play / contact | .352 | .458 | .518 | .562 | .558 | .467 | .339 | .233 |
+
+**Best results come with the bat slightly steeper than the pitch.** Whiffs are fewest at
+`aa_match` −5 to +5, and contact is most often fair at 0 to +10.
+
+**Does it add anything?** This was tested in the DML structure. D was boosted from a cross-fitted
+offset of W + `vaa` (five folds grouped by batter), once with the seven bat-path fields and once
+with `aa_match` added. The gain is the drop in log loss; the z uses batter-clustered SEs.
+
+| stage | sample | gain | z | share of the path's lift |
+|---|---|---|---|---|
+| whiff vs contact | all swings | .0005 | 1.9 | 0.5% |
+| | committed swings | .0001 | 0.3 | 0.1% |
+| foul vs in play | all swings | .0022 | **6.1** | 4.1% |
+| | committed swings | .0021 | **5.3** | 4.6% |
+
+* **It decides fair vs foul, not hit vs miss.** That fits being on plane: whether the bat meets
+  the ball is mostly timing and direction, but whether the contact stays fair depends on
+  matching the ball's plane.
+* **A model that sees both angles gains nothing from it.** In a plain multiclass classifier with
+  W, `vaa` and the raw angles (an earlier pass over the same month), the trees learn the
+  interaction themselves: log loss .7909 without the match feature, .7916 with it. It
+  only matters because D is barred from seeing the pitch.
+* **Horizontal match** (`attack_direction` against the pitch's horizontal approach angle) is left
+  as an extension.
+
+## Fooled-swing filter (`features.add_fooled`)
+
+A fooled swing is one whose timing or bat speed departs sharply from what that pitch, location
+and count usually get. Each swing is measured against the league and against the hitter's own
+norm. The flag uses the bat path and the pitch only, never the outcome.
+
+1. **Expected swing.** E[intercept_y | W] and E[bat_speed | W] are Huber LightGBM fits on W, the
+   same pitch-side inputs as the model plus `vaa`. They are cross-fitted in five folds grouped by
+   batter.
+   * W explains 44% of intercept_y and 16% of bat speed.
+   * Count is in W, so an ordinary two-strike shortened swing is not flagged.
+2. **The hitter's norm.** Subtract the hitter's shrunk mean residual for the season (residual sum
+   / (swings + 50)). A hitter who always meets the ball deep is then not "late" on every swing.
+3. **Robust z.** Divide by 1.4826 × MAD of the residual: 7.4 in for timing and 3.9 mph for bat
+   speed.
+4. **Flags** (threshold `FOOLED_Z` = 2):
+
+| flag | rule | share of swings |
+|---|---|---|
+| `early` | `z_timing` ≥ 2: met far out front, ahead of a slower pitch | 3.0% |
+| `late` | `z_timing` ≤ −2: met far behind, beaten | 3.6% |
+| `decel` | `z_speed` ≤ −2: bat far slower than usual, i.e. checked up, lunged or defended | 6.7% |
+| `fooled` | any of the three | 11.2% |
+
+**Outside checks: signals the flag never sees.**
+
+| | early | late | decel | fooled |
+|---|---|---|---|---|
+| Velo change from the previous pitch, ≤ −8 mph | 5.1% | 3.9% | 8.9% | 15.3% |
+| … −3 to +3 mph | 2.9% | 3.3% | 6.9% | 11.2% |
+| … ≥ +8 mph | 1.2% | 3.2% | 4.8% | 7.8% |
+| Fastball / Breaking / Offspeed | 1.3 / 4.8 / 4.7% | 2.9 / 4.6 / 3.6% | 5.2 / 9.1 / 6.2% | 7.8 / 15.5 / 12.5% |
+| Hitter-level r with chase rate (154 hitters, 150+ swings) | **.22** | −.02 | −.14 | .02 |
+| Hitter-level r with whiff rate | **.27** | .02 | .04 | .15 |
+| Split-half reliability within the month (174 hitters, Spearman-Brown) | .41 | .46 | .34 | .56 |
+| Share of whiffs / fouls / balls in play flagged | 8.1 / 1.6 / 0.8% | 6.8 / 3.6 / 1.4% | 11.9 / 6.3 / 3.4% | 22.3 / 9.6 / 5.1% |
+
+* **`early` is the well-validated component.** It quadruples after a big velocity drop, is rare
+  on fastballs, and tracks a hitter's chase rate. That is the pitch-recognition signature.
+* **`late` and `decel` behave like real, repeatable traits** (split-half .46 and .34 within a
+  month), but they have no outside confirmation. They are kept in `fooled` because they mark
+  swings whose path is not the hitter's intended one. `decel` especially catches check-ups and
+  lunges.
+* **The threshold and the components are parameters.** In exploration, tightening `fooled` to
+  `early` alone changed the results below very little.
+
+**What filtering does to the model** (the same DML-style test as above; D includes
+`aa_match`). Hitter rows split the month by game; a hitter needs 40+ swings in each half.
+
+| stage | sample | lift over W | hitter split-half r of D | D → other half's obs − exp | obs − exp → itself |
+|---|---|---|---|---|---|
+| whiff vs contact | all swings | .102 | .90 | .48 | .57 |
+| | committed swings | .084 | **.92** | .46 | .59 |
+| foul vs in play | all swings | .056 | .82 | .15 | .32 |
+| | committed swings | .049 | .80 | .14 | .30 |
+
+* **Fooled swings are 11% of swings but carry an outsized share of the whiff-stage lift.** That
+  share is the "he was fooled" reading that risk 1 describes. Most of the lift (.084) survives on
+  committed swings, so the path score is not mainly a fooled detector.
+* **Filtering makes the whiff-stage hitter score a little more reliable** (.90 → .92), and no
+  less predictive within a month.
+* **The case for it is interpretive.** The path score then describes committed swings, and
+  recognition (fooled%) is reported on its own instead of being folded in. Whether it improves
+  year-over-year prediction is an open question for the full-season evaluation.
+
 ## Risks and how to check them
 
 1. **The bat path is measured during the swing, not before it.** A fooled swing has a different
-   path: early, pulled and out front. So a large part of the per-swing lift is the model reading
+   path: early, pulled and out front. So part of the per-swing lift is the model reading
    *"he was fooled"*, which is real but is not purely swing skill.
+   * **Addressed by the fooled-swing filter:** D is fitted on committed swings, and fooled swings
+     get their own term. Without fooled swings, the whiff-stage lift per swing falls from .102 to
+     .084, so most of the lift is not this effect.
    * **Judge the model at the hitter level, not by pitch-level log loss**, which will look
      excellent almost regardless.
    * The questions that matter are:
@@ -241,12 +379,11 @@ So whiffs are early and around the ball: pulled, out front and steep.
 
 ## Extensions (ablations, after the base model)
 
-* **Plane matching.** Let D see the pitch's plane: `attack_angle − |VAA|` and
-  `attack_direction − HAA`, with the approach angles computed at the plate from
-  `vy0`/`vz0`/`ay`/`az`.
-  * This stays valid under DML, because step 3 still subtracts E[D | W] (put VAA and HAA in W
-    too).
-  * It measures *path given pitch*, which is closer to "squared up" than the raw angles.
+* **Horizontal plane matching.** The vertical match is in the base model. The horizontal
+  analogue is `attack_direction` against the pitch's horizontal approach angle (HAA), mirrored to
+  the batter, with HAA in W.
+* **Fooled-filter thresholds.** Try `FOOLED_Z` 1.5–2.5 and `early` alone, judged on
+  year-over-year prediction rather than within-month numbers.
 * **Path profile (hitter "stuff").** Replace per-swing S with the hitter's trailing averages of
   S. That is the analogue of pitch physics for pitchers: fixed traits rather than per-swing
   execution. It separates *approach* (persistent tilt, attack angle and bat speed) from
@@ -255,10 +392,22 @@ So whiffs are early and around the ball: pulled, out front and steep.
 * **Batted-ball stage.** Add the README's in-play KNN target (field out / 1B / 2B / 3B / HR) as
   a third stage. That gives the path score a damage component and a full run value.
 
-## Running (planned interface)
+## Running
+
+Built (`pip install -r swing_path/requirements.txt`; about 12 s for a month):
 
 ```bash
-python fetch_bat_tracking.py --start 2023-03-30 --end 2026-09-30 --out data/bat_tracking.parquet
+python swing_path/features.py --start 2026-06-01 --end 2026-06-30 --out swings_2026_06.parquet
+python swing_path/features.py --csv 'data/savant/*.csv' --out swings.parquet   # already downloaded
+```
+
+This fetches Savant day by day, keeps tracked non-bunt swings, adds every feature and flag, runs
+the convention check, and prints the flag-validation tables. Run it on whole seasons, because
+the hitter norms need each hitter's swings.
+
+Planned:
+
+```bash
 python dml_swing_path.py --data data/statfast_2023_2025.parquet --bat data/bat_tracking.parquet \
     --plv output/swing_outcome_logit_2325.parquet --link logit --tuned output/tuned_swing_path.json \
     --out output/swing_path_logit_2325.parquet --model output/swing_path_logit_2325.pkl
