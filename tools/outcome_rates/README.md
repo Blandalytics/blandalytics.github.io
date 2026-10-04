@@ -90,3 +90,26 @@ scores 2026.
   identity (a hit share times pitches per PA); BB% and PA/IP depend on how a
   pitcher's balls and baserunners cluster in counts and innings, which pitch shares
   can't see, hence the lower R².
+
+## Stuff K%
+
+`stuff_k.py` applies the K% coefficients to the Stuff model's outcome predictions.
+For every pitch, the Stuff model ([pitch-modeling](https://data.blandalytics.com/pitch-modeling/score_pitches.py))
+gives count-neutral probabilities for the same nine outcomes, over the league's
+location and count mix. Plugging those into the K% model gives the strikeout rate of
+a pitcher whose every pitch had that pitch's stuff. The model is linear, so a pitch
+type's Stuff K% is the mean over its pitches.
+
+```bash
+python tools/outcome_rates/stuff_k.py --cache /tmp/mlb --csv stuff_k.csv   # ~10 min, 2023-2026
+```
+
+One row per pitcher-season-pitch type thrown at least 500 times in the regular
+season, ranked by Stuff K%, with plvStuff+ (the pitcher-season-pitch-type scale)
+beside it. Pitch types the Stuff model doesn't cover (knuckleballs, eephuses,
+screwballs) are left out, as are the pitches it doesn't score (bunts, pitchouts,
+pitches missing tracking).
+
+Stuff K% is a pitch-level number on a pitcher scale: a fastball's 30% means a pitcher
+throwing only that fastball, located like the league, would strike out 30% of hitters.
+It ignores how pitches play off each other and where the pitcher actually locates.

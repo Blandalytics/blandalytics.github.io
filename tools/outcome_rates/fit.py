@@ -79,7 +79,8 @@ def season_units(manifest: dict, season: int) -> list[str]:
                   if u["sport"] == "mlb" and u["start"].startswith(str(season)))
 
 
-def read_unit(s: requests.Session, path: str, cache: Path | None) -> pd.DataFrame:
+def read_unit(s: requests.Session, path: str, cache: Path | None,
+              columns: list[str] = COLUMNS) -> pd.DataFrame:
     local = cache / path if cache else None
     if local and local.exists():
         data = local.read_bytes()
@@ -90,7 +91,7 @@ def read_unit(s: requests.Session, path: str, cache: Path | None) -> pd.DataFram
         if local:
             local.parent.mkdir(parents=True, exist_ok=True)
             local.write_bytes(data)
-    return pq.read_table(io.BytesIO(data), columns=COLUMNS).to_pandas()
+    return pq.read_table(io.BytesIO(data), columns=columns).to_pandas()
 
 
 def load(seasons: list[int], cache: Path | None) -> pd.DataFrame:
