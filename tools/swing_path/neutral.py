@@ -10,7 +10,8 @@ PLV terms plus swing i's path against the average path there:
 The two stages are chained per draw (whiff p1; foul (1 - p1) p2; in play (1 - p1)(1 - p2)) and
 averaged over the draws, so the three probabilities sum to 1. One log-odds shift per stage and
 season makes the league means equal the observed whiff and foul shares. The damage stage is
-linear, so its draw average is exact: mean_j(l3 + r3 - theta r3) + theta D3(i).
+linear, so its draw average is exact: mean_j(l3 + r3 - theta r3) + theta D3(i), shifted so
+its mean over balls in play equals the mean KNN expected wOBAcon.
 
     x<class>_plus = 100 * p_<class>_path / its season x count x group x platoon cell mean
 
@@ -101,7 +102,9 @@ def season_probs(s: pd.DataFrame, info: dict, seed: int) -> pd.DataFrame:
     shift = calibrate(draws, len(s), (s["whiff"].mean(), contact["foul"].mean()))
     p = chained(draws, len(s), shift)
     out = pd.DataFrame(p, columns=["p_whiff_path", "p_foul_path", "p_in_play_path"], index=s.index)
-    out["wobacon_path"] = neutral_damage(s, th["damage"])
+    damage = pd.Series(neutral_damage(s, th["damage"]), index=s.index)
+    shift["damage"] = s.loc[s["bip"], "x_wobacon"].mean() - damage[s["bip"]].mean()
+    out["wobacon_path"] = damage + shift["damage"]
     print(f"season {int(s['season'].iloc[0])}: shifts {shift}", flush=True)
     return out
 
