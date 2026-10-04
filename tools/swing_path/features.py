@@ -158,6 +158,30 @@ def add_attack_angle_match(p: pd.DataFrame) -> None:
     p["aa_match"] = p["attack_angle"] + p["vaa"]
 
 
+def add_horizontal_match(p: pd.DataFrame) -> None:
+    """The bat's horizontal path against the pitch's. `haa_b` is the direction of the ball's
+    path reversed (toward the field) at the front of the plate, in the batter's frame like
+    attack_direction (+ = opposite field). `ad_match` = attack_direction - haa_b is 0 when the
+    bat travels back along the ball's line. haa_b has an SD of only about 2.3 degrees against
+    about 15 for attack_direction, so ad_match is mostly attack_direction."""
+    vy_f = -np.sqrt(p["vy0"] ** 2 - 2 * p["ay"] * (50 - 17 / 12))
+    vx_f = p["vx0"] + p["ax"] * (vy_f - p["vy0"]) / p["ay"]
+    toward_rf = np.degrees(np.arctan2(-vx_f, -vy_f))
+    p["haa_b"] = np.where(p["stand"] == "R", toward_rf, -toward_rf)
+    p["ad_match"] = p["attack_direction"] - p["haa_b"]
+
+
+def add_swing_mix(s: pd.DataFrame) -> None:
+    """Where each hitter swings, per season: mean x_in and z_n of his swings, and the share
+    outside the zone. Location only, never outcome; it lets the location model absorb a
+    hitter-level location habit that the per-pitch location cannot."""
+    out = (s["x_in"].abs() > 0.83) | (s["z_n"] < 0) | (s["z_n"] > 1)
+    by = s.assign(out_zone=out).groupby(["batter", "game_year"])
+    s["bat_x_mean"] = by["x_in"].transform("mean")
+    s["bat_z_mean"] = by["z_n"].transform("mean")
+    s["bat_chase"] = by["out_zone"].transform("mean")
+
+
 def check_conventions(s: pd.DataFrame) -> None:
     """Fail if attack_direction or the intercept x is not batter-relative for both hands:
     attack_direction must rise toward the opposite field (spray + = right field for a righty,
@@ -241,8 +265,10 @@ def build(pitches: pd.DataFrame) -> pd.DataFrame:
     add_location(s)
     add_approach_angle(s)
     add_attack_angle_match(s)
+    add_horizontal_match(s)
     check_conventions(s)
     add_fooled(s)
+    add_swing_mix(s)
     return s
 
 
