@@ -9,8 +9,12 @@ triple, home run:
 
 Those are the nine outcome shares fit.py's models take, so the coefficients in
 models.json turn them into a K%, BB% and Hit%: the rates of a pitcher whose every pitch
-had that pitch's predicted outcomes. The models are linear, so a pitch type's rates come
-straight from its mean probabilities.
+had that pitch's predicted outcomes. Each season uses its own season's models, centered
+the way they were fit: the season's actual rate plus the coefficients times the pitch
+type's probabilities less the pitch model's own league average for the season (over
+every pitch it scored). The pitch model's average pitch therefore lands on the season's
+actual rate, whatever the pitch model's own bias. The models are linear, so a pitch
+type's rates come straight from its mean probabilities.
 
 Those means are already in the bucket, in the tables the Model Drilldown reads
 (``shap-values/``, from stuff_model's shap_values.py): ``units_<stuff|pitching>_<season>``
@@ -70,12 +74,22 @@ def season_units(s: requests.Session, season: int, model: str) -> pd.DataFrame:
     return info.set_index(keys).join(out, how="inner").reset_index()
 
 
-def apply_models(units: pd.DataFrame, models: dict) -> pd.DataFrame:
-    """Each rate as the probability-weighted sum of its model's coefficients."""
-    for target in RATES:
-        coef = models[target]["coef"]
-        units[target] = sum(coef[o] * units[o] for o in fit.OUTCOMES)
-    return units
+def apply_models(units: pd.DataFrame, seasons: dict) -> pd.DataFrame:
+    """Each rate as its season's actual rate plus the season's coefficients times the
+    pitch type's deviation from the pitch model's average probabilities that season."""
+    parts = []
+    for season, u in units.groupby("season", sort=True):
+        fitted = seasons.get(str(season))
+        if fitted is None:
+            raise SystemExit(f"no {season} models in models.json")
+        u = u.copy()
+        avg = {o: (u[o] * u["n"]).sum() / u["n"].sum() for o in fit.OUTCOMES}
+        for target in RATES:
+            coef = fitted["models"][target]["coef"]
+            league = fitted["league"]["stats"][target]
+            u[target] = league + sum(coef[o] * (u[o] - avg[o]) for o in fit.OUTCOMES)
+        parts.append(u)
+    return pd.concat(parts, ignore_index=True)
 
 
 def table(rows: pd.DataFrame, col: str, label: str) -> list[str]:
@@ -117,11 +131,11 @@ def main() -> None:
     ap.add_argument("--csv", type=Path, help="write every pitch type over the minimum here")
     args = ap.parse_args()
 
-    models = json.loads(args.models.read_text())["models"]
+    seasons = json.loads(args.models.read_text())["seasons"]
     s = requests.Session()
     units = pd.concat([season_units(s, yr, args.model) for yr in args.seasons],
                       ignore_index=True)
-    units = apply_models(units, models)
+    units = apply_models(units, seasons)
     print(report(units, args.min_pitches, args.top, MODELS[args.model][1]))
     if args.csv:
         board = units[units["n"] >= args.min_pitches]

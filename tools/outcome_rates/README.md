@@ -2,36 +2,29 @@
 
 Linear models for a pitcher's **K%**, **BB%**, **Hit%** and **PA per inning** from the
 share of his pitches ending in each of nine outcomes. Fit on 2023–2026 regular-season
-MLB data (through 2026-10-01): one row per pitcher-season, ordinary least squares
-with every pitcher-season counting the same. `fit.py` builds it; `models.json` holds
-the result.
+MLB data (through 2026-10-01), **one fit per season**: one row per pitcher-season,
+weighted by batters faced, on deviations from that season's league averages.
+`fit.py` builds them; `models.json` holds each season's coefficients and averages.
 
 ```bash
 python tools/outcome_rates/fit.py --cache /tmp/mlb --json tools/outcome_rates/models.json
-python tools/outcome_rates/fit.py --cache /tmp/mlb --weight bf --decay 0.8   # the earlier weighted fit
+python tools/outcome_rates/fit.py --cache /tmp/mlb --weight none   # every pitcher-season the same
 ```
 
-## Weights
+## The fit
 
-None by default. `--weight bf` weights each pitcher-season by batters faced, and
-`--decay` adds a recency weight, `decay ^ (newest season − season)`. Fit statistics use
-the base weight alone (equal, or batters faced), so they read the same whatever the
-decay.
+For each season, with the season's batters-faced-weighted averages:
 
-The earlier fit used batters faced × 0.8 per season back. Dropping both weights makes
-every rate fit worse. Scoring both coefficient sets the same way (pitcher-seasons with
-100+ batters faced, weighted by batters faced):
+    stat − season avg = Σ coef × (share − season avg share)
 
-| R² | K% | BB% | Hit% | PA/IP |
-|---|---:|---:|---:|---:|
-| batters faced × 0.8 recency | .905 | .675 | .966 | .701 |
-| unweighted (current) | .807 | .565 | .893 | .130 |
+A prediction is the season's average plus the deviations times the coefficients. The
+shares sum to one, so within a season this is the same fit as the uncentered one with
+no intercept (`fit.py` checks that rather than assuming it); the coefficients are
+reported in that form, as the stat a pitcher would post if every pitch he threw had
+that outcome. Centering matters when the models are applied to something on a
+different baseline, such as a pitch model's probabilities (below).
 
-899 of the 3,457 pitcher-seasons have fewer than 50 batters faced. Unweighted, their
-noise counts as much as a full season of starts, which pulls the coefficients off;
-PA/IP, a ratio that explodes on a handful of outs, suffers most.
-
-## Inputs
+The nine shares:
 
 | outcome | pitches counted |
 |---|---|
@@ -42,40 +35,52 @@ PA/IP, a ratio that explodes on a handful of outs, suffers most.
 | Field out | in play, not a hit (outs, errors, fielder's choices, sacrifices) |
 | Single / Double / Triple / Home run | in play, that hit |
 
-The nine shares sum to one, so the models have no intercept: a pitcher's prediction
-is `Σ share × coefficient`. (That is the same fit as an intercept plus eight shares
-with one left out.)
+## Coefficients by season
 
-## Coefficients
+K% (standard errors in `models.json`, about .02–.03 for the strike outcomes):
 
-3,457 pitcher-seasons, 731,707 batters faced, 2.85M pitches; unweighted. Standard
-errors in parentheses.
+| outcome | 2023 | 2024 | 2025 | 2026 |
+|---|---:|---:|---:|---:|
+| Ball/HBP | −0.02 | −0.02 | −0.06 | −0.03 |
+| Called strike | 0.90 | 0.95 | 0.89 | 0.87 |
+| Swinging strike | 1.35 | 1.36 | 1.38 | 1.38 |
+| Foul strike | 0.46 | 0.45 | 0.42 | 0.42 |
+| Field out | −0.97 | −0.96 | −0.86 | −0.88 |
+| Single | −0.77 | −0.91 | −0.67 | −0.74 |
+| Double | −0.94 | −1.11 | −0.78 | −0.78 |
+| Triple | −1.35 | −0.48 | −1.37 | −2.41 |
+| Home run | −1.07 | −1.20 | −0.73 | −0.63 |
+| season K% | 22.8% | 22.6% | 22.3% | 22.2% |
 
-| outcome | league share | K% | BB% | Hit% | PA/IP |
-|---|---:|---:|---:|---:|---:|
-| Ball/HBP | .359 | −0.011 (.009) | 0.612 (.008) | 0.123 (.006) | 9.24 (0.18) |
-| Called strike | .163 | 0.598 (.018) | −0.098 (.016) | 0.137 (.012) | 1.33 (0.35) |
-| Swinging strike | .121 | 1.246 (.019) | −0.157 (.017) | −0.019 (.012) | −1.32 (0.36) |
-| Foul strike | .182 | 0.289 (.016) | −0.129 (.014) | 0.275 (.010) | 2.04 (0.30) |
-| Field out | .118 | −0.394 (.016) | −0.421 (.014) | −0.337 (.010) | −5.47 (0.30) |
-| Single | .037 | −0.472 (.030) | −0.309 (.027) | 2.430 (.020) | 20.55 (0.58) |
-| Double | .011 | −0.716 (.069) | −0.506 (.062) | 2.958 (.046) | 24.51 (1.32) |
-| Triple | .001 | −1.822 (.329) | −0.350 (.294) | 3.438 (.217) | 56.38 (6.25) |
-| Home run | .008 | −0.231 (.074) | −0.528 (.066) | 2.557 (.049) | 23.25 (1.40) |
+BB%, Hit% and PA/IP are in `models.json` and printed by `fit.py`. Season averages:
+BB% 8.4 / 8.0 / 8.2 / 8.7%, Hit% 22.2 / 21.9 / 22.0 / 21.7%, PA/IP 4.28 / 4.24 / 4.26 /
+4.28 (2023–2026).
 
 ## Fit
 
-Unweighted, so not comparable with the weighted table above. The holdout row refits
-on 2023–2025 and scores 2026.
+R² within each season, weighted by batters faced, and with the previous season's
+coefficients centered on this season's averages:
 
-| | K% | BB% | Hit% | PA/IP |
+| | 2023 | 2024 | 2025 | 2026 |
 |---|---:|---:|---:|---:|
-| R² (all) | .745 | .570 | .877 | .496 |
-| R² (BF ≥ 100) | .796 | .611 | .892 | .311 |
-| R² (BF ≥ 400) | .824 | .399 | .893 | −.282 |
-| RMSE | .0432 | .0386 | .0285 | 0.822 |
-| MAE | .0290 | .0237 | .0160 | 0.316 |
-| R² (2026 holdout) | .719 | .604 | .886 | .434 |
+| K% | .876 | .881 | .863 | .858 |
+| K%, previous season's coefficients | | .880 | .855 | .857 |
+| BB% | .694 | .672 | .626 | .667 |
+| Hit% | .944 | .957 | .922 | .938 |
+| PA/IP | .675 | .579 | .706 | .626 |
+
+Against the earlier pooled versions, scored the same way (pitcher-seasons with 100+
+batters faced, weighted by batters faced, all four seasons):
+
+| R² | K% | BB% | Hit% | PA/IP |
+|---|---:|---:|---:|---:|
+| pooled, batters faced × 0.8 recency | .905 | .675 | .966 | .701 |
+| pooled, unweighted | .807 | .565 | .893 | .130 |
+| per season, centered (current) | .907 | .680 | .967 | .706 |
+
+Unweighted, the 899 pitcher-seasons with fewer than 50 batters faced count as much as
+a full season of starts and pull the coefficients off; weighting by batters faced
+fixes that.
 
 ## Definitions and caveats
 
@@ -108,8 +113,11 @@ outcomes:
   and count.
 
 Plugging those into the models gives the rates of a pitcher whose every pitch had that
-pitch's predicted outcomes. The models are linear, so a pitch type's rates come
-straight from its mean probabilities.
+pitch's predicted outcomes. Each season uses its own models, centered the way they were
+fit: the season's actual rate plus the coefficients times the pitch type's
+probabilities less the pitch model's own average that season (over every pitch it
+scored). The pitch model's average pitch lands on the season's actual rate. The models
+are linear, so a pitch type's rates come straight from its mean probabilities.
 
 Nothing is scored here: the means are already in the bucket, in the tables the Model
 Drilldown reads. `shap-values/units_<stuff|pitching>_<season>.parquet` holds each
@@ -137,14 +145,15 @@ only what the pitch's shape does to the league's ball and take rates, not comman
 Caveats for PLV:
 
 - **Its ball rate runs high.** Over 2026 the PLV probabilities average 38.7% balls
-  against 36.1% actual (Stuff: 37.1%), with fouls and field outs correspondingly low,
-  so PLV BB% reads high at league level (11.4% against 8.6% with the unweighted
-  coefficients; K% and Hit% are within a point). The models are linear, so this shifts every pitch type by
-  the same amount and leaves the rankings alone.
+  against 36.1% actual (Stuff: 37.1%), with fouls and field outs correspondingly low.
+  Centering on the model's own average cancels this at league level: both models' league
+  rates equal the season's actual ones.
 - **Pitch types sit outside the fit's range.** The models were fit on whole
   pitcher-seasons, whose ball share runs 30-42% (1st-99th percentile). A single pitch
   type at its actual counts spreads wider (26-49% in 2026), so the extremes are
-  extrapolations, and a strike-throwing sinker can come out below 0% BB%.
+  extrapolations. Centering moves every PLV pitch type's BB% down, and in 2026 14
+  strike-throwing pitch types (mostly sinkers) come out below 0%; their order means
+  something, their levels don't.
 - **Count usage is baked in.** PLV prices a pitch at the count it was thrown in, so a
   pitch used to get back into counts or to finish hitters carries that role into its
   rates, on top of its quality.
