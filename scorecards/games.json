@@ -1,5 +1,5 @@
 {
- "built": "2026-10-03T14:35:42Z",
+ "built": "2026-10-04T15:11:18Z",
  "games": {
   "822678": {
    "away": "New York Mets",
@@ -34006,6 +34006,62 @@
    "home_r": 9,
    "title": "D-backs 9, Tigers 6",
    "venue": "Chase Field"
+  },
+  "849828": {
+   "away": "Atlanta Braves",
+   "away_abbr": "ATL",
+   "away_nick": "Braves",
+   "away_r": 3,
+   "date": "2026-10-03",
+   "file": "games/849828.html",
+   "home": "Los Angeles Dodgers",
+   "home_abbr": "LAD",
+   "home_nick": "Dodgers",
+   "home_r": 5,
+   "title": "Dodgers 5, Braves 3",
+   "venue": "UNIQLO Field at Dodger Stadium"
+  },
+  "849829": {
+   "away": "Chicago White Sox",
+   "away_abbr": "CWS",
+   "away_nick": "White Sox",
+   "away_r": 3,
+   "date": "2026-10-03",
+   "file": "games/849829.html",
+   "home": "Cleveland Guardians",
+   "home_abbr": "CLE",
+   "home_nick": "Guardians",
+   "home_r": 0,
+   "title": "White Sox 3, Guardians 0",
+   "venue": "Progressive Field"
+  },
+  "849830": {
+   "away": "San Diego Padres",
+   "away_abbr": "SD",
+   "away_nick": "Padres",
+   "away_r": 2,
+   "date": "2026-10-03",
+   "file": "games/849830.html",
+   "home": "Milwaukee Brewers",
+   "home_abbr": "MIL",
+   "home_nick": "Brewers",
+   "home_r": 3,
+   "title": "Brewers 3, Padres 2",
+   "venue": "American Family Field"
+  },
+  "849835": {
+   "away": "New York Yankees",
+   "away_abbr": "NYY",
+   "away_nick": "Yankees",
+   "away_r": 0,
+   "date": "2026-10-03",
+   "file": "games/849835.html",
+   "home": "Tampa Bay Rays",
+   "home_abbr": "TB",
+   "home_nick": "Rays",
+   "home_r": 1,
+   "title": "Rays 1, Yankees 0",
+   "venue": "Tropicana Field"
   },
   "849841": {
    "away": "Philadelphia Phillies",
