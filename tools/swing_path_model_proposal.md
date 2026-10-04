@@ -7,6 +7,7 @@
 * `swing_path/batted_ball.py`: the KNN expected wOBAcon target for the damage stage;
 * `swing_path/dml_swing_path.py`: the model;
 * `swing_path/neutral.py`: the location-neutral probabilities;
+* `swing_path/swing_value.py`: contact and damage combined in runs, count-neutral, calibrated;
 * `swing_path/evaluate.py`: the evaluation.
 
 The numbers under *Prototype* come from a 10-day 2026 sample, without PLV. The numbers under
@@ -525,6 +526,93 @@ In-play added runs from Ke'Bryan Hayes (+0.67), Corbin Carroll and Elly De La Cr
 Millas (−0.57) and Paul Goldschmidt (−0.56). Spencer Jones is the clearest trade-off: the worst
 contact path and the second-best damage path. Tyler Heineman and Keibert Ruiz are the reverse.
 
+## Swing value: contact and damage in runs (`swing_value.py`)
+
+**One run value per swing,** at a location-, count- and pitch-quality-neutral level.
+
+* **Location and pitch quality.** Each swing's path is played against 300 league swings drawn
+  from its season × count × pitch group × platoon cell. At each draw, the location, PLV
+  prediction and average-path projection come from the draw pitch; the swing contributes only
+  θ_c (D − r).
+* **Count.** Each swing is evaluated in all 12 counts, with that count's θ and run values
+  (pitch-modeling's `run_values_by_count.csv`), and weighted by the league's swing count mix.
+* **Pricing balls in play.** At every count, a ball in play's run value is linear in expected
+  wOBAcon: RV = a_c + b_c · wOBAcon, with b_c ≈ 0.80–0.87 and R² ≥ .9995 on the KNN classes.
+  So the damage stage is priced exactly.
+* **Calibration** matches `neutral.py`. Log-odds shifts on whiff and foul and an additive shift on
+  damage hit the observed shares and the KNN wOBAcon.
+
+**The split** (hitter side, centred on the season's average swing):
+
+```
+value   = p1 RV(whiff) + (1 − p1) p2 RV(foul) + (1 − p1)(1 − p2) (a_c + b_c w)
+contact = the same with w set to the average path's damage at that draw
+damage  = value − contact = (1 − p1)(1 − p2) b_c θ_c (D_damage − r_damage)
+```
+
+`contact` is the whiff / foul / in-play profile with average contact quality. `damage` is what
+the path's contact quality adds on the balls it would put in play. Per swing the SDs are .044
+runs for value, .031 for contact and .032 for damage.
+
+**Observed counterpart** (per hitter-season, all swings, actual counts):
+
+* run value minus PLV's expectation, with balls in play at their KNN expected wOBAcon;
+* split the same way: `obs_contact` uses PLV's expected wOBAcon for the outcome class,
+  `obs_damage` is (x_wobacon − PLV's) × b_c on balls in play.
+
+**Hitters** (1,329 hitter-seasons with 200+ swings; per 100 committed swings):
+
+| | value | contact | damage |
+|---|---|---|---|
+| SD across hitter-seasons (runs / 100) | 0.88 | 0.98 | 0.60 |
+| split-half reliability | .93 | .976 | .92 |
+| year to year with itself (683 pairs) | .88 | .92 | .85 |
+| same-season r with its observed part | — | .51 | .68 |
+| predicts next season's observed part | — | .47 | **.66** |
+| that observed part predicting itself | — | .81 | .69 |
+
+* **Contact and damage trade off** (r −.46 across hitters; observed −.38).
+* **Damage is the standout.** It predicts next season's contact quality over PLV about as well
+  as contact quality itself (.66 vs .69), and better at small samples: .42 vs .32 at 100–250
+  swings, .63 vs .58 at 250–500.
+
+**The raw sum is mis-weighted.**
+
+* Observed contact moves only **0.46** runs per model run of contact; observed damage moves
+  **1.74** runs per model run of damage. These slopes are fitted on 2024–25, swing-weighted.
+* So the bat path overstates contact differences and understates damage differences. The
+  damage stage explains only R² .08 of contact quality, so its effects are shrunk; the contact
+  stages are sharp.
+* The raw value therefore leans toward contact hitters. Its same-season r with observed run
+  value over PLV is only .12, and the contact part alone is −.12.
+
+**`cal100`** rescales each part by its slope (fitted on seasons before `--calib-before`):
+
+| r with observed run value over PLV | raw value | calibrated | observed itself |
+|---|---|---|---|
+| same season (all hitter-seasons) | .12 | **.36** | 1 |
+| 2026, slopes from 2024–25 | .17 | **.35** | 1 |
+| next season, 100+ swings (683 pairs) | .10 | **.32** | .60 |
+| next season, 100–250 swings | .39 | .28 | .28 |
+| 2025→26 only, 100+ swings | .16 | .34 | .58 |
+
+* **The calibrated value roughly triples the raw one** and matches observed results at small
+  samples.
+* **Over full seasons, results predict results better.** Adding `cal100` to observed run value
+  over PLV raises next-season R² only from .362 to .374.
+
+**2026 leaders** (calibrated plus; raw plus in brackets):
+
+* **Top:** James Wood 152 (141), Pete Crow-Armstrong 148 (139), Roman Anthony 142 (143), Elly
+  De La Cruz 142 (151), Miguel Vargas 141 (136), Riley Greene 139 (121).
+* **Bottom:** Tyler Heineman 60 (89), Isiah Kiner-Falefa 65 (91), Jake Meyers 66 (86), Adam
+  Frazier 66 (75), Hyeseong Kim 66 (78), Chandler Simpson 70 (87).
+* **Calibration mostly moves hitters on the contact-vs-damage axis.**
+  * Keibert Ruiz goes from 106 raw to 71 calibrated: elite contact, weak damage.
+  * Nick Kurtz goes from 67 to 104, and Spencer Jones from 67 to 111: the reverse.
+  * Paul Goldschmidt (57 raw) and George Springer (59) are last on raw value, with the weakest
+    contact paths and average damage.
+
 ## Risks and how to check them
 
 1. **The bat path is measured during the swing, not before it.** A fooled swing has a different
@@ -586,8 +674,11 @@ contact path and the second-best damage path. Tyler Heineman and Keibert Ruiz ar
   execution. It separates *approach* (persistent tilt, attack angle and bat speed) from
   *execution* (the deviation from his own norm on this swing). It should stabilize faster and
   is free of the risk-1 problem.
-* **Full run value.** Split the damage stage into the five batted-ball classes and price the
-  whiff / foul / in-play / batted-ball chain with `runvalue.py`'s weights.
+* **Done:** the full run value (`swing_value.py`; damage priced through the near-exact wOBAcon
+  line rather than five class stages).
+* **Damage stage strength.** The damage stage explains R² .08 and needs a 1.74 calibration
+  slope. Richer S (bat speed × attack angle interactions, intercept depth × direction) or a
+  direct exit-velocity / launch-angle target may sharpen it.
 
 ## Running
 
@@ -616,4 +707,8 @@ python swing_path/dml_swing_path.py --savant 's2[456]/*.parquet' --plv 'plv/scor
 # location-neutral probabilities (about 1.5 min), then the evaluation
 python swing_path/neutral.py --scored pooled.parquet --out neutral.parquet
 python swing_path/evaluate.py --scored pooled.parquet --neutral neutral.parquet --out-board board.csv
+# swing value in runs (about 1 min): writes swing_value.parquet and swing_value_hitters.csv
+python swing_path/swing_value.py --scored pooled.parquet --bip bip.parquet \
+    --run-values pitch-modeling/constants/run_values_by_count.csv --calib-before 2026 \
+    --out swing_value.parquet
 ```
