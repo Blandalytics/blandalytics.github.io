@@ -11,7 +11,9 @@ in each is his outcome profile:
     1b 2b 3b hr   in play, a hit of that kind
 
 Each stat is a weighted least-squares fit on those nine shares, one row per
-pitcher-season (regular season only), weighted by batters faced. The shares sum to
+pitcher-season (regular season only), weighted by batters faced times a recency
+weight, DECAY ** (newest season - season): with the default 0.8, the newest season
+counts 1, the one before 0.8, then 0.64 and 0.512. The shares sum to
 one, so the fit has no intercept: a coefficient is the stat a pitcher would post if
 every pitch he threw had that outcome, and his prediction is the share-weighted sum.
 
@@ -25,6 +27,7 @@ intentional walks throw no pitch, so they are not in the pitch data and count
 neither as a walk nor as a batter faced.
 
     python tools/outcome_rates/fit.py                         # 2023-2026, results to stdout
+    python tools/outcome_rates/fit.py --decay 1               # no recency weight
     python tools/outcome_rates/fit.py --cache /tmp/mlb --json tools/outcome_rates/models.json
 """
 
@@ -52,6 +55,7 @@ OUTCOMES = ["ball", "called", "swstr", "foul", "out", "1b", "2b", "3b", "hr"]
 LABELS = {"ball": "Ball/HBP", "called": "Called strike", "swstr": "Swinging strike",
           "foul": "Foul strike", "out": "Field out", "1b": "Single", "2b": "Double",
           "3b": "Triple", "hr": "Home run"}
+DECAY = 0.8                # each season back counts this much less than the one after it
 TARGETS = {"k_pct": "K%", "bb_pct": "BB%", "hit_pct": "Hit%", "pa_per_ip": "PA/IP"}
 
 # call codes for pitches not put in play
@@ -194,12 +198,21 @@ def score(beta: np.ndarray, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> dict
             "mae": float(np.average(np.abs(y - pred), weights=w))}
 
 
-def fit_all(ps: pd.DataFrame, holdout: int | None) -> dict:
+def recency(seasons: np.ndarray, decay: float) -> np.ndarray:
+    """decay ** (seasons back from the newest one)."""
+    return decay ** (seasons.max() - seasons)
+
+
+def fit_all(ps: pd.DataFrame, holdout: int | None, decay: float) -> dict:
+    """Fit on batters faced x recency; score on batters faced alone, so the fit stats
+    read the same whatever the decay."""
     X, w = ps[OUTCOMES].to_numpy(float), ps["pa"].to_numpy(float)
+    season = ps["season"].to_numpy()
+    wf = w * recency(season, decay)
     models = {}
     for t in TARGETS:
         y = ps[t].to_numpy(float)
-        f = wls(X, y, w)
+        f = wls(X, y, wf)
         m = {"coef": dict(zip(OUTCOMES, f["beta"].tolist(), strict=True)),
              "se": dict(zip(OUTCOMES, f["se"].tolist(), strict=True)),
              "fit": score(f["beta"], X, y, w)}
@@ -207,18 +220,18 @@ def fit_all(ps: pd.DataFrame, holdout: int | None) -> dict:
             big = ps["pa"].to_numpy() >= floor
             m["fit"][f"r2_bf{floor}"] = score(f["beta"], X[big], y[big], w[big])["r2"]
         if holdout is not None:
-            tr = (ps["season"] != holdout).to_numpy()
-            ft = wls(X[tr], y[tr], w[tr])
+            tr = season != holdout
+            ft = wls(X[tr], y[tr], w[tr] * recency(season[tr], decay))
             m["holdout"] = {"season": holdout, **score(ft["beta"], X[~tr], y[~tr], w[~tr])}
         models[t] = m
     return models
 
 
 # ---- output ---------------------------------------------------------------------------
-def report(ps: pd.DataFrame, models: dict) -> str:
+def report(ps: pd.DataFrame, models: dict, decay: float) -> str:
     lines = [f"{len(ps):,} pitcher-seasons, {int(ps['pa'].sum()):,} batters faced, "
              f"{int(ps['pitches'].sum()):,} pitches ({ps['season'].min()}-{ps['season'].max()}, "
-             "regular season, weighted by batters faced)", ""]
+             f"regular season, weighted by batters faced x {decay:g}^seasons back)", ""]
     league = np.average(ps[OUTCOMES], axis=0, weights=ps["pitches"])
     head = f"{'outcome':<16}{'league':>8}" + "".join(f"{TARGETS[t]:>18}" for t in TARGETS)
     lines += [head, "-" * len(head)]
@@ -242,6 +255,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seasons", type=int, nargs="+", default=[2023, 2024, 2025, 2026])
+    ap.add_argument("--decay", type=float, default=DECAY,
+                    help=f"recency weight per season back (default {DECAY}; 1 for none)")
     ap.add_argument("--cache", type=Path, help="keep the downloaded Parquet here")
     ap.add_argument("--json", type=Path, help="write the coefficients and fit stats here")
     ap.add_argument("--csv", type=Path, help="write the pitcher-season table here")
@@ -249,11 +264,15 @@ def main() -> None:
 
     ps = pitcher_seasons(load(args.seasons, args.cache))
     holdout = max(args.seasons) if len(args.seasons) > 1 else None
-    models = fit_all(ps, holdout)
-    print(report(ps, models))
+    models = fit_all(ps, holdout, args.decay)
+    print(report(ps, models, args.decay))
 
     if args.json:
-        meta = {"seasons": args.seasons, "pitcher_seasons": len(ps),
+        weights = recency(ps["season"].drop_duplicates().to_numpy(), args.decay)
+        meta = {"seasons": args.seasons, "decay": args.decay,
+                "season_weights": dict(zip(map(str, ps["season"].drop_duplicates()),
+                                           weights.tolist(), strict=True)),
+                "pitcher_seasons": len(ps),
                 "batters_faced": int(ps["pa"].sum()), "outcomes": OUTCOMES, "labels": LABELS}
         args.json.write_text(json.dumps({"meta": meta, "models": models}, indent=2) + "\n")
     if args.csv:

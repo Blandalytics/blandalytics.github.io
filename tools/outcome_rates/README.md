@@ -2,12 +2,26 @@
 
 Linear models for a pitcher's **K%**, **BB%**, **Hit%** and **PA per inning** from the
 share of his pitches ending in each of nine outcomes. Fit on 2023–2026 regular-season
-MLB data (through 2026-10-01): one row per pitcher-season, weighted least squares
-with batters faced as the weight. `fit.py` builds it; `models.json` holds the result.
+MLB data (through 2026-10-01): one row per pitcher-season, weighted least squares.
+`fit.py` builds it; `models.json` holds the result.
 
 ```bash
 python tools/outcome_rates/fit.py --cache /tmp/mlb --json tools/outcome_rates/models.json
+python tools/outcome_rates/fit.py --cache /tmp/mlb --decay 1     # batters faced only
 ```
+
+## Weights
+
+Each pitcher-season is weighted by **batters faced × a recency weight**,
+`decay ^ (newest season − season)`. The default decay is 0.8 (`--decay` changes it):
+
+| season | 2023 | 2024 | 2025 | 2026 |
+|---|---:|---:|---:|---:|
+| recency weight | 0.512 | 0.64 | 0.8 | 1 |
+
+Fit statistics below are weighted by batters faced alone, so they read the same
+whatever the decay. The standard errors treat the combined weight as an inverse
+variance, which the recency part is not, so they are approximate.
 
 ## Inputs
 
@@ -26,33 +40,37 @@ with one left out.)
 
 ## Coefficients
 
-3,457 pitcher-seasons, 731,707 batters faced, 2.85M pitches. Standard errors in
-parentheses.
+3,457 pitcher-seasons, 731,707 batters faced, 2.85M pitches; decay 0.8.
 
 | outcome | league share | K% | BB% | Hit% | PA/IP |
 |---|---:|---:|---:|---:|---:|
-| Ball/HBP | .359 | −0.030 (.008) | 0.618 (.007) | 0.123 (.004) | 7.25 (0.09) |
-| Called strike | .163 | 0.898 (.015) | −0.128 (.013) | 0.070 (.007) | 2.10 (0.16) |
-| Swinging strike | .121 | 1.366 (.013) | −0.165 (.011) | −0.064 (.006) | 0.97 (0.14) |
-| Foul strike | .182 | 0.434 (.013) | −0.044 (.011) | 0.211 (.006) | 3.22 (0.14) |
-| Field out | .118 | −0.912 (.020) | −0.540 (.017) | −0.372 (.010) | −5.18 (0.21) |
-| Single | .037 | −0.759 (.039) | −0.400 (.033) | 3.075 (.018) | 20.70 (0.40) |
-| Double | .011 | −0.893 (.082) | −0.560 (.069) | 3.277 (.039) | 23.02 (0.84) |
-| Triple | .001 | −1.423 (.294) | −0.535 (.251) | 3.590 (.139) | 27.44 (3.02) |
-| Home run | .008 | −0.876 (.091) | −0.514 (.077) | 3.176 (.043) | 24.20 (0.93) |
+| Ball/HBP | .359 | −0.032 (.008) | 0.618 (.007) | 0.123 (.004) | 7.25 (0.09) |
+| Called strike | .163 | 0.894 (.015) | −0.125 (.013) | 0.072 (.007) | 2.13 (0.16) |
+| Swinging strike | .121 | 1.369 (.013) | −0.168 (.011) | −0.064 (.006) | 0.96 (0.14) |
+| Foul strike | .182 | 0.429 (.014) | −0.043 (.012) | 0.214 (.006) | 3.24 (0.14) |
+| Field out | .118 | −0.902 (.020) | −0.546 (.017) | −0.372 (.010) | −5.27 (0.21) |
+| Single | .037 | −0.751 (.039) | −0.390 (.033) | 3.060 (.019) | 20.88 (0.40) |
+| Double | .011 | −0.868 (.082) | −0.553 (.070) | 3.246 (.039) | 23.06 (0.85) |
+| Triple | .001 | −1.538 (.297) | −0.553 (.253) | 3.673 (.141) | 26.81 (3.07) |
+| Home run | .008 | −0.826 (.091) | −0.501 (.077) | 3.161 (.043) | 24.32 (0.94) |
+
+The coefficients barely move with the decay — at 0.5 or 1 (no recency weight) every
+one stays within about a standard error, triples aside — so the relationships are
+stable across these four seasons.
 
 ## Fit
 
-Weighted by batters faced. The holdout row refits on 2023–2025 and scores 2026.
+The holdout row refits on 2023–2025 (2025 weighted 1, 2024 0.8, 2023 0.64) and
+scores 2026.
 
 | | K% | BB% | Hit% | PA/IP |
 |---|---:|---:|---:|---:|
-| R² (all) | .869 | .664 | .938 | .643 |
-| R² (BF ≥ 100) | .906 | .676 | .967 | .704 |
-| R² (BF ≥ 400) | .919 | .648 | .966 | .673 |
+| R² (all) | .868 | .664 | .938 | .643 |
+| R² (BF ≥ 100) | .905 | .675 | .966 | .701 |
+| R² (BF ≥ 400) | .919 | .643 | .965 | .664 |
 | RMSE | .0198 | .0169 | .0094 | 0.203 |
-| MAE | .0136 | .0121 | .0051 | 0.102 |
-| R² (2026 holdout) | .856 | .654 | .936 | .616 |
+| MAE | .0136 | .0122 | .0052 | 0.103 |
+| R² (2026 holdout) | .856 | .653 | .936 | .615 |
 
 ## Definitions and caveats
 
