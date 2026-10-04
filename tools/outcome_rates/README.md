@@ -91,13 +91,14 @@ scores 2026.
   pitcher's balls and baserunners cluster in counts and innings, which pitch shares
   can't see, hence the lower R².
 
-## Stuff K%
+## Stuff K%, BB% and Hit%
 
-`stuff_k.py` applies the K% coefficients to the Stuff model's outcome predictions.
-For every pitch, the Stuff model gives count-neutral probabilities for the same nine
-outcomes, over the league's location and count mix. Plugging those into the K% model
-gives the strikeout rate of a pitcher whose every pitch had that pitch's stuff. The
-model is linear, so a pitch type's Stuff K% comes straight from its mean probabilities.
+`stuff_rates.py` applies the K%, BB% and Hit% coefficients to the Stuff model's
+outcome predictions. For every pitch, the Stuff model gives count-neutral
+probabilities for the same nine outcomes, over the league's location and count mix.
+Plugging those into the models gives the rates of a pitcher whose every pitch had
+that pitch's stuff. The models are linear, so a pitch type's rates come straight from
+its mean probabilities.
 
 Nothing is scored here: the means are already in the bucket, in the tables the Model
 Drilldown reads. `shap-values/units_stuff_<season>.parquet` holds each pitcher-season-
@@ -105,14 +106,19 @@ pitch type's nine `p_<outcome>` targets and Stuff+ (`plus`); `unit_features_<sea
 its name and pitch count.
 
 ```bash
-python tools/outcome_rates/stuff_k.py --csv stuff_k.csv     # 2023-2026, a few seconds
+python tools/outcome_rates/stuff_rates.py --seasons 2026            # top and bottom 10 of each
+python tools/outcome_rates/stuff_rates.py --csv stuff_rates.csv     # 2023-2026, every row
 ```
 
-One row per pitcher-season-pitch type with at least 500 scored pitches (regular
-season; bunts, pitchouts and pitches missing tracking aren't scored), ranked by Stuff
-K%. Pitch types the Stuff model doesn't cover (knuckleballs, eephuses, screwballs)
-aren't in the tables.
+It prints the top and bottom 10 on each rate among pitch types with at least 500
+scored pitches (`--top`, `--min-pitches`); "top" is the pitcher's best end, the highest
+K% and the lowest BB% and Hit%. Pitches are the regular-season ones the Stuff model
+scores (bunts, pitchouts and pitches missing tracking aren't), and pitch types it
+doesn't cover (knuckleballs, eephuses, screwballs) aren't in the tables. The tables
+are rebuilt on their own schedule, so the current season's can lag a few days.
 
-Stuff K% is a pitch-level number on a pitcher scale: a fastball's 30% means a pitcher
-throwing only that fastball, located like the league, would strike out 30% of hitters.
-It ignores how pitches play off each other and where the pitcher actually locates.
+These are pitch-level numbers on a pitcher scale: a fastball's 30% Stuff K% means a
+pitcher throwing only that fastball, located like the league, would strike out 30%
+of hitters. They ignore how pitches play off each other and where the pitcher actually
+locates; Stuff BB% in particular is only what the pitch's shape does to the league's
+ball and take rates, not command.
