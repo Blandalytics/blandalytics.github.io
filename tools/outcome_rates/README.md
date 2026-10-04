@@ -91,34 +91,55 @@ scores 2026.
   pitcher's balls and baserunners cluster in counts and innings, which pitch shares
   can't see, hence the lower R².
 
-## Stuff K%, BB% and Hit%
+## K%, BB% and Hit% from the Stuff and PLV models
 
-`stuff_rates.py` applies the K%, BB% and Hit% coefficients to the Stuff model's
-outcome predictions. For every pitch, the Stuff model gives count-neutral
-probabilities for the same nine outcomes, over the league's location and count mix.
-Plugging those into the models gives the rates of a pitcher whose every pitch had
-that pitch's stuff. The models are linear, so a pitch type's rates come straight from
-its mean probabilities.
+`pitch_rates.py` applies the K%, BB% and Hit% coefficients to a pitch model's outcome
+predictions. For every pitch, the pitch models give probabilities for the same nine
+outcomes:
+
+- **Stuff** (`--model stuff`, the default): count-neutral, over the league's location
+  and count mix.
+- **PLV** (`--model plv`, the tables' `pitching` model): at the pitch's actual location
+  and count.
+
+Plugging those into the models gives the rates of a pitcher whose every pitch had that
+pitch's predicted outcomes. The models are linear, so a pitch type's rates come
+straight from its mean probabilities.
 
 Nothing is scored here: the means are already in the bucket, in the tables the Model
-Drilldown reads. `shap-values/units_stuff_<season>.parquet` holds each pitcher-season-
-pitch type's nine `p_<outcome>` targets and Stuff+ (`plus`); `unit_features_<season>`
-its name and pitch count.
+Drilldown reads. `shap-values/units_<stuff|pitching>_<season>.parquet` holds each
+pitcher-season-pitch type's nine `p_<outcome>` targets and its plus score (`plus`:
+Stuff+ or PLV+); `unit_features_<season>` its name and pitch count.
 
 ```bash
-python tools/outcome_rates/stuff_rates.py --seasons 2026            # top and bottom 10 of each
-python tools/outcome_rates/stuff_rates.py --csv stuff_rates.csv     # 2023-2026, every row
+python tools/outcome_rates/pitch_rates.py --seasons 2026               # Stuff, top and bottom 10
+python tools/outcome_rates/pitch_rates.py --seasons 2026 --model plv   # PLV
+python tools/outcome_rates/pitch_rates.py --csv stuff_rates.csv        # 2023-2026, every row
 ```
 
 It prints the top and bottom 10 on each rate among pitch types with at least 500
 scored pitches (`--top`, `--min-pitches`); "top" is the pitcher's best end, the highest
-K% and the lowest BB% and Hit%. Pitches are the regular-season ones the Stuff model
-scores (bunts, pitchouts and pitches missing tracking aren't), and pitch types it
-doesn't cover (knuckleballs, eephuses, screwballs) aren't in the tables. The tables
-are rebuilt on their own schedule, so the current season's can lag a few days.
+K% and the lowest BB% and Hit%. Pitches are the regular-season ones the pitch models
+score (bunts, pitchouts and pitches missing tracking aren't), and pitch types they
+don't cover (knuckleballs, eephuses, screwballs) aren't in the tables. The tables are
+rebuilt on their own schedule, so the current season's can lag a few days.
 
 These are pitch-level numbers on a pitcher scale: a fastball's 30% Stuff K% means a
 pitcher throwing only that fastball, located like the league, would strike out 30%
-of hitters. They ignore how pitches play off each other and where the pitcher actually
-locates; Stuff BB% in particular is only what the pitch's shape does to the league's
-ball and take rates, not command.
+of hitters. They ignore how pitches play off each other. Stuff BB% in particular is
+only what the pitch's shape does to the league's ball and take rates, not command.
+
+Caveats for PLV:
+
+- **Its ball rate runs high.** Over 2026 the PLV probabilities average 38.7% balls
+  against 36.1% actual (Stuff: 37.1%), with fouls and field outs correspondingly low,
+  so PLV BB% reads about 2.3 points high at league level (10.9% against 8.6%; K% and
+  Hit% are within a point). The models are linear, so this shifts every pitch type by
+  the same amount and leaves the rankings alone.
+- **Pitch types sit outside the fit's range.** The models were fit on whole
+  pitcher-seasons, whose ball share runs 30-42% (1st-99th percentile). A single pitch
+  type at its actual counts spreads wider (26-49% in 2026), so the extremes are
+  extrapolations, and a strike-throwing sinker can come out below 0% BB%.
+- **Count usage is baked in.** PLV prices a pitch at the count it was thrown in, so a
+  pitch used to get back into counts or to finish hitters carries that role into its
+  rates, on top of its quality.
