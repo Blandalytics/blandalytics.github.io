@@ -1,10 +1,15 @@
 # Proposal: DML swing-path model for swing outcomes (whiff / foul / in play)
 
-**Status:** proposal. The DML model itself is not implemented yet. The feature layer is built:
-`swing_path/features.py` has location mirroring, the convention check, the attack-angle match
-and the fooled-swing filter. The numbers under *Prototype* come from a 10-day 2026 sample. The
-numbers under *Attack-angle match* and *Fooled-swing filter* come from June 2026 (52,918 tracked
-swings), using `features.py`'s own output. None come from the full pipeline.
+**Status:** implemented and fitted on 2024–26 (see *Results*). The pieces are:
+
+* `swing_path/features.py`: location mirroring, the convention check, the attack-angle match and
+  the fooled-swing filter;
+* `swing_path/dml_swing_path.py`: the model;
+* `swing_path/evaluate.py`: the evaluation.
+
+The numbers under *Prototype* come from a 10-day 2026 sample, without PLV. The numbers under
+*Attack-angle match* and *Fooled-swing filter* come from June 2026 (52,918 tracked swings), using
+`features.py`'s own output, with a location stand-in for PLV.
 
 This is the hitter-side mirror of the swing-outcome model in `model_README.md`. That model asks
 *how much does the pitch's stuff move whiff / foul / in play, at a fixed location and count?* This
@@ -326,6 +331,86 @@ norm. The flag uses the bat path and the pitch only, never the outcome.
 * **The case for it is interpretive.** The path score then describes committed swings, and
   recognition (fooled%) is reported on its own instead of being folded in. Whether it improves
   year-over-year prediction is an open question for the full-season evaluation.
+
+## Results: 2024–26 with PLV offsets
+
+**Inputs**
+
+* **PLV:** `score_pitches.py --probs`, with the published 2023–25 models, on the bucket's
+  regular-season pitches: 2.11M pitches scored.
+* **PLV for 2024–25 is in-sample.** Those models trained on those seasons, and the
+  leave-one-pitcher-out training output isn't in the bucket. 2026 is out of time.
+* **Bat path:** Savant, joined on `game_pk` / `at_bat_index + 1` / `pitch_number`. 99.5% of
+  tracked swings match. Rows whose Savant class disagrees with PLV's observed outcome (~0.05%)
+  are dropped.
+* **Sample:** 964,732 swings, 11.2% of them fooled. Three pitch groups × two stages.
+  * Nuisances are cross-fitted in five batter-grouped folds.
+  * A second pass fits on 2024–25 and scores 2026.
+
+**2026 out of time** (log loss per swing; the 3-class loss splits exactly into the two stages):
+
+| | PLV | PLV + g(W) | + bat path |
+|---|---|---|---|
+| whiff vs contact (327k swings) | 0.466 (AUC .770) | 0.466 (.770) | **0.368 (.867)** |
+| foul vs in play (244k contacts) | 0.666 (.630) | 0.664 (.633) | **0.601 (.733)** |
+| 3-class | 0.962 | 0.960 | **0.816** |
+
+* **PLV alone reproduces the README's 2026 number** (0.963, location + stuff).
+* **g(W) adds almost nothing**, as expected.
+* **The bat path cuts the 3-class log loss by 0.144.** That is 13 times what stuff adds over
+  location (0.011).
+* **The gain holds on committed swings** (0.960 → 0.823), so it is not driven by fooled swings.
+
+**Theta** is 0.98–1.12 for every group, stage and count. Rare counts, such as 3-0 with an SE of
+0.3–0.5, are pooled to their neighbours: CV chose heavy pooling (λ from 1e2 to 1.6e4). The
+index D is on the right scale without rescaling. Unlike stuff, the count barely changes how
+much the bat path matters.
+
+**Hitters** (hitter-seasons with 200+ swings: 1,329):
+
+| | contact added | in-play added | fooled% |
+|---|---|---|---|
+| SD across hitter-seasons (log-odds) | 0.53 | 0.21 | — |
+| split-half reliability within a season | .985 | .958 | .60 |
+| year to year, self (805 pairs, 100+ swings) | .92 | .88 | .69 |
+| same-season r with observed vs PLV | .61 | .20 | — |
+| r with mean `x_in` / `z_n` / PLV logit | −.01 / **.23** / −.09 | .02 / −.01 / .06 | — |
+
+**Next season's observed contact vs PLV** (log-odds, all swings; weighted r; pairs 2024→25 and
+2025→26):
+
+| swings | contact added | observed vs PLV | raw whiff% |
+|---|---|---|---|
+| 100–250 | .52 | **.71** | −.64 |
+| 250–500 | .62 | **.82** | −.77 |
+| 500+ | .59 | **.88** | −.81 |
+
+Adding the path score to observed vs PLV raises the next-season R² only from .732 to .736.
+For in-play vs foul the path score predicts .12, against .65 for the observed rate.
+
+**Reading it**
+
+* **The bat path explains swings very well and is extremely stable, but it is not the better
+  forecaster.** A hitter's own contact rate over PLV is itself very stable (r .88 at 500+
+  swings), more so than the pitcher-side rates the stuff model beats. The path score carries
+  about half of that stable variance and adds almost nothing beyond it.
+  * Unlike Stuff for pitchers, this is not a faster-stabilizing stand-in for results.
+  * It is a **description of how** a hitter makes or misses contact.
+* **In-play added is a stable trait** (.88 year to year) that barely relates to fair-contact
+  results (.20 same season, .12 next season). Foul vs fair at the hitter level is mostly
+  something other than the bat path.
+* **Leakage:** contact added correlates .23 with the mean height of the pitches a hitter swings
+  at. Hitters who swing at higher pitches score as better contact paths. That is either real
+  (flat, high-pitch swings) or the location residual the projection doesn't remove.
+  * **Next step:** within-pitch-group leakage, and adding the hitter's swing-location mix to W.
+* **2026 environment:** league whiffs per swing were 25.5% against PLV's 27.3%. That is the
+  README's calibration shift, carried as a constant in g(W)'s season term.
+
+**2026 leaders** (200+ swings): contact added runs from Steven Kwan (+1.54), Keibert Ruiz,
+Luis Arraez and Ke'Bryan Hayes down to Spencer Jones (−1.51) and Nick Kurtz (−1.50). In-play
+added runs from Ke'Bryan Hayes (+0.70), Elly De La Cruz and Corbin Carroll down to Paul
+Goldschmidt (−0.63). Not included: `p_<class>_path` (location-neutral probabilities), the
+six-model hand split, the plane-matching ablations and the batted-ball stage.
 
 ## Risks and how to check them
 
