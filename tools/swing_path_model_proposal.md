@@ -1,10 +1,12 @@
 # Proposal: DML swing-path model for swing outcomes (whiff / foul / in play)
 
-**Status:** implemented and fitted on 2024–26 (see *Results*). The pieces are:
+**Status:** implemented and fitted on 2024–26 (see the two *Results* sections). The pieces are:
 
 * `swing_path/features.py`: location mirroring, the convention check, the attack-angle match and
   the fooled-swing filter;
+* `swing_path/batted_ball.py`: the KNN expected wOBAcon target for the damage stage;
 * `swing_path/dml_swing_path.py`: the model;
+* `swing_path/neutral.py`: the location-neutral probabilities;
 * `swing_path/evaluate.py`: the evaluation.
 
 The numbers under *Prototype* come from a 10-day 2026 sample, without PLV. The numbers under
@@ -406,11 +408,122 @@ For in-play vs foul the path score predicts .12, against .65 for the observed ra
 * **2026 environment:** league whiffs per swing were 25.5% against PLV's 27.3%. That is the
   README's calibration shift, carried as a constant in g(W)'s season term.
 
-**2026 leaders** (200+ swings): contact added runs from Steven Kwan (+1.54), Keibert Ruiz,
-Luis Arraez and Ke'Bryan Hayes down to Spencer Jones (−1.51) and Nick Kurtz (−1.50). In-play
-added runs from Ke'Bryan Hayes (+0.70), Elly De La Cruz and Corbin Carroll down to Paul
-Goldschmidt (−0.63). Not included: `p_<class>_path` (location-neutral probabilities), the
-six-model hand split, the plane-matching ablations and the batted-ball stage.
+**2026 leaders in this first run** (200+ swings): contact added runs from Steven Kwan (+1.54),
+Keibert Ruiz, Luis Arraez and Ke'Bryan Hayes down to Spencer Jones (−1.51) and Nick Kurtz
+(−1.50). The second run, below, supersedes this ordering.
+
+## Results, second run: leakage fix, horizontal match, damage stage, hand split, neutral probabilities
+
+The same 964,732 swings; 346,509 balls in play carry the damage target.
+
+* **Leakage fix.** W gains each hitter's season swing-location mix: mean `x_in`, mean `z_n`, and
+  the share of swings outside the zone (`features.add_swing_mix`). These are location only,
+  never outcome.
+* **Horizontal match.**
+  * `haa_b` is the ball's reversed path at the plate front, in the batter frame (+ = opposite
+    field). It goes into W.
+  * `ad_match` = `attack_direction` − `haa_b` goes into S.
+  * In a 2025 ablation, `ad_match` adds 1.2% of the path's lift on foul vs in play (z = 5.8) and
+    nothing on whiffs (z = 1.0). That is small, because `haa_b` has an SD of 2.3° against about
+    15° for attack direction.
+* **Damage stage.** E[x_wobacon | ball in play] is a linear partially linear model, offset by
+  PLV's batted-ball probabilities as wOBAcon. x_wobacon is `batted_ball.py`'s out-of-fold KNN
+  expected wOBAcon (k = 100, batter folds; .363 expected vs .365 actual).
+* **Every swing is scored for every stage,** so whiffs also carry the foul and damage effect
+  their path would have had on contact.
+
+**2026 out of time** (pooled model):
+
+| | PLV | PLV + g | + bat path |
+|---|---|---|---|
+| whiff (log loss, AUC) | 0.466, .770 | 0.465, .770 | **0.368, .868** |
+| foul vs in play | 0.666, .630 | 0.664, .633 | **0.601, .734** |
+| 3-class log loss | 0.962 | 0.960 | **0.815** |
+| damage (MSE, R² vs KNN xwOBAcon) | .1590, .023 | .1591, .022 | **.1496, .080** |
+
+* **The bat path more than triples the explained variance in contact quality** over PLV,
+  though it stays small in absolute terms (R² .08). Contact quality is mostly what the swing
+  does at impact, which the path only partly describes.
+* **Theta** is 1.0–1.14 for the logit stages, 0.98–1.02 for Fastball and Breaking damage, and
+  0.85–0.92 for Offspeed damage.
+
+**Hand split (six models) vs pooled** (2026 out of time, split − pooled per swing,
+batter-clustered SE):
+
+| stage | difference | z |
+|---|---|---|
+| whiff | +.00014 | +0.5 |
+| foul | +.00144 | **+5.7** |
+| damage (MSE) | +.00092 | **+6.8** |
+
+* **The split is worse** on foul and damage and ties on whiffs.
+* **Its hitter scores barely differ:** they correlate .977–.988 with the pooled ones, with the
+  same reliabilities.
+* **Pooled stays the default.** All inputs are batter-relative, so splitting halves the data
+  without adding information.
+
+**Leakage fix** (hitter-seasons with 200+ swings; first run → second run):
+
+| contact added | first run | second run |
+|---|---|---|
+| r with mean `z_n` | .23 | **.03** |
+| r with mean `x_in` / PLV logit | −.01 / −.09 | .01 / −.07 |
+| split-half reliability | .985 | .984 |
+| year to year with itself | .92 | .82 |
+| predicting next contact vs PLV (100+ swings) | .57 | .51 |
+| same-season r with contact vs PLV | .61 | .55 |
+
+* **The fix removes the location correlation** at the cost of about a tenth of the year-to-year
+  stability and predictiveness. Part of what it removed was a stable, real trait: hitters who
+  swing at higher pitches make more contact for their path.
+* **This is the README's DML-vs-baseline trade-off again.** `contact_added` is now the direct
+  effect of the path at a given location. `p_whiff_path` (below) keeps the hitter's own path
+  value, measured against league locations.
+
+**Hitter scores, second run** (1,329 hitter-seasons with 200+ swings):
+
+| | contact added | in-play added | damage added |
+|---|---|---|---|
+| SD | 0.52 log-odds | 0.21 log-odds | .020 wOBAcon |
+| split-half reliability | .984 | .957 | .899 |
+| year to year with itself | .82 | .83 | .72 (585 pairs, 100+ BIP) |
+| predicting next season's observed vs PLV | .51 | .09 | .57 |
+| that observed rate predicting itself | **.86** | **.65** | **.71** |
+| same-season r with observed vs PLV | .55 | .17 | .57 |
+
+**Damage added is the most useful of the three.** It explains .57 of same-season xwOBAcon over
+PLV and predicts next season's at .57, against .71 for the rate itself. The pattern holds: the
+path describes results well, but never out-predicts the results themselves.
+
+**Location-neutral probabilities** (`neutral.py`):
+
+* **Method.** Each swing's path is averaged over 300 league draws from its season × count ×
+  group × platoon cell. The stages are chained per draw.
+* **Calibration.** Each season gets one shift per stage so league means equal the observed
+  whiff and foul shares: whiff +.02 to +.06 log-odds, foul −.07 to −.08. The damage stage gets
+  an additive +.005 to +.013 so its ball-in-play mean equals the KNN mean.
+* **Probabilities** average .255 / .384 / .360 for whiff / foul / in play, and sum to 1 on
+  every swing.
+* **Agreement:** hitter `p_whiff_path` correlates −.91 with contact added.
+* **It carries the location habit** the orthogonal score removes: −.29 with mean `z_n`.
+* **It predicts next contact vs PLV at .55**, between the two versions of contact added.
+
+**2026 leaders** (pooled, 200+ swings; xWhiff+ = 100 × p_whiff_path / cell mean, so lower is
+better):
+
+| | contact added (log-odds) | xWhiff+ | | damage added (wOBAcon) | neutral wOBAcon |
+|---|---|---|---|---|---|
+| 1 | Keibert Ruiz +1.69 | 46 | | Cal Raleigh +.075 | .386 |
+| 2 | Steven Kwan +1.45 | 33 | | Spencer Jones +.070 | .419 |
+| 3 | J.P. Crawford +1.43 | 44 | | Nelson Velázquez +.063 | .378 |
+| 4 | Tyler Heineman +1.40 | 53 | | Kyle Schwarber +.056 | .384 |
+| 5 | Ke'Bryan Hayes +1.23 | 43 | | Miguel Vargas +.051 | .382 |
+| last | Spencer Jones −1.41 | 212 | | Hyeseong Kim −.058 | .314 |
+| 2nd last | Francisco Alvarez −1.30 | 159 | | Tyler Heineman −.055 | .301 |
+
+In-play added runs from Ke'Bryan Hayes (+0.67), Corbin Carroll and Elly De La Cruz down to Drew
+Millas (−0.57) and Paul Goldschmidt (−0.56). Spencer Jones is the clearest trade-off: the worst
+contact path and the second-best damage path. Tyler Heineman and Keibert Ruiz are the reverse.
 
 ## Risks and how to check them
 
@@ -464,9 +577,8 @@ six-model hand split, the plane-matching ablations and the batted-ball stage.
 
 ## Extensions (ablations, after the base model)
 
-* **Horizontal plane matching.** The vertical match is in the base model. The horizontal
-  analogue is `attack_direction` against the pitch's horizontal approach angle (HAA), mirrored to
-  the batter, with HAA in W.
+* **Done in the second run:** horizontal plane matching, the hand split (worse; pooled stays
+  the default) and the batted-ball stage (as expected wOBAcon).
 * **Fooled-filter thresholds.** Try `FOOLED_Z` 1.5–2.5 and `early` alone, judged on
   year-over-year prediction rather than within-month numbers.
 * **Path profile (hitter "stuff").** Replace per-swing S with the hitter's trailing averages of
@@ -474,8 +586,8 @@ six-model hand split, the plane-matching ablations and the batted-ball stage.
   execution. It separates *approach* (persistent tilt, attack angle and bat speed) from
   *execution* (the deviation from his own norm on this swing). It should stabilize faster and
   is free of the risk-1 problem.
-* **Batted-ball stage.** Add the README's in-play KNN target (field out / 1B / 2B / 3B / HR) as
-  a third stage. That gives the path score a damage component and a full run value.
+* **Full run value.** Split the damage stage into the five batted-ball classes and price the
+  whiff / foul / in-play / batted-ball chain with `runvalue.py`'s weights.
 
 ## Running
 
@@ -490,13 +602,18 @@ This fetches Savant day by day, keeps tracked non-bunt swings, adds every featur
 the convention check, and prints the flag-validation tables. Run it on whole seasons, because
 the hitter norms need each hitter's swings.
 
-Planned:
+The full pipeline, as run for 2024–26 (Savant days saved as one parquet per day; the scorer
+and models from the bucket's `pitch-modeling/`; pitches from `data/mlb/`):
 
 ```bash
-python dml_swing_path.py --data data/statfast_2023_2025.parquet --bat data/bat_tracking.parquet \
-    --plv output/swing_outcome_logit_2325.parquet --link logit --tuned output/tuned_swing_path.json \
-    --out output/swing_path_logit_2325.parquet --model output/swing_path_logit_2325.pkl
-python evaluate.py --model output/swing_path_logit_2325.pkl --data data/statfast_2026.parquet \
-    --bat data/bat_tracking.parquet --plv output/swing_outcome_2026_scored.parquet \
-    --out-board output/swing_path_leaderboard_2026.csv
+# PLV probabilities per season (about 2 min each on 4 cores with numba)
+python score_pitches.py in_2026.parquet --probs --out plv/scored_2026.parquet
+# the damage target (about 30 s)
+python swing_path/batted_ball.py --pitches 'in_*.parquet' --out bip.parquet
+# the model: cross-fit over all seasons, plus a 2024-25 -> 2026 out-of-time pass (about 30 min)
+python swing_path/dml_swing_path.py --savant 's2[456]/*.parquet' --plv 'plv/scored_*.parquet' \
+    --bip bip.parquet --test-season 2026 --out pooled.parquet          # --split-hand for six models
+# location-neutral probabilities (about 1.5 min), then the evaluation
+python swing_path/neutral.py --scored pooled.parquet --out neutral.parquet
+python swing_path/evaluate.py --scored pooled.parquet --neutral neutral.parquet --out-board board.csv
 ```
