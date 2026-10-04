@@ -30,7 +30,7 @@ KNN wOBAcon, at each swing's own count.
         --run-values run_values_by_count.csv --out swing_value.parquet
 
 writes the per-swing file and `<out>_hitters.csv`: value, contact and damage per 100 committed
-swings and their plus scales per hitter-season (200+ swings), with observed vs PLV per 100.
+swings and their plus scales per hitter-season-hand (200+ swings), with observed vs PLV per 100.
 """
 
 from __future__ import annotations
@@ -198,7 +198,7 @@ def _wslope(x: pd.Series, y: pd.Series, w: pd.Series) -> float:
 
 
 def hitter_values(s: pd.DataFrame, calib_before: int, min_swings: int = 200):
-    """Per batter-season: value, contact and damage per 100 committed swings (+ = good for the
+    """Per batter-season-hand: value, contact and damage per 100 committed swings (+ = good for the
     hitter) and observed vs PLV per 100 swings (all swings), with its contact / damage split.
 
     `cal100` rescales each part by the slope of its observed counterpart on it, fitted on
@@ -206,7 +206,7 @@ def hitter_values(s: pd.DataFrame, calib_before: int, min_swings: int = 200):
     contact differences and the raw damage part understates observed damage differences, so
     the raw sum leans toward contact. Every value gets a 100 / 15 plus scale per season,
     swing-weighted over hitters with `min_swings`+ swings."""
-    k = ["batter", "season"]
+    k = ["batter", "season", "stand"]  # a switch hitter is two units per season
     out = s[~s["fooled"]].groupby(k)[["rv_value", "rv_contact", "rv_damage"]].mean() * 100
     out.columns = ["rv100", "contact100", "damage100"]
     obs = s.groupby(k)[["obs_vs_plv", "obs_contact", "obs_damage"]].mean() * 100
@@ -235,7 +235,7 @@ def main() -> None:
     ap.add_argument("--calib-before", type=int, help="fit cal100 slopes on earlier seasons")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
-    keep = ["batter", "player_name", "game_pk", "season", "count_idx", "group", "platoon",
+    keep = ["batter", "player_name", "stand", "game_pk", "season", "count_idx", "group", "platoon",
             "whiff", "foul", "contact", "bip", "fooled", "x_wobacon", "q_whiff", "q_foul",
             "q_wobacon", *[f"{c}_{st}" for st in STAGES for c in ("l", "r", "D")]]  # fmt: skip
     s = pd.read_parquet(a.scored, columns=keep)

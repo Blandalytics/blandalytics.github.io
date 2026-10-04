@@ -481,19 +481,23 @@ batter-clustered SE):
   effect of the path at a given location. `p_whiff_path` (below) keeps the hitter's own path
   value, measured against league locations.
 
-**Hitter scores, second run** (1,329 hitter-seasons with 200+ swings):
+**Hitter scores, second run.** From here on the hitter unit is the **batter × season × batting
+side**, so a switch hitter is two units per season. There are 1,387 hitter-season-hands with
+200+ swings, 72 of them switch-hitter seasons with 200+ swings from both sides. The model's own
+hitter inputs (the swing-location mix in W and the fooled-swing norms) are still per
+batter-season.
 
 | | contact added | in-play added | damage added |
 |---|---|---|---|
-| SD | 0.52 log-odds | 0.21 log-odds | .020 wOBAcon |
-| split-half reliability | .984 | .957 | .899 |
-| year to year with itself | .82 | .83 | .72 (585 pairs, 100+ BIP) |
-| predicting next season's observed vs PLV | .51 | .09 | .57 |
-| that observed rate predicting itself | **.86** | **.65** | **.71** |
-| same-season r with observed vs PLV | .55 | .17 | .57 |
+| SD | 0.53 log-odds | 0.21 log-odds | .020 wOBAcon |
+| split-half reliability | .984 | .951 | .899 |
+| year to year with itself | .82 | .83 | .72 (591 pairs, 100+ BIP) |
+| predicting next season's observed vs PLV | .51 | .09 | .55 |
+| that observed rate predicting itself | **.85** | **.64** | **.69** |
+| same-season r with observed vs PLV | .55 | .18 | .57 |
 
 **Damage added is the most useful of the three.** It explains .57 of same-season xwOBAcon over
-PLV and predicts next season's at .57, against .71 for the rate itself. The pattern holds: the
+PLV and predicts next season's at .55, against .69 for the rate itself. The pattern holds: the
 path describes results well, but never out-predicts the results themselves.
 
 **Location-neutral probabilities** (`neutral.py`):
@@ -560,56 +564,58 @@ runs for value, .031 for contact and .032 for damage.
 * split the same way: `obs_contact` uses PLV's expected wOBAcon for the outcome class,
   `obs_damage` is (x_wobacon − PLV's) × b_c on balls in play.
 
-**Hitters** (1,329 hitter-seasons with 200+ swings; per 100 committed swings):
+**Hitters** (1,387 hitter-season-hands with 200+ swings; per 100 committed swings):
 
 | | value | contact | damage |
 |---|---|---|---|
-| SD across hitter-seasons (runs / 100) | 0.88 | 0.98 | 0.60 |
+| SD across hitter-season-hands (runs / 100) | 0.90 | 0.99 | 0.61 |
 | split-half reliability | .93 | .976 | .92 |
-| year to year with itself (683 pairs) | .88 | .92 | .85 |
+| year to year with itself (707 pairs) | .88 | .92 | .85 |
 | same-season r with its observed part | — | .51 | .68 |
-| predicts next season's observed part | — | .47 | **.66** |
-| that observed part predicting itself | — | .81 | .69 |
+| predicts next season's observed part | — | .47 | **.65** |
+| that observed part predicting itself | — | .80 | .67 |
 
-* **Contact and damage trade off** (r −.46 across hitters; observed −.38).
+* **Contact and damage trade off** (r −.45 across hitter-season-hands; observed −.37).
 * **Damage is the standout.** It predicts next season's contact quality over PLV about as well
-  as contact quality itself (.66 vs .69), and better at small samples: .42 vs .32 at 100–250
-  swings, .63 vs .58 at 250–500.
+  as contact quality itself (.65 vs .67), and better at small samples: .42 vs .36 at 100–250
+  swings, .63 vs .56 at 250–500.
 
 **The raw sum is mis-weighted.**
 
 * Observed contact moves only **0.46** runs per model run of contact; observed damage moves
-  **1.74** runs per model run of damage. These slopes are fitted on 2024–25, swing-weighted.
+  **1.75** runs per model run of damage. These slopes are fitted on 2024–25, swing-weighted.
 * So the bat path overstates contact differences and understates damage differences. The
   damage stage explains only R² .08 of contact quality, so its effects are shrunk; the contact
   stages are sharp.
 * The raw value therefore leans toward contact hitters. Its same-season r with observed run
-  value over PLV is only .12, and the contact part alone is −.12.
+  value over PLV is only .15.
 
 **`cal100`** rescales each part by its slope (fitted on seasons before `--calib-before`):
 
 | r with observed run value over PLV | raw value | calibrated | observed itself |
 |---|---|---|---|
-| same season (all hitter-seasons) | .12 | **.36** | 1 |
-| 2026, slopes from 2024–25 | .17 | **.35** | 1 |
-| next season, 100+ swings (683 pairs) | .10 | **.32** | .60 |
-| next season, 100–250 swings | .39 | .28 | .28 |
-| 2025→26 only, 100+ swings | .16 | .34 | .58 |
+| same season (all hitter-season-hands) | .15 | **.36** | 1 |
+| 2026, slopes from 2024–25 | .19 | **.35** | 1 |
+| next season, 100+ swings (707 pairs) | .10 | **.32** | .59 |
+| next season, 100–250 swings (79 pairs) | .33 | .25 | .35 |
+| 2025→26 only, 100+ swings | .17 | .34 | .57 |
 
-* **The calibrated value roughly triples the raw one** and matches observed results at small
-  samples.
+* **The calibrated value roughly triples the raw one.** At 100–250 swings it trails observed
+  results (.25 vs .35); damage alone leads there.
 * **Over full seasons, results predict results better.** Adding `cal100` to observed run value
-  over PLV raises next-season R² only from .362 to .374.
+  over PLV raises next-season R² only from .345 to .358.
 
-**2026 leaders** (calibrated plus; raw plus in brackets):
+**2026 leaders** (calibrated plus, raw in brackets; switch hitters marked by side):
 
-* **Top:** James Wood 152 (141), Pete Crow-Armstrong 148 (139), Roman Anthony 142 (143), Elly
-  De La Cruz 142 (151), Miguel Vargas 141 (136), Riley Greene 139 (121).
-* **Bottom:** Tyler Heineman 60 (89), Isiah Kiner-Falefa 65 (91), Jake Meyers 66 (86), Adam
-  Frazier 66 (75), Hyeseong Kim 66 (78), Chandler Simpson 70 (87).
+* **Top:** James Wood 152 (140), Pete Crow-Armstrong 147 (138), Cole Carrigg (L) 144 (137), Elly
+  De La Cruz (R) 143 (151), Roman Anthony 142 (143), Elly De La Cruz (L) 141 (150).
+* **Bottom:** Tyler Heineman (L) 60 (90), Isiah Kiner-Falefa 65 (91), Jake Meyers 66 (87), Adam
+  Frazier 66 (75), Brayan Rocchio (R) 66 (88), Hyeseong Kim 66 (78).
+* **Sides can differ a lot:** Cole Carrigg is 144 as a lefty and 118 as a righty; Brayan Rocchio
+  89 and 66.
 * **Calibration mostly moves hitters on the contact-vs-damage axis.**
-  * Keibert Ruiz goes from 106 raw to 71 calibrated: elite contact, weak damage.
-  * Nick Kurtz goes from 67 to 104, and Spencer Jones from 67 to 111: the reverse.
+  * Keibert Ruiz (left side) goes from 114 raw to 79 calibrated: elite contact, weak damage.
+  * Nick Kurtz goes from 67 to 104, and Spencer Jones from 68 to 110: the reverse.
   * Paul Goldschmidt (57 raw) and George Springer (59) are last on raw value, with the weakest
     contact paths and average damage.
 

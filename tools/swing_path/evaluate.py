@@ -20,6 +20,7 @@ SCORES = {  # hitter score: (per-swing column, sign so + is good for the hitter,
     "inplay_added": ("lo_foul", -1, "contact"),
     "damage_added": ("lo_damage", 1, "bip"),
 }
+KEYS = ["batter", "season", "stand"]  # a switch hitter is two units per season, one per side
 VS_PLV = {"contact_added": "contact_vs_plv", "inplay_added": "inplay_vs_plv",
           "damage_added": "xwobacon_vs_plv"}  # fmt: skip
 
@@ -67,9 +68,9 @@ def out_of_time(oot: pd.DataFrame) -> pd.DataFrame:
 
 
 def hitter_seasons(s: pd.DataFrame) -> pd.DataFrame:
-    """Per batter-season: the path scores (mean effect over committed swings in each stage's
+    """Per batter-season-hand: the path scores (mean effect over committed swings in each stage's
     sample, + = good for the hitter), observed vs PLV, fooled share and mean location."""
-    k = ["batter", "season"]
+    k = KEYS
     out = s.groupby(k).agg(name=("player_name", "first"), swings=("whiff", "size"),
                            whiff=("whiff", "mean"), q_whiff=("q_whiff", "mean"),
                            fooled=("fooled", "mean"), x_in=("x_in", "mean"),
@@ -90,16 +91,16 @@ def hitter_seasons(s: pd.DataFrame) -> pd.DataFrame:
 
 def add_neutral(h: pd.DataFrame, neutral: pd.DataFrame) -> pd.DataFrame:
     """Hitter means of the location-neutral probabilities, over committed swings."""
-    n = neutral[~neutral["fooled"]].groupby(["batter", "season"])
+    n = neutral[~neutral["fooled"]].groupby(KEYS)
     cols = ["p_whiff_path", "p_foul_path", "p_in_play_path", "wobacon_path", "xwhiff_plus"]
-    return h.join(n[cols].mean(), on=["batter", "season"])
+    return h.join(n[cols].mean(), on=KEYS)
 
 
 def split_half(s: pd.DataFrame, col: str, sign: int, sub=None, min_n: int = 50) -> float:
     """Spearman-Brown split-half reliability over hitter-seasons, halves by game parity."""
     d = s[~s["fooled"]]
     d = d[d[sub]] if sub else d
-    g = d.assign(half=d["game_pk"] % 2).groupby(["batter", "season", "half"])[col]
+    g = d.assign(half=d["game_pk"] % 2).groupby([*KEYS, "half"])[col]
     g = g.agg(["mean", "size"]).unstack()
     g = g[(g["size"] >= min_n).all(axis=1)]
     r = (sign * g["mean"][0]).corr(sign * g["mean"][1])
@@ -117,8 +118,8 @@ def _wcorr(x, y, w) -> float:
 def year_over_year(h: pd.DataFrame, target: str, predictors: list[str], n: str = "swings"):
     """Season Y predictors against season Y+1 `target`, by the smaller season's sample,
     weighted by the harmonic mean of the two samples."""
-    nxt = h.assign(season=h["season"] - 1).set_index(["batter", "season"])
-    pairs = h.set_index(["batter", "season"]).join(nxt[[target, n]], rsuffix="_next", how="inner")
+    nxt = h.assign(season=h["season"] - 1).set_index(KEYS)
+    pairs = h.set_index(KEYS).join(nxt[[target, n]], rsuffix="_next", how="inner")
     pairs = pairs.dropna(subset=[*predictors, f"{target}_next"])
     small = np.minimum(pairs[n], pairs[f"{n}_next"])
     w = 2 / (1 / pairs[n] + 1 / pairs[f"{n}_next"])

@@ -114,7 +114,7 @@ def main() -> None:
     ap.add_argument("--scored", required=True)
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
-    keep = ["batter", "player_name", "game_pk", "season", "count_idx", "group", "platoon",
+    keep = ["batter", "player_name", "stand", "game_pk", "season", "count_idx", "group", "platoon",
             "whiff", "foul", "contact", "bip", "fooled", "x_wobacon", *STAGE_COLS]  # fmt: skip
     s = pd.read_parquet(a.scored, columns=keep)
     with open(a.scored.replace(".parquet", "_theta.json")) as f:
