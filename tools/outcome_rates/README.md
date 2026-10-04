@@ -128,11 +128,34 @@ Stuff+ or PLV+); `unit_features_<season>` its name and pitch count.
 python tools/outcome_rates/pitch_rates.py --seasons 2026               # Stuff, top and bottom 10
 python tools/outcome_rates/pitch_rates.py --seasons 2026 --model plv   # PLV
 python tools/outcome_rates/pitch_rates.py --csv stuff_rates.csv        # 2023-2026, every row
+python tools/outcome_rates/fit.py --cache /tmp/mlb --csv pitcher_seasons.csv
+python tools/outcome_rates/pitch_rates.py --seasons 2026 --actual pitcher_seasons.csv \
+    --pitcher-csv pitchers.csv                                          # with real rates
 ```
 
-It prints the top and bottom 10 on each rate among pitch types with at least 500
-scored pitches (`--top`, `--min-pitches`); "top" is the pitcher's best end, the highest
-K% and the lowest BB% and Hit%. Pitches are the regular-season ones the pitch models
+It ranks two levels, printing the top and bottom 10 on each rate (`--top`); "top" is
+the pitcher's best end, the highest K% and the lowest BB% and Hit%:
+
+- **Pitch types** with at least 500 scored pitches (`--min-pitches`).
+- **Pitchers' whole seasons** with at least 1,500 (`--min-pitcher-pitches`): every pitch
+  type the tables cover, its probabilities averaged over all his pitches. The plus
+  score is regraded on the pitcher-season scale: each pitch type's plus turned back
+  into runs per 100 pitches, averaged over his pitches, and rescaled with the
+  pitcher-season constants in `pitch-modeling/constants/plus_scale_constants.json`
+  (it matches the scorer exactly). `--actual` takes `fit.py --csv` to put each
+  pitcher's real rates beside the predicted ones.
+
+Whole-season profiles are what the rate models were fit on, so the pitcher level
+doesn't extrapolate (2026 PLV BB% runs 3.8–13.0%). Against the pitchers' real 2026
+rates (151 pitchers):
+
+| correlation with actual | K% | BB% | Hit% |
+|---|---:|---:|---:|
+| Stuff | .65 | .01 | .46 |
+| PLV | .61 | .66 | .52 |
+
+Stuff BB% doesn't track real walks because Stuff knows nothing about command; PLV,
+which sees where each pitch went, does. Pitches are the regular-season ones the pitch models
 score (bunts, pitchouts and pitches missing tracking aren't), and pitch types they
 don't cover (knuckleballs, eephuses, screwballs) aren't in the tables. The tables are
 rebuilt on their own schedule, so the current season's can lag a few days.
