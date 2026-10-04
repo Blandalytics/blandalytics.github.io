@@ -54,9 +54,9 @@ with one left out.)
 | Triple | .001 | −1.538 (.297) | −0.553 (.253) | 3.673 (.141) | 26.81 (3.07) |
 | Home run | .008 | −0.826 (.091) | −0.501 (.077) | 3.161 (.043) | 24.32 (0.94) |
 
-The coefficients barely move with the decay — at 0.5 or 1 (no recency weight) every
-one stays within about a standard error, triples aside — so the relationships are
-stable across these four seasons.
+The coefficients barely move with the decay: against no recency weight (`--decay 1`)
+every one is within a standard error, and even a steep 0.5 moves none by more than
+about two, so the relationships are stable across these four seasons.
 
 ## Fit
 
