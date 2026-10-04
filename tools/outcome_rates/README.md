@@ -94,21 +94,24 @@ scores 2026.
 ## Stuff K%
 
 `stuff_k.py` applies the K% coefficients to the Stuff model's outcome predictions.
-For every pitch, the Stuff model ([pitch-modeling](https://data.blandalytics.com/pitch-modeling/score_pitches.py))
-gives count-neutral probabilities for the same nine outcomes, over the league's
-location and count mix. Plugging those into the K% model gives the strikeout rate of
-a pitcher whose every pitch had that pitch's stuff. The model is linear, so a pitch
-type's Stuff K% is the mean over its pitches.
+For every pitch, the Stuff model gives count-neutral probabilities for the same nine
+outcomes, over the league's location and count mix. Plugging those into the K% model
+gives the strikeout rate of a pitcher whose every pitch had that pitch's stuff. The
+model is linear, so a pitch type's Stuff K% comes straight from its mean probabilities.
+
+Nothing is scored here: the means are already in the bucket, in the tables the Model
+Drilldown reads. `shap-values/units_stuff_<season>.parquet` holds each pitcher-season-
+pitch type's nine `p_<outcome>` targets and Stuff+ (`plus`); `unit_features_<season>`
+its name and pitch count.
 
 ```bash
-python tools/outcome_rates/stuff_k.py --cache /tmp/mlb --csv stuff_k.csv   # ~10 min, 2023-2026
+python tools/outcome_rates/stuff_k.py --csv stuff_k.csv     # 2023-2026, a few seconds
 ```
 
-One row per pitcher-season-pitch type thrown at least 500 times in the regular
-season, ranked by Stuff K%, with plvStuff+ (the pitcher-season-pitch-type scale)
-beside it. Pitch types the Stuff model doesn't cover (knuckleballs, eephuses,
-screwballs) are left out, as are the pitches it doesn't score (bunts, pitchouts,
-pitches missing tracking).
+One row per pitcher-season-pitch type with at least 500 scored pitches (regular
+season; bunts, pitchouts and pitches missing tracking aren't scored), ranked by Stuff
+K%. Pitch types the Stuff model doesn't cover (knuckleballs, eephuses, screwballs)
+aren't in the tables.
 
 Stuff K% is a pitch-level number on a pitcher scale: a fastball's 30% means a pitcher
 throwing only that fastball, located like the league, would strike out 30% of hitters.
