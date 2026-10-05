@@ -1,5 +1,5 @@
 {
- "built": "2026-10-04T15:11:18Z",
+ "built": "2026-10-05T19:07:31Z",
  "games": {
   "822678": {
    "away": "New York Mets",
@@ -34006,6 +34006,34 @@
    "home_r": 9,
    "title": "D-backs 9, Tigers 6",
    "venue": "Chase Field"
+  },
+  "849823": {
+   "away": "Atlanta Braves",
+   "away_abbr": "ATL",
+   "away_nick": "Braves",
+   "away_r": 3,
+   "date": "2026-10-04",
+   "file": "games/849823.html",
+   "home": "Los Angeles Dodgers",
+   "home_abbr": "LAD",
+   "home_nick": "Dodgers",
+   "home_r": 2,
+   "title": "Braves 3, Dodgers 2",
+   "venue": "UNIQLO Field at Dodger Stadium"
+  },
+  "849825": {
+   "away": "San Diego Padres",
+   "away_abbr": "SD",
+   "away_nick": "Padres",
+   "away_r": 3,
+   "date": "2026-10-04",
+   "file": "games/849825.html",
+   "home": "Milwaukee Brewers",
+   "home_abbr": "MIL",
+   "home_nick": "Brewers",
+   "home_r": 4,
+   "title": "Brewers 4, Padres 3",
+   "venue": "American Family Field"
   },
   "849828": {
    "away": "Atlanta Braves",
