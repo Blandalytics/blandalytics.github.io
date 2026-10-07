@@ -189,14 +189,19 @@ Stuff, Locations and PLV come from the
 the bucket under `pitch-modeling/` (60 MB, downloaded once and cached beside the data files)
 and contains:
 
-* `score_pitches.py`, the standalone scorer;
-* `models/`, the four chained logit models;
-* `constants/`, the run-value tables and plus scale.
+* `score_pitches.py`, the scorer, with `pitch_groups.py` and `pitch_l1.py` (the Level 1
+  pitch classifier that assigns each pitch type its Fastball / Breaking / Offspeed group)
+  and `abs_2026.py` (2026's ABS zone and calls);
+* `models/`, the four chained logit models and the classifier (`pitch_l1_v1.npz`);
+* `constants/`, the run-value tables, the plus scale and the 2026 ABS adjustment.
+
+Each file is fetched past the CDN's 4-hour cache, so a new publish reaches the next build.
 
 The scorer gives a run value per pitch from the pitcher's side: count-neutral Stuff, what the
 location added, and the two together as Pitching, which is the card's PLV.
 `constants/plus_scale_constants.json` puts a unit's mean on the card's 100 ± 15 scale, with
-2023–26 constants. The card uses whole outings for the three grades, and one pitch type of
+2020–26 constants (weighted by pitches × 0.9^(2026 − season)); 2026 games are scored with
+the ABS adjustment, as the scale was. The card uses whole outings for the three grades, and one pitch type of
 one outing for the plvStuff+ and PLV+ columns. The letters keep their old cut
 points at the same distances from the mean, so a grade still means what it did, and the
 per-pitch-type colour bins are the 10th, 30th, 70th and 90th percentiles of that pitch
