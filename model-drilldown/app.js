@@ -20,6 +20,7 @@ import {
   LOCATION_AXIS,
   MODELS,
   OUTCOMES,
+  XSTATS,
   TARGET_NAMES,
   PITCH_NAMES,
   LABELS,
@@ -46,7 +47,13 @@ const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' }; // Jacob Misiorowsk
 // their cards stay hidden and they are not drawn. Set true to bring them back.
 const SHOW_LEAGUE_FIGS = false;
 // 'outcomes' is the plus score split by outcome (the features split is the default)
-const TARGETS = ['plus', 'outcomes', 'era', ...OUTCOMES.map((o) => `p_${o}`), 'wobacon'];
+// the Target menu's segments; TARGETS is every target in menu order
+const TARGET_GROUPS = [
+  ['Models', ['plus', 'outcomes']],
+  ['xStats', XSTATS],
+  ['Outcomes', OUTCOMES.map((o) => `p_${o}`)],
+];
+const TARGETS = TARGET_GROUPS.flatMap(([, ts]) => ts);
 const RV = OUTCOMES.map((o) => `rv_${o}`);
 const DP = OUTCOMES.map((o) => `dp_${o}`); // Location's change in each rate
 // the targets a model offers: Location is split by outcome only
@@ -112,7 +119,17 @@ function fillTargets() {
       : t === 'outcomes'
         ? `${targetName(state.model, t)} (outcomes)`
         : targetName(state.model, t);
-  el.target.replaceChildren(...targetsFor(state.model).map((t) => new Option(menu(t), t)));
+  const offered = new Set(targetsFor(state.model));
+  el.target.replaceChildren(
+    ...TARGET_GROUPS.map(([label, ts]) => [label, ts.filter((t) => offered.has(t))])
+      .filter(([, ts]) => ts.length)
+      .map(([label, ts]) => {
+        const g = document.createElement('optgroup');
+        g.label = label;
+        g.append(...ts.map((t) => new Option(menu(t), t)));
+        return g;
+      }),
+  );
   el.target.value = keep;
 }
 

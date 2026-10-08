@@ -69,7 +69,7 @@ export const OUTCOMES = [
 ];
 export const TARGET_NAMES = {
   p_ball: 'Ball%',
-  p_called_strike: 'CStr%',
+  p_called_strike: 'CStrike%',
   p_swinging_strike: 'SwStr%',
   p_foul: 'Foul%',
   p_field_out: 'In-Play Out%',
@@ -79,6 +79,8 @@ export const TARGET_NAMES = {
   p_home_run: 'Home Run%',
   wobacon: 'wOBAcon',
   era: 'ERA',
+  k_pct: 'K%', // model-implied, per PA (shap_values.py pa)
+  bb_pct: 'BB%',
 };
 export const OUTCOME_NAMES = {
   ball: 'Ball',
@@ -104,14 +106,25 @@ export const OUTCOME_COLORS = {
   home_run: '#FF5EDC',
 };
 // targets where lower is better for the pitcher: gold and teal swap
-export const LOWER_IS_BETTER = new Set(['p_ball', 'p_single', 'p_double', 'p_triple', 'p_home_run', 'wobacon', 'era']);
+export const LOWER_IS_BETTER = new Set([
+  'p_ball',
+  'p_single',
+  'p_double',
+  'p_triple',
+  'p_home_run',
+  'wobacon',
+  'era',
+  'bb_pct',
+]);
 export const targetGood = (t) => (LOWER_IS_BETTER.has(t) ? -1 : 1);
 // 'outcomes' is the plus score split by outcome (shap_values_card.py --by outcome); in the
 // figures it is named like the plus score it splits
 export const isPlus = (t) => t === 'plus' || t === 'outcomes';
-// era: pitch type ERA from the model (model_era.py --by pt), named "PLV ERA" / "Stuff ERA"
+// the model's expected stats, named for it ("PLV ERA", "Stuff K%"): pitch type ERA
+// (model_era.py --by pt), model-implied K% and BB% per PA (pa_rates.py's count chain), wOBAcon
+export const XSTATS = ['era', 'k_pct', 'bb_pct', 'wobacon'];
 export const targetName = (model, t) =>
-  isPlus(t) ? MODELS[model].title : t === 'era' ? `${MODELS[model].short} ERA` : TARGET_NAMES[t];
+  isPlus(t) ? MODELS[model].title : XSTATS.includes(t) ? `${MODELS[model].short} ${TARGET_NAMES[t]}` : TARGET_NAMES[t];
 
 export const LABELS = {
   velo: 'Velocity',

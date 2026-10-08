@@ -217,7 +217,7 @@ const head = (x, y, s, anchor, m, fill = C.faint, size = 11) =>
     m,
   );
 // the widest KPI label ("In-Play Out% (Stuff)"): every model's targets, Location+ its one
-const KPI_TARGETS = ['plus', 'outcomes', 'era', 'wobacon', ...OUTCOMES.map((o) => `p_${o}`)];
+const KPI_TARGETS = ['plus', 'outcomes', 'era', 'k_pct', 'bb_pct', 'wobacon', ...OUTCOMES.map((o) => `p_${o}`)];
 export function widestKpiName(size) {
   return Math.max(
     ...Object.entries(MODELS).flatMap(([m, d]) =>
