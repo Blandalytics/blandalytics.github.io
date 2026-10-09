@@ -316,13 +316,13 @@ fill($("org"), ORGS, "All orgs", "");
 $("thresholds").textContent = LEVELS.map(l => `${l} ${DATA.latest[l]} more than ${minGames(l, DATA.latest[l])}`).join(", ") +
   `; for example MLB 2020 more than ${minGames("MLB", 2020)} and AAA 2021 more than ${minGames("AAA", 2021)}`;
 
-// years newest first ("" is the level's most recent); leagues in level order (MLB, IL, PCL, EL, …);
-// teams alphabetically within the level, year, league and org
+// years: All years on top, then newest first ("" is the level's most recent, and the default);
+// leagues in level order (MLB, IL, PCL, EL, …); teams alphabetically within the level, year, league and org
 function refreshOptions() {
   const atLevel = DATA.rows.filter(r => (!state.level || r[ci.Level] === state.level) && r[ci.Side] === "All");
   const newest = state.level ? DATA.latest[state.level] : null;
   const years = [...new Set(atLevel.map(r => r[ci.Year]))].sort((a, b) => b - a).filter(y => y !== newest).map(String);
-  $("year").innerHTML = `<option value="">${newest || "Most recent"}</option><option value="${ALL}">All years</option>` +
+  $("year").innerHTML = `<option value="${ALL}">All years</option><option value="">${newest || "Most recent"}</option>` +
     years.map(y => `<option>${y}</option>`).join("");
   if (state.year !== ALL && !years.includes(state.year)) state.year = "";
   $("year").value = state.year;
