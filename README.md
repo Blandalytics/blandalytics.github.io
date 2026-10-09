@@ -607,9 +607,7 @@ column appears. Past seasons are all batters only, so LHB / RHB switch off for t
 season is indexed to that season's average park at its level, and shows the venue under its name
 that season (Miller Park, Safeco Field, U.S. Cellular Field, …) with that season's home club,
 league and parent org; 2021's interim minor-league names show as the leagues' current ones
-(Triple-A East as IL, High-A West as NWL, and so on). MLB 2027 rows carry the names parks have
-for 2027, from `NAMES_2027` in `build_leaderboard.py` (Comerica Park → Fifth Third Park; the cell's
-tooltip gives the old name), while earlier seasons keep the name they had then.
+(Triple-A East as IL, High-A West as NWL, and so on).
 
 The filters and sort are linkable: the page keeps them in the hash, leaving defaults out, e.g.
 `park-factors/#org=SEA&side=L` or `#level=AAA&league=PCL&sort=HR&dir=desc` (keys `side` = `L` /
