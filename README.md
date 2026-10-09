@@ -588,6 +588,51 @@ open 2-2 and then alternate from home (2-2-1, 2-2-1-1-1, …), the script's sche
 After any change to the JavaScript, bump the `?v=` query on the two script tags in `index.html`
 so browsers fetch the new files.
 
+## Park Factors
+
+[blandalytics.com/park-factors/](https://blandalytics.com/park-factors/) — a Baseball
+Savant-style leaderboard of 2027 park factors for MLB and MiLB (AAA, AA, A+, A) parks. Filters
+for **Batter side** (All / LHB / RHB), **Level**, **League** (the level's leagues), **Team** (the
+level and league's clubs) and **Org**, plus **Qualified parks**; it opens on MLB, all batters,
+qualified parks, sorted by Park Factor. Any header sorts the table, and **Reset filters** goes
+back to the opening view.
+
+Every column is an index where 100 is that level's average park: Park Factor (wOBA), R
+(BaseRuns), OBP, H, 1B, 2B, 3B, HR, BB, SO, HBP, BACON (hits per contact, HR included), wOBACon,
+and HR p10 / p90 (the HR index's 80% interval), then Games and PA. The index columns are shaded
+on one diverging scale centred on 100 and saturated at 90 and 110: red helps hitters and blue
+hurts them, so SO runs the other way (more strikeouts shade blue).
+
+**Qualified parks** keeps venues with more than 50 games, pro-rated to each level's home
+schedule: MLB 50 of 81, AAA 46.3 of 75, AA 42.6 of 69, A+ and A 40.7 of 66. MLB games are the
+2027 schedule's at each venue (neutral sites included, so Las Vegas Ballpark's 6 and Field of
+Dreams' 1 drop out); MiLB games are 2026's.
+
+The factors come from the projection system's park model: one joint Bayesian fit of every plate
+appearance (MLB 2015–26, the full-season minors 2021–26) with batter, pitcher, league-season,
+home-field and platoon terms, a venue factor that drifts across seasons with breaks at known
+dimension changes, and a venue left/right split. Factors are full (not halved) and adjusted for
+who batted and pitched there.
+
+| file | role |
+|---|---|
+| `park-factors/index.html` | the page, with the leaderboard data inlined; no other requests but the fonts |
+| `tools/park_factors/park_factors_2027.csv` | the data: one row per level, batter side (`All`, `L`, `R`) and venue, with every column on the page and the date the factors were generated (`As Of`) |
+| `tools/park_factors/build_leaderboard.py` | builds the page from the CSV; `--from-md` first rewrites the CSV from the park model's handoff markdown (every table in its section 10) |
+| `tools/park_factors/build_tile.py` | the homepage tile, from the CSV: the top and bottom seven qualified MLB parks as a heatmap in the Pitcher List Stats figure style, laid out as HTML, screenshotted at 900 × 900 by headless Edge and saved as `images/tile-park-factors.webp` and `-720.webp` |
+| `tools/park_factors/tile_logo.png` | the Pitcher List Stats wordmark for the tile, cropped from the Series Win tile |
+
+### Updating
+
+```
+python tools/park_factors/build_leaderboard.py                       # page from the committed CSV
+python tools/park_factors/build_leaderboard.py --from-md path/to/park_factors_2027.md   # new factors
+python tools/park_factors/build_tile.py                              # homepage tile from the CSV
+```
+
+The handoff markdown stays with the park model; only the CSV it produces is committed. After
+rebuilding the tile, bump its `?v=` in `index.html` so Cloudflare serves the new image.
+
 ## Model Drilldown
 
 [blandalytics.com/model-drilldown/](https://blandalytics.com/model-drilldown/) — why a pitch grades
