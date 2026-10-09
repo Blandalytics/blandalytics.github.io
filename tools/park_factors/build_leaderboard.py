@@ -204,6 +204,7 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
         <p><b>Colors:</b> centered on 100 and saturated at 90 and 110. Red helps hitters and blue hurts them, so for <b>SO</b> the scale is flipped: more strikeouts shade blue.</p>
         <p><b>Model:</b> one joint Bayesian fit of every plate appearance (MLB 2015–26; AAA, AA, A+ and A 2021–26) with batter, pitcher, league-season, home-field and platoon terms, a per-venue factor that drifts across seasons (with breaks for known dimension changes) and a per-venue left/right split. A venue is shared across levels, so a park's minor-league years inform its MLB factor.</p>
         <p><b>Games:</b> MLB rows use the 2027 schedule (games at the venue that season, neutral sites included); MiLB rows use the 2026 parks. <b>Qualified parks</b> hides venues with 50 or fewer games, pro-rated to each level's home schedule: <span id="thresholds"></span>. <b>PA</b> is the venue's plate appearances at that level in the data.</p>
+        <p><b>All levels:</b> every row is still indexed to its own level's average, so a 105 in AA and a 105 in MLB are each 5% above their level, not equal environments. Picking an <b>Org</b> switches to All levels to show the whole system; pick a level after that to narrow it.</p>
         <p>Factors as of __GENERATED__.</p>
       </div>
     </details>
@@ -224,10 +225,12 @@ const TIPS = {
   "BB": "Walk index", "SO": "Strikeout index (higher = worse for hitters)", "HBP": "Hit-by-pitch index",
   "BACON": "Hits per contact, HR included", "wOBACon": "wOBA on contact",
   "HR p10": "HR index, 10th percentile", "HR p90": "HR index, 90th percentile",
+  "Level": "Each row is indexed to its own level's average",
   "Games": "Games at the venue (MLB: 2027 schedule; MiLB: 2026)", "PA": "PAs at the venue and level in the data"
 };
-const SHOW = ["Rk.", "League", "Team", "Org", "Venue", "Games", ...COLORED, "PA"];
-const TXT = new Set(["League", "Team", "Org", "Venue"]);
+// the Level column only shows on All levels
+const showCols = () => ["Rk.", ...(state.level ? [] : ["Level"]), "League", "Team", "Org", "Venue", "Games", ...COLORED, "PA"];
+const TXT = new Set(["Level", "League", "Team", "Org", "Venue"]);
 
 const ci = Object.fromEntries(DATA.cols.map((c, i) => [c, i]));
 const DEFAULTS = {side: "All", level: "MLB", league: "", team: "", org: "", qual: true, sort: "Park Factor", dir: -1};
@@ -253,19 +256,21 @@ function fill(sel, values, allLabel, keep) {
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"})[c]); }
 
-$("level").innerHTML = LEVELS.map(l => `<option>${l}</option>`).join("");
+$("level").innerHTML = `<option value="">All levels</option>` + LEVELS.map(l => `<option>${l}</option>`).join("");
 fill($("org"), uniq(DATA.rows.map(r => r[ci.Org])), "All orgs", "");
 $("thresholds").textContent = LEVELS.map(l => `${l} more than ${+MIN_GAMES(l).toFixed(1)} (of ${HOME_GAMES[l]} home)`).join(", ");
 
+// leagues in level order (MLB, IL, PCL, EL, …), teams alphabetically within the level, league and org
 function refreshOptions() {
-  const lv = DATA.rows.filter(r => r[ci.Level] === state.level && r[ci.Side] === "All");
-  state.league = fill($("league"), uniq(lv.map(r => r[ci.League])), "All leagues", state.league);
-  const inLeague = lv.filter(r => !state.league || r[ci.League] === state.league);
+  const lv = DATA.rows.filter(r => (!state.level || r[ci.Level] === state.level) && r[ci.Side] === "All");
+  const leagues = LEVELS.flatMap(l => uniq(lv.filter(r => r[ci.Level] === l).map(r => r[ci.League])));
+  state.league = fill($("league"), [...new Set(leagues)], "All leagues", state.league);
+  const inLeague = lv.filter(r => (!state.league || r[ci.League] === state.league) && (!state.org || r[ci.Org] === state.org));
   state.team = fill($("team"), uniq(inLeague.map(r => r[ci.Team])), "All teams", state.team);
 }
 
 function head() {
-  $("head").innerHTML = SHOW.map(c => {
+  $("head").innerHTML = showCols().map(c => {
     const cls = [TXT.has(c) ? "txt" : "", c === "Venue" ? "venue" : "", c === "Park Factor" ? "sep" : "", c === "PA" ? "sep" : ""].join(" ").trim();
     const sort = c === state.sort ? (state.dir < 0 ? "descending" : "ascending") : "none";
     return `<th scope="col" data-c="${esc(c)}" class="${cls}" aria-sort="${sort}" title="${esc(TIPS[c] || "")}">${esc(c)}</th>`;
@@ -273,17 +278,19 @@ function head() {
 }
 
 function render() {
-  const min = MIN_GAMES(state.level);
-  $("qual_label").textContent = `Qualified parks (more than ${+min.toFixed(1)} games)`;
+  const SHOW = showCols();
+  $("qual_label").textContent = state.level
+    ? `Qualified parks (more than ${+MIN_GAMES(state.level).toFixed(1)} games)`
+    : "Qualified parks (more than 50 games, pro-rated by level)";
   const rows = DATA.rows.filter(r =>
-    r[ci.Side] === state.side && r[ci.Level] === state.level &&
+    r[ci.Side] === state.side && (!state.level || r[ci.Level] === state.level) &&
     (!state.league || r[ci.League] === state.league) &&
     (!state.team || r[ci.Team] === state.team) &&
     (!state.org || r[ci.Org] === state.org) &&
-    (!state.qual || r[ci.Games] > min));
+    (!state.qual || r[ci.Games] > MIN_GAMES(r[ci.Level])));
   const k = state.sort === "Rk." ? ci["Park Factor"] : ci[state.sort], d = state.sort === "Rk." ? -state.dir : state.dir;
   rows.sort((a, b) => {
-    const x = a[k], y = b[k];
+    const x = k === ci.Level ? LEVELS.indexOf(a[k]) : a[k], y = k === ci.Level ? LEVELS.indexOf(b[k]) : b[k];
     const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y));
     return c * d || b[ci["Park Factor"]] - a[ci["Park Factor"]] || b[ci.PA] - a[ci.PA];
   });
@@ -296,7 +303,9 @@ function render() {
     return `<td class="dim${c === "PA" ? " sep" : ""}">${v.toLocaleString()}</td>`;
   }).join("") + "</tr>").join("")
     : `<tr class="empty"><td colspan="${SHOW.length}">No parks match these filters${state.qual ? " — try turning off Qualified parks" : ""}.</td></tr>`;
-  $("status").textContent = `${rows.length} ${state.level} park${rows.length === 1 ? "" : "s"}, ${SIDE_LABEL[state.side]}`;
+  $("status").textContent = state.level
+    ? `${rows.length} ${state.level} park${rows.length === 1 ? "" : "s"}, ${SIDE_LABEL[state.side]}`
+    : `${rows.length} park${rows.length === 1 ? "" : "s"} across all levels, ${SIDE_LABEL[state.side]} (each indexed to its own level)`;
   document.querySelectorAll("#side button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.side));
   $("level").value = state.level; $("org").value = state.org; $("qual").checked = state.qual;
 }
@@ -305,7 +314,12 @@ $("side").addEventListener("click", e => { const b = e.target.closest("button");
 $("level").addEventListener("change", e => { state.level = e.target.value; state.league = state.team = ""; refreshOptions(); render(); });
 $("league").addEventListener("change", e => { state.league = e.target.value; refreshOptions(); render(); });
 $("team").addEventListener("change", e => { state.team = e.target.value; render(); });
-$("org").addEventListener("change", e => { state.org = e.target.value; render(); });
+// picking an org shows its whole system: every level at once
+$("org").addEventListener("change", e => {
+  state.org = e.target.value;
+  if (state.org) state.level = "";
+  refreshOptions(); render();
+});
 $("qual").addEventListener("change", e => { state.qual = e.target.checked; render(); });
 $("reset").addEventListener("click", () => { Object.assign(state, DEFAULTS); refreshOptions(); render(); });
 $("head").addEventListener("click", e => {
