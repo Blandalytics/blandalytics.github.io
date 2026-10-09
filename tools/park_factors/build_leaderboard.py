@@ -28,6 +28,9 @@ SHOW_AS = {"H": "AVG", "SO": "K"}  # page names for the model's columns
 # each level's most recent year is the current board's; earlier seasons come from the history
 LATEST = {"MLB": 2027, "AAA": 2026, "AA": 2026, "A+": 2026, "A": 2026}
 HOME_GAMES = {"MLB": 81, "AAA": 75, "AA": 69, "A+": 66, "A": 66}  # a full season's home games
+# parks with a new name for 2027, applied to the board's MLB rows (the 2027 season); earlier
+# seasons keep the name they had then
+NAMES_2027 = {"Comerica Park": "Fifth Third Park"}
 
 
 def parse_md(md):
@@ -59,6 +62,7 @@ def load(path=CSV):
     """(columns, rows) from the CSV, numbers as ints; the As Of column comes back separately."""
     with open(path, newline="", encoding="utf-8") as f:
         recs = list(csv.DictReader(f))
+    recs = [{**r, "Venue": NAMES_2027.get(r["Venue"], r["Venue"])} if r["Level"] == "MLB" else r for r in recs]
     cols = [c for c in recs[0] if c != "As Of"]
     rows = [[r[c] if c in TEXT_COLS else int(r[c]) for c in cols] for r in recs]
     return cols, rows, recs[0]["As Of"]
@@ -102,7 +106,9 @@ def main():
     rows = [[r[0], LATEST[r[0]]] + r[1:] for r in rows] + load_history(cols)
     mins = min_games(cols, rows)
     cols = [SHOW_AS.get(c, c) for c in cols]
-    data = json.dumps({"cols": cols, "rows": rows, "latest": LATEST, "minGames": mins}, separators=(",", ":"))
+    renamed = {new: f"{old} through 2026" for old, new in NAMES_2027.items()}
+    data = json.dumps({"cols": cols, "rows": rows, "latest": LATEST, "minGames": mins, "renamed": renamed},
+                      separators=(",", ":"))
     html = TEMPLATE.replace("__DATA__", data).replace("__GENERATED__", as_of)
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(html, encoding="utf-8")
@@ -244,7 +250,7 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
         <p><b>Model:</b> one joint Bayesian fit of every plate appearance (MLB 2015–26; AAA, AA, A+ and A 2021–26) with batter, pitcher, league-season, home-field and platoon terms, a per-venue factor that drifts across seasons (with breaks for known dimension changes) and a per-venue left/right split. If a park is used across multiple leagues (Ex: Sutter Health Park has hosted both AAA and MLB games), the data from all leagues informs that park factor.</p>
         <p><b>Games:</b> MLB 2027 rows use the 2027 schedule (games at the venue that season, neutral sites included); every other year counts the venue's completed regular-season games that season. <b>Qualified parks</b> hides venues with 50 or fewer games, pro-rated to each level's home schedule, so shortened seasons scale down: <span id="thresholds"></span>. <b>PA</b> is the venue's plate appearances at that level in the data: that season's for past years, and every season's for each level's most recent year.</p>
         <p><b>All levels:</b> every row is still indexed to its own level's average, so a 105 in AA and a 105 in MLB are each 5% above their level, not equal environments. Picking an <b>Org</b> switches to All levels to show the whole system; pick a level after that to narrow it.</p>
-        <p><b>Years:</b> each level opens on its most recent year: 2027 for MLB, built on the 2027 schedule, and 2026 for the minors. Earlier seasons (MLB from 2015, the minors from 2021) come from the same fit, indexed to that season's average park at that level, for all batters; the LHB/RHB split covers each level's most recent year. Venue names, teams, leagues and orgs are as they were that season, from MLB's StatsAPI, with 2021's interim minor-league names shown as the leagues' current ones (Triple-A East as IL, and so on).</p>
+        <p><b>Years:</b> each level opens on its most recent year: 2027 for MLB, built on the 2027 schedule, and 2026 for the minors. Earlier seasons (MLB from 2015, the minors from 2021) come from the same fit, indexed to that season's average park at that level, for all batters; the LHB/RHB split covers each level's most recent year. Venue names, teams, leagues and orgs are as they were that season, from MLB's StatsAPI, with 2021's interim minor-league names shown as the leagues' current ones (Triple-A East as IL, and so on). MLB 2027 uses the names parks carry in 2027, so Comerica Park appears as Fifth Third Park. <b>All years</b> lists every season at once, one row per park and season; with a Team or Org picked, it follows a park through the years.</p>
         <p>Factors as of __GENERATED__.</p>
       </div>
     </details>
@@ -256,9 +262,10 @@ const DATA = __DATA__;
 const LEVELS = ["MLB", "AAA", "AA", "A+", "A"];
 // the qualifying cutoff by level and year (50 of MLB's 81 home games, pro-rated; short seasons scale down)
 const minGames = (lv, yr) => DATA.minGames[lv][yr];
-// the year on screen for a level: the one picked, else the level's most recent
-const yearOf = lv => state.year ? +state.year : DATA.latest[lv];
-const yearOk = r => r[ci.Year] === yearOf(r[ci.Level]);
+// the year on screen for a level: the one picked, else the level's most recent; "all" is every year
+const ALL = "all";
+const yearOf = lv => state.year && state.year !== ALL ? +state.year : DATA.latest[lv];
+const yearOk = r => state.year === ALL || r[ci.Year] === yearOf(r[ci.Level]);
 const SIDE_LABEL = {All: "all batters", L: "left-handed batters", R: "right-handed batters"};
 const LOWER_BETTER = new Set(["K"]);
 const COLORED = ["Park Factor", "R", "OBP", "AVG", "1B", "2B", "3B", "HR", "BB", "K", "HBP", "BACON", "wOBACon", "HR p10", "HR p90"];
@@ -271,8 +278,10 @@ const TIPS = {
   "Games": "Games at the venue (MLB 2027: the 2027 schedule; other years: completed games that season)",
   "PA": "PAs at the venue and level (past years: that season's; most recent year: every season's)"
 };
-// the Level column only shows on All levels, and Year when that mixes the levels' most recent years
-const showCols = () => ["Rk.", ...(state.level ? [] : ["Level"]), ...(state.level || state.year ? [] : ["Year"]), "League", "Team", "Org", "Venue", "Games", ...COLORED, "PA"];
+// the Level column only shows on All levels, and Year on All years or when All levels mixes the
+// levels' most recent years
+const showCols = () => ["Rk.", ...(state.level ? [] : ["Level"]),
+  ...(state.year === ALL || !(state.level || state.year) ? ["Year"] : []), "League", "Team", "Org", "Venue", "Games", ...COLORED, "PA"];
 const TXT = new Set(["Level", "League", "Team", "Org", "Venue"]);
 
 const ci = Object.fromEntries(DATA.cols.map((c, i) => [c, i]));
@@ -313,8 +322,9 @@ function refreshOptions() {
   const atLevel = DATA.rows.filter(r => (!state.level || r[ci.Level] === state.level) && r[ci.Side] === "All");
   const newest = state.level ? DATA.latest[state.level] : null;
   const years = [...new Set(atLevel.map(r => r[ci.Year]))].sort((a, b) => b - a).filter(y => y !== newest).map(String);
-  $("year").innerHTML = `<option value="">${newest || "Most recent"}</option>` + years.map(y => `<option>${y}</option>`).join("");
-  if (!years.includes(state.year)) state.year = "";
+  $("year").innerHTML = `<option value="">${newest || "Most recent"}</option><option value="${ALL}">All years</option>` +
+    years.map(y => `<option>${y}</option>`).join("");
+  if (state.year !== ALL && !years.includes(state.year)) state.year = "";
   $("year").value = state.year;
   const lv = atLevel.filter(yearOk);
   const leagues = LEVELS.flatMap(l => uniq(lv.filter(r => r[ci.Level] === l).map(r => r[ci.League])));
@@ -332,17 +342,17 @@ function head() {
 }
 
 function render() {
-  // batter-side splits only exist for each level's most recent year
-  const splits = DATA.rows.some(r => r[ci.Side] !== "All" && (!state.level || r[ci.Level] === state.level) && yearOk(r));
+  // batter-side splits only exist for each level's most recent year, so not on All years
+  const splits = state.year !== ALL && DATA.rows.some(r => r[ci.Side] !== "All" && (!state.level || r[ci.Level] === state.level) && yearOk(r));
   if (!splits) state.side = "All";
   document.querySelectorAll("#side button").forEach(b => {
     b.disabled = !splits && b.dataset.v !== "All";
     b.title = b.disabled ? "Batter-side splits cover each level's most recent year" : "";
   });
   const SHOW = showCols();
-  $("qual_label").textContent = state.level
+  $("qual_label").textContent = state.level && state.year !== ALL
     ? `Qualified parks (more than ${minGames(state.level, yearOf(state.level))} games)`
-    : "Qualified parks (more than 50 games, pro-rated by level and season)";
+    : `Qualified parks (more than 50 games, pro-rated by ${state.level ? "season" : "level and season"})`;
   const rows = DATA.rows.filter(r =>
     r[ci.Side] === state.side && (!state.level || r[ci.Level] === state.level) && yearOk(r) &&
     (!state.league || r[ci.League] === state.league) &&
@@ -353,22 +363,26 @@ function render() {
   rows.sort((a, b) => {
     const x = k === ci.Level ? LEVELS.indexOf(a[k]) : a[k], y = k === ci.Level ? LEVELS.indexOf(b[k]) : b[k];
     const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y));
-    return c * d || b[ci["Park Factor"]] - a[ci["Park Factor"]] || b[ci.PA] - a[ci.PA];
+    return c * d || b[ci["Park Factor"]] - a[ci["Park Factor"]] || b[ci.Year] - a[ci.Year] || b[ci.PA] - a[ci.PA];
   });
   shown = rows;
   head();
   $("body").innerHTML = rows.length ? rows.map((r, i) => "<tr>" + SHOW.map(c => {
     if (c === "Rk.") return `<td class="rk">${i + 1}</td>`;
     const v = r[ci[c]];
-    if (TXT.has(c)) return `<td class="txt${c === "Venue" ? " venue" : ""}">${esc(v)}</td>`;
+    const was = c === "Venue" && DATA.renamed[v];  // a park renamed for 2027
+    if (TXT.has(c)) return `<td class="txt${c === "Venue" ? " venue" : ""}"${was ? ` title="${esc(was)}"` : ""}>${esc(v)}</td>`;
     if (COLORED.includes(c)) return `<td class="stat${c === "Park Factor" ? " pf sep" : ""}" style="background:${shade(v, c)}">${v}</td>`;
     return `<td class="dim${c === "PA" ? " sep" : ""}">${c === "Year" ? v : v.toLocaleString()}</td>`;
   }).join("") + "</tr>").join("")
     : `<tr class="empty"><td colspan="${SHOW.length}">No parks match these filters${state.qual ? " — try turning off Qualified parks" : ""}.</td></tr>`;
-  const parks = `${rows.length} park${rows.length === 1 ? "" : "s"}`;
+  const n = rows.length, unit = (state.year === ALL ? "park season" : "park") + (n === 1 ? "" : "s");
+  const years = rows.map(r => r[ci.Year]);
+  const when = state.year === ALL ? (n ? `, ${Math.min(...years)}–${Math.max(...years)}` : "")
+    : state.level ? ` in ${yearOf(state.level)}` : state.year ? ` in ${state.year}` : " in each level's most recent year";
   $("status").textContent = state.level
-    ? `${rows.length} ${state.level} ${parks.split(" ")[1]} in ${yearOf(state.level)}, ${SIDE_LABEL[state.side]}`
-    : `${parks} across all levels ${state.year ? "in " + state.year : "in each level's most recent year"}, ${SIDE_LABEL[state.side]} (each indexed to its own level)`;
+    ? `${n} ${state.level} ${unit}${when}, ${SIDE_LABEL[state.side]}`
+    : `${n} ${unit} across all levels${when}, ${SIDE_LABEL[state.side]} (each indexed to its own level)`;
   document.querySelectorAll("#side button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.side));
   $("level").value = state.level; $("year").value = state.year; $("org").value = state.org; $("qual").checked = state.qual;
   const h = toHash();
@@ -400,7 +414,7 @@ function fromHash() {
   if (ORGS.includes(p.get("org"))) state.org = p.get("org");
   const lv = p.get("level");
   state.level = lv === "all" ? "" : LEVELS.includes(lv) ? lv : levelDefault();
-  state.year = p.get("year") || "";  // refreshOptions drops a year the level doesn't have
+  state.year = p.get("year") || "";  // "all", or a year; refreshOptions drops one the level doesn't have
   state.league = p.get("league") || "";  // refreshOptions drops a league or team that isn't there
   state.team = p.get("team") || "";
   if (p.get("qual") === "0") state.qual = false;
@@ -440,7 +454,8 @@ $("csv").addEventListener("click", () => {
   const lines = [CSV_COLS, ...shown.map((r, i) => CSV_COLS.map(c => c === "Rk." ? i + 1 : r[ci[c]]))];
   const text = lines.map(l => l.map(csvCell).join(",")).join("\r\n") + "\r\n";
   const blob = new Blob(["\ufeff" + text], {type: "text/csv;charset=utf-8"});  // BOM so Excel reads UTF-8
-  const name = ["park_factors", state.level ? yearOf(state.level) : state.year || "most-recent", state.level || "all-levels", state.org, state.league, state.team,
+  const year = state.year === ALL ? "all-years" : state.level ? yearOf(state.level) : state.year || "most-recent";
+  const name = ["park_factors", year, state.level || "all-levels", state.org, state.league, state.team,
     state.side === "All" ? "" : state.side + "HB"].filter(Boolean).join("_").replace(/\+/g, "plus");
   const a = Object.assign(document.createElement("a"), {href: URL.createObjectURL(blob), download: name + ".csv"});
   document.body.append(a); a.click(); a.remove();

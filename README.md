@@ -602,21 +602,23 @@ and every row stays indexed to its own level's average. Any header sorts the tab
 
 **Year** opens on each level's most recent year: 2027 for MLB (the factors centred on the 2027
 schedule) and 2026 for the minors; any earlier season can be picked (MLB from 2015, the minors
-from 2021). On All levels, the most recent year mixes MLB 2027 with the minors' 2026, so a Year
+from 2021), or **All years**, one row per park and season (with a Team or Org, a park's history). On All levels, the most recent year mixes MLB 2027 with the minors' 2026, so a Year
 column appears. Past seasons are all batters only, so LHB / RHB switch off for them. Each past
 season is indexed to that season's average park at its level, and shows the venue under its name
 that season (Miller Park, Safeco Field, U.S. Cellular Field, …) with that season's home club,
 league and parent org; 2021's interim minor-league names show as the leagues' current ones
-(Triple-A East as IL, High-A West as NWL, and so on).
+(Triple-A East as IL, High-A West as NWL, and so on). MLB 2027 rows carry the names parks have
+for 2027, from `NAMES_2027` in `build_leaderboard.py` (Comerica Park → Fifth Third Park; the cell's
+tooltip gives the old name), while earlier seasons keep the name they had then.
 
 The filters and sort are linkable: the page keeps them in the hash, leaving defaults out, e.g.
 `park-factors/#org=SEA&side=L` or `#level=AAA&league=PCL&sort=HR&dir=desc` (keys `side` = `L` /
-`R`, `level` = a level or `all`, `year`, `league`, `team`, `org`, `qual=0`, `sort` = a column header,
+`R`, `level` = a level or `all`, `year` = a year or `all`, `league`, `team`, `org`, `qual=0`, `sort` = a column header,
 `dir` = `asc` / `desc`). With an org in the link, the level defaults to All levels. Unknown
 values fall back to the defaults, and **Copy link** copies the current address. **Download CSV**
 saves the table as shown (filters and sort applied, with Level, Year and Side columns always
 included) as `park_factors_<year>_<level>[_<org>_<league>_<team>_<side>HB].csv` (`most-recent` for
-the year on All levels' default).
+the year on All levels' default, `all-years` for All years).
 
 Every column is an index where 100 is that level's average park: Park Factor (wOBA), R
 (BaseRuns), OBP, AVG, 1B, 2B, 3B, HR, BB, K, HBP, BACON (hits per contact, HR included), wOBACon,
