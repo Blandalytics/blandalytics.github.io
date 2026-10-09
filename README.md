@@ -592,9 +592,11 @@ so browsers fetch the new files.
 
 [blandalytics.com/park-factors/](https://blandalytics.com/park-factors/) — a Baseball
 Savant-style leaderboard of 2027 park factors for MLB and MiLB (AAA, AA, A+, A) parks. Filters
-for **Batter side** (All / LHB / RHB), **Level**, **League** (the level's leagues), **Team** (the
-level and league's clubs) and **Org**, plus **Qualified parks**; it opens on MLB, all batters,
-qualified parks, sorted by Park Factor. Any header sorts the table, and **Reset filters** goes
+for **Batter side** (All / LHB / RHB), **Level** (one level or All levels), **League** (the
+level's leagues), **Team** (the level, league and org's clubs) and **Org**, plus **Qualified
+parks**; it opens on MLB, all batters, qualified parks, sorted by Park Factor. Picking an org
+switches Level to All levels, so the whole system shows at once; All levels adds a Level column,
+and every row stays indexed to its own level's average. Any header sorts the table, and **Reset filters** goes
 back to the opening view.
 
 Every column is an index where 100 is that level's average park: Park Factor (wOBA), R
@@ -603,7 +605,7 @@ and HR p10 / p90 (the HR index's 80% interval), then Games and PA. The index col
 on one diverging scale centred on 100 and saturated at 90 and 110: red helps hitters and blue
 hurts them, so SO runs the other way (more strikeouts shade blue).
 
-**Qualified parks** keeps venues with more than 50 games, pro-rated to each level's home
+**Qualified parks** keeps venues with more than 50 games, pro-rated to each row's level's home
 schedule: MLB 50 of 81, AAA 46.3 of 75, AA 42.6 of 69, A+ and A 40.7 of 66. MLB games are the
 2027 schedule's at each venue (neutral sites included, so Las Vegas Ballpark's 6 and Field of
 Dreams' 1 drop out); MiLB games are 2026's.
