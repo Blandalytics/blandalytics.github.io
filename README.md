@@ -596,8 +596,14 @@ for **Batter side** (All / LHB / RHB), **Level** (one level or All levels), **Le
 level's leagues), **Team** (the level, league and org's clubs) and **Org**, plus **Qualified
 parks**; it opens on MLB, all batters, qualified parks, sorted by Park Factor. Picking an org
 switches Level to All levels, so the whole system shows at once; All levels adds a Level column,
-and every row stays indexed to its own level's average. Any header sorts the table, and **Reset filters** goes
-back to the opening view.
+and every row stays indexed to its own level's average. Any header sorts the table, and
+**Reset filters** goes back to the opening view.
+
+The filters and sort are linkable: the page keeps them in the hash, leaving defaults out, e.g.
+`park-factors/#org=SEA&side=L` or `#level=AAA&league=PCL&sort=HR&dir=desc` (keys `side` = `L` /
+`R`, `level` = a level or `all`, `league`, `team`, `org`, `qual=0`, `sort` = a column header,
+`dir` = `asc` / `desc`). With an org in the link, the level defaults to All levels. Unknown
+values fall back to the defaults, and **Copy link** copies the current address.
 
 Every column is an index where 100 is that level's average park: Park Factor (wOBA), R
 (BaseRuns), OBP, H, 1B, 2B, 3B, HR, BB, SO, HBP, BACON (hits per contact, HR included), wOBACon,
