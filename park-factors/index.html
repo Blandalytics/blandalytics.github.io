@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>Park Factors · Blandalytics</title>
-<meta name="description" content="2027 park factors for MLB and MiLB parks, by batter side: wOBA, runs, hits by type, walks, strikeouts and contact, adjusted for batter and pitcher.">
+<title>Park Factors</title>
+<meta name="description" content="Park factors for MLB and MiLB parks, by batter side: wOBA, runs, hits by type, walks, strikeouts and contact, adjusted for batter and pitcher.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -82,9 +82,8 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
 <body>
 <main>
   <header>
-    <a class="home" href="/">← Blandalytics</a>
     <h1>Park Factors</h1>
-    <p class="tag">How much each MLB and MiLB park helps or hurts hitters, by batter side, for 2027. 100 is the level's average park; every factor is the full park effect (not halved), adjusted for who batted and pitched there.</p>
+    <p class="tag">How each park affects outcomes going into 2027. 100 is the level's average park, and a factor above 100 shows the park increases that result. Stats are color-coded for how they benefit a hitter (Red = better for the hitter). Every factor is adjusted for who batted and pitched there.</p>
   </header>
 
   <section class="card">
@@ -127,11 +126,10 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
     <details>
       <summary>How it works</summary>
       <div class="method">
-        <p><b>Scale:</b> 100 is the average park at that level. <b>Park Factor</b> is the wOBA index and <b>R</b> is runs (BaseRuns). The other columns are indexes for each outcome: <b>BACON</b> is hits per ball in contact (home runs included), <b>wOBACon</b> is wOBA on contact, and <b>HR p10 / p90</b> bound the 80% interval of the HR index.</p>
+        <p><b>Scale:</b> 100 is the average park at that level. <b>Park Factor</b> is the wOBA index and <b>R</b> is runs (<a href="https://en.wikipedia.org/wiki/Base_runs">BaseRuns</a>). The other columns are indexes for each outcome: <b>BACON</b> is Batting Average on CONtact (home runs included), <b>wOBACon</b> is wOBA on Contact, and <b>HR p10 / p90</b> factors provide an 80% Confidence Interval for the park's HR true factor. The spread is wider for newer parks or those with recent renovations (Ex: <a href="https://www.mlb.com/news/royals-moving-outfield-walls-at-kauffman-stadium">Kauffman Stadium</a> in 2026).</p>
         <p><b>Colors:</b> centered on 100 and saturated at 90 and 110. Red helps hitters and blue hurts them, so for <b>SO</b> the scale is flipped: more strikeouts shade blue.</p>
-        <p><b>Model:</b> one joint Bayesian fit of every plate appearance (MLB 2015–26; AAA, AA, A+ and A 2021–26) with batter, pitcher, league-season, home-field and platoon terms, a per-venue factor that drifts across seasons (with breaks for known dimension changes) and a per-venue left/right split. A venue is shared across levels, so a park's minor-league years inform its MLB factor.</p>
+        <p><b>Model:</b> one joint Bayesian fit of every plate appearance (MLB 2015–26; AAA, AA, A+ and A 2021–26) with batter, pitcher, league-season, home-field and platoon terms, a per-venue factor that drifts across seasons (with breaks for known dimension changes) and a per-venue left/right split. If a park is used across multiple leagues (Ex: Sutter Health Park has hosted both AAA and MLB games), the data from all leagues informs that park factor.</p>
         <p><b>Games:</b> MLB rows use the 2027 schedule (games at the venue that season, neutral sites included); MiLB rows use the 2026 parks. <b>Qualified parks</b> hides venues with 50 or fewer games, pro-rated to each level's home schedule: <span id="thresholds"></span>. <b>PA</b> is the venue's plate appearances at that level in the data.</p>
-        <p><b>Links:</b> the address bar keeps the current filters and sort (for example <code>#org=SEA&amp;side=L</code>), so a view can be bookmarked or shared; <b>Copy link</b> copies it. <b>Download CSV</b> saves the table as shown, filters and sort applied.</p>
         <p><b>All levels:</b> every row is still indexed to its own level's average, so a 105 in AA and a 105 in MLB are each 5% above their level, not equal environments. Picking an <b>Org</b> switches to All levels to show the whole system; pick a level after that to narrow it.</p>
         <p>Factors as of 2026-10-08.</p>
       </div>
@@ -151,7 +149,7 @@ const COLORED = ["Park Factor", "R", "OBP", "H", "1B", "2B", "3B", "HR", "BB", "
 const TIPS = {
   "Park Factor": "wOBA index", "R": "Runs (BaseRuns) index", "OBP": "On-base index", "H": "Hits index",
   "BB": "Walk index", "SO": "Strikeout index (higher = worse for hitters)", "HBP": "Hit-by-pitch index",
-  "BACON": "Hits per contact, HR included", "wOBACon": "wOBA on contact",
+  "BACON": "Batting average on contact", "wOBACon": "wOBA on contact",
   "HR p10": "HR index, 10th percentile", "HR p90": "HR index, 90th percentile",
   "Level": "Each row is indexed to its own level's average",
   "Games": "Games at the venue (MLB: 2027 schedule; MiLB: 2026)", "PA": "PAs at the venue and level in the data"
