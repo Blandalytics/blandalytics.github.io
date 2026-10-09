@@ -591,32 +591,46 @@ so browsers fetch the new files.
 ## Park Factors
 
 [blandalytics.com/park-factors/](https://blandalytics.com/park-factors/) — a Baseball
-Savant-style leaderboard of 2027 park factors for MLB and MiLB (AAA, AA, A+, A) parks. Filters
-for **Batter side** (All / LHB / RHB), **Level** (one level or All levels), **League** (the
-level's leagues), **Team** (the level, league and org's clubs) and **Org**, plus **Qualified
-parks**; it opens on MLB, all batters, qualified parks, sorted by Park Factor. Picking an org
+Savant-style leaderboard of park factors for MLB and MiLB (AAA, AA, A+, A) parks, going into 2027
+and for every season the park model covers. Filters for **Batter side** (All / LHB / RHB),
+**Level** (one level or All levels), **Year**, **League** (the level and year's leagues),
+**Team** (the level, year, league and org's clubs) and **Org**, plus **Qualified parks**; it opens
+on MLB 2027, all batters, qualified parks, sorted by Park Factor. Picking an org
 switches Level to All levels, so the whole system shows at once; All levels adds a Level column,
 and every row stays indexed to its own level's average. Any header sorts the table, and
 **Reset filters** goes back to the opening view.
 
+**Year** opens on each level's most recent year: 2027 for MLB (the factors centred on the 2027
+schedule) and 2026 for the minors; any earlier season can be picked (MLB from 2015, the minors
+from 2021). On All levels, the most recent year mixes MLB 2027 with the minors' 2026, so a Year
+column appears. Past seasons are all batters only, so LHB / RHB switch off for them. Each past
+season is indexed to that season's average park at its level, and shows the venue under its name
+that season (Miller Park, Safeco Field, U.S. Cellular Field, …) with that season's home club,
+league and parent org; 2021's interim minor-league names show as the leagues' current ones
+(Triple-A East as IL, High-A West as NWL, and so on).
+
 The filters and sort are linkable: the page keeps them in the hash, leaving defaults out, e.g.
 `park-factors/#org=SEA&side=L` or `#level=AAA&league=PCL&sort=HR&dir=desc` (keys `side` = `L` /
-`R`, `level` = a level or `all`, `league`, `team`, `org`, `qual=0`, `sort` = a column header,
+`R`, `level` = a level or `all`, `year`, `league`, `team`, `org`, `qual=0`, `sort` = a column header,
 `dir` = `asc` / `desc`). With an org in the link, the level defaults to All levels. Unknown
 values fall back to the defaults, and **Copy link** copies the current address. **Download CSV**
-saves the table as shown (filters and sort applied, with Level and Side columns always included)
-as `park_factors_2027_<level>[_<org>_<league>_<team>_<side>HB].csv`.
+saves the table as shown (filters and sort applied, with Level, Year and Side columns always
+included) as `park_factors_<year>_<level>[_<org>_<league>_<team>_<side>HB].csv` (`most-recent` for
+the year on All levels' default).
 
 Every column is an index where 100 is that level's average park: Park Factor (wOBA), R
-(BaseRuns), OBP, H, 1B, 2B, 3B, HR, BB, SO, HBP, BACON (hits per contact, HR included), wOBACon,
+(BaseRuns), OBP, AVG, 1B, 2B, 3B, HR, BB, K, HBP, BACON (hits per contact, HR included), wOBACon,
 and HR p10 / p90 (the HR index's 80% interval), then Games and PA. The index columns are shaded
 on one diverging scale centred on 100 and saturated at 90 and 110: red helps hitters and blue
-hurts them, so SO runs the other way (more strikeouts shade blue).
+hurts them, so K runs the other way (more strikeouts shade blue). The CSVs keep the model's
+names for two of them: AVG is `H` and K is `SO`.
 
 **Qualified parks** keeps venues with more than 50 games, pro-rated to each row's level's home
-schedule: MLB 50 of 81, AAA 46.3 of 75, AA 42.6 of 69, A+ and A 40.7 of 66. MLB games are the
-2027 schedule's at each venue (neutral sites included, so Las Vegas Ballpark's 6 and Field of
-Dreams' 1 drop out); MiLB games are 2026's.
+schedule: MLB 50 of 81, AAA 46.3 of 75, AA 42.6 of 69, A+ and A 40.7 of 66. A past season
+pro-rates to its own median games per venue, so short seasons scale down (MLB 2020: more than
+18.5; the minors' 2021: 37 to 40.1). MLB 2027 games are the 2027 schedule's at each venue (neutral
+sites included, so Las Vegas Ballpark's 6 and Field of Dreams' 1 drop out); every other year
+counts the venue's completed regular-season games that season.
 
 The factors come from the projection system's park model: one joint Bayesian fit of every plate
 appearance (MLB 2015–26, the full-season minors 2021–26) with batter, pitcher, league-season,
@@ -628,7 +642,9 @@ who batted and pitched there.
 |---|---|
 | `park-factors/index.html` | the page, with the leaderboard data inlined; no other requests but the fonts |
 | `tools/park_factors/park_factors_2027.csv` | the data: one row per level, batter side (`All`, `L`, `R`) and venue, with every column on the page and the date the factors were generated (`As Of`) |
-| `tools/park_factors/build_leaderboard.py` | builds the page from the CSV; `--from-md` first rewrites the CSV from the park model's handoff markdown (every table in its section 10) |
+| `tools/park_factors/park_factors_history.csv` | every season before each level's most recent: one row per level, year and venue (all batters), with the season's venue name, League, Team, Org and Games added from StatsAPI |
+| `tools/park_factors/build_history.py` | writes that file from the park model's `park_factors_history.csv` (index columns, PA and StatsAPI venue ids): each row's venue name, home club (most games there that season), league, org and completed-game count come from that season's StatsAPI schedule and teams. Responses are cached in `tools/park_factors/cache/` (not committed); it checks its 2026 minor-league rows against the board's |
+| `tools/park_factors/build_leaderboard.py` | builds the page from both CSVs; `--from-md` first rewrites the board CSV from the park model's handoff markdown (every table in its section 10) |
 | `tools/park_factors/build_tile.py` | the homepage tile, from the CSV: the top and bottom seven qualified MLB parks as a heatmap in the Pitcher List Stats figure style, laid out as HTML, screenshotted at 900 × 900 by headless Edge and saved as `images/tile-park-factors.webp` and `-720.webp` |
 | `tools/park_factors/tile_logo.png` | the Pitcher List Stats wordmark for the tile, cropped from the Series Win tile |
 
@@ -637,10 +653,12 @@ who batted and pitched there.
 ```
 python tools/park_factors/build_leaderboard.py                       # page from the committed CSV
 python tools/park_factors/build_leaderboard.py --from-md path/to/park_factors_2027.md   # new factors
+python tools/park_factors/build_history.py path/to/park_factors_history.csv   # then rebuild the page
 python tools/park_factors/build_tile.py                              # homepage tile from the CSV
 ```
 
-The handoff markdown stays with the park model; only the CSV it produces is committed. After
+The handoff markdown and the model's history file stay with the park model; only the CSVs
+built from them are committed. After
 rebuilding the tile, bump its `?v=` in `index.html` so Cloudflare serves the new image.
 
 ## Model Drilldown

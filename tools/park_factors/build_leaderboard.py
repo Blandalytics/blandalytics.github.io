@@ -1,7 +1,9 @@
 """Build blandalytics.com/park-factors/ from park_factors_2027.csv.
 
-The CSV holds every leaderboard row (level x batter side x venue) with the date the
-factors were generated; the page inlines it, so it makes no data requests.
+park_factors_2027.csv holds the current board (level x batter side x venue) with the date the
+factors were generated: each level's most recent year, MLB 2027 (on the 2027 schedule) and the
+minors 2026. park_factors_history.csv (from build_history.py) adds every earlier season, all
+batters. The page inlines both, so it makes no data requests.
 Usage:
   python tools/park_factors/build_leaderboard.py                 # page from the CSV
   python tools/park_factors/build_leaderboard.py --from-md X.md  # rewrite the CSV from the park
@@ -11,20 +13,28 @@ import argparse
 import csv
 import json
 import re
+import statistics
+from collections import defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).parent
 ROOT = HERE.resolve().parents[1]
 CSV = HERE / "park_factors_2027.csv"
+HIST = HERE / "park_factors_history.csv"
 OUT = ROOT / "park-factors" / "index.html"
 
 TEXT_COLS = {"Level", "Side", "League", "Team", "Org", "Venue", "As Of"}
+SHOW_AS = {"H": "AVG", "SO": "K"}  # page names for the model's columns
+# each level's most recent year is the current board's; earlier seasons come from the history
+LATEST = {"MLB": 2027, "AAA": 2026, "AA": 2026, "A+": 2026, "A": 2026}
+HOME_GAMES = {"MLB": 81, "AAA": 75, "AA": 69, "A+": 66, "A": 66}  # a full season's home games
 
 
 def parse_md(md):
     """Leaderboard rows from the handoff markdown, as dicts in CSV column order."""
     generated = re.search(r"Generated (\d{4}-\d{2}-\d{2})", md).group(1)
     sec = md[md.index("## 10."):]
+    sec = sec[:sec.index("\n## 11.")] if "\n## 11." in sec else sec
     rows, cur, hdr = [], None, None
     for line in sec.splitlines():
         m = re.match(r"### (\S+), batter side (\w+)", line)
@@ -54,6 +64,28 @@ def load(path=CSV):
     return cols, rows, recs[0]["As Of"]
 
 
+def load_history(cols, path=HIST):
+    """Seasons before each level's most recent year (all batters), in the page's column order."""
+    with open(path, newline="", encoding="utf-8") as f:
+        recs = [r for r in csv.DictReader(f) if int(r["Year"]) < LATEST[r["Level"]]]
+    return [[{**r, "Side": "All"}[c] if c in TEXT_COLS else int(r[c]) for c in cols] for r in recs]
+
+
+def min_games(cols, rows):
+    """The qualifying cutoff by level and year: more than 50 of MLB's 81 home games, pro-rated to
+    the level's home schedule. Past seasons take theirs from the median games per venue, so the
+    short ones (MLB 2020, the minors' 2021) scale down."""
+    li, yi, gi = cols.index("Level"), cols.index("Year"), cols.index("Games")
+    games = defaultdict(list)
+    for r in rows:
+        games[(r[li], r[yi])].append(r[gi])
+    out = defaultdict(dict)
+    for (lv, yr), g in sorted(games.items()):
+        full = HOME_GAMES[lv] if yr == LATEST[lv] else statistics.median(g)
+        out[lv][yr] = round(50 * full / 81, 1)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--from-md", help="park model handoff markdown to rewrite the CSV from")
@@ -66,7 +98,11 @@ def main():
             w.writerows(recs)
         print(f"{len(recs)} rows -> {CSV}")
     cols, rows, as_of = load()
-    data = json.dumps({"cols": cols, "rows": rows}, separators=(",", ":"))
+    cols = ["Level", "Year"] + cols[1:]
+    rows = [[r[0], LATEST[r[0]]] + r[1:] for r in rows] + load_history(cols)
+    mins = min_games(cols, rows)
+    cols = [SHOW_AS.get(c, c) for c in cols]
+    data = json.dumps({"cols": cols, "rows": rows, "latest": LATEST, "minGames": mins}, separators=(",", ":"))
     html = TEMPLATE.replace("__DATA__", data).replace("__GENERATED__", as_of)
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(html, encoding="utf-8")
@@ -79,8 +115,8 @@ TEMPLATE = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>Park Factors · Blandalytics</title>
-<meta name="description" content="2027 park factors for MLB and MiLB parks, by batter side: wOBA, runs, hits by type, walks, strikeouts and contact, adjusted for batter and pitcher.">
+<title>Park Factors</title>
+<meta name="description" content="Park factors for MLB and MiLB parks, by batter side: wOBA, runs, hits by type, walks, strikeouts and contact quality, adjusted for batter and pitcher.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -103,7 +139,7 @@ a{color:var(--accent)}
 a.home{color:var(--muted); text-decoration:none; font-size:14px}
 a.home:hover{color:var(--ink)}
 .card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
-.controls{display:grid; grid-template-columns:auto repeat(4,minmax(110px,1fr)) auto; gap:12px 14px; align-items:end}
+.controls{display:grid; grid-template-columns:auto repeat(5,minmax(100px,1fr)) auto; gap:12px 14px; align-items:end}
 @media (max-width:900px){.controls{grid-template-columns:1fr 1fr} .controls .side,.controls .qual{grid-column:1 / -1}}
 label,.field{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
 label b,.field b{color:var(--ink); font-weight:500}
@@ -114,7 +150,8 @@ select:focus,button:focus-visible,input:focus-visible{outline:2px solid var(--ac
 .seg button{background:transparent; border:0; padding:7px 14px; cursor:pointer; color:var(--muted)}
 .seg button + button{border-left:1px solid var(--rule)}
 .seg button[aria-pressed=true]{background:var(--accent); color:#0b1320; font-weight:600}
-.seg button:hover:not([aria-pressed=true]){color:var(--ink); background:var(--raise)}
+.seg button:hover:not([aria-pressed=true]):not(:disabled){color:var(--ink); background:var(--raise)}
+.seg button:disabled{opacity:.4; cursor:default}
 .check{flex-direction:row; align-items:center; gap:8px; padding-bottom:8px; white-space:nowrap}
 .check input{accent-color:var(--accent); width:16px; height:16px; margin:0}
 .row{display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; justify-content:space-between}
@@ -157,9 +194,8 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
 <body>
 <main>
   <header>
-    <a class="home" href="/">← Blandalytics</a>
     <h1>Park Factors</h1>
-    <p class="tag">How much each MLB and MiLB park helps or hurts hitters, by batter side, for 2027. 100 is the level's average park; every factor is the full park effect (not halved), adjusted for who batted and pitched there.</p>
+    <p class="tag">How each park affects outcomes going into 2027. 100 is the level's average park, and a factor above 100 shows the park increases that result. Stats are color-coded for how they benefit a hitter (Red = better for the hitter). Every factor uses observed results, adjusted for who batted and pitched there.</p>
   </header>
 
   <section class="card">
@@ -172,6 +208,7 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
         </div>
       </div>
       <label><b>Level</b><select id="level"></select></label>
+      <label><b>Year</b><select id="year"></select></label>
       <label><b>League</b><select id="league"></select></label>
       <label><b>Team</b><select id="team"></select></label>
       <label><b>Org</b><select id="org"></select></label>
@@ -202,12 +239,12 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
     <details>
       <summary>How it works</summary>
       <div class="method">
-        <p><b>Scale:</b> 100 is the average park at that level. <b>Park Factor</b> is the wOBA index and <b>R</b> is runs (BaseRuns). The other columns are indexes for each outcome: <b>BACON</b> is hits per ball in contact (home runs included), <b>wOBACon</b> is wOBA on contact, and <b>HR p10 / p90</b> bound the 80% interval of the HR index.</p>
-        <p><b>Colors:</b> centered on 100 and saturated at 90 and 110. Red helps hitters and blue hurts them, so for <b>SO</b> the scale is flipped: more strikeouts shade blue.</p>
-        <p><b>Model:</b> one joint Bayesian fit of every plate appearance (MLB 2015–26; AAA, AA, A+ and A 2021–26) with batter, pitcher, league-season, home-field and platoon terms, a per-venue factor that drifts across seasons (with breaks for known dimension changes) and a per-venue left/right split. A venue is shared across levels, so a park's minor-league years inform its MLB factor.</p>
-        <p><b>Games:</b> MLB rows use the 2027 schedule (games at the venue that season, neutral sites included); MiLB rows use the 2026 parks. <b>Qualified parks</b> hides venues with 50 or fewer games, pro-rated to each level's home schedule: <span id="thresholds"></span>. <b>PA</b> is the venue's plate appearances at that level in the data.</p>
-        <p><b>Links:</b> the address bar keeps the current filters and sort (for example <code>#org=SEA&amp;side=L</code>), so a view can be bookmarked or shared; <b>Copy link</b> copies it. <b>Download CSV</b> saves the table as shown, filters and sort applied.</p>
+        <p><b>Scale:</b> 100 is the average park at that level. <b>Park Factor</b> is the wOBA index and <b>R</b> is runs (<a href="https://en.wikipedia.org/wiki/Base_runs">BaseRuns</a>). The other columns are indexes for each outcome: <b>BACON</b> is Batting Average on CONtact (home runs included), <b>wOBACon</b> is wOBA on Contact, and <b>HR p10 / p90</b> factors provide an 80% Confidence Interval for the park's HR true factor. The spread is wider for newer parks or those with recent renovations (Ex: <a href="https://www.mlb.com/news/royals-moving-outfield-walls-at-kauffman-stadium">Kauffman Stadium</a> in 2026).</p>
+        <p><b>Colors:</b> centered on 100 and saturated at 90 and 110. Red helps hitters and blue hurts them, so for <b>K</b> the scale is flipped: more strikeouts shade blue.</p>
+        <p><b>Model:</b> one joint Bayesian fit of every plate appearance (MLB 2015–26; AAA, AA, A+ and A 2021–26) with batter, pitcher, league-season, home-field and platoon terms, a per-venue factor that drifts across seasons (with breaks for known dimension changes) and a per-venue left/right split. If a park is used across multiple leagues (Ex: Sutter Health Park has hosted both AAA and MLB games), the data from all leagues informs that park factor.</p>
+        <p><b>Games:</b> MLB 2027 rows use the 2027 schedule (games at the venue that season, neutral sites included); every other year counts the venue's completed regular-season games that season. <b>Qualified parks</b> hides venues with 50 or fewer games, pro-rated to each level's home schedule, so shortened seasons scale down: <span id="thresholds"></span>. <b>PA</b> is the venue's plate appearances at that level in the data: that season's for past years, and every season's for each level's most recent year.</p>
         <p><b>All levels:</b> every row is still indexed to its own level's average, so a 105 in AA and a 105 in MLB are each 5% above their level, not equal environments. Picking an <b>Org</b> switches to All levels to show the whole system; pick a level after that to narrow it.</p>
+        <p><b>Years:</b> each level opens on its most recent year: 2027 for MLB, built on the 2027 schedule, and 2026 for the minors. Earlier seasons (MLB from 2015, the minors from 2021) come from the same fit, indexed to that season's average park at that level, for all batters; the LHB/RHB split covers each level's most recent year. Venue names, teams, leagues and orgs are as they were that season, from MLB's StatsAPI, with 2021's interim minor-league names shown as the leagues' current ones (Triple-A East as IL, and so on).</p>
         <p>Factors as of __GENERATED__.</p>
       </div>
     </details>
@@ -217,26 +254,29 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
 const DATA = __DATA__;
 
 const LEVELS = ["MLB", "AAA", "AA", "A+", "A"];
-// home games in a full season at each level; the qualifying cutoff is 50 of MLB's 81, pro-rated
-const HOME_GAMES = {"MLB": 81, "AAA": 75, "AA": 69, "A+": 66, "A": 66};
-const MIN_GAMES = lv => 50 * HOME_GAMES[lv] / 81;
+// the qualifying cutoff by level and year (50 of MLB's 81 home games, pro-rated; short seasons scale down)
+const minGames = (lv, yr) => DATA.minGames[lv][yr];
+// the year on screen for a level: the one picked, else the level's most recent
+const yearOf = lv => state.year ? +state.year : DATA.latest[lv];
+const yearOk = r => r[ci.Year] === yearOf(r[ci.Level]);
 const SIDE_LABEL = {All: "all batters", L: "left-handed batters", R: "right-handed batters"};
-const LOWER_BETTER = new Set(["SO"]);
-const COLORED = ["Park Factor", "R", "OBP", "H", "1B", "2B", "3B", "HR", "BB", "SO", "HBP", "BACON", "wOBACon", "HR p10", "HR p90"];
+const LOWER_BETTER = new Set(["K"]);
+const COLORED = ["Park Factor", "R", "OBP", "AVG", "1B", "2B", "3B", "HR", "BB", "K", "HBP", "BACON", "wOBACon", "HR p10", "HR p90"];
 const TIPS = {
-  "Park Factor": "wOBA index", "R": "Runs (BaseRuns) index", "OBP": "On-base index", "H": "Hits index",
-  "BB": "Walk index", "SO": "Strikeout index (higher = worse for hitters)", "HBP": "Hit-by-pitch index",
-  "BACON": "Hits per contact, HR included", "wOBACon": "wOBA on contact",
+  "Park Factor": "wOBA factor", "R": "Runs (BaseRuns) factor", "OBP": "On-base factor", "AVG": "Batting average factor",
+  "BB": "Walk factor", "K": "Strikeout factor (higher = worse for hitters)", "HBP": "Hit-by-pitch factor",
+  "BACON": "Batting average on contact", "wOBACon": "wOBA on contact",
   "HR p10": "HR index, 10th percentile", "HR p90": "HR index, 90th percentile",
-  "Level": "Each row is indexed to its own level's average",
-  "Games": "Games at the venue (MLB: 2027 schedule; MiLB: 2026)", "PA": "PAs at the venue and level in the data"
+  "Level": "Each row is indexed to its own level's average", "Year": "Each level's most recent year: MLB 2027, the minors 2026",
+  "Games": "Games at the venue (MLB 2027: the 2027 schedule; other years: completed games that season)",
+  "PA": "PAs at the venue and level (past years: that season's; most recent year: every season's)"
 };
-// the Level column only shows on All levels
-const showCols = () => ["Rk.", ...(state.level ? [] : ["Level"]), "League", "Team", "Org", "Venue", "Games", ...COLORED, "PA"];
+// the Level column only shows on All levels, and Year when that mixes the levels' most recent years
+const showCols = () => ["Rk.", ...(state.level ? [] : ["Level"]), ...(state.level || state.year ? [] : ["Year"]), "League", "Team", "Org", "Venue", "Games", ...COLORED, "PA"];
 const TXT = new Set(["Level", "League", "Team", "Org", "Venue"]);
 
 const ci = Object.fromEntries(DATA.cols.map((c, i) => [c, i]));
-const DEFAULTS = {side: "All", level: "MLB", league: "", team: "", org: "", qual: true, sort: "Park Factor", dir: -1};
+const DEFAULTS = {side: "All", level: "MLB", year: "", league: "", team: "", org: "", qual: true, sort: "Park Factor", dir: -1};
 const state = {...DEFAULTS};
 let shown = [];  // the rows on screen, in order, for the CSV download
 
@@ -254,6 +294,7 @@ document.getElementById("legend_bar").style.background =
 const $ = id => document.getElementById(id);
 const uniq = a => [...new Set(a)].sort((x, y) => x.localeCompare(y));
 function fill(sel, values, allLabel, keep) {
+  values = values.filter(v => v !== "");
   sel.innerHTML = `<option value="">${allLabel}</option>` + values.map(v => `<option>${esc(v)}</option>`).join("");
   sel.value = values.includes(keep) ? keep : "";
   return sel.value;
@@ -263,11 +304,19 @@ function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": 
 $("level").innerHTML = `<option value="">All levels</option>` + LEVELS.map(l => `<option>${l}</option>`).join("");
 const ORGS = uniq(DATA.rows.map(r => r[ci.Org]));
 fill($("org"), ORGS, "All orgs", "");
-$("thresholds").textContent = LEVELS.map(l => `${l} more than ${+MIN_GAMES(l).toFixed(1)} (of ${HOME_GAMES[l]} home)`).join(", ");
+$("thresholds").textContent = LEVELS.map(l => `${l} ${DATA.latest[l]} more than ${minGames(l, DATA.latest[l])}`).join(", ") +
+  `; for example MLB 2020 more than ${minGames("MLB", 2020)} and AAA 2021 more than ${minGames("AAA", 2021)}`;
 
-// leagues in level order (MLB, IL, PCL, EL, …), teams alphabetically within the level, league and org
+// years newest first ("" is the level's most recent); leagues in level order (MLB, IL, PCL, EL, …);
+// teams alphabetically within the level, year, league and org
 function refreshOptions() {
-  const lv = DATA.rows.filter(r => (!state.level || r[ci.Level] === state.level) && r[ci.Side] === "All");
+  const atLevel = DATA.rows.filter(r => (!state.level || r[ci.Level] === state.level) && r[ci.Side] === "All");
+  const newest = state.level ? DATA.latest[state.level] : null;
+  const years = [...new Set(atLevel.map(r => r[ci.Year]))].sort((a, b) => b - a).filter(y => y !== newest).map(String);
+  $("year").innerHTML = `<option value="">${newest || "Most recent"}</option>` + years.map(y => `<option>${y}</option>`).join("");
+  if (!years.includes(state.year)) state.year = "";
+  $("year").value = state.year;
+  const lv = atLevel.filter(yearOk);
   const leagues = LEVELS.flatMap(l => uniq(lv.filter(r => r[ci.Level] === l).map(r => r[ci.League])));
   state.league = fill($("league"), [...new Set(leagues)], "All leagues", state.league);
   const inLeague = lv.filter(r => (!state.league || r[ci.League] === state.league) && (!state.org || r[ci.Org] === state.org));
@@ -283,16 +332,23 @@ function head() {
 }
 
 function render() {
+  // batter-side splits only exist for each level's most recent year
+  const splits = DATA.rows.some(r => r[ci.Side] !== "All" && (!state.level || r[ci.Level] === state.level) && yearOk(r));
+  if (!splits) state.side = "All";
+  document.querySelectorAll("#side button").forEach(b => {
+    b.disabled = !splits && b.dataset.v !== "All";
+    b.title = b.disabled ? "Batter-side splits cover each level's most recent year" : "";
+  });
   const SHOW = showCols();
   $("qual_label").textContent = state.level
-    ? `Qualified parks (more than ${+MIN_GAMES(state.level).toFixed(1)} games)`
-    : "Qualified parks (more than 50 games, pro-rated by level)";
+    ? `Qualified parks (more than ${minGames(state.level, yearOf(state.level))} games)`
+    : "Qualified parks (more than 50 games, pro-rated by level and season)";
   const rows = DATA.rows.filter(r =>
-    r[ci.Side] === state.side && (!state.level || r[ci.Level] === state.level) &&
+    r[ci.Side] === state.side && (!state.level || r[ci.Level] === state.level) && yearOk(r) &&
     (!state.league || r[ci.League] === state.league) &&
     (!state.team || r[ci.Team] === state.team) &&
     (!state.org || r[ci.Org] === state.org) &&
-    (!state.qual || r[ci.Games] > MIN_GAMES(r[ci.Level])));
+    (!state.qual || r[ci.Games] > minGames(r[ci.Level], r[ci.Year])));
   const k = state.sort === "Rk." ? ci["Park Factor"] : ci[state.sort], d = state.sort === "Rk." ? -state.dir : state.dir;
   rows.sort((a, b) => {
     const x = k === ci.Level ? LEVELS.indexOf(a[k]) : a[k], y = k === ci.Level ? LEVELS.indexOf(b[k]) : b[k];
@@ -306,14 +362,15 @@ function render() {
     const v = r[ci[c]];
     if (TXT.has(c)) return `<td class="txt${c === "Venue" ? " venue" : ""}">${esc(v)}</td>`;
     if (COLORED.includes(c)) return `<td class="stat${c === "Park Factor" ? " pf sep" : ""}" style="background:${shade(v, c)}">${v}</td>`;
-    return `<td class="dim${c === "PA" ? " sep" : ""}">${v.toLocaleString()}</td>`;
+    return `<td class="dim${c === "PA" ? " sep" : ""}">${c === "Year" ? v : v.toLocaleString()}</td>`;
   }).join("") + "</tr>").join("")
     : `<tr class="empty"><td colspan="${SHOW.length}">No parks match these filters${state.qual ? " — try turning off Qualified parks" : ""}.</td></tr>`;
+  const parks = `${rows.length} park${rows.length === 1 ? "" : "s"}`;
   $("status").textContent = state.level
-    ? `${rows.length} ${state.level} park${rows.length === 1 ? "" : "s"}, ${SIDE_LABEL[state.side]}`
-    : `${rows.length} park${rows.length === 1 ? "" : "s"} across all levels, ${SIDE_LABEL[state.side]} (each indexed to its own level)`;
+    ? `${rows.length} ${state.level} ${parks.split(" ")[1]} in ${yearOf(state.level)}, ${SIDE_LABEL[state.side]}`
+    : `${parks} across all levels ${state.year ? "in " + state.year : "in each level's most recent year"}, ${SIDE_LABEL[state.side]} (each indexed to its own level)`;
   document.querySelectorAll("#side button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.side));
-  $("level").value = state.level; $("org").value = state.org; $("qual").checked = state.qual;
+  $("level").value = state.level; $("year").value = state.year; $("org").value = state.org; $("qual").checked = state.qual;
   const h = toHash();
   if (location.hash.slice(1) !== h) {
     try { history.replaceState(null, "", h ? "#" + h : location.pathname + location.search); } catch (e) {}
@@ -327,6 +384,7 @@ function toHash() {
   const p = new URLSearchParams();
   if (state.side !== DEFAULTS.side) p.set("side", state.side);
   if (state.level !== levelDefault()) p.set("level", state.level || "all");
+  if (state.year) p.set("year", state.year);
   for (const k of ["league", "team", "org"]) if (state[k]) p.set(k, state[k]);
   if (!state.qual) p.set("qual", "0");
   if (state.sort !== DEFAULTS.sort || state.dir !== DEFAULTS.dir) {
@@ -342,6 +400,7 @@ function fromHash() {
   if (ORGS.includes(p.get("org"))) state.org = p.get("org");
   const lv = p.get("level");
   state.level = lv === "all" ? "" : LEVELS.includes(lv) ? lv : levelDefault();
+  state.year = p.get("year") || "";  // refreshOptions drops a year the level doesn't have
   state.league = p.get("league") || "";  // refreshOptions drops a league or team that isn't there
   state.team = p.get("team") || "";
   if (p.get("qual") === "0") state.qual = false;
@@ -353,6 +412,7 @@ function fromHash() {
 
 $("side").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.side = b.dataset.v; render(); } });
 $("level").addEventListener("change", e => { state.level = e.target.value; state.league = state.team = ""; refreshOptions(); render(); });
+$("year").addEventListener("change", e => { state.year = e.target.value; refreshOptions(); render(); });
 $("league").addEventListener("change", e => { state.league = e.target.value; refreshOptions(); render(); });
 $("team").addEventListener("change", e => { state.team = e.target.value; render(); });
 // picking an org shows its whole system: every level at once
@@ -373,14 +433,14 @@ function copyText(text) {
     if (!ok) throw new Error("copy failed");
   });
 }
-// the table as shown (filters and sort), with Level and Side always included so the file says what it is
-const CSV_COLS = ["Rk.", "Level", "Side", "League", "Team", "Org", "Venue", "Games", ...COLORED, "PA"];
+// the table as shown (filters and sort), with Level, Year and Side always included so the file says what it is
+const CSV_COLS = ["Rk.", "Level", "Year", "Side", "League", "Team", "Org", "Venue", "Games", ...COLORED, "PA"];
 const csvCell = v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
 $("csv").addEventListener("click", () => {
   const lines = [CSV_COLS, ...shown.map((r, i) => CSV_COLS.map(c => c === "Rk." ? i + 1 : r[ci[c]]))];
   const text = lines.map(l => l.map(csvCell).join(",")).join("\r\n") + "\r\n";
   const blob = new Blob(["\ufeff" + text], {type: "text/csv;charset=utf-8"});  // BOM so Excel reads UTF-8
-  const name = ["park_factors_2027", state.level || "all-levels", state.org, state.league, state.team,
+  const name = ["park_factors", state.level ? yearOf(state.level) : state.year || "most-recent", state.level || "all-levels", state.org, state.league, state.team,
     state.side === "All" ? "" : state.side + "HB"].filter(Boolean).join("_").replace(/\+/g, "plus");
   const a = Object.assign(document.createElement("a"), {href: URL.createObjectURL(blob), download: name + ".csv"});
   document.body.append(a); a.click(); a.remove();
