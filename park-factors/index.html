@@ -111,6 +111,7 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
         <span>Worse for hitters</span><span class="tick">90</span><span class="bar" id="legend_bar"></span><span class="tick">110</span><span>Better</span>
       </div>
       <button id="copy" class="reset" type="button">Copy link</button>
+      <button id="csv" class="reset" type="button">Download CSV</button>
       <button id="reset" class="reset" type="button">Reset filters</button>
     </div>
   </div>
@@ -130,7 +131,7 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
         <p><b>Colors:</b> centered on 100 and saturated at 90 and 110. Red helps hitters and blue hurts them, so for <b>SO</b> the scale is flipped: more strikeouts shade blue.</p>
         <p><b>Model:</b> one joint Bayesian fit of every plate appearance (MLB 2015–26; AAA, AA, A+ and A 2021–26) with batter, pitcher, league-season, home-field and platoon terms, a per-venue factor that drifts across seasons (with breaks for known dimension changes) and a per-venue left/right split. A venue is shared across levels, so a park's minor-league years inform its MLB factor.</p>
         <p><b>Games:</b> MLB rows use the 2027 schedule (games at the venue that season, neutral sites included); MiLB rows use the 2026 parks. <b>Qualified parks</b> hides venues with 50 or fewer games, pro-rated to each level's home schedule: <span id="thresholds"></span>. <b>PA</b> is the venue's plate appearances at that level in the data.</p>
-        <p><b>Links:</b> the address bar keeps the current filters and sort (for example <code>#org=SEA&amp;side=L</code>), so a view can be bookmarked or shared; <b>Copy link</b> copies it.</p>
+        <p><b>Links:</b> the address bar keeps the current filters and sort (for example <code>#org=SEA&amp;side=L</code>), so a view can be bookmarked or shared; <b>Copy link</b> copies it. <b>Download CSV</b> saves the table as shown, filters and sort applied.</p>
         <p><b>All levels:</b> every row is still indexed to its own level's average, so a 105 in AA and a 105 in MLB are each 5% above their level, not equal environments. Picking an <b>Org</b> switches to All levels to show the whole system; pick a level after that to narrow it.</p>
         <p>Factors as of 2026-10-08.</p>
       </div>
@@ -162,6 +163,7 @@ const TXT = new Set(["Level", "League", "Team", "Org", "Venue"]);
 const ci = Object.fromEntries(DATA.cols.map((c, i) => [c, i]));
 const DEFAULTS = {side: "All", level: "MLB", league: "", team: "", org: "", qual: true, sort: "Park Factor", dir: -1};
 const state = {...DEFAULTS};
+let shown = [];  // the rows on screen, in order, for the CSV download
 
 // diverging scale on the dark surface: blue (worse) – surface – red (better), clipped at 90/110
 const SURF = [21, 27, 35], RED = [214, 72, 66], BLUE = [58, 116, 214];
@@ -222,6 +224,7 @@ function render() {
     const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y));
     return c * d || b[ci["Park Factor"]] - a[ci["Park Factor"]] || b[ci.PA] - a[ci.PA];
   });
+  shown = rows;
   head();
   $("body").innerHTML = rows.length ? rows.map((r, i) => "<tr>" + SHOW.map(c => {
     if (c === "Rk.") return `<td class="rk">${i + 1}</td>`;
@@ -295,6 +298,19 @@ function copyText(text) {
     if (!ok) throw new Error("copy failed");
   });
 }
+// the table as shown (filters and sort), with Level and Side always included so the file says what it is
+const CSV_COLS = ["Rk.", "Level", "Side", "League", "Team", "Org", "Venue", "Games", ...COLORED, "PA"];
+const csvCell = v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+$("csv").addEventListener("click", () => {
+  const lines = [CSV_COLS, ...shown.map((r, i) => CSV_COLS.map(c => c === "Rk." ? i + 1 : r[ci[c]]))];
+  const text = lines.map(l => l.map(csvCell).join(",")).join("\r\n") + "\r\n";
+  const blob = new Blob(["\ufeff" + text], {type: "text/csv;charset=utf-8"});  // BOM so Excel reads UTF-8
+  const name = ["park_factors_2027", state.level || "all-levels", state.org, state.league, state.team,
+    state.side === "All" ? "" : state.side + "HB"].filter(Boolean).join("_").replace(/\+/g, "plus");
+  const a = Object.assign(document.createElement("a"), {href: URL.createObjectURL(blob), download: name + ".csv"});
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
 $("copy").addEventListener("click", () => {
   copyText(location.href).then(() => "Copied", () => "Copy failed").then(t => {
     $("copy").textContent = t;

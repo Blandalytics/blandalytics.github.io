@@ -603,7 +603,9 @@ The filters and sort are linkable: the page keeps them in the hash, leaving defa
 `park-factors/#org=SEA&side=L` or `#level=AAA&league=PCL&sort=HR&dir=desc` (keys `side` = `L` /
 `R`, `level` = a level or `all`, `league`, `team`, `org`, `qual=0`, `sort` = a column header,
 `dir` = `asc` / `desc`). With an org in the link, the level defaults to All levels. Unknown
-values fall back to the defaults, and **Copy link** copies the current address.
+values fall back to the defaults, and **Copy link** copies the current address. **Download CSV**
+saves the table as shown (filters and sort applied, with Level and Side columns always included)
+as `park_factors_2027_<level>[_<org>_<league>_<team>_<side>HB].csv`.
 
 Every column is an index where 100 is that level's average park: Park Factor (wOBA), R
 (BaseRuns), OBP, H, 1B, 2B, 3B, HR, BB, SO, HBP, BACON (hits per contact, HR included), wOBACon,
