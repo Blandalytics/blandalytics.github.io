@@ -6,6 +6,9 @@ swing this fast worth on average?* There is no exit velocity in it, so it credit
 how fast they swing and where they hit the ball, but not for how squarely they hit it — that
 part, with the luck, is what is left over in wOBA − xwOBA.
 
+The [Batted Ball Charts](https://blandalytics.com/batted-balls/) page draws it: its **xwOBA**
+view (2024 on) shows this surface at a hitter's average bat speed, with their batted balls on it.
+
 ![xwOBA over spray and launch angle at a slow, typical and fast swing](surface.png)
 
 ## The model

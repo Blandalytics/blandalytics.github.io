@@ -5,14 +5,22 @@ angle) compared to the league or to their own prior season, as the Streamlit app
 batted-ball-charts.streamlit.app does. It needs, per season, every hitter's batted
 balls and the league-wide density they are compared against. Both come from the
 completed-games Parquet in the bucket (see tools/data) and are written back to the
-same bucket, so the page reads nothing but two small JSON files:
+same bucket, so the page reads nothing but small JSON files:
 
     batted-balls/index.json        the seasons built, with what each covers
     batted-balls/<season>.json     one season: every hitter's batted balls, the league grid
+    batted-balls/xwoba.json        the 3D xwOBA model's surface on the chart's grid
 
 A hitter's own density is cheap (a few hundred points on a 91x91 grid) and is
 computed in the page, exactly as scipy's gaussian_kde would; the league's is
 ~120,000 points and is computed here, once a night, with scipy itself.
+
+From 2024, the first season bat tracking covers from opening day, each ball also
+carries its bat speed and its xwOBA from the 3D model in tools/xwoba (spray, launch
+angle, bat speed). The Stats API the bucket is built from has no bat tracking, so
+the bat speeds come from Savant's Statcast search through tools/xwoba/savant.py,
+joined pitch for pitch; the page draws the model's surface at a hitter's average
+bat speed, which it reads off xwoba.json by interpolating between two slices.
 
     python tools/batted_balls/build_data.py                  # the current season, into the bucket
     python tools/batted_balls/build_data.py --seasons 2021 2022 2023   # a backfill
@@ -23,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import functools
 import io
 import json
 import os
@@ -41,10 +50,15 @@ PREFIX = "batted-balls"
 SEASON_CACHE = "public, max-age=3600"
 INDEX_CACHE = "public, max-age=300"
 FIRST_SEASON = 2020
+# Bat tracking starts on 14 July 2023, so 2023's average bat speeds would be half a
+# season's; the xwOBA view starts with the first season tracked from opening day.
+XWOBA_SEASON = 2024
+XWOBA_DIR = Path(__file__).resolve().parents[1] / "xwoba"
 
-# the columns a chart needs, out of the ~140 in a file
-COLUMNS = ["game_date", "game_type", "batter", "batter_name", "bat_team", "stand",
-           "is_in_play", "launch_angle", "spray_angle"]
+# the columns a chart needs, out of the ~140 in a file; the pitch's keys join it to
+# Savant's bat speed
+COLUMNS = ["game_date", "game_type", "game_pk", "at_bat_index", "pitch_number", "batter",
+           "batter_name", "bat_team", "stand", "is_in_play", "launch_angle", "spray_angle"]
 
 # The chart's grid: spray angle 0-90 (0 the pull-side line, 45 dead centre for
 # either hand) against launch angle -30..60, 91 points each way -- the app's mgrid.
@@ -117,7 +131,8 @@ def batted_balls(df: pd.DataFrame) -> pd.DataFrame:
     90 at the opposite line, for either hand."""
     keep = (df["game_type"] == "R") & df["is_in_play"].fillna(False).astype(bool)
     keep &= df["launch_angle"].notna() & df["spray_angle"].notna()
-    out = df.loc[keep, ["game_date", "batter", "batter_name", "bat_team", "stand", "launch_angle"]].copy()
+    out = df.loc[keep, ["game_date", "game_pk", "at_bat_index", "pitch_number", "batter",
+                        "batter_name", "bat_team", "stand", "launch_angle"]].copy()
     out["spray_deg"] = df.loc[keep, "spray_angle"].astype(float) + 45.0
     out["launch_angle"] = out["launch_angle"].astype(float)
     return out.sort_values(["game_date", "batter"], kind="stable").reset_index(drop=True)
@@ -132,6 +147,56 @@ def load_season(s: requests.Session, manifest: dict, season: int, verbose: bool)
     if not parts:
         raise SystemExit(f"no MLB data for {season} in the manifest")
     return pd.concat(parts, ignore_index=True)
+
+
+# ---- bat speed and xwOBA ----------------------------------------------------------------
+@functools.cache
+def xwoba_tools():
+    """tools/xwoba's Savant pull, its fitted model and the model file's own fields."""
+    if str(XWOBA_DIR) not in sys.path:
+        sys.path.insert(0, str(XWOBA_DIR))
+    import model
+    import savant
+    meta = json.loads((XWOBA_DIR / "model.json").read_text())
+    return savant, model.Grid.from_json(meta), meta
+
+
+def with_xwoba(df: pd.DataFrame, season: int, verbose: bool) -> pd.DataFrame:
+    """df with each ball's bat speed and 3D xwOBA where the model covers it -- a swung-at
+    ball in play with bat tracking, not bunted (savant.batted_balls' rule) -- and NaN
+    for the rest. Savant numbers a plate appearance from 1, the Stats API from 0."""
+    savant, grid, _ = xwoba_tools()
+    swings = savant.batted_balls(savant.load_seasons([season], verbose=verbose))
+    keys = ["game_pk", "at_bat_number", "pitch_number"]
+    speeds = swings[keys + ["bat_speed"]].astype({k: "int64" for k in keys})
+    out = df.assign(at_bat_number=df["at_bat_index"].astype("int64") + 1,
+                    game_pk=df["game_pk"].astype("int64"),
+                    pitch_number=df["pitch_number"].astype("int64"))
+    out = out.merge(speeds, on=keys, how="left").drop(columns="at_bat_number")
+    has = out["bat_speed"].notna().to_numpy()
+    out["xwoba"] = np.nan
+    out.loc[has, "xwoba"] = grid.xwoba(out.loc[has, "spray_deg"], out.loc[has, "launch_angle"],
+                                       out.loc[has, "bat_speed"])
+    return out
+
+
+def surface_file(built: str) -> dict:
+    """The model's xwOBA on the chart's grid at each of its bat-speed nodes, in thousandths,
+    row-major by spray then launch angle as the league grid is. Reading between two slices
+    at a hitter's bat speed is exactly how the model reads between its own nodes."""
+    _, grid, meta = xwoba_tools()
+    speed = grid.axes[-1]
+    X, Y = np.mgrid[SPRAY[0]:SPRAY[1]:complex(GRID_N), LAUNCH[0]:LAUNCH[1]:complex(GRID_N)]
+    slices = [np.rint(1000 * grid.xwoba(X.ravel(), Y.ravel(), np.full(X.size, b))).astype(int).tolist()
+              for b in speed.nodes()]
+    return {
+        "built": built,
+        "model": {k: meta[k] for k in ("built", "from", "through", "n", "cv")},
+        "grid": {"spray": [*SPRAY, GRID_N], "launch": [*LAUNCH, GRID_N]},
+        "bat_speed": {"lo": speed.lo, "step": speed.step, "n": speed.n},
+        "scale": 1000,
+        "slices": slices,
+    }
 
 
 # ---- the league density -------------------------------------------------------------------
@@ -150,6 +215,19 @@ def league_grid(df: pd.DataFrame) -> np.ndarray:
 
 
 # ---- the season file ----------------------------------------------------------------------
+def _opt(v: float, digits: int):
+    return None if pd.isna(v) else round(float(v), digits)
+
+
+def ball_rows(g: pd.DataFrame) -> list[list]:
+    """[spray, launch angle] per ball, and where the season has them [.., bat speed, xwOBA],
+    null for a ball the model doesn't cover."""
+    if "xwoba" not in g:
+        return [[round(float(a), 1), round(float(b), 1)] for a, b in zip(g["spray_deg"], g["launch_angle"], strict=True)]
+    return [[round(float(a), 1), round(float(b), 1), _opt(c, 1), _opt(d, 3)]
+            for a, b, c, d in zip(g["spray_deg"], g["launch_angle"], g["bat_speed"], g["xwoba"], strict=True)]
+
+
 def player_rows(df: pd.DataFrame) -> list[dict]:
     rows = []
     for pid, g in df.groupby("batter", sort=False):
@@ -159,11 +237,19 @@ def player_rows(df: pd.DataFrame) -> list[dict]:
             "name": str(last["batter_name"]),
             "team": str(last["bat_team"]),
             "stand": str(g["stand"].mode().iloc[0]),
-            "bbe": [[round(float(a), 1), round(float(b), 1)]
-                    for a, b in zip(g["spray_deg"], g["launch_angle"])],
+            "bbe": ball_rows(g),
         })
     rows.sort(key=lambda r: (r["name"], r["id"]))
     return rows
+
+
+def xwoba_summary(df: pd.DataFrame) -> dict | None:
+    """The league's average bat speed and xwOBA over the balls the model covers."""
+    if "xwoba" not in df:
+        return None
+    has = df["xwoba"].notna()
+    return {"n": int(has.sum()), "bat_speed": round(float(df.loc[has, "bat_speed"].mean()), 2),
+            "xwoba": round(float(df.loc[has, "xwoba"].mean()), 4)}
 
 
 def season_file(season: int, df: pd.DataFrame, built: str) -> dict:
@@ -175,6 +261,7 @@ def season_file(season: int, df: pd.DataFrame, built: str) -> dict:
         "grid": {"spray": [*SPRAY, GRID_N], "launch": [*LAUNCH, GRID_N]},
         "league": [round(float(v), 7) for v in league_grid(df)],
         "teams": sorted(df["bat_team"].astype(str).unique()),
+        "xwoba": xwoba_summary(df),
         "players": player_rows(df),
     }
 
@@ -191,15 +278,22 @@ def build(store, s: requests.Session, manifest: dict, seasons: list[int], verbos
             print(f"{season}:", file=sys.stderr)
         built = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
         df = load_season(s, manifest, season, verbose)
+        if season >= XWOBA_SEASON:
+            df = with_xwoba(df, season, verbose)
         data = season_file(season, df, built)
         store.put(f"{PREFIX}/{season}.json", _dump(data), "application/json", SEASON_CACHE)
         index["seasons"][str(season)] = {
             "built": built, "through": data["through"], "n": data["n"],
-            "players": len(data["players"]),
+            "players": len(data["players"]), "xwoba": data["xwoba"] is not None,
         }
         if verbose:
             print(f"  {data['n']} batted balls, {len(data['players'])} hitters, through {data['through']}",
                   file=sys.stderr)
+            if data["xwoba"]:
+                print(f"  bat speed and xwOBA on {data['xwoba']['n']}", file=sys.stderr)
+    if any(y >= XWOBA_SEASON for y in seasons):
+        built = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+        store.put(f"{PREFIX}/xwoba.json", _dump(surface_file(built)), "application/json", SEASON_CACHE)
     index["seasons"] = dict(sorted(index["seasons"].items()))
     index["built"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     store.put(f"{PREFIX}/index.json", _dump(index), "application/json", INDEX_CACHE)

@@ -323,9 +323,13 @@ pick a team); *Discrete* draws the difference as filled contours, *Continuous* s
 cell; *Self (prior year)* subtracts the hitter's previous season instead of the league. The
 boxed numbers are the hitter's share of batted balls in each pull / centre / oppo by ground ball
 / line drive / fly ball / pop up cell, with the row and column shares along the axes (as changes
-from the prior season in the self comparison). Isaac Paredes' current season loads on arrival; a
-chart is linkable as `batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, with
-`-continuous` and `-self` suffixes. **Download PNG** saves the figure at 2x.
+from the prior season in the self comparison). From 2024, the first season Statcast tracked bat
+speed from opening day, **xwOBA** swaps the density for the [3D xwOBA model](#3d-xwoba)'s surface
+at the hitter's (or team's) average bat speed on balls in play, with their batted balls drawn on
+it as dots, and the boxes and axis figures become the model's xwOBA of the balls hit into each
+zone; the colour scale applies, the comparison doesn't. Isaac Paredes' current season loads on
+arrival; a chart is linkable as `batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, with
+`-continuous`, `-self` and `-xwoba` suffixes. **Download PNG** saves the figure at 2x.
 
 It is the chart [batted-ball-charts.streamlit.app](https://batted-ball-charts.streamlit.app/)
 draws ([PLV_viz `batted_ball_charts.py`](https://github.com/Blandalytics/PLV_viz/blob/main/hitter_app/pages/batted_ball_charts.py)),
@@ -339,31 +343,45 @@ time.
 ### How it works
 
 The data comes from the completed-games Parquet in the bucket (see *Data files*) rather than the
-app's own files, and is reduced to two small JSON files there that the page reads:
+app's own files, and is reduced to small JSON files there that the page reads:
 
 - `https://data.blandalytics.com/batted-balls/index.json` — the seasons built, with what each
   covers.
 - `https://data.blandalytics.com/batted-balls/<season>.json` — every hitter's regular-season
   batted balls (spray angle in the app's convention — 0° at the pull-side line, 45° dead centre,
   90° at the opposite line, for either hand — and launch angle), their team and bat side, the
-  team list, and the league density on the grid. About 1.5 MB, 450 KB compressed.
+  team list, and the league density on the grid. From 2024 each ball also carries its bat speed
+  and its 3D xwOBA (null for a bunt or an untracked swing), and the file the league's average of
+  both. About 1.5 MB before 2024, 3 MB after (450 / 930 KB compressed).
+- `https://data.blandalytics.com/batted-balls/xwoba.json` — the 3D xwOBA model's surface on the
+  same 91 × 91 grid at each of its bat-speed nodes (every 3 mph), in thousandths; the page reads
+  a hitter's surface by interpolating between the two slices around their bat speed, which is
+  exactly how the model reads between its own nodes. 650 KB, 240 KB compressed, fetched the
+  first time the xwOBA view is shown.
 - [`.github/workflows/batted-balls.yml`](.github/workflows/batted-balls.yml) rebuilds the current
   season every morning at 11:15 UTC, after the data files roll, and takes a `seasons` input for
-  backfills; a season takes about ten seconds.
+  backfills; a season takes about ten seconds, plus, from 2024, the bat speeds. The Stats API the
+  bucket is built from has no bat tracking, so those come from Baseball Savant's Statcast search
+  through `tools/xwoba/savant.py`, a week per request, joined pitch for pitch (Savant numbers a
+  plate appearance from 1, the Stats API from 0; 99.8% of balls match). The settled weeks are
+  kept in the Actions cache between runs, so the nightly job asks Savant only for the days since
+  the last one; a cold season is about thirty requests.
 
 | file | role |
 |---|---|
-| `tools/batted_balls/build_data.py` | reads a season's files from the bucket, keeps regular-season balls in play with a launch angle and a landing spot, writes the season file and the index |
-| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) or the heatmap, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x |
-| `batted-balls/index.html`, `app.js` | the page: season, hitter / team, colour scale and comparison controls, the link hash, the download |
+| `tools/batted_balls/build_data.py` | reads a season's files from the bucket, keeps regular-season balls in play with a launch angle and a landing spot, joins Savant's bat speeds and scores the 3D xwOBA from 2024, writes the season file, the surface file and the index |
+| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) or the heatmap, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed, the dots and the zones' xwOBA on the same layout |
+| `batted-balls/index.html`, `app.js` | the page: season, hitter / team, view, colour scale and comparison controls, the link hash, the download |
 
 A traded hitter's batted balls count for each of his teams in the team-wide chart, and his
 listed team is the last he hit for. A hitter needs three batted balls (not all in a line) for a
 density; the self comparison needs the prior season built, and reports when the hitter has no
 batted balls in it. Locally, `python tools/batted_balls/build_data.py --out batted-balls/data
 --seasons 2026` writes the same files under `batted-balls/data/batted-balls/`, and the page reads
-them with `?data=data/`. After any change to the JavaScript, bump the `?v=` query on the two
-script tags in `index.html` so browsers fetch the new files.
+them with `?data=data/` (from 2024 it pulls the season's bat speeds from Savant first, cached
+under `tools/xwoba/cache/`). After any change to the JavaScript, bump the `?v=` query on the two
+script tags in `index.html` so browsers fetch the new files. After a refit of the 3D model
+(`tools/xwoba/model.json`), rebuild 2024 on so the balls' xwOBA and the surface file follow it.
 
 ## 3D xwOBA
 
@@ -391,9 +409,9 @@ wOBA on contact (r = 0.66 against 0.49).
 | `tools/xwoba/savant.py` | the weekly Savant pulls, cached under `tools/xwoba/cache/` |
 | `tools/xwoba/build.py`, `evaluate.py`, `plot.py` | the fit, the held-out evaluation ([`evaluation.md`](tools/xwoba/evaluation.md)), the figure |
 
-Nothing on the site reads it yet. Method, use, results and limits are in
-[`tools/xwoba/README.md`](tools/xwoba/README.md); `python tools/xwoba/build.py --cv` rebuilds
-it.
+The Batted Ball Charts page draws it (the **xwOBA** view, 2024 on). Method, use, results and
+limits are in [`tools/xwoba/README.md`](tools/xwoba/README.md); `python tools/xwoba/build.py
+--cv` rebuilds it.
 
 ## NHL Draft Tool
 

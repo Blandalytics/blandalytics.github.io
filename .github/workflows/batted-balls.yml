@@ -2,7 +2,9 @@ name: Build batted-ball data
 
 # The Batted Ball Charts page's data (tools/batted_balls/build_data.py): every
 # hitter's batted balls and the league density for a season, from the completed-
-# games Parquet in the bucket, written back to the bucket under batted-balls/.
+# games Parquet in the bucket, written back to the bucket under batted-balls/. From
+# 2024 each ball also gets its bat speed, pulled from Baseball Savant a week at a
+# time (tools/xwoba/savant.py), and its xwOBA from the model in tools/xwoba.
 on:
   schedule:
     # 11:15 UTC: after the data files roll at 10:30, so the season file holds the
@@ -38,5 +40,20 @@ jobs:
       - name: Install
         run: pip install -r tools/batted_balls/requirements.txt
 
+      # Savant's settled weeks, so a run asks only for the days since the last one.
+      # Saved after every run: the season grows by a week at a time.
+      - name: Restore the Savant cache
+        uses: actions/cache/restore@v4
+        with:
+          path: tools/xwoba/cache
+          key: savant-weeks-${{ github.run_id }}
+          restore-keys: savant-weeks-
+
       - name: Build
         run: python tools/batted_balls/build_data.py ${{ inputs.seasons && format('--seasons {0}', inputs.seasons) || '' }}
+
+      - name: Save the Savant cache
+        uses: actions/cache/save@v4
+        with:
+          path: tools/xwoba/cache
+          key: savant-weeks-${{ github.run_id }}

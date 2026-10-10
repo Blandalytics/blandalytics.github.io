@@ -4,6 +4,10 @@
 // the same scipy density, the same vlag bands and heatmap palette, the same
 // layout -- so the PNG matches what the Streamlit app draws. Laid out in the pixels
 // of the 200 dpi image the app serves (1390 x 1135) and rasterised at 2x.
+//
+// The xwOBA view draws, on the same grid and layout, the 3D xwOBA model's surface
+// (tools/xwoba: spray, launch angle, bat speed) at the hitter's average bat speed,
+// with their batted balls as dots and the model's xwOBA of those balls by zone.
 
 (() => {
   "use strict";
@@ -101,6 +105,52 @@
     return { diff, shares: shares(hitter) };
   }
 
+  // ---- the xwOBA view -------------------------------------------------------------
+  // The surface at one bat speed, from xwoba.json's slices (one per model node, in
+  // thousandths, laid out as the league grid): linear between the two slices around
+  // it, which is how the model itself reads between its nodes.
+  function surfaceAt(surface, batSpeed) {
+    const { lo, step, n } = surface.bat_speed;
+    const t = Math.min(Math.max((batSpeed - lo) / step, 0), n - 1);
+    const i = Math.min(Math.floor(t), n - 2), f = t - i;
+    const a = surface.slices[i], b = surface.slices[i + 1];
+    const out = new Float64Array(N * N);
+    for (let k = 0; k < out.length; k++) out[k] = ((1 - f) * a[k] + f * b[k]) / surface.scale;
+    return out;
+  }
+
+  // The mean xwOBA of the balls in each zone (the same zones as the shares), null
+  // for a zone with none. A ball is [spray, launch angle, bat speed, xwOBA].
+  function zoneXwoba(balls) {
+    const mean = (keep) => {
+      let s = 0, c = 0;
+      for (const b of balls) if (keep(b)) { s += b[3]; c++; }
+      return c ? s / c : null;
+    };
+    return {
+      spray: SPRAY_BUCKETS.map((f) => mean(([x]) => f(x))),
+      launch: LAUNCH_BUCKETS.map((g) => mean(([, y]) => g(y))),
+      cells: SPRAY_BUCKETS.map((f) => LAUNCH_BUCKETS.map((g) => mean(([x, y]) => f(x) && g(y)))),
+    };
+  }
+
+  // What the xwOBA view needs: the surface at the average bat speed of the balls the
+  // model covers (swung at, tracked, not bunted), and their xwOBA by zone. Every
+  // ball is drawn.
+  function computeXwoba({ balls, surface }) {
+    const tracked = balls.filter((b) => b[2] != null && b[3] != null);
+    if (!tracked.length) return null;
+    const batSpeed = tracked.reduce((s, b) => s + b[2], 0) / tracked.length;
+    return {
+      surface: surfaceAt(surface, batSpeed),
+      zones: zoneXwoba(tracked),
+      points: balls,
+      batSpeed,
+      xwoba: tracked.reduce((s, b) => s + b[3], 0) / tracked.length,
+      tracked: tracked.length,
+    };
+  }
+
   // ---- colours ------------------------------------------------------------------
   const BACKGROUND = "#292C42";
   const WHITE = "#FEFEFE";
@@ -126,6 +176,26 @@
     return from.map((c, i) => Math.round(c + (to[i] - c) * u));
   }
 
+  // The xwOBA surface: one blue, light to dark, in steps of .200 up to 1.400 and past
+  // it (the README figure's ramp). The batted balls are dots in a warm orange that
+  // stands apart from every step, ringed in white.
+  const BLUES = ["#f3f8fe", "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"];
+  const XW_STEP = 0.2;
+  const XW_LEVELS = BLUES.slice(1).map((_, i) => (i + 1) * XW_STEP);  // .2 .. 1.4
+  const XW_TOP = XW_STEP * (BLUES.length - 1);
+  const DOT = "#eb6834";
+  const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const BLUES_RGB = BLUES.map(rgb);
+
+  function xwColour(v) {
+    const t = Math.max(0, Math.min(1, v / XW_TOP)) * (BLUES.length - 1);
+    const i = Math.min(Math.floor(t), BLUES.length - 2), u = t - i;
+    return BLUES_RGB[i].map((c, k) => Math.round(c + (BLUES_RGB[i + 1][k] - c) * u));
+  }
+
+  // xwOBA as baseball writes it: .412, 1.023; a dash for a zone without balls
+  const fmtXw = (v) => (v == null ? "–" : v < 1 ? v.toFixed(3).slice(1) : v.toFixed(3));
+
   // ---- layout, in the pixels of the app's 1390 x 1135 image ---------------------
   const W = 1390, H = 1135;
   const AX = { left: 286, top: 108.5, size: 900 };  // 10 px per degree
@@ -143,6 +213,75 @@
     return logoPromise;
   }
 
+  // Paint a 91 x 91 grid into the axes: filled contour bands (d3-contour) for the
+  // discrete scale, a cell per grid point for the continuous one.
+  //   style: { discrete, scale (grid -> contour units), levels, bands, colour }
+  function paintGrid(ctx, grid, style, px, py, flip) {
+    if (style.discrete) {
+      // values on the grid, y-major for d3
+      const values = new Float64Array(N * N);
+      for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) values[iy * N + ix] = grid[ix * N + iy] * style.scale;
+      ctx.fillStyle = style.bands[0];
+      ctx.fillRect(AX.left, AX.top, AX.size, AX.size);
+      const rings = d3.contours().size([N, N]).thresholds(style.levels)(values);
+      // d3 puts sample i at coordinate i + 0.5
+      const cx = (c) => px(c - 0.5), cy = (c) => py(c - 0.5 + LAUNCH[0]);
+      rings.forEach((multi, k) => {
+        ctx.fillStyle = style.bands[k + 1];
+        ctx.beginPath();
+        for (const polygon of multi.coordinates) {
+          for (const ring of polygon) {
+            ring.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(cx(x), cy(y)); else ctx.lineTo(cx(x), cy(y)); });
+            ctx.closePath();
+          }
+        }
+        ctx.fill("evenodd");
+      });
+      return;
+    }
+    // seaborn.heatmap of the transposed grid: cell (ix, iy) spans [ix, ix+1) by
+    // [iy, iy+1) in index units, with the axes cut at 90 so the last row and
+    // column are clipped away
+    const off = document.createElement("canvas");
+    off.width = N; off.height = N;
+    const img = off.getContext("2d").createImageData(N, N);
+    for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) {
+      const [r, g, b] = style.colour(grid[ix * N + iy]);
+      const o = ((N - 1 - iy) * N + ix) * 4;
+      img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
+    }
+    off.getContext("2d").putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.save();
+    if (flip) { ctx.translate(AX.left * 2 + AX.size, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(off, 0, 1, N - 1, N - 1, AX.left, AX.top, AX.size, AX.size);
+    ctx.restore();
+    ctx.imageSmoothingEnabled = true;
+  }
+
+  // Every batted ball inside the axes as a dot; smaller and fainter for a team's
+  // thousands than for one hitter's hundreds. Launch angle is recorded in whole
+  // degrees, so each dot is spread across its own degree (a fixed offset per ball,
+  // so the picture doesn't change between draws) rather than lining up in rows.
+  function paintDots(ctx, points, px, py) {
+    const inside = points.filter(inRange);
+    const team = inside.length > 1500;
+    const r = team ? 1.7 : inside.length > 600 ? 3 : 3.8;
+    ctx.save();
+    ctx.globalAlpha = team ? 0.55 : 0.9;
+    ctx.fillStyle = DOT;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = r > 3 ? 1.2 : 0.8;
+    inside.forEach(([x, y], i) => {
+      const jitter = ((i * 0.618034) % 1) - 0.5;  // golden-ratio steps: even, never random
+      ctx.beginPath();
+      ctx.arc(px(x), py(Math.min(Math.max(y + jitter, LAUNCH[0]), LAUNCH[1])), r, 0, 2 * Math.PI);
+      ctx.fill();
+      if (!team) ctx.stroke();
+    });
+    ctx.restore();
+  }
+
   async function ensureFonts() {
     if (!document.fonts) return;
     try {
@@ -151,9 +290,10 @@
   }
 
   // Draw the chart onto `canvas`.
-  //   result:   from compute()
+  //   result:   from compute(), or computeXwoba() for the xwOBA view
   //   opts:     { title, subtitle, hand: "L"|"R", scale: "discrete"|"continuous",
-  //               signed: bool (print shares as +/- differences), logo, footer }
+  //               view: "balls"|"xwoba", signed: bool (print shares as +/- differences),
+  //               logo, footer }
   function draw(canvas, result, opts) {
     const scale = 2;
     canvas.width = W * scale; canvas.height = H * scale;
@@ -163,6 +303,7 @@
     ctx.fillRect(0, 0, W, H);
 
     const discrete = opts.scale !== "continuous";
+    const xw = opts.view === "xwoba";
     const flip = opts.hand === "L";  // the pull side stays on the left for right-handers, right for lefties
     const px = (spray) => AX.left + (flip ? 90 - spray : spray) * 10;
     const py = (launch) => AX.top + (60 - launch) * 10;
@@ -188,51 +329,13 @@
       }
     }
 
-    // --- the density -------------------------------------------------------------
+    // --- the density, or the xwOBA surface ----------------------------------------
     ctx.save();
     ctx.beginPath();
     ctx.rect(AX.left, AX.top, AX.size, AX.size);
     ctx.clip();
-    if (discrete) {
-      // contourf of diff x 1000: values on the grid, y-major for d3
-      const values = new Float64Array(N * N);
-      for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) values[iy * N + ix] = result.diff[ix * N + iy] * 1000;
-      ctx.fillStyle = BANDS[0];
-      ctx.fillRect(AX.left, AX.top, AX.size, AX.size);
-      const rings = d3.contours().size([N, N]).thresholds(LEVELS)(values);
-      // d3 puts sample i at coordinate i + 0.5
-      const cx = (c) => px(c - 0.5), cy = (c) => py(c - 0.5 + LAUNCH[0]);
-      rings.forEach((multi, k) => {
-        ctx.fillStyle = BANDS[k + 1];
-        ctx.beginPath();
-        for (const polygon of multi.coordinates) {
-          for (const ring of polygon) {
-            ring.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(cx(x), cy(y)); else ctx.lineTo(cx(x), cy(y)); });
-            ctx.closePath();
-          }
-        }
-        ctx.fill("evenodd");
-      });
-    } else {
-      // seaborn.heatmap of the transposed grid: cell (ix, iy) spans [ix, ix+1) by
-      // [iy, iy+1) in index units, with the axes cut at 90 so the last row and
-      // column are clipped away
-      const off = document.createElement("canvas");
-      off.width = N; off.height = N;
-      const img = off.getContext("2d").createImageData(N, N);
-      for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) {
-        const [r, g, b] = heatColour(result.diff[ix * N + iy]);
-        const o = ((N - 1 - iy) * N + ix) * 4;
-        img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
-      }
-      off.getContext("2d").putImageData(img, 0, 0);
-      ctx.imageSmoothingEnabled = false;
-      ctx.save();
-      if (flip) { ctx.translate(AX.left * 2 + AX.size, 0); ctx.scale(-1, 1); }
-      ctx.drawImage(off, 0, 1, N - 1, N - 1, AX.left, AX.top, AX.size, AX.size);
-      ctx.restore();
-      ctx.imageSmoothingEnabled = true;
-    }
+    if (xw) paintGrid(ctx, result.surface, { discrete, scale: 1, levels: XW_LEVELS, bands: BLUES, colour: xwColour }, px, py, flip);
+    else paintGrid(ctx, result.diff, { discrete, scale: 1000, levels: LEVELS, bands: BANDS, colour: heatColour }, px, py, flip);
     ctx.restore();
 
     // --- the bucket lines: black at a quarter, 1 pt ----------------------------
@@ -243,24 +346,29 @@
     for (const sp of [30, 60]) { ctx.moveTo(px(sp), AX.top); ctx.lineTo(px(sp), AX.top + AX.size); }
     ctx.stroke();
 
-    // --- the shares in each cell, boxed ------------------------------------------
-    const fmt = (v) => (opts.signed ? (v >= 0 ? "+" : "-") + Math.abs(v * 100).toFixed(1) : (v * 100).toFixed(1)) + "%";
+    if (xw) paintDots(ctx, result.points, px, py);
+
+    // --- the shares (or the zones' xwOBA) in each cell, boxed --------------------
+    const fmtShare = (v) => (opts.signed ? (v >= 0 ? "+" : "-") + Math.abs(v * 100).toFixed(1) : (v * 100).toFixed(1)) + "%";
+    const fmt = xw ? fmtXw : fmtShare;
+    const zones = xw ? result.zones : result.shares;
     const sprayMid = [15, 45, 75], launchMid = [-10, 17.5, 37.5, 55];
     setFont(12);
     const box = lineBox();
     const pad = pt(12) * 0.3;  // the Round boxstyle's pad, in text units
-    result.shares.cells.forEach((col, i) => col.forEach((v, j) => {
+    zones.cells.forEach((col, i) => col.forEach((v, j) => {
       const s = fmt(v), x = px(sprayMid[i]), y = py(launchMid[j]);
       setFont(12);
       const w = ctx.measureText(s).width + 2 * pad, h = box.asc + box.desc + 2 * pad;
       ctx.save();
-      ctx.globalAlpha = 0.25;
       ctx.fillStyle = "#ffffff";
       ctx.strokeStyle = "#000000";
       ctx.lineWidth = pt(2);
       ctx.beginPath();
       ctx.roundRect(x - w / 2, y - h / 2, w, h, pad);
+      ctx.globalAlpha = xw ? 0.85 : 0.25;  // the surface's darkest blues need a solid box
       ctx.fill();
+      ctx.globalAlpha = 0.25;
       ctx.stroke();
       ctx.restore();
       text(s, x, y, { size: 12, colour: "#000000" });
@@ -270,32 +378,35 @@
     const xLabels = ["Pull", "Center", "Oppo"];
     xLabels.forEach((s, i) => {
       text(s, px(sprayMid[i]), AX.top + AX.size + 0.02 * AX.size, { size: 15, va: "top" });
-      text(`(${fmt(result.shares.spray[i])})`, px(sprayMid[i]), AX.top + AX.size + 0.075 * AX.size, { size: 10, va: "top" });
+      text(`(${fmt(zones.spray[i])})`, px(sprayMid[i]), AX.top + AX.size + 0.075 * AX.size, { size: 10, va: "top" });
     });
     const yLabels = ["Ground\nBall", "Line Drive", "Fly Ball", "Pop Up"];
     const yMid = [-10, 17.5, 37.5, 55];
     yLabels.forEach((s, j) => {
       const x = AX.left - 0.14 * AX.size;
       text(s, x, py(yMid[j] + 1), { size: 15 });
-      text(`(${fmt(result.shares.launch[j])})`, x, py(yMid[j] - (j === 0 ? 6 : 3.5)), { size: 10 });
+      text(`(${fmt(zones.launch[j])})`, x, py(yMid[j] - (j === 0 ? 6 : 3.5)), { size: 10 });
     });
 
     // --- the colourbar ---------------------------------------------------------------
-    if (discrete) {
-      const h = CB.height / STEPS.length;
-      STEPS.forEach((c, i) => {
-        ctx.fillStyle = c;
-        ctx.fillRect(CB.left, CB.top + CB.height - (i + 1) * h, CB.width, h + 0.5);
-      });
-    } else {
-      const grad = ctx.createLinearGradient(0, CB.top + CB.height, 0, CB.top);
-      VLAG.forEach((c, i) => grad.addColorStop(i / (VLAG.length - 1), c));
-      ctx.fillStyle = grad;
-      ctx.fillRect(CB.left, CB.top, CB.width, CB.height);
+    if (xw) xwColourbar(ctx, discrete, text);
+    else {
+      if (discrete) {
+        const h = CB.height / STEPS.length;
+        STEPS.forEach((c, i) => {
+          ctx.fillStyle = c;
+          ctx.fillRect(CB.left, CB.top + CB.height - (i + 1) * h, CB.width, h + 0.5);
+        });
+      } else {
+        const grad = ctx.createLinearGradient(0, CB.top + CB.height, 0, CB.top);
+        VLAG.forEach((c, i) => grad.addColorStop(i / (VLAG.length - 1), c));
+        ctx.fillStyle = grad;
+        ctx.fillRect(CB.left, CB.top, CB.width, CB.height);
+      }
+      const cbx = AX.left + 1.115 * AX.size;
+      [["Less\nOften", -24, LABEL_BLUE], ["Same", 15, "#000000"], ["More\nOften", 53.5, LABEL_RED]]
+        .forEach(([s, la, colour]) => text(s, cbx, py(la), { size: 15, weight: 500, colour }));
     }
-    const cbx = AX.left + 1.115 * AX.size;
-    [["Less\nOften", -24, LABEL_BLUE], ["Same", 15, "#000000"], ["More\nOften", 53.5, LABEL_RED]]
-      .forEach(([s, la, colour]) => text(s, cbx, py(la), { size: 15, weight: 500, colour }));
 
     // --- title, credits, logo --------------------------------------------------------
     text(opts.title, 742, 40, { size: 16 });
@@ -306,11 +417,35 @@
     if (opts.logo) ctx.drawImage(opts.logo, 61.6, 995.8, 209.8, 87.5);
   }
 
+  // The xwOBA colourbar: narrower than the density's, so its ticks fit to its left.
+  // Discrete, a band per .200 with the last for 1.400 and up; continuous, the same
+  // ramp blended, flat past 1.400.
+  const XW_BAR = { left: 1268, top: CB.top, width: 60, height: CB.height };
+  function xwColourbar(ctx, discrete, text) {
+    const { left, top, width, height } = XW_BAR;
+    const h = height / BLUES.length, bottom = top + height;
+    if (discrete) {
+      BLUES.forEach((c, i) => {
+        ctx.fillStyle = c;
+        ctx.fillRect(left, bottom - (i + 1) * h, width, h + 0.5);
+      });
+    } else {
+      const grad = ctx.createLinearGradient(0, bottom, 0, top);
+      const end = (BLUES.length - 1) / BLUES.length;  // where 1.400 sits on the bar
+      BLUES.forEach((c, i) => grad.addColorStop((i / (BLUES.length - 1)) * end, c));
+      grad.addColorStop(1, BLUES[BLUES.length - 1]);
+      ctx.fillStyle = grad;
+      ctx.fillRect(left, top, width, height);
+    }
+    XW_LEVELS.concat(0).forEach((v) => text(fmtXw(v).replace(/^\.000$/, "0"), left - 10, bottom - (v / XW_STEP) * h, { size: 10, ha: "right" }));
+    text("xwOBA", left + width / 2, top - 32, { size: 15, weight: 500 });
+  }
+
   async function render(canvas, result, opts) {
     await ensureFonts();
     const logo = await loadLogo();
     draw(canvas, result, { ...opts, logo });
   }
 
-  window.BattedBalls = { N, kdeGrid, compute, shares, render, inRange };
+  window.BattedBalls = { N, kdeGrid, compute, computeXwoba, surfaceAt, shares, render, inRange };
 })();
