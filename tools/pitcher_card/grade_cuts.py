@@ -13,31 +13,34 @@ outings is the target's share of B+.
     python grade_cuts.py --starts              # starters' outings only
 
 A season's outing means are cached beside the data files (grade_games_<year>.parquet);
---rescore scores them again. Prints the cuts as grades.py and build.js spell them, and
-the share of each letter they give."""
+--rescore scores them again. Prints the cuts as pitcher-cards/card.js spells them (its
+GRADE_CUTS, which letter every card as it is drawn), and the share of each letter they
+and card.js's current cuts give."""
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import os
+import re
 import sys
 
 import numpy as np
 import pandas as pd
 
-from card import DEFAULT_CACHE  # first: it puts the scraper on sys.path
+from card import DEFAULT_CACHE, ROOT  # first: it puts the scraper on sys.path
 
 import fetch  # noqa: E402
 import pitch_model  # noqa: E402
 import prep  # noqa: E402
-from grades import GRADE_CUTS, LETTERS  # noqa: E402
+from grades import LETTERS  # noqa: E402
 
 # percent of graded pitches in each letter, F to A+: the modeled grade distribution of
 # every 2022-2025 start
 TARGET = (6.2, 4.7, 5.6, 5.9, 5.7, 8.3, 8.6, 10.2, 10.9, 11.0, 9.8, 9.7, 3.4)
 GRADES = {"stuff": "stuffGrade_game", "loc": "locGrade_game", "plv": "plvGrade_game"}
 FIRST_SEASON = 2020  # the first season the data files and the plus scale cover
+CARD_JS = os.path.join(ROOT, "pitcher-cards", "card.js")
 
 
 def scored(pm: pitch_model.PitchModel, df: pd.DataFrame, workers: int) -> pd.DataFrame:
@@ -141,22 +144,31 @@ def letter_shares(values: np.ndarray, weights: np.ndarray, cuts) -> np.ndarray:
     return 100 * np.bincount(bins, weights, minlength=len(LETTERS)) / weights.sum()
 
 
+def current_cuts() -> dict[str, list[float]]:
+    """card.js's GRADE_CUTS: the cuts the cards are lettered with now."""
+    with open(CARD_JS, encoding="utf-8") as fh:
+        js = fh.read()
+    block = js[js.index("const GRADE_CUTS = {") :]
+    block = block[: block.index("};")]
+    found = {g: re.search(rf"\b{g}: \[([^\]]*)\]", block) for g in GRADES}
+    return {g: [float(x) for x in m.group(1).split(",")] for g, m in found.items()}
+
+
 def report(games: pd.DataFrame) -> None:
     shares = np.cumsum(TARGET)[:-1] / 100
     fitted = pd.DataFrame({"target": TARGET}, index=list(LETTERS))
-    now = fitted.copy()
+    now, live = fitted.copy(), current_cuts()
     for g, column in GRADES.items():
         ok = games[g].notna()
         values, weights = games.loc[ok, g].to_numpy(), games.loc[ok, "pitches"].to_numpy(float)
         cuts = np.round(fit(values, weights, shares), 1)
         fitted[g] = letter_shares(values, weights, cuts)
-        now[g] = letter_shares(values, weights, GRADE_CUTS[g])
+        now[g] = letter_shares(values, weights, live[g])
         print(f"{column}: {ok.sum():,} outings, {weights.sum():,.0f} pitches")
-        print(f'  grades.py  "{g}": ({", ".join(f"{c:g}" for c in cuts)}),')
-        print(f"  build.js   {g}: [{', '.join(f'{c:g}' for c in cuts)}],")
+        print(f"  card.js  {g}: [{', '.join(f'{c:g}' for c in cuts)}],")
     print("\npercent of pitches in each letter with the fitted cuts:")
     print(fitted.round(1).to_string())
-    print("\n...and with the cuts in grades.py:")
+    print("\n...and with card.js's cuts:")
     print(now.round(1).to_string())
 
 

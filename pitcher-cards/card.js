@@ -1,6 +1,8 @@
 // The PLV Pitcher Game Card, drawn from its card dict (tools/pitcher_card/build_data.py,
-// version 2) as one SVG, plus what a page needs to show it: the comparison layer, and the
-// card as a PNG to copy or save.
+// version 3) as one SVG, plus what a page needs to show it: the comparison layer, and the
+// card as a PNG to copy or save. The Stuff, Location and PLV letters are given here, from
+// the outing's means in the dict and GRADE_CUTS below, so a change of cuts reaches every
+// card without a rebuild. Version 2 dicts, which carry the letters themselves, still draw.
 //
 // The card is drawn in the original figure's coordinate system (15 x 20 inches at 100 dpi,
 // so 1500 x 2000 units): every panel keeps the matplotlib axes rectangle and data limits of
@@ -21,6 +23,7 @@
 //   PitcherCard.png(svgEl)               the card as a 3000 x 4000 PNG blob
 //   PitcherCard.copyPng(svgEl, name)     ...onto the clipboard, else downloaded
 //   PitcherCard.filename(card)           the name to save it under
+//   PitcherCard.letter(value, grade)     the letter for a mean Stuff, Location or PLV
 //
 // A classic <script> defines window.PitcherCard; require() returns the same object.
 
@@ -30,7 +33,7 @@
 })(typeof self !== "undefined" ? self : this, () => {
   "use strict";
 
-  const VERSION = 2; // the card dict this draws
+  const VERSION = 3; // the card dict this draws (and 2, whose grades are letters already)
 
   // ---- Python's number formatting ---------------------------------------------------
   // f"{v:.Nf}" and round() take the double's exact binary value to the nearest, ties to
@@ -138,6 +141,32 @@
   const GRADE_COLORS = { "-": WHITE, "A+": HIGHLIGHT };
   ["F", "D", "C", "B", "A"].forEach((g, i) => (GRADE_COLORS[g] = GRADE_PALETTE[2 * i]));
   LETTERS.forEach((g) => (GRADE_COLORS[g] = GRADE_COLORS[g] || GRADE_COLORS[g[0]]));
+
+  // Cut points for the Stuff, Location and PLV letters, on the 100 +/- 15 scale: an
+  // outing's mean at or below a cut takes the letter below it. tools/pitcher_card/
+  // grade_cuts.py fits them: every 2020-26 MLB pitcher-game, weighted by its pitches, to
+  // the modeled grade distribution of 2022-2025 starts (F 6.2% ... A+ 3.4%). Location's
+  // also grade each side of the plate.
+  const GRADE_CUTS = {
+    stuff: [79.2, 83, 86.4, 89.2, 91.6, 94.7, 97.8, 101.6, 105.8, 110.9, 117.2, 129.4],
+    loc: [75.2, 82.5, 87.6, 91.2, 93.9, 97.1, 100, 103.1, 106.4, 110, 114.1, 122.4],
+    plv: [77, 83, 87.5, 90.8, 93.3, 96.4, 99.3, 102.5, 106, 110.2, 115, 125.6],
+  };
+
+  // the letter for an outing's mean (grade: "stuff", "loc" or "plv"); "-" when it has none
+  function letter(value, grade) {
+    if (value == null) return "-";
+    const cuts = GRADE_CUTS[grade];
+    let i = 0;
+    while (i < cuts.length && cuts[i] < value) i++;
+    return LETTERS[i];
+  }
+
+  // one of a card's skill letters: stuff, loc, plv, loc_vl or loc_vr
+  function skill(card, key) {
+    if (card.version === 2) return card.grades[key];
+    return letter(card.skills[key], key.startsWith("loc") ? "loc" : key);
+  }
 
   const PITCH_NAMES = {
     FF: "Four-Seam", SI: "Sinker", FC: "Cutter", SL: "Slider", ST: "Sweeper",
@@ -443,8 +472,9 @@
     const g = card.grades;
     const out = [text(fx(0.1575), fy(0.815), "Skills", 30), text(fx(0.37), fy(0.815), "Results", 25)];
     for (const [x, label, key, size] of [[0.175, "Stuff", "stuff", 22], [0.5, "Locations", "loc", 20], [0.825, "PLV", "plv", 22]]) {
+      const grade = skill(card, key);
       out.push(text(ax.x(x), ax.y(0.8), label, size, { color: LINE }));
-      out.push(text(ax.x(x), ax.y(0.4), g[key], 60, { color: GRADE_COLORS[g[key]] }));
+      out.push(text(ax.x(x), ax.y(0.4), grade, 60, { color: GRADE_COLORS[grade] }));
     }
     out.push(text(sg.x(0.5), sg.y(0.8), card.label, 20, { color: LINE }));
     out.push(text(sg.x(0.5), sg.y(0.4), g.game, 60, { color: GRADE_COLORS[g.game] }));
@@ -725,12 +755,11 @@
   }
 
   function locations(card) {
-    const g = card.grades;
     return [
       text(fx(0.57375), fy(0.565), "vs LHB", 30),
       text(fx(0.85125), fy(0.565), "vs RHB", 30),
-      ...location(card, "L", 0.445, 0.435, g.loc_vl, card.n_vl),
-      ...location(card, "R", 0.7225, 0.7125, g.loc_vr, card.n_vr),
+      ...location(card, "L", 0.445, 0.435, skill(card, "loc_vl"), card.n_vl),
+      ...location(card, "R", 0.7225, 0.7125, skill(card, "loc_vr"), card.n_vr),
     ];
   }
 
@@ -802,8 +831,8 @@
   // ---- the card ---------------------------------------------------------------------
   // the whole card as one SVG; opts.logo is the Pitcher List mark's URL
   function svg(card, opts = {}) {
-    if (card.version !== VERSION) {
-      throw new Error(`card.js draws card dict version ${VERSION}, not ${card.version}`);
+    if (card.version !== VERSION && card.version !== 2) {
+      throw new Error(`card.js draws card dict versions 2 and ${VERSION}, not ${card.version}`);
     }
     const body = [
       rect(0, 0, W, H, { fill: BACKGROUND }),
@@ -943,5 +972,8 @@
     return `${card.name.replace(/ /g, "_")}_${card.date}_${card.team}_${card.opp}_PLV_card.png`;
   }
 
-  return { VERSION, LOGO, svg, draw, show, comparisonYear, png, download, copyPng, filename, fixed, pyRound };
+  return {
+    VERSION, LOGO, GRADE_CUTS, svg, draw, show, comparisonYear, png, download, copyPng, filename, letter,
+    fixed, pyRound,
+  };
 });

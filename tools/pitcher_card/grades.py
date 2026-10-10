@@ -1,7 +1,8 @@
 """Constants shared by the card pipeline: pitch-type codes, the outcome families, the
 letter-grade scale, the two game-score formulas and the labels the card dict carries.
-The display side (palette, pitch names and colours, benchmark bins) is in
-pitcher-cards/card.js, which draws the card.
+The display side (palette, pitch names and colours, benchmark bins, and the cuts that
+letter the Stuff, Location and PLV grades) is in pitcher-cards/card.js, which draws the
+card.
 
 Everything here is a pure function of its inputs; nothing touches the network."""
 
@@ -37,24 +38,6 @@ def bin_index(value: float, cuts: tuple[float, ...]) -> int:
 
 
 LETTERS = ("F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+")
-# Cut points for the three model grades, on the 100 +/- 15 scale: grade_cuts.py's fit of
-# every 2020-26 MLB pitcher-game, weighted by its pitches, to the modeled grade distribution
-# of 2022-2025 starts (F 6.2% ... A+ 3.4%). Location's also grade each side of the plate.
-GRADE_CUTS = {
-    "stuff": (79.2, 83, 86.4, 89.2, 91.6, 94.7, 97.8, 101.6, 105.8, 110.9, 117.2, 129.4),
-    "loc": (75.2, 82.5, 87.6, 91.2, 93.9, 97.1, 100, 103.1, 106.4, 110, 114.1, 122.4),
-    "plv": (77, 83, 87.5, 90.8, 93.3, 96.4, 99.3, 102.5, 106, 110.2, 115, 125.6),
-}
-
-
-def letter_grade(value: float | None, grade: str) -> str:
-    """Letter for an outing's mean Stuff, Location or PLV (``grade``: 'stuff', 'loc' or
-    'plv'); '-' when there is no value."""
-    if value is None or value != value:
-        return "-"
-    return LETTERS[bin_index(value, GRADE_CUTS[grade])]
-
-
 _SP_CUTS = (12, 22.3, 30, 36.6, 41, 47.6, 53.6, 60.6, 67, 74, 82.3, 95)
 _RP_CUTS = (27, 37, 42, 46, 48, 50, 51, 52, 53, 56, 61, 67)
 

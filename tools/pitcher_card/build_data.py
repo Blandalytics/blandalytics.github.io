@@ -15,11 +15,11 @@ import pandas as pd
 
 import prep
 import shapes
-from grades import GAME_TYPE_LABEL, TEAM_ABBR, game_grade, letter_grade, run_diff_bucket
+from grades import GAME_TYPE_LABEL, TEAM_ABBR, game_grade, run_diff_bucket
 from models import Models
 from pitch_model import GRADE_COLUMNS
 
-VERSION = 2  # the card dict's shape
+VERSION = 3  # the card dict's shape
 MIN_GAMES = 3  # a season needs this many appearances to be offered as a comparison
 TABLE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
 # the primary fastball panel: its shape, plus its break as acceleration (unrounded), which
@@ -110,14 +110,16 @@ def scored_pitches(df, info: dict, arm: dict[str, float], models: Models, values
     return p
 
 
-def grade_summary(p: pd.DataFrame) -> dict[str, str]:
+def skills(p: pd.DataFrame) -> dict[str, float | None]:
+    """The outing's mean Stuff, Location and PLV on the 100 +/- 15 scale, and Location
+    against each side; card.js turns them into the card's letters."""
     left, right = p["stand"] == "L", p["stand"] == "R"
     return {
-        "stuff": letter_grade(p["stuffGrade_game"].mean(), "stuff"),
-        "loc": letter_grade(p["locGrade_game"].mean(), "loc"),
-        "plv": letter_grade(p["plvGrade_game"].mean(), "plv"),
-        "loc_vl": letter_grade(p.loc[left, "locGrade_game"].mean(), "loc"),
-        "loc_vr": letter_grade(p.loc[right, "locGrade_game"].mean(), "loc"),
+        "stuff": _num(p["stuffGrade_game"].mean()),
+        "loc": _num(p["locGrade_game"].mean()),
+        "plv": _num(p["plvGrade_game"].mean()),
+        "loc_vl": _num(p.loc[left, "locGrade_game"].mean()),
+        "loc_vr": _num(p.loc[right, "locGrade_game"].mean()),
     }
 
 
@@ -229,7 +231,6 @@ def build(
     p = scored_pitches(df, info, arm_angles, models, values)
     table = prep.game_table(p)
     date = dt.date.fromisoformat(info["date"])
-    grades = {"game": outing_grade(info["box"], p), **grade_summary(p)}
     at = "vs" if info["home"] else "@"
     return {
         "version": VERSION,
@@ -240,7 +241,8 @@ def build(
         "title": f"Pitcher Performance: {date.month}/{date.day}/{date.year} {at} {info['opp']}",
         "bio": f"{info['hand']}HP | {info['team']} | Age: {info['age']}",
         "line": game_line(info["box"], p),
-        "grades": grades,
+        "grades": {"game": outing_grade(info["box"], p)},
+        "skills": skills(p),
         "n_vl": int(p["vLHH"].sum()),
         "n_vr": int(p["vRHH"].sum()),
         "arm_angle": _num(p["armAngle"].mean()),
