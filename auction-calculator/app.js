@@ -377,7 +377,7 @@ const INFO = [
 // The slot a hitter fills in the league's best lineups (blank: not a starter)
 const SLOT_COL = { key: "slot", label: "Slot", get: (p) => p.slot ?? "", cell: (p) => esc(p.slot ?? ""), cls: "l muted", text: true };
 const POINTS_COL = { key: "points", label: "Points", get: (p) => p.points, cell: (p) => fmt("", p.points) };
-const VALUE_COL = { key: "value", label: "Auction $", get: (p) => p.value, cell: (p) => money(p.value), cls: (p) => "val" + (p.value < result.settings.minBid ? " neg" : "") };
+const VALUE_COL = { key: "value", label: "Auction $", frozen: true, get: (p) => p.value, cell: (p) => money(p.value), cls: (p) => "val" + (p.value < result.settings.minBid ? " neg" : "") };
 // Bid prices, moved toward a market's hitter/pitcher split (shown when one is set)
 const BID_COL = { key: "bid", label: "Bid $", title: "Moved toward the market's hitter/pitcher split; the values keep their own", get: (p) => p.bid,
   cell: (p) => money(p.bid), cls: (p) => (p.bid < result.settings.minBid ? "muted" : "") };
@@ -475,13 +475,13 @@ function render() {
   }
   const head = `<thead><tr>${runs.map((r) => (r.group ? `<th colspan="${r.n}" class="gp">${GROUPS[r.group]}</th>` : `<th colspan="${r.n}"></th>`)).join("")}</tr><tr>`
     + cols.map((c) => {
-      const cls = [c.text ? "l" : "", c.key === "name" ? "name" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
+      const cls = [c.text ? "l" : "", c.key === "name" ? "name" : "", c.frozen ? "frz" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
       const aria = c.key === sort.key ? ` aria-sort="${sort.dir < 0 ? "descending" : "ascending"}"` : "";
       return `<th data-key="${esc(c.key)}"${cls ? ` class="${cls}"` : ""}${aria}${c.title ? ` title="${esc(c.title)}"` : ""} scope="col">${esc(c.label)}</th>`;
     }).join("") + `</tr></thead>`;
   const body = rows.length
     ? rows.map((p) => `<tr class="${p.type}">` + cols.map((c) => {
-      const cls = [typeof c.cls === "function" ? c.cls(p) : c.cls, c.first ? "gp" : ""].filter(Boolean).join(" ");
+      const cls = [typeof c.cls === "function" ? c.cls(p) : c.cls, c.frozen ? "frz" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
       const title = c.key === "name" ? p.name : c.key === "pos" && p.valuedAt ? `Priced at ${p.valuedAt}`
         : c.key === "value" && !p.drafted ? "Not on a drafted roster" : "";
       return `<td${cls ? ` class="${cls}"` : ""}${title ? ` title="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
@@ -489,6 +489,7 @@ function render() {
     : `<tr><td class="empty l" colspan="${cols.length}">No players match.</td></tr>`;
   $("table").innerHTML = head + `<tbody>${body}</tbody>`;
   $("tbl").hidden = false;
+  freezeOffset();
 }
 
 // The SGP denominators: how many of each category buy one standings point (or category win)
@@ -513,6 +514,13 @@ function renderScarcity() {
     + `<span class="side">Hitters</span>${chips("h")}<span class="side">Pitchers</span>${chips("p")}`;
   el.hidden = false;
 }
+
+// The frozen dollars column sits just right of the frozen name column, however wide that is
+function freezeOffset() {
+  const name = $("table").querySelector("thead th.name");
+  if (name) $("table").style.setProperty("--name-w", `${name.getBoundingClientRect().width}px`);
+}
+window.addEventListener("resize", freezeOffset);
 
 $("table").addEventListener("click", (e) => {
   const th = e.target.closest("th[data-key]");

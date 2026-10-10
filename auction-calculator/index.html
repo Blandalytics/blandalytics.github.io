@@ -107,6 +107,9 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
 .values th.l,.values td.l{text-align:left}
 .values td.name{position:sticky; left:0; background:var(--surface); z-index:1; font-family:"DM Sans",system-ui,sans-serif; font-size:13.5px; max-width:220px; overflow:hidden; text-overflow:ellipsis}
 .values thead th.name{left:0; z-index:3}
+/* the dollars stay on screen beside the name when the table scrolls sideways */
+.values .frz{position:sticky; left:var(--name-w, 0px); background:var(--surface); z-index:1; box-shadow:inset -1px 0 0 var(--rule)}
+.values thead th.frz{z-index:3}
 .values td.muted{color:var(--muted)}
 .values td.val{font-weight:600; color:var(--good)}
 .values td.val.neg{color:var(--faint); font-weight:400}
@@ -242,6 +245,6 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
     </section>
   </div>
 </main>
-<script type="module" src="app.js?v=10"></script>
+<script type="module" src="app.js?v=11"></script>
 </body>
 </html>
