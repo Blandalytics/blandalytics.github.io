@@ -438,6 +438,7 @@ function columns() {
   const stat = (type, cat, first) => ({
     key: `${type}:${cat}`, label: cat, group: type, first,
     get: (p) => (p.type === type ? p.stats[cat] : NaN), cell: (p) => (p.type === type ? fmt(cat, p.stats[cat]) : ""),
+    ...(result.valueCols[type].includes(cat) ? heatOf(type, cat) : {}),
   });
   if (view() === "value" && result.valueCols) return [...info, ...breakdownColumns()];
   return [
@@ -445,6 +446,33 @@ function columns() {
     ...result.hitterCols.map((c, i) => stat("h", c, i === 0)),
     ...result.pitcherCols.map((c, i) => stat("p", c, i === 0)),
   ];
+}
+
+// ---- stat shading -------------------------------------------------------------------------
+
+// A scored stat's cells are shaded by what it adds to the player's dollars (the accent blue) or
+// costs them (red), mixed into the surface up to 42%, where the ink still reads at 5.8:1. Each
+// column has its own scale: full strength at the 95th percentile of its drafted players' $.
+const HEAT = { base: [21, 27, 35], up: [108, 180, 255], down: [255, 138, 128], max: 0.42 };   // --surface, --accent, --bad
+const heatColor = (v, scale) => {
+  if (!(scale > 0) || !Number.isFinite(v) || Math.abs(v) < 0.005) return "";
+  const t = HEAT.max * Math.min(1, Math.abs(v) / scale), pole = v > 0 ? HEAT.up : HEAT.down;
+  return `rgb(${HEAT.base.map((b, i) => Math.round(b + (pole[i] - b) * t)).join(",")})`;
+};
+function heatOf(type, cat) {
+  const $of = (p) => (p.type === type && p.breakdown ? p.breakdown.stats[cat] : NaN);
+  result.heat ??= {};
+  const key = type + ":" + cat;
+  if (!(key in result.heat)) {
+    const v = result.players.filter((p) => p.type === type && p.drafted).map((p) => Math.abs($of(p))).filter(Number.isFinite).sort((a, b) => a - b);
+    result.heat[key] = v.length ? v[Math.min(v.length - 1, Math.floor(0.95 * v.length))] : 0;
+  }
+  const scale = result.heat[key];
+  return {
+    title: `Shaded by what ${cat} adds to a player's dollars (blue) or costs them (red)`,
+    bg: (p) => heatColor($of(p), scale),
+    tip: (p) => (Number.isFinite($of(p)) ? `${cat}: ${$of(p) < 0 ? "costs" : "adds"} ${money(Math.abs($of(p)))}` : ""),
+  };
 }
 
 const fold = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -488,12 +516,14 @@ function render() {
   const body = rows.length
     ? rows.map((p) => `<tr class="${p.type}">` + cols.map((c) => {
       const cls = [typeof c.cls === "function" ? c.cls(p) : c.cls, c.frozen ? "frz" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
-      const title = c.key === "name" ? p.name : c.key === "pos" && p.valuedAt ? `Priced at ${p.valuedAt}`
+      const title = c.tip ? c.tip(p) : c.key === "name" ? p.name : c.key === "pos" && p.valuedAt ? `Priced at ${p.valuedAt}`
         : c.key === "value" && !p.drafted ? "Not on a drafted roster" : "";
-      return `<td${cls ? ` class="${cls}"` : ""}${title ? ` data-tip="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
+      const bg = c.bg ? c.bg(p) : "";
+      return `<td${cls ? ` class="${cls}"` : ""}${bg ? ` style="background:${bg}"` : ""}${title ? ` data-tip="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
     }).join("") + `</tr>`).join("")
     : `<tr><td class="empty l" colspan="${cols.length}">No players match.</td></tr>`;
   $("table").innerHTML = head + `<tbody>${body}</tbody>`;
+  $("heatkey").hidden = view() === "value";
   $("tbl").hidden = false;
   freezeOffset();
 }
