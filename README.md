@@ -835,10 +835,11 @@ load), and **Valuation details**, the **Replacement span**, **Fill missing playi
 setting's small print is in the tooltip on its ⓘ (on hover, keyboard focus or a tap). Any change
 reprices at once. The table beside it is every player by auction dollars, with the stats grouped
 under Hitting and Pitching; a **Slot** column says where each drafted player plays, BN for the
-bench. Each scored stat's cells are shaded by what that stat adds to the player's dollars (blue) or
-costs them (red), the same dollars as its column in the value breakdown, on its column's own scale
-(full strength at the 95th percentile of its drafted players), with the dollars in each cell's
-tooltip and a key over the table. Over it, a row of **Position premiums** says what each position is worth over its
+bench. Each scored stat's cells are shaded by what that stat adds to the player's dollars (the
+same dollars as its column in the value breakdown), on its column's own scale: no shade at or
+below its drafted players' median, rising to the Auction $ green at their top 5% (the text switches
+to dark where it needs to, keeping 4.5:1). Each cell's tooltip gives the dollars, and a key sits
+over the table. Over it, a row of **Position premiums** says what each position is worth over its
 side's deepest one. Any header sorts the table, a search box and position filter narrow it, and
 **Download CSV** saves the whole table in the script's layout (a stat both sides score is suffixed
 `_h` / `_p`). **View** switches the stat columns for a **Value breakdown** of each player's dollars
