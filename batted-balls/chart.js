@@ -176,14 +176,14 @@
   }
 
   // The xwOBA surface: a continuous spectrum pinned to the wOBA value of each outcome
-  // -- white for an out, the single's orange, the double's violet, the triple's gold,
-  // the home run's magenta -- in ten levels of .200 (Discrete) or blended cell by cell
+  // -- white for an out, the single's blue, the double's green, the triple's yellow,
+  // the home run's red -- in ten levels of .200 (Discrete) or blended cell by cell
   // (Continuous), with Tanaka lines at the levels' boundaries either way. The bands
   // take the spectrum evenly from end to end, as matplotlib's contourf spreads a
-  // colormap: the lowest an out's white, the .800-1.000 band a single's orange (.889),
-  // the highest a home run's magenta.
-  const XW_STOPS = [[0, "#ffffff", "Out"], [0.9, "#FE6100", "1B"], [1.25, "#785EF0", "2B"],
-    [1.6, "#FFB000", "3B"], [2, "#DC267F", "HR"]];
+  // colormap: the lowest an out's white, the .800-1.000 band a single's blue (.889),
+  // the highest a home run's red.
+  const XW_STOPS = [[0, "#FFFFFF", "Out"], [0.9, "#2D99C8", "1B"], [1.25, "#54D29B", "2B"],
+    [1.6, "#FFE066", "3B"], [2, "#F04542", "HR"]];
   const XW_MAX = 2, XW_N = 10, XW_STEP = XW_MAX / XW_N;
   const XW_LEVELS = Array.from({ length: XW_N - 1 }, (_, i) => (i + 1) * XW_STEP);  // .2 .. 1.8
   const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));

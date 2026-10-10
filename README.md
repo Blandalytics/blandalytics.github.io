@@ -327,8 +327,8 @@ from the prior season in the self comparison). From 2024, the first season Statc
 speed from opening day, **xwOBA** swaps the density for the [3D xwOBA model](#3d-xwoba)'s surface
 at the hitter's (or team's) average bat speed on balls in play, and the boxes and axis figures
 become the model's xwOBA of the balls hit into each zone. Its colours run through each
-outcome's wOBA value — white for an out (0), `#FE6100` for a single (.900), `#785EF0` for a
-double (1.250), `#FFB000` for a triple (1.600), `#DC267F` for a home run (2.000) — in ten levels
+outcome's wOBA value — white for an out (0), `#2D99C8` for a single (.900), `#54D29B` for a
+double (1.250), `#FFE066` for a triple (1.600), `#F04542` for a home run (2.000) — in ten levels
 of .200 (*Discrete*, spread end to end as matplotlib's `contourf` spreads a colormap) or blended
 per cell (*Continuous*), with Tanaka (illuminated) contour lines at the levels' edges either way:
 each segment lit or shaded by which way its downhill side faces a light in the upper left, and
