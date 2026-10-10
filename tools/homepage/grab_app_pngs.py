@@ -2,7 +2,8 @@
 
 Drives headless Chrome over the DevTools protocol. For apps with a Save/Download PNG
 button, it clicks the button and captures the blob the app hands to its download link.
-The NHL Draft Tool has no export, so it starts a mock draft and screenshots the result.
+The NHL Draft Tool has no export, so it starts a mock draft and screenshots the result;
+the Auction Calculator has none either, so it screenshots its values table.
 """
 import base64
 import json
@@ -135,6 +136,23 @@ def grab_nhl_draft():
     print(f"nhl-draft: screenshot of #options {rect['width']:.0f}x{rect['height']:.0f}")
 
 
+def grab_auction_calculator():
+    tab = new_tab()
+    # a phone-width page, so the square crop holds a readable top of the table
+    tab.call("Emulation.setDeviceMetricsOverride", width=600, height=1600, deviceScaleFactor=3, mobile=False)
+    tab.call("Page.navigate", url="https://blandalytics.com/auction-calculator/")
+    tab.wait_for("!document.getElementById('tbl').hidden", 60, "auction values table")
+    time.sleep(2)  # let fonts settle
+    rect = tab.eval(
+        "(() => { const r = document.getElementById('tbl').getBoundingClientRect();"
+        " return {x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height}; })()"
+    )
+    shot = tab.call("Page.captureScreenshot", format="png", captureBeyondViewport=True,
+                    clip={**rect, "scale": 1})
+    (OUT / "auction-calculator.png").write_bytes(base64.b64decode(shot["data"]))
+    print(f"auction-calculator: screenshot of #tbl {rect['width']:.0f}x{rect['height']:.0f}")
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     profile = tempfile.mkdtemp(prefix="bland-chrome-")
@@ -156,6 +174,11 @@ def main():
                     grab_export(*app)
                 except Exception as e:
                     print(f"{app[0]}: FAILED {e}")
+        if not only or "auction-calculator" in only:
+            try:
+                grab_auction_calculator()
+            except Exception as e:
+                print(f"auction-calculator: FAILED {e}")
         if not only or "nhl-draft" in only:
             try:
                 grab_nhl_draft()

@@ -38,6 +38,7 @@ CROPS = {
     "release-angles": (0.5, 0.0),   # the figure with its title; trims the footer
     "series-win": None,              # square already: the title and wordmark sit at the edges
     "model-drilldown": None,         # padded: any square crop loses the bars or the league panel
+    "auction-calculator": (0.0, 0.0),  # top of the values table: names, dollars, the first stats
     "nhl-draft": (0.0, 0.0),         # top of the options table
 }
 
