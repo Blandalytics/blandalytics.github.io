@@ -5,15 +5,19 @@ scored on the test season's batted balls, against
 
 - the league average (no inputs at all),
 - the same smoother on fewer inputs (launch angle alone; spray and launch angle;
-  launch angle and bat speed), which says what each input adds,
+  launch angle and bat speed), which says what each input adds, and in one pass
+  (without the twicing), which says what the second pass adds,
 - gradient-boosted trees on the same three inputs (scikit-learn's
   HistGradientBoostingClassifier), a flexible benchmark for the smoother itself, and
 - Savant's own xwOBA (estimated_woba_using_speedangle), which reads exit velocity
   rather than bat speed and so knows how squarely the ball was hit -- a ceiling
   rather than a rival.
 
-Then hitters: each hitter's mean xwOBA on contact against their actual wOBA on
-contact that season, and from the season before the test season to the test season.
+The same comparisons are made out of fold on the fit seasons (five folds by game),
+where calibration is not confounded with how the test season differs from the
+others, and season by season. Then hitters: each hitter's mean xwOBA on contact
+against their actual wOBA on contact that season, and from the season before the
+test season to the test season.
 
     python tools/xwoba/evaluate.py                 # test on the latest season
     python tools/xwoba/evaluate.py --test 2025
@@ -23,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -32,7 +37,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import savant  # noqa: E402
-from build import STRIDE, current_season, load  # noqa: E402
+from build import FOLDS, STRIDE, current_season, load  # noqa: E402
 from model import AXES, CLASSES, WEIGHTS, Grid, Params, fit  # noqa: E402
 
 OUT = HERE / "evaluation.md"
@@ -40,7 +45,10 @@ MIN_BBE = 100  # batted balls for a hitter-season to count
 SAVANT = "estimated_woba_using_speedangle"
 AXIS = {a.name: a for a in AXES}
 MODEL = "**3D model**"
+ONE_PASS = "3D model, one pass (no twicing)"
 SAVED = f"3D model, saved grid ({STRIDE}° × {STRIDE}° × {STRIDE} mph)"
+BOOSTED = "Gradient boosting, same 3 inputs"
+BINS = 20  # equal-count bins of xwOBA for the calibration error
 
 
 # ---- the contenders ------------------------------------------------------------------------
@@ -78,11 +86,20 @@ def contenders(train, test, params, grid: Grid) -> dict:
         "Launch angle": smoother(train, test, ["launch_angle"], params),
         "Spray + launch angle": smoother(train, test, ["spray", "launch_angle"], params),
         "Launch angle + bat speed": smoother(train, test, ["launch_angle", "bat_speed"], params),
+        ONE_PASS: smoother(train, test, list(AXIS), replace(params, twice=False)),
         MODEL: grid.predict_frame(test),
         SAVED: grid.coarsen(STRIDE).predict_frame(test),
-        "Gradient boosting, same 3 inputs": boosted(train, test),
+        BOOSTED: boosted(train, test),
         "Savant xwOBA (exit velo + launch angle)": test[SAVANT].to_numpy(),
     }
+
+
+def calibration_error(x: np.ndarray, y: np.ndarray) -> float:
+    """Mean |mean xwOBA - mean wOBA| over BINS equal-count bins of xwOBA, by ball (binned
+    by rank, so tied predictions still fill every bin)."""
+    q = np.argsort(np.argsort(x, kind="stable")) * BINS // len(x)
+    g = pd.DataFrame({"q": q, "d": x - y}).groupby("q")["d"]
+    return float((g.mean().abs() * g.size()).sum() / len(x))
 
 
 def metrics(pred, test) -> dict:
@@ -90,6 +107,7 @@ def metrics(pred, test) -> dict:
     x = pred @ WEIGHTS if pred.ndim == 2 else pred
     mse = float(np.mean((x - y) ** 2))
     out = {"RMSE": mse**0.5, "R²": 1 - mse / float(np.var(y)), "mean": float(x.mean())}
+    out["calib. error"] = calibration_error(x, y)
     if pred.ndim == 2:
         hit = pred[np.arange(len(y)), test["outcome"].to_numpy()]
         out["log loss"] = float(-np.log(np.clip(hit, 1e-12, None)).mean())
@@ -110,8 +128,49 @@ def table(rows: list[dict], cols: list[str], fmt: dict) -> str:
 
 def ball_section(preds, test) -> str:
     rows = [{"model": k, **metrics(v, test)} for k, v in preds.items()]
-    fmt = {"RMSE": "{:.4f}", "R²": "{:.4f}", "log loss": "{:.4f}", "mean": "{:.3f}"}
-    return table(rows, ["model", "RMSE", "R²", "log loss", "mean"], fmt)
+    fmt = {"RMSE": "{:.4f}", "R²": "{:.4f}", "log loss": "{:.4f}", "calib. error": "{:.4f}"}
+    fmt["mean"] = "{:.3f}"
+    return table(rows, ["model", "RMSE", "R²", "log loss", "calib. error", "mean"], fmt)
+
+
+def out_of_fold(df: pd.DataFrame, make) -> np.ndarray:
+    """Probabilities for every ball from a model fit without its game's fold."""
+    fold = df["game_pk"].to_numpy() % FOLDS
+    p = np.zeros((len(df), len(CLASSES)))
+    for f in range(FOLDS):
+        p[fold == f] = make(df[fold != f], df[fold == f])
+    return p
+
+
+def fold_section(train: pd.DataFrame, params: Params) -> tuple[str, np.ndarray]:
+    """The 3D model, one pass of it and gradient boosting, out of fold on the fit seasons;
+    and the 3D model's out-of-fold xwOBA."""
+    preds = {
+        MODEL: out_of_fold(train, lambda a, b: fit(a, params).predict_frame(b)),
+        ONE_PASS: out_of_fold(
+            train, lambda a, b: fit(a, replace(params, twice=False)).predict_frame(b)
+        ),
+        BOOSTED: out_of_fold(train, boosted),
+    }
+    rows = [{"model": k, **metrics(v, train)} for k, v in preds.items()]
+    fmt = {"RMSE": "{:.5f}", "log loss": "{:.5f}", "calib. error": "{:.4f}"}
+    return table(rows, ["model", "RMSE", "log loss", "calib. error"], fmt), preds[MODEL] @ WEIGHTS
+
+
+def season_section(df: pd.DataFrame) -> str:
+    g = df.groupby("game_year").agg(
+        balls=("woba_value", "size"),
+        wOBA=("woba_value", "mean"),
+        xw=("x3", "mean"),
+        savant=(SAVANT, "mean"),
+        bat_speed=("bat_speed", "mean"),
+    )
+    rows = [{"season": str(y), **r} for y, r in g.iterrows()]
+    cols = {"xw": "3D xwOBA", "savant": "Savant xwOBA", "bat_speed": "bat speed"}
+    rows = [{cols.get(k, k): v for k, v in r.items()} for r in rows]
+    fmt = {"wOBA": "{:.3f}", "3D xwOBA": "{:.3f}", "Savant xwOBA": "{:.3f}", "bat speed": "{:.2f}"}
+    fmt["balls"] = "{:,.0f}"
+    return table(rows, ["season", "balls", "wOBA", "3D xwOBA", "Savant xwOBA", "bat speed"], fmt)
 
 
 def calibration(x, test, by: pd.Series, label: str) -> str:
@@ -182,6 +241,7 @@ def report(train, test, test_season, params) -> str:
     preds = contenders(train, test, params, grid)
     p3 = preds[MODEL]
     x3 = p3 @ WEIGHTS
+    folds, x_oof = fold_section(train, params)
     bands = pd.cut(
         test["bat_speed"],
         [0, 60, 65, 70, 75, 80, 200],
@@ -192,28 +252,49 @@ def report(train, test, test_season, params) -> str:
     # the season before is in the fit, but the hitters' next-season wOBA is not
     prev = train[train["game_year"] == test_season - 1]
     both = pd.concat([prev.assign(x3=grid.predict_frame(prev) @ WEIGHTS), test.assign(x3=x3)])
+    every = pd.concat([train.assign(x3=x_oof), test.assign(x3=x3)])
     seasons = sorted(train["game_year"].unique())
+    span = f"{seasons[0]}–{seasons[-1]}"
     return "\n".join(
         [
             "# 3D xwOBA model: evaluation",
             "",
-            f"Fit on {len(train):,} batted balls ({seasons[0]}–{seasons[-1]}, bat tracking "
-            f"only), scored on {len(test):,} from {test_season} that the fit never saw (every "
-            f"{test_season} ball in play with bat speed, launch angle, a landing spot and a "
-            f"Savant xwOBA). Parameters: `{params}`. Written by `tools/xwoba/evaluate.py`.",
+            f"Fit on {len(train):,} batted balls ({span}, bat tracking only), scored on "
+            f"{len(test):,} from {test_season} that the fit never saw (every {test_season} ball "
+            "in play with bat speed, launch angle, a landing spot and a Savant xwOBA). "
+            f"Parameters: `{params}`. Written by `tools/xwoba/evaluate.py`.",
             "",
-            "## Batted balls",
+            f"## Batted balls, {test_season}",
             "",
             "RMSE of the predicted against the actual wOBA value of each ball; R² against the "
-            "test season's own variance; log loss of the five-outcome probabilities (lower is "
-            f"better); the mean prediction, against an actual {test_season} mean of "
-            f"{test['woba_value'].mean():.3f} (the league average row is the fit seasons' mean).",
+            "test season's own variance; log loss of the five-outcome probabilities; the "
+            f"calibration error, the mean gap between predicted and actual wOBA over {BINS} "
+            "equal-count bins of the prediction (lower is better for all three); and the mean "
+            f"prediction, against an actual {test_season} mean of "
+            f"{test['woba_value'].mean():.3f}. The league average row is the fit seasons' mean, "
+            f"and the gap between it and {test_season}'s is in every model's calibration error.",
             "",
             ball_section(preds, test),
-            "### Calibration, by deciles of the model's xwOBA",
+            f"## Batted balls, out of fold on {span}",
+            "",
+            "Five folds by game on the fit seasons, each fold predicted by a model fit on the "
+            "other four. With the seasons pooled there is no drift between fit and test, so "
+            "the calibration error is the model's own (with ~19,000 balls in a bin, about "
+            "0.004 of it is noise).",
+            "",
+            folds,
+            "## Season by season",
+            "",
+            f"Mean predicted against actual wOBA on contact: out of fold for {span}, the "
+            f"held-out fit's for {test_season}.",
+            "",
+            season_section(every),
+            f"## Calibration in {test_season}",
+            "",
+            "### By deciles of the model's xwOBA",
             "",
             calibration(x3, test, deciles, "decile"),
-            "### Calibration, by bat speed (mph)",
+            "### By bat speed (mph)",
             "",
             calibration(x3, test, bands, "bat speed"),
             "### Outcome mix",

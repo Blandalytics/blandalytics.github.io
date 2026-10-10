@@ -26,6 +26,17 @@ scarce -- a 70-degree pop up off a 45 mph swing -- the estimate leans on its wid
 neighbourhood instead of a handful of balls. degree=0 in Params uses the plain
 average throughout (Nadaraya-Watson), for comparison.
 
+A kernel of any width still flattens what is sharp: the line-drive peak at 12-13
+degrees of launch angle, the dip just above it where liners carry to the
+outfielders, the edges of the home-run band. Squared error barely notices (the
+outcome of a single ball is mostly noise), but a hitter's xwOBA averages hundreds of
+balls, so a flattened peak shortchanges the hitters who live on it. So the fit is
+made twice (Tukey's "twicing"): the residuals of the first pass -- each ball's
+outcome less its node's estimate -- are smoothed the same way and added back, which
+restores most of what the first pass flattened. A probability the correction would
+push down is kept to at least `floor` of its first-pass value, so no outcome the
+first pass allowed is ever ruled out.
+
 Inputs beyond the grid are clamped to its edge: a ball caught behind the plate is
 read at the edge of foul territory, a 25 mph swing at 30 mph.
 
@@ -82,10 +93,11 @@ AXES = (Axis("spray", -45, 135), Axis("launch_angle", -90, 90), Axis("bat_speed"
 @dataclass(frozen=True)
 class Params:
     """Kernel widths in each input's own units; the prior's weight in balls and how
-    much wider its kernel is; 1 for local-linear fits, 0 for plain averages; and the
-    ridge that steadies a fit's slopes where the balls are few or one-sided (as a share
-    of the kernel's own spread). The defaults are what cross-validation chose (see
-    build.py)."""
+    much wider its kernel is; 1 for local-linear fits, 0 for plain averages; the ridge
+    that steadies a fit's slopes where the balls are few or one-sided (as a share of
+    the kernel's own spread); and whether to twice the fit, with the share of a
+    first-pass probability the second pass keeps at least. The defaults are what
+    cross-validation chose (see build.py)."""
 
     spray: float = 2.0
     launch_angle: float = 1.5
@@ -94,6 +106,8 @@ class Params:
     widen: float = 2.0
     degree: int = 1
     ridge: float = 0.01
+    twice: bool = True
+    floor: float = 0.5
 
     def widths(self, axes) -> tuple[float, ...]:
         return tuple(getattr(self, a.name) for a in axes)
@@ -158,21 +172,31 @@ def _intercept(a: list[list], b: list) -> np.ndarray:
     return b[0] / a[0][0]
 
 
-def _local_linear(hist: np.ndarray, sigma: tuple[float, ...], ridge: float):
-    """Each class's local-linear estimate at every node, (classes, *grid), and the
-    kernel-weighted count of balls, N. The slopes' ridge is ridge * N * s_j^2."""
+def _design(n: np.ndarray, sigma: tuple[float, ...], ridge: float) -> list[list]:
+    """The left side of every node's weighted least squares, as (1 + d) x (1 + d) grids:
+    the kernel-weighted count of balls N, their first and second moments about the node,
+    and a ridge of ridge * N * s_j^2 on each slope."""
     d = len(sigma)
-    per_class = [_moments(h, sigma) for h in hist]
-    b = [np.stack([m[i] for m in per_class]) for i in range(d + 1)]  # (classes, *grid) each
-    s = [x.sum(axis=0) for x in b]  # the same sums over every ball: N, then the first moments
-    n = hist.sum(axis=0)
+    s = _moments(n, sigma)
     a = [[s[0] + 1e-9, *s[1:]]] + [[s[j + 1]] + [None] * d for j in range(d)]
     for j in range(d):
         for k in range(j, d):
             a[j + 1][k + 1] = a[k + 1][j + 1] = _second(n, s[0], sigma, j, k)
         # an empty neighbourhood solves to zero
         a[j + 1][j + 1] = a[j + 1][j + 1] + ridge * s[0] * sigma[j] ** 2 + 1e-9
-    return _intercept(a, b), s[0]
+    return a
+
+
+def _local_linear(y: np.ndarray, design: list[list], sigma: tuple[float, ...]) -> np.ndarray:
+    """Each class's local-linear estimate at every node, (classes, *grid), from per-class
+    sums on the grid: a histogram of outcomes, or of residuals."""
+    per_class = [_moments(h, sigma) for h in y]
+    b = [np.stack([m[i] for m in per_class]) for i in range(len(sigma) + 1)]
+    return _intercept([row[:] for row in design], b)
+
+
+def _normalise(p: np.ndarray) -> np.ndarray:
+    return p / p.sum(axis=0)
 
 
 def smooth(hist: np.ndarray, axes, params: Params) -> np.ndarray:
@@ -183,9 +207,16 @@ def smooth(hist: np.ndarray, axes, params: Params) -> np.ndarray:
     wide = _shrink(_blur(hist, tuple(s * params.widen for s in sigma)), league, params.prior)
     if params.degree == 0:
         return _shrink(_blur(hist, sigma), wide, params.prior)
-    est, n = _local_linear(hist, sigma, params.ridge)
-    p = _shrink(n * np.clip(est, 0, 1), wide, params.prior)
-    return p / p.sum(axis=0)
+    n = hist.sum(axis=0)
+    design = _design(n, sigma, params.ridge)
+    count = design[0][0]
+    est = np.clip(_local_linear(hist, design, sigma), 0, 1)
+    p = _normalise(_shrink(count * est, wide, params.prior))
+    if params.twice:
+        # the residuals' fit, trusted as far as the first pass trusts its own
+        fix = _local_linear(hist - n * p, design, sigma) * (count / (count + params.prior))
+        p = _normalise(np.maximum(p + fix, params.floor * p))
+    return p
 
 
 def fit(df, params: Params | None = None, axes=AXES) -> Grid:
