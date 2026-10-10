@@ -4,7 +4,7 @@
  * Takes the game's feed (box score, bio, teams), its rows (feed.js), the scorer's
  * per-pitch values (scorer.js), the xSLG model, the pitcher's arm angles and his pack
  * of comparison seasons (written nightly by the Python pipeline), and returns the same
- * dict build_data.build returns (version 2: numbers, formatted by the renderer). The
+ * dict build_data.build returns (version 3: numbers, formatted by the renderer). The
  * per-pitch metrics follow prep.py, keeping its float32 arithmetic where the scraper's
  * float32 columns carry it (see npf.js).
  *
@@ -41,7 +41,6 @@ const GAME_TYPE_LABEL = {
 };
 const TEAM_ABBR = { AZ: "ARI", KC: "KCR", SD: "SDP", SF: "SFG", TB: "TBR" };
 const LETTERS = ["F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"];
-const LETTER_CUTS = [77.5, 82, 88, 92.5, 97, 103, 107.5, 112, 118, 122.5, 127, 133];
 const SP_CUTS = [12, 22.3, 30, 36.6, 41, 47.6, 53.6, 60.6, 67, 74, 82.3, 95];
 const RP_CUTS = [27, 37, 42, 46, 48, 50, 51, 52, 53, 56, 61, 67];
 // reliever game-score weights by inning (4-9) and run-differential bucket (0-3), grades.py
@@ -116,10 +115,6 @@ function gameLine(box, p) {
 }
 
 // ---- grades.py -------------------------------------------------------------------------
-export function letterGrade(v) {
-  return missing(v) ? "-" : LETTERS[binIndex(v, LETTER_CUTS)];
-}
-
 function runDiffBucket(field, bat) {
   const diff = Math.max(-3, Math.min(4, field - bat));
   return diff > 0 ? diff - 1 : Math.abs(diff);
@@ -246,14 +241,15 @@ function scoreColumns(p, values, scale, xslg) {
   }
 }
 
-function gradeSummary(p) {
-  const mean = (col, side) => seriesMean(p.filter((r) => !side || r.stand === side).map((r) => r[col]));
+/** build_data.skills: the outing's mean Stuff, Location and PLV, which card.js letters. */
+function skills(p) {
+  const mean = (col, side) => num(seriesMean(p.filter((r) => !side || r.stand === side).map((r) => r[col])));
   return {
-    stuff: letterGrade(mean("stuffGrade_game")),
-    loc: letterGrade(mean("locGrade_game")),
-    plv: letterGrade(mean("plvGrade_game")),
-    loc_vl: letterGrade(mean("locGrade_game", "L")),
-    loc_vr: letterGrade(mean("locGrade_game", "R")),
+    stuff: mean("stuffGrade_game"),
+    loc: mean("locGrade_game"),
+    plv: mean("plvGrade_game"),
+    loc_vl: mean("locGrade_game", "L"),
+    loc_vr: mean("locGrade_game", "R"),
   };
 }
 
@@ -447,7 +443,7 @@ export function build({ feed, pitcherId, rows, values, scale, xslg, arm, pack })
   const at = info.home ? "vs" : "@";
   const sum = (c) => seriesSum(p.map((r) => r[c]));
   return {
-    version: 2,
+    version: 3,
     game_pk: rows[0].game_pk,
     pitcher_id: pitcherId,
     name: info.name, hand: info.hand, age: info.age, team: info.team, opp: info.opp,
@@ -456,7 +452,8 @@ export function build({ feed, pitcherId, rows, values, scale, xslg, arm, pack })
     title: `Pitcher Performance: ${m}/${d}/${y} ${at} ${info.opp}`,
     bio: `${info.hand}HP | ${info.team} | Age: ${info.age}`,
     line: gameLine(info.box, p),
-    grades: { game: outingGrade(info.box, p), ...gradeSummary(p) },
+    grades: { game: outingGrade(info.box, p) },
+    skills: skills(p),
     n_vl: sum("vLHH"),
     n_vr: sum("vRHH"),
     arm_angle: num(seriesMean(p.map((r) => r.armAngle))),

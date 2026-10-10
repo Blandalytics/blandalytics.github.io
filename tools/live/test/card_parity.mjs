@@ -7,9 +7,10 @@
 //
 // Everything on the card has to match exactly but for two things. The model columns:
 // the Python scorer averages the location draws in float32 (no numba), so its run
-// values sit ~1e-7 from these and a plus number or letter right on a rounding edge can
-// land one step over; a few of those are allowed. And the comparison regions, which the
-// Worker scales from the pitcher's pack rather than drawing (reported, not failed).
+// values sit ~1e-7 from these; the outing's mean Stuff, Location and PLV (`skills`) must
+// agree to 1e-3, and a table's plus number right on a rounding edge can land one step
+// over, a few of which are allowed. And the comparison regions, which the Worker scales
+// from the pitcher's pack rather than drawing (reported, not failed).
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { loadBundle } from "../src/cards/bundle.js";
@@ -27,22 +28,28 @@ console.log(`bundle loaded in ${(performance.now() - t0).toFixed(0)} ms`);
 const GRADES = [["plvStuff+", "stuff_rv", "pitcher_game_pitch_type"], ["PLV+", "pitching_rv", "pitcher_game_pitch_type"],
   ["stuffGrade_game", "stuff_rv", "pitcher_game"], ["locGrade_game", "location_rv", "pitcher_game"],
   ["plvGrade_game", "pitching_rv", "pitcher_game"]];
-const MODEL = new Set(["plvStuff+", "PLV+", "stuff", "loc", "plv", "loc_vl", "loc_vr"]);
-const LETTERS = ["F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"];
-const stats = { cards: 0, pitches: 0, maxPlus: 0, modelFields: 0, modelSteps: 0, exact: 0, regions: 0, maxRegion: 0 };
+const MODEL = new Set(["plvStuff+", "PLV+"]);
+const SKILL_TOL = 1e-3;
+const stats = {
+  cards: 0, pitches: 0, maxPlus: 0, modelFields: 0, modelSteps: 0, skills: 0, maxSkill: 0, exact: 0, regions: 0,
+  maxRegion: 0,
+};
 const failures = [];
 
-/** One step: a plus number off by one, or a letter one notch away. */
-function oneStep(a, b) {
-  if (typeof a === "number" && typeof b === "number") return Math.abs(a - b) === 1;
-  return Math.abs(LETTERS.indexOf(a) - LETTERS.indexOf(b)) === 1;
+/** An outing's mean Stuff, Location or PLV: both blank, or within SKILL_TOL. */
+function skill(path, got, want) {
+  stats.skills++;
+  const d = got === null || want === null ? (got === want ? 0 : Infinity) : Math.abs(got - want);
+  stats.maxSkill = Math.max(stats.maxSkill, d === Infinity ? 0 : d);
+  if (!(d <= SKILL_TOL)) failures.push(`${path}: ${JSON.stringify(got)} vs ${JSON.stringify(want)}`);
 }
 
 function compare(path, got, want) {
+  if (path.split(".").at(-2) === "skills") return skill(path, got, want);
   if (MODEL.has(path.split(".").at(-1))) {
     stats.modelFields++;
     if (got !== want) {
-      if (oneStep(got, want)) stats.modelSteps++;
+      if (Math.abs(got - want) === 1) stats.modelSteps++;
       else failures.push(`${path}: ${JSON.stringify(got)} vs ${JSON.stringify(want)}`);
     }
     return;
@@ -106,7 +113,8 @@ for (const g of readdirSync(dir).filter((f) => statSync(`${dir}/${f}`).isDirecto
 }
 
 console.log(`${stats.cards} cards, ${stats.pitches} pitches; max per-pitch plus difference ${stats.maxPlus.toExponential(1)}`);
-console.log(`${stats.exact} exact fields; ${stats.modelSteps} of ${stats.modelFields} model numbers/grades one step over`);
+console.log(`${stats.skills} outing means, max difference ${stats.maxSkill.toExponential(1)}`);
+console.log(`${stats.exact} exact fields; ${stats.modelSteps} of ${stats.modelFields} plus numbers one step over`);
 console.log(`${stats.regions} comparison regions, max extent difference ${stats.maxRegion.toFixed(1)} in (scaled from the pack, not failed)`);
 const allowed = Math.max(2, Math.ceil(stats.modelFields * 0.01));
 if (stats.maxPlus > 1e-3) failures.push(`per-pitch plus numbers differ by up to ${stats.maxPlus}`);

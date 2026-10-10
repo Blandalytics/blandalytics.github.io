@@ -1,7 +1,8 @@
 """Constants shared by the card pipeline: pitch-type codes, the outcome families, the
 letter-grade scale, the two game-score formulas and the labels the card dict carries.
-The display side (palette, pitch names and colours, benchmark bins) is in
-pitcher-cards/card.js, which draws the card.
+The display side (palette, pitch names and colours, benchmark bins, and the cuts that
+letter the Stuff, Location and PLV grades) is in pitcher-cards/card.js, which draws the
+card.
 
 Everything here is a pure function of its inputs; nothing touches the network."""
 
@@ -37,18 +38,6 @@ def bin_index(value: float, cuts: tuple[float, ...]) -> int:
 
 
 LETTERS = ("F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+")
-_LETTER_CUTS = (77.5, 82, 88, 92.5, 97, 103, 107.5, 112, 118, 122.5, 127, 133)
-
-
-def letter_grade(value: float | None) -> str:
-    """Letter for a model grade on the 100 +/- 15 scale; '-' when there is no value.
-    The cut points are the old 75 +/- 10 ones at the same distances from the mean, so a
-    grade still means what it did."""
-    if value is None or value != value:
-        return "-"
-    return LETTERS[bin_index(value, _LETTER_CUTS)]
-
-
 _SP_CUTS = (12, 22.3, 30, 36.6, 41, 47.6, 53.6, 60.6, 67, 74, 82.3, 95)
 _RP_CUTS = (27, 37, 42, 46, 48, 50, 51, 52, 53, 56, 61, 67)
 
