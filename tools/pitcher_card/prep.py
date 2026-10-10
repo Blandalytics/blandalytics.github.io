@@ -197,8 +197,12 @@ def _shares(t: pd.DataFrame) -> None:
 
 
 def game_table(p: pd.DataFrame) -> pd.DataFrame:
-    """One row per pitch type, most thrown first: the numbers on the card's tables."""
-    t = p.groupby("pitchType").agg(**_GAME_AGG).sort_values("n", ascending=False).reset_index()
+    """One row per pitch type, most thrown first (alphabetical on a tie): the numbers on
+    the card's tables. The sort is stable so that a tie comes out the same on any machine
+    -- numpy's default argsort is not, and its order varies with the CPU -- and as the
+    live Worker's port orders it."""
+    t = p.groupby("pitchType").agg(**_GAME_AGG)
+    t = t.sort_values("n", ascending=False, kind="stable").reset_index()
     _shares(t)
     for col in ("Str%", "SwStr%", "CSW%"):
         t[col] *= 100
