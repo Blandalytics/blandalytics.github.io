@@ -1,7 +1,7 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=7";
+import * as C from "./calc.js?v=8";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -14,12 +14,7 @@ const STORE = "auction-calculator:v1";
 const VIEW_STORE = "auction-calculator:view";
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
 const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
-const NUM_INPUTS = ["hitters", "pitchers", "catchers", "bench", "teams", "min_bid", "budget", "split", "span", ...SLOT_IDS, ...PSLOT_IDS];
-const SCRIPT_ONLY = new Set(["hitters", "pitchers", "catchers"]);
-const SLOTS_ONLY = (id) => id.includes("slot_") || id === "span";
-const bySlots = () => $("pos_mode").value === "slots";
-// The inputs the position adjustment in use reads
-const activeInputs = () => NUM_INPUTS.filter((id) => (bySlots() ? !SCRIPT_ONLY.has(id) : !SLOTS_ONLY(id)));
+const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "split", "span", ...SLOT_IDS, ...PSLOT_IDS];
 const slotsOf = (types, prefix) => Object.fromEntries(Object.keys(types).map((t) => [t, Number($(prefix + t).value)]));
 const total = (slots) => Object.values(slots).reduce((a, b) => a + b, 0);
 
@@ -211,19 +206,17 @@ document.querySelectorAll('input[name="style"]').forEach((r) => r.addEventListen
 // ---- settings ----------------------------------------------------------------------
 
 function readSettings() {
-  const bad = activeInputs().filter((id) => !$(id).checkValidity() || $(id).value === "");
+  const bad = NUM_INPUTS.filter((id) => !$(id).checkValidity() || $(id).value === "");
   if (bad.length) {
     const names = bad.map((id) => (id.includes("slot_") ? "the " : "") + $(id).closest("label").querySelector("b").textContent + (id.includes("slot_") ? " slots" : ""));
     return { error: `Check ${names.join(", ")}: ${bad.map((id) => $(id).validationMessage).filter(Boolean)[0] || "a number is needed"}` };
   }
   const n = (id) => Number($(id).value);
   const slots = slotsOf(C.SLOT_TYPES, "slot_"), pitcherSlots = slotsOf(C.PITCHER_SLOT_TYPES, "pslot_");
-  if (bySlots() && (total(slots) < 4 || total(slots) > 30)) return { error: `A lineup needs 4 to 30 hitter slots; this one has ${total(slots)}.` };
-  if (bySlots() && (total(pitcherSlots) < 4 || total(pitcherSlots) > 20)) return { error: `A staff needs 4 to 20 pitcher slots; this one has ${total(pitcherSlots)}.` };
+  if (total(slots) < 4 || total(slots) > 30) return { error: `A lineup needs 4 to 30 hitter slots; this one has ${total(slots)}.` };
+  if (total(pitcherSlots) < 4 || total(pitcherSlots) > 20) return { error: `A staff needs 4 to 20 pitcher slots; this one has ${total(pitcherSlots)}.` };
   const s = {
-    positions: $("pos_mode").value, slots, pitcherSlots,
-    hitters: bySlots() ? total(slots) : n("hitters"), pitchers: bySlots() ? total(pitcherSlots) : n("pitchers"),
-    catchers: bySlots() ? slots.C : n("catchers"), bench: n("bench"), span: bySlots() ? n("span") : 0,
+    slots, pitcherSlots, hitters: total(slots), pitchers: total(pitcherSlots), bench: n("bench"), span: n("span"),
     minimizeBench: $("min_bench").checked, style: style(), teams: n("teams"), minBid: n("min_bid"),
     budget: n("budget"), hitterSplit: n("split") / 100, pool: $("pool").value, includeFa: $("include_fa").checked,
     hitterCats: cats.h, pitcherCats: cats.p, hitterPoints: points.h, pitcherPoints: points.p,
@@ -234,7 +227,7 @@ function readSettings() {
 }
 
 function save() {
-  const form = { style: style(), pos_mode: $("pos_mode").value, pool: $("pool").value, min_bench: $("min_bench").checked, include_fa: $("include_fa").checked, cats, points };
+  const form = { style: style(), pool: $("pool").value, min_bench: $("min_bench").checked, include_fa: $("include_fa").checked, cats, points };
   for (const id of NUM_INPUTS) form[id] = $(id).value;
   try { localStorage.setItem(STORE, JSON.stringify(form)); } catch { /* private mode */ }
 }
@@ -245,7 +238,6 @@ function restore() {
   if (!form) return;
   for (const id of NUM_INPUTS) if (form[id] !== undefined) $(id).value = form[id];
   if (form.pool) $("pool").value = form.pool;
-  if (form.pos_mode === "slots" || form.pos_mode === "catchers") $("pos_mode").value = form.pos_mode;
   if (typeof form.min_bench === "boolean") $("min_bench").checked = form.min_bench;
   if (typeof form.include_fa === "boolean") $("include_fa").checked = form.include_fa;
   const r = document.querySelector(`input[name="style"][value="${form.style}"]`);
@@ -256,21 +248,15 @@ function restore() {
   if (Array.isArray(form.points?.h) && Array.isArray(form.points?.p)) points = form.points;
 }
 
-// ---- position adjustment ---------------------------------------------------------------
+// ---- lineup slots ---------------------------------------------------------------------------
 
-function showPositionMode() {
-  for (const id of ["slots_ui", "pslots_ui", "span_field"]) $(id).hidden = !bySlots();
-  for (const id of ["hitters_field", "pitchers_field", "catchers_field"]) $(id).hidden = bySlots();
-  $("pos_mode_hint").textContent = bySlots()
-    ? "Each position's replacement level comes from the league's best lineups"
-    : "The script's replacement: catchers against catchers, every other hitter in one pool, every pitcher in another";
+function showSlotTotals() {
   const count = (ids) => ids.reduce((a, id) => a + (Number($(id).value) || 0), 0);
   $("slot_total").textContent = `${count(SLOT_IDS)} per team`;
   $("pslot_total").textContent = `${count(PSLOT_IDS)} per team`;
 }
-$("pos_mode").addEventListener("change", showPositionMode);
-$("slots_ui").addEventListener("input", showPositionMode);
-$("pslots_ui").addEventListener("input", showPositionMode);
+$("slots_ui").addEventListener("input", showSlotTotals);
+$("pslots_ui").addEventListener("input", showSlotTotals);
 
 // ---- league formats ------------------------------------------------------------------------
 
@@ -294,15 +280,14 @@ $("preset").addEventListener("change", () => {
   if (!preset) return;   // Custom: keep what's there
   $("teams").value = preset.teams;
   for (const [id, v] of presetInputs(preset)) $(id).value = v;
-  $("pos_mode").value = "slots";
-  showPositionMode();
+  showSlotTotals();
   changed();
 });
 
 // The select follows the settings: a format whose teams and slots they match, or Custom
 function showPreset() {
   const n = (id) => Number($(id).value);
-  const match = bySlots() && Object.keys(PRESETS).find((k) => {
+  const match = Object.keys(PRESETS).find((k) => {
     const p = PRESETS[k];
     return n("teams") === p.teams && presetInputs(p).every(([id, v]) => n(id) === v);
   });
@@ -409,7 +394,7 @@ const GROUPS = { h: "Hitting", p: "Pitching", v: "Value", h$: "Hitting $", p$: "
 
 function columns() {
   // The dollars sit by the name, so they're on screen on a phone too
-  const info = [INFO[0], INFO[1], VALUE_COL, INFO[2], INFO[3], ...(result.positions ? [SLOT_COL] : []),
+  const info = [INFO[0], INFO[1], VALUE_COL, INFO[2], INFO[3], SLOT_COL,
     ...(result.settings.style === "Points" ? [POINTS_COL] : [])];
   const stat = (type, cat, first) => ({
     key: `${type}:${cat}`, label: cat, group: type, first,
@@ -484,7 +469,6 @@ function render() {
 // Each position's premium over its side's deepest one, scarcest first, as the data has it
 function renderScarcity() {
   const el = $("scarcity");
-  if (!result.positions) { el.hidden = true; return; }
   const chips = (side) => result.positions.filter((p) => p.side === side).map((p) =>
     `<span class="prem${p.premium >= 0.005 ? " up" : ""}" title="${p.slots} slots · replacement ${p.level.toFixed(2)} · last starter ${p.worst.toFixed(2)}"><b>${esc(p.slot)}</b>${p.premium >= 0.005 ? "+" + money(p.premium) : "$0"}</span>`).join("");
   el.innerHTML = `<span title="What a player is worth over the same player at his side's deepest position, from this league's best lineups">Position premium</span>`
@@ -525,17 +509,16 @@ $("download").onclick = () => {
   const hitterCols = byValue ? result.valueCols.h : result.hitterCols;
   const pitcherCols = byValue ? result.valueCols.p : result.pitcherCols;
   const both = new Set(hitterCols.filter((c) => pitcherCols.includes(c)));
-  const slots = !!result.positions;
   const name = (c, side) => (byValue ? c + " $" : c) + (both.has(c) ? "_" + side : "");
   const extra = byValue ? breakdownColumns().filter((c) => c.group === "v") : [];
-  const head = ["Rank", "Name", "Team", "Y! Pos", ...(slots ? ["Slot"] : []), ...(settings.style === "Points" ? ["Points"] : []), "Value",
+  const head = ["Rank", "Name", "Team", "Y! Pos", "Slot", ...(settings.style === "Points" ? ["Points"] : []), "Value",
     ...extra.map((c) => c.label), ...hitterCols.map((c) => name(c, "h")), ...pitcherCols.map((c) => name(c, "p"))];
   const num = (v, d) => (v === undefined || Number.isNaN(v) ? "" : d === undefined ? String(v) : v.toFixed(d));
   const cell = (v) => (/[",\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v);
   const sideValue = (p, side, c) => (p.type !== side ? "" : byValue ? num(p.breakdown ? p.breakdown.stats[c] : NaN, 2) : num(p.stats[c]));
   const lines = [head.map(cell).join(",")];
   for (const p of players) {
-    lines.push([num(p.rank), p.name, p.team, p.pos, ...(slots ? [p.slot ?? ""] : []), ...(settings.style === "Points" ? [num(p.points, 2)] : []), num(p.value, 2),
+    lines.push([num(p.rank), p.name, p.team, p.pos, p.slot ?? "", ...(settings.style === "Points" ? [num(p.points, 2)] : []), num(p.value, 2),
       ...extra.map((c) => num(c.get(p), 2)),
       ...hitterCols.map((c) => sideValue(p, "h", c)),
       ...pitcherCols.map((c) => sideValue(p, "p", c))].map((v) => cell(String(v))).join(","));
@@ -548,7 +531,7 @@ $("download").onclick = () => {
 };
 
 restore();
-showPositionMode();
+showSlotTotals();
 showPreset();
 renderSources();
 loadDefaults();
