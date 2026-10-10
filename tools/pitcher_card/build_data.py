@@ -113,11 +113,11 @@ def scored_pitches(df, info: dict, arm: dict[str, float], models: Models, values
 def grade_summary(p: pd.DataFrame) -> dict[str, str]:
     left, right = p["stand"] == "L", p["stand"] == "R"
     return {
-        "stuff": letter_grade(p["stuffGrade_game"].mean()),
-        "loc": letter_grade(p["locGrade_game"].mean()),
-        "plv": letter_grade(p["plvGrade_game"].mean()),
-        "loc_vl": letter_grade(p.loc[left, "locGrade_game"].mean()),
-        "loc_vr": letter_grade(p.loc[right, "locGrade_game"].mean()),
+        "stuff": letter_grade(p["stuffGrade_game"].mean(), "stuff"),
+        "loc": letter_grade(p["locGrade_game"].mean(), "loc"),
+        "plv": letter_grade(p["plvGrade_game"].mean(), "plv"),
+        "loc_vl": letter_grade(p.loc[left, "locGrade_game"].mean(), "loc"),
+        "loc_vr": letter_grade(p.loc[right, "locGrade_game"].mean(), "loc"),
     }
 
 

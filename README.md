@@ -211,6 +211,7 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 | `models.py` | expected slugging on contact, the one model still read from the `player_cards` checkout |
 | `shapes.py` | the comparison season's movement regions (seaborn's 90%-mass KDE contours) as SVG paths |
 | `grades.py` | pitch-type maps, letter grades and both game-score formulas |
+| `grade_cuts.py` | fits the Stuff / Locations / PLV letter cuts to a target grade distribution |
 | `build_data.py` | assembles all of that into one card dict (numbers; `card.js` formats them) |
 | `render.py` | a standalone page around one card dict, drawn by `card.js` |
 | `build_site.py` | builds a date range into the bucket (or a folder with `--out`) and maintains the manifests; `--reindex` rebuilds the index alone |
@@ -239,8 +240,10 @@ location added, and the two together as Pitching, which is the card's PLV.
 `constants/plus_scale_constants.json` puts a unit's mean on the card's 100 ± 15 scale, with
 2020–26 constants (weighted by pitches × 0.9^(2026 − season)); 2026 games are scored with
 the ABS adjustment, as the scale was. The card uses whole outings for the three grades, and one pitch type of
-one outing for the plvStuff+ and PLV+ columns. The letters keep their old cut
-points at the same distances from the mean, so a grade still means what it did, and the
+one outing for the plvStuff+ and PLV+ columns. Each grade's letters have their own cut
+points, fitted by `grade_cuts.py` to a target share of each letter: every MLB pitcher-game
+in the data files is scored as its card is, and the cuts are the pitch-weighted quantiles of
+the outings' means (Location's cuts also grade each side of the plate). The
 per-pitch-type colour bins are the 10th, 30th, 70th and 90th percentiles of that pitch
 type's 2026 pitcher-games. A pitch the chain does not model — a position player's eephus,
 anything missing tracking — simply has no value, and the card shows a dash. Expected
