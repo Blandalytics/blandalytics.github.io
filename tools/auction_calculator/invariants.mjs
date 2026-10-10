@@ -2,8 +2,8 @@
 // minimized) at the min bid or more, costing exactly teams × budget (less a minimized bench's min
 // bids, which it's drafted at), on rosters that fill every slot
 // legally; that the Slot column agrees with who is drafted; and that each player's value breakdown
-// adds back up to his dollars; that bid prices toward a market split keep the count and the budget;
-// and that the valuation settled.
+// adds back up to his dollars; that a hitter share gives hitters exactly that share of the dollars
+// above the min bids (with none, the share is the values' own); and that the valuation settled.
 //
 //   node invariants.mjs hitters.csv pitchers.csv
 import { readFileSync } from "node:fs";
@@ -22,13 +22,15 @@ const variants = [
   { style: "Points", hitterPoints: C.DEFAULT_HITTER_POINTS, pitcherPoints: C.DEFAULT_PITCHER_POINTS },
   { pool: "AL-Only" }, { pool: "NL-Only", includeFa: false }, { span: 3, bench: 0, teams: 15 }, { span: 1, minimizeBench: false, bench: 2 },
   { hitterCats: ["R", "HR", "RBI", "SB", "OBP", "K%"], pitcherCats: ["K/BB", "W+QS", "ERA", "WHIP", "SV+H"] },
-  { format: "h2h" }, { format: "allplay", weeks: 20 }, { fillPT: false }, { specialists: false }, { marketHitterShare: 0.63 },
+  { format: "h2h" }, { format: "allplay", weeks: 20 }, { fillPT: false }, { specialists: false },
+  { hitterShare: 0.65 }, { hitterShare: 0.7, minimizeBench: false }, { hitterShare: 0.5, style: "Points", hitterPoints: C.DEFAULT_HITTER_POINTS, pitcherPoints: C.DEFAULT_PITCHER_POINTS },
+  { hitterShare: 1 }, { hitterShare: 0 },
 ];
 let fails = 0, runs = 0;
 for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (const v of variants) {
   const s = { slots, pitcherSlots, hitters: sum(slots), pitchers: sum(pitcherSlots),
     bench: 5, minimizeBench: true, style: "Categories", format: "roto", weeks: 23, teams, minBid: 1, budget: 260, span: 3,
-    hitterCats: C.DEFAULT_HITTER_CATS, pitcherCats: C.DEFAULT_PITCHER_CATS, pool: "All", includeFa: true, ...v };
+    hitterCats: C.DEFAULT_HITTER_CATS, pitcherCats: C.DEFAULT_PITCHER_CATS, pool: "All", includeFa: true, hitterShare: null, ...v };
   const H = C.prepHitters(raw.h, s.pool, s.includeFa), P = C.prepPitchers(raw.p, s.pool, s.includeFa);
   const res = C.auctionValues(H, P, s);
   const effBench = s.minimizeBench ? 0 : s.bench;
@@ -52,17 +54,16 @@ for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (co
     return r.slot.every((x) => x !== null) && ps.length === sum(caps);
   });
   const slotsAgree = res.players.every((p) => p.drafted === (p.slot !== null));
-  // bid prices (moved toward a market split) keep the same players at the min bid or more, and the budget
-  const bidsAt = res.players.filter((p) => p.bid >= s.minBid - 1e-9);
-  const bidsOk = bidsAt.length === spots && Math.abs(bidsAt.reduce((a, p) => a + p.bid, 0) - budget) < 1e-6
-    && (s.marketHitterShare == null || Math.abs(res.players.filter((p) => p.drafted && p.type === "h").reduce((a, p) => a + p.bid - s.minBid, 0)
-      - s.marketHitterShare * (budget - spots * s.minBid)) < 1e-6);
+  // the hitters get the hitter share of the dollars above the min bids (with none set, the values' own)
+  const share = s.hitterShare ?? res.split.hitters;
+  const hitterDollars = drafted.filter((p) => p.type === "h").reduce((a, p) => a + p.value - s.minBid, 0);
+  const shareOk = res.hitterShare === share && Math.abs(hitterDollars - share * (budget - spots * s.minBid)) < 1e-6;
   // the breakdown adds back up to every player's dollars
   const parts = (b) => b.minBid + Object.values(b.stats).reduce((a, v) => a + v, 0) + b.baseline + b.position + b.fill + b.specialist + b.other;
   const adds = res.players.every((p) => (p.breakdown ? Math.abs(parts(p.breakdown) - p.value) < 1e-6 : Number.isNaN(p.value)));
-  const ok = atMin.length === spots && Math.abs(total - budget) < 1e-6 && sameSet && legal && slotsAgree && adds && bidsOk && res.converged;
+  const ok = atMin.length === spots && Math.abs(total - budget) < 1e-6 && sameSet && legal && slotsAgree && adds && shareOk && res.converged;
   runs++;
-  if (!ok) { fails++; console.log(`FAIL ${name} ${JSON.stringify(v)}: ${atMin.length} at min bid+ (spots ${spots}), total $${total.toFixed(4)} (budget ${budget}), same set ${sameSet}, legal ${legal}, slots agree ${slotsAgree}, breakdown adds up ${adds}, bids ${bidsOk}, settled ${res.converged}`); }
+  if (!ok) { fails++; console.log(`FAIL ${name} ${JSON.stringify(v)}: ${atMin.length} at min bid+ (spots ${spots}), total $${total.toFixed(4)} (budget ${budget}), same set ${sameSet}, legal ${legal}, slots agree ${slotsAgree}, breakdown adds up ${adds}, hitter share ${shareOk}, settled ${res.converged}`); }
 }
 console.log(`${fails ? "FAIL" : "OK"}: ${runs} leagues, ${fails} failing`);
 process.exit(fails ? 1 : 0);

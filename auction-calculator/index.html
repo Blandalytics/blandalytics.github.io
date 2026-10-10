@@ -41,6 +41,8 @@ label small,.hint{color:var(--faint); font-size:12px}
 label.check{flex-direction:row; align-items:flex-start; gap:8px; color:var(--ink); font-size:14px; margin:4px 0 10px}
 label.check input{margin:3px 0 0}
 label.check small{display:block}
+label.check.mini{font-size:12.5px; color:var(--muted); margin:6px 0 0; gap:6px}
+input[readonly]{background:var(--surface); color:var(--muted)}
 fieldset{border:0; margin:0; padding:0; min-width:0}
 fieldset legend{padding:0; color:var(--ink); font-weight:500; font-size:13px; margin-bottom:6px}
 .seg{display:flex; border:1px solid var(--rule); border-radius:6px; overflow:hidden}
@@ -184,7 +186,10 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
           <option value="roto">Roto</option><option value="h2h">Head-to-head</option><option value="allplay">H2H all-play</option></select></label>
         <label id="weeks_field" hidden><b>Weeks</b><input id="weeks" type="number" min="1" max="30" step="1" value="23" required><small>Scoring periods in the season</small></label>
         <label><b>Player pool</b><select id="pool"><option>All</option><option>NL-Only</option><option>AL-Only</option></select></label>
-        <label><b>Bid hitter share (%)</b><input id="market" type="number" min="0" max="100" step="1" placeholder="from values"><small>Optional: moves bid prices toward a market's split (NFBC ≈ 63, LABR/Tout ≈ 70); values keep their own</small></label>
+        <div class="field">
+          <label title="The share of the dollars above the min bids that goes to hitters"><b>Hitter split (%)</b><input id="split" type="number" min="0" max="100" step="0.1" value="65" required></label>
+          <label class="check mini" title="Split the dollars at one price per SGP across hitters and pitchers, and show the hitter share that makes"><input id="split_auto" type="checkbox"><span>From the values</span></label>
+        </div>
       </div>
       <label class="check"><input id="include_fa" type="checkbox" checked><span>Include free agents<small>Players without a team stay in the pool</small></span></label>
 
@@ -241,10 +246,10 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
       <div id="weights" class="scarcity" hidden></div>
       <div id="scarcity" class="scarcity" hidden></div>
       <div class="tbl" id="tbl" hidden><table class="values" id="table"></table></div>
-      <p class="note">Players are valued in standings points (SGP). Each category's weight is the standings points one more unit buys a team, from how far apart team totals land: the spread the draft leaves (tiers of one player per team, in draft order) plus a season's luck. Rate stats count as what a player adds above the drafted pool's rate (hits above it, earned runs saved below it), so they carry his playing time; what he doesn't play is filled with replacement production. The league's lineup slots are filled for the most value; a position's replacement level is the average of the players around its cutoff, so its scarcity comes from the projections, not a fixed order. Exactly the players who fill every team's legal roster are drafted: the last on each side goes for the min bid, the rest of the budget goes out at one price per SGP, and the hitter/pitcher split is what the values make. Starts from the z-scores of <a href="https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py">auction_calc.py</a>.</p>
+      <p class="note">Players are valued in standings points (SGP). Each category's weight is the standings points one more unit buys a team, from how far apart team totals land: the spread the draft leaves (tiers of one player per team, in draft order) plus a season's luck. Rate stats count as what a player adds above the drafted pool's rate (hits above it, earned runs saved below it), so they carry his playing time; what he doesn't play is filled with replacement production. The league's lineup slots are filled for the most value; a position's replacement level is the average of the players around its cutoff, so its scarcity comes from the projections, not a fixed order. Exactly the players who fill every team's legal roster are drafted: the last on each side goes for the min bid, and the rest of the budget goes to hitters and pitchers by the hitter split (or, from the values, at one price per SGP across both) and out by SGP over that side's last player. Starts from the z-scores of <a href="https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py">auction_calc.py</a>.</p>
     </section>
   </div>
 </main>
-<script type="module" src="app.js?v=13"></script>
+<script type="module" src="app.js?v=14"></script>
 </body>
 </html>

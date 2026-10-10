@@ -1,7 +1,7 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=10";
+import * as C from "./calc.js?v=11";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -15,9 +15,8 @@ const VIEW_STORE = "auction-calculator:view";
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
 const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
 const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "span", "weeks", "phi", "pt_cv", ...SLOT_IDS, ...PSLOT_IDS];
-// Optional numbers (empty is allowed) and the checkboxes and selects saved with the settings
-const OPTIONAL_INPUTS = ["market"];
-const CHECKS = ["min_bench", "include_fa", "fill_pt", "specialists"];
+// The checkboxes and selects saved with the settings
+const CHECKS = ["min_bench", "include_fa", "fill_pt", "specialists", "split_auto"];
 const SELECTS = ["pool", "format"];
 const slotsOf = (types, prefix) => Object.fromEntries(Object.keys(types).map((t) => [t, Number($(prefix + t).value)]));
 const total = (slots) => Object.values(slots).reduce((a, b) => a + b, 0);
@@ -210,14 +209,31 @@ function showFormat() {
 document.querySelectorAll('input[name="style"]').forEach((r) => r.addEventListener("change", () => {
   showFormat();
   options = { h: [], p: [] };   // re-render the controls for the other style
+  manualSplit = defaultSplit();  // as the script does: its split resets with the league type
+  showSplit();
   changed();
 }));
 $("format").addEventListener("change", showFormat);
 
+// ---- the hitter split --------------------------------------------------------------------
+
+// The script's default: 65% to hitters in categories, 50% in points
+const defaultSplit = () => (style() === "Categories" ? "65" : "50");
+let manualSplit = "65";   // the typed split, kept while the box shows the values' own
+const autoSplit = () => $("split_auto").checked;
+// Typed, or the values' own split in the box (read-only) once they're priced
+function showSplit() {
+  $("split").readOnly = autoSplit();
+  if (!autoSplit()) $("split").value = manualSplit;
+  else $("split").value = result ? (100 * result.split.hitters).toFixed(1) : "";
+}
+$("split").addEventListener("input", () => { if (!autoSplit()) manualSplit = $("split").value; });
+$("split_auto").addEventListener("change", showSplit);
+
 // ---- settings ----------------------------------------------------------------------
 
 function readSettings() {
-  const bad = [...NUM_INPUTS, ...OPTIONAL_INPUTS].filter((id) => !$(id).checkValidity() || (NUM_INPUTS.includes(id) && $(id).value === ""));
+  const bad = [...NUM_INPUTS, ...(autoSplit() ? [] : ["split"])].filter((id) => !$(id).checkValidity() || $(id).value === "");
   if (bad.length) {
     const names = bad.map((id) => (id.includes("slot_") ? "the " : "") + $(id).closest("label").querySelector("b").textContent + (id.includes("slot_") ? " slots" : ""));
     return { error: `Check ${names.join(", ")}: ${bad.map((id) => $(id).validationMessage).filter(Boolean)[0] || "a number is needed"}` };
@@ -232,7 +248,7 @@ function readSettings() {
     budget: n("budget"), pool: $("pool").value, includeFa: $("include_fa").checked,
     format: $("format").value, weeks: n("weeks"), phi: n("phi"), ptCV: n("pt_cv"),
     fillPT: $("fill_pt").checked, specialists: $("specialists").checked,
-    marketHitterShare: $("market").value === "" ? null : n("market") / 100,
+    hitterShare: autoSplit() ? null : n("split") / 100,
     hitterCats: cats.h, pitcherCats: cats.p, hitterPoints: points.h, pitcherPoints: points.p,
   };
   // one dollar over the min bid for every priced spot, and the min bid for a minimized bench
@@ -244,8 +260,8 @@ function readSettings() {
 }
 
 function save() {
-  const form = { style: style(), cats, points };
-  for (const id of [...NUM_INPUTS, ...OPTIONAL_INPUTS, ...SELECTS]) form[id] = $(id).value;
+  const form = { style: style(), cats, points, split: manualSplit };
+  for (const id of [...NUM_INPUTS, ...SELECTS]) form[id] = $(id).value;
   for (const id of CHECKS) form[id] = $(id).checked;
   try { localStorage.setItem(STORE, JSON.stringify(form)); } catch { /* private mode */ }
 }
@@ -254,13 +270,14 @@ function restore() {
   let form;
   try { form = JSON.parse(localStorage.getItem(STORE)); } catch { return; }
   if (!form) return;
-  for (const id of [...NUM_INPUTS, ...OPTIONAL_INPUTS]) if (form[id] !== undefined) $(id).value = form[id];
+  for (const id of NUM_INPUTS) if (form[id] !== undefined) $(id).value = form[id];
   for (const id of SELECTS) if (form[id] && [...$(id).options].some((o) => o.value === form[id])) $(id).value = form[id];
   for (const id of CHECKS) if (typeof form[id] === "boolean") $(id).checked = form[id];
   const r = document.querySelector(`input[name="style"][value="${form.style}"]`);
   if (r) r.checked = true;
   if (form.cats?.h && form.cats?.p) cats = form.cats;
   if (Array.isArray(form.points?.h) && Array.isArray(form.points?.p)) points = form.points;
+  manualSplit = typeof form.split === "string" ? form.split : defaultSplit();
 }
 
 // ---- lineup slots ---------------------------------------------------------------------------
@@ -365,6 +382,7 @@ function update() {
   }
   if (!result.converged) warnings.push("The values didn't settle in 20 passes; these use the mean of the last two.");
   status(warnings.join(" "), "warn");
+  if (autoSplit()) showSplit();
   $("download").disabled = false;
   render();
 }
@@ -381,9 +399,6 @@ const INFO = [
 const SLOT_COL = { key: "slot", label: "Slot", get: (p) => p.slot ?? "", cell: (p) => esc(p.slot ?? ""), cls: "l muted", text: true };
 const POINTS_COL = { key: "points", label: "Points", get: (p) => p.points, cell: (p) => fmt("", p.points) };
 const VALUE_COL = { key: "value", label: "Auction $", frozen: true, get: (p) => p.value, cell: (p) => money(p.value), cls: (p) => "val" + (p.value < result.settings.minBid ? " neg" : "") };
-// Bid prices, moved toward a market's hitter/pitcher split (shown when one is set)
-const BID_COL = { key: "bid", label: "Bid $", title: "Moved toward the market's hitter/pitcher split; the values keep their own", get: (p) => p.bid,
-  cell: (p) => money(p.bid), cls: (p) => (p.bid < result.settings.minBid ? "muted" : "") };
 
 // ---- the value breakdown -------------------------------------------------------------------
 
@@ -418,7 +433,7 @@ const GROUPS = { h: "Hitting", p: "Pitching", v: "Value", h$: "Hitting $", p$: "
 
 function columns() {
   // The dollars sit by the name, so they're on screen on a phone too
-  const info = [INFO[0], INFO[1], VALUE_COL, ...(result.market !== null ? [BID_COL] : []), INFO[2], INFO[3], SLOT_COL,
+  const info = [INFO[0], INFO[1], VALUE_COL, INFO[2], INFO[3], SLOT_COL,
     ...(result.settings.style === "Points" ? [POINTS_COL] : [])];
   const stat = (type, cat, first) => ({
     key: `${type}:${cat}`, label: cat, group: type, first,
@@ -462,9 +477,9 @@ function render() {
   $("summary").innerHTML = `<b>${int(result.players.length)}</b> players priced · <b>${int(drafted.length)}</b> drafted at $${s.minBid}+ `
     + `(${s.teams} teams × ${spots} ${s.minimizeBench ? "lineup" : "roster"} spots) for <b>$${int(Math.round(spent))}</b> (${s.teams} × $${int(s.budget)}`
     + (s.minimizeBench && s.bench ? `, less ${s.teams} × ${s.bench} bench spots at $${s.minBid})` : ")")
-    + ` · values split <b>${Math.round(100 * result.split.hitters)}/${Math.round(100 * result.split.pitchers)}</b> hitters/pitchers`
-    + (result.market !== null ? `, bids ${Math.round(100 * result.market)}/${Math.round(100 - 100 * result.market)}` : "")
-    + ` · $${result.perSGP.toFixed(2)} per ${s.style === "Points" ? "point" : "SGP"}`
+    + ` · split <b>${pct(result.hitterShare)}/${pct(1 - result.hitterShare)}</b> hitters/pitchers`
+    + (s.hitterShare === null ? ", the values' own" : ` (the values make ${pct(result.split.hitters)}/${pct(result.split.pitchers)})`)
+    + ` · ${perSGP(result.perSGP, s.style === "Points" ? "point" : "SGP")}`
     + `${rows.length !== result.players.length ? ` · showing <b>${int(rows.length)}</b>` : ""}`;
   $("summary").hidden = false;
   renderWeights();
@@ -494,6 +509,13 @@ function render() {
   $("table").innerHTML = head + `<tbody>${body}</tbody>`;
   $("tbl").hidden = false;
   freezeOffset();
+}
+
+// A share as a percent, to a tenth when it isn't whole (62.5/37.5, not 63/38)
+const pct = (x) => (Math.abs(100 * x - Math.round(100 * x)) < 0.05 ? String(Math.round(100 * x)) : (100 * x).toFixed(1));
+// Dollars per SGP (or point): one rate, or each side's when the split sets them apart
+function perSGP({ h, p }, unit) {
+  return Math.abs(h - p) < 0.005 ? `$${h.toFixed(2)} per ${unit}` : `$${h.toFixed(2)} per ${unit} hitting, $${p.toFixed(2)} pitching`;
 }
 
 // The SGP denominators: how many of each category buy one standings point (or category win)
@@ -561,8 +583,7 @@ $("download").onclick = () => {
   const both = new Set(hitterCols.filter((c) => pitcherCols.includes(c)));
   const name = (c, side) => (byValue ? c + " $" : c) + (both.has(c) ? "_" + side : "");
   const extra = byValue ? breakdownColumns().filter((c) => c.group === "v") : [];
-  const bids = result.market !== null;
-  const head = ["Rank", "Name", "Team", "Y! Pos", "Slot", ...(settings.style === "Points" ? ["Points"] : []), "Value", ...(bids ? ["Bid"] : []),
+  const head = ["Rank", "Name", "Team", "Y! Pos", "Slot", ...(settings.style === "Points" ? ["Points"] : []), "Value",
     ...extra.map((c) => c.label), ...hitterCols.map((c) => name(c, "h")), ...pitcherCols.map((c) => name(c, "p"))];
   const num = (v, d) => (v === undefined || Number.isNaN(v) ? "" : d === undefined ? String(v) : v.toFixed(d));
   const cell = (v) => (/[",\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v);
@@ -570,7 +591,6 @@ $("download").onclick = () => {
   const lines = [head.map(cell).join(",")];
   for (const p of players) {
     lines.push([num(p.rank), p.name, p.team, p.pos, p.slot ?? "", ...(settings.style === "Points" ? [num(p.points, 2)] : []), num(p.value, 2),
-      ...(bids ? [num(p.bid, 2)] : []),
       ...extra.map((c) => num(c.get(p), 2)),
       ...hitterCols.map((c) => sideValue(p, "h", c)),
       ...pitcherCols.map((c) => sideValue(p, "p", c))].map((v) => cell(String(v))).join(","));
@@ -585,6 +605,7 @@ $("download").onclick = () => {
 };
 
 restore();
+showSplit();
 showFormat();
 showSlotTotals();
 showPreset();

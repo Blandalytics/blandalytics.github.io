@@ -722,15 +722,18 @@ function draftPool(value, posStrings, caps, types, benchSlots) {
  *   teams, slots and pitcherSlots ({ slotType: per team }), bench, minimizeBench,
  *   span (players either side of each position's cutoff; 0 is the last starter),
  *   style ("Categories" | "Points"), format ("roto" | "h2h" | "allplay"), weeks,
- *   minBid, budget, marketHitterShare (0-1 or null: bid prices toward a market split),
+ *   minBid, budget, hitterShare (0-1: the hitters' share of the dollars above the min bids;
+ *   null for the split the values make),
  *   phi, ptCV (noise where the projections have no percentiles), fillPT, specialists,
  *   hitterCats, pitcherCats (Categories), hitterPoints, pitcherPoints ([[cat, pts]], Points)
  * Exactly the players on legal rosters (lineups, plus the bench unless it's minimized) are
  * worth the min bid or more, and they add up to the league's budget (less a minimized bench's
- * min bids, which it's drafted at); one $/SGP across hitters and pitchers, so the values set
- * the split.
- * Returns { players, hitterCols, pitcherCols, positions, valueCols, weights, split,
- * perSGP, iterations, converged }, players sorted by value.
+ * min bids, which it's drafted at). The dollars above the min bids go to hitters and pitchers
+ * by the hitter share, or with no share at one $/SGP across both sides, so the values set the
+ * split.
+ * Returns { players, hitterCols, pitcherCols, positions, valueCols, weights, split (the values'
+ * own), hitterShare (the one used), perSGP ({ h, p }), iterations, converged }, players sorted
+ * by value.
  */
 export function auctionValues(H, P, s) {
   const bench = s.minimizeBench ? 0 : s.bench;
@@ -771,10 +774,11 @@ export function auctionValues(H, P, s) {
   });
 
   // Task 11: dollars. The drafted players fill every team's legal roster (lineups, and half the
-  // bench each side unless it's minimized); each side's last one goes for the min bid, and the
-  // dollars beyond the min bids go out at one rate per SGP above him, whichever side he's on.
-  // Every bench spot's min bid comes out of the budget either way: a minimized bench is still
-  // drafted, at the min bid, just not priced
+  // bench each side unless it's minimized); each side's last one goes for the min bid. The
+  // dollars beyond the min bids go to hitters and pitchers by the hitter share (with none, by
+  // the split one rate per SGP across both sides makes), and out on each side by SGP above its
+  // last player. Every bench spot's min bid comes out of the budget either way: a minimized
+  // bench is still drafted, at the min bid, just not priced
   const benchH = Math.floor((s.teams * bench) / 2);
   const hSlot = draftPool(h.sgpar, hPos, hCaps, SLOT_TYPES, benchH);
   const pSlot = draftPool(p.sgpar, pPos, pCaps, PITCHER_SLOT_TYPES, s.teams * bench - benchH);
@@ -782,31 +786,27 @@ export function auctionValues(H, P, s) {
   const baseOf = (v, slot) => Math.min(...v.filter((_, i) => slot[i] !== null));
   const hBase = baseOf(h.sgpar, hSlot), pBase = baseOf(p.sgpar, pSlot);
   const over = (v, slot, base) => v.reduce((a, x, i) => (slot[i] !== null ? a + x - base : a), 0);
-  const total = over(h.sgpar, hSlot, hBase) + over(p.sgpar, pSlot, pBase);
-  const drafted = hSlot.filter((t) => t !== null).length + pSlot.filter((t) => t !== null).length;
-  const perSGP = total > 0 ? spare / total : 0;
-  const flat = total > 0 || !drafted ? 0 : spare / drafted;   // everyone level: split it evenly
-  const dollars = (v, slot, base) => v.map((x, i) => {
+  const hOver = over(h.sgpar, hSlot, hBase), pOver = over(p.sgpar, pSlot, pBase);
+  const hN = hSlot.filter((t) => t !== null).length, pN = pSlot.filter((t) => t !== null).length;
+  // The values' own split: one rate per SGP across both sides (by head count when everyone's level)
+  const ownShare = hOver + pOver > 0 ? hOver / (hOver + pOver) : hN + pN > 0 ? hN / (hN + pN) : 0.5;
+  const share = s.hitterShare ?? ownShare;
+  // A side's dollars per SGP over its last player, or split evenly when nobody's above him
+  const rateOf = (sgp, n, dollars) => (sgp > 0 ? { perSGP: dollars / sgp, flat: 0 } : { perSGP: 0, flat: n ? dollars / n : 0 });
+  const hRate = rateOf(hOver, hN, share * spare), pRate = rateOf(pOver, pN, (1 - share) * spare);
+  const dollars = (v, slot, base, r) => v.map((x, i) => {
     if (Number.isNaN(x)) return NaN;
-    const d = s.minBid + (x - base) * perSGP;
+    const d = s.minBid + (x - base) * r.perSGP;
     // a player no legal roster has room for stays under the min bid
-    return slot[i] !== null ? d + flat : Math.min(d, s.minBid - 0.01);
+    return slot[i] !== null ? d + r.flat : Math.min(d, s.minBid - 0.01);
   });
-  const hValue = dollars(h.sgpar, hSlot, hBase), pValue = dollars(p.sgpar, pSlot, pBase);
-
-  // The split the values make, and bid prices moved toward a market's split (values unchanged)
-  const surplus = (v, slot) => v.reduce((a, x, i) => (slot[i] !== null ? a + x - s.minBid : a), 0);
-  const hSurplus = surplus(hValue, hSlot), pSurplus = surplus(pValue, pSlot);
-  const split = { hitters: spare > 0 ? hSurplus / spare : NaN, pitchers: spare > 0 ? pSurplus / spare : NaN };
-  const market = s.marketHitterShare;
-  const scale = market === null || market === undefined ? null
-    : { h: hSurplus > 0 ? (market * spare) / hSurplus : 1, p: pSurplus > 0 ? ((1 - market) * spare) / pSurplus : 1 };
+  const hValue = dollars(h.sgpar, hSlot, hBase, hRate), pValue = dollars(p.sgpar, pSlot, pBase, pRate);
 
   // Each player's dollars, part by part (they add back up exactly): the min bid; the side's
   // baseline (its last drafted player); his position's premium over the side's deepest one;
   // each stat over the deepest position's replacement; the playing time filled in for him;
   // the specialist correction; and anything holding a player with no roster spot under the min bid
-  const parts = (side, value, slot, base) => side.score.map((_, i) => {
+  const parts = (side, value, slot, base, { perSGP, flat }) => side.score.map((_, i) => {
     if (Number.isNaN(value[i])) return null;
     const stats = {};
     let sum = s.minBid;
@@ -822,7 +822,7 @@ export function auctionValues(H, P, s) {
     return { minBid: s.minBid, baseline, position, fill, specialist, stats, other: Math.abs(other) < 1e-9 ? 0 : other };
   });
   h.catNames = hitterCats; p.catNames = pitcherCats;
-  const hParts = parts(h, hValue, hSlot, hBase), pParts = parts(p, pValue, pSlot, pBase);
+  const hParts = parts(h, hValue, hSlot, hBase, hRate), pParts = parts(p, pValue, pSlot, pBase, pRate);
 
   const hitterCols = ["PA", ...hitterCats.filter((c) => c !== "PA")];
   const pitcherCols = ["IP", ...pitcherCats.filter((c) => c !== "IP")];
@@ -836,7 +836,7 @@ export function auctionValues(H, P, s) {
         type, name: T.data.Name[i] ?? "", mlbamid: T.data.MLBAMID[i], team: T.data.Team[i] ?? "",
         pos: T.data["Y! Pos"] ? (T.data["Y! Pos"][i] ?? (type === "p" ? "P" : "UT")) : "P",
         start: start.total[i], points: points ? start.total[i] : NaN, sgp: side.score[i], sgpar: side.sgpar[i],
-        value: v, bid: scale ? s.minBid + (v - s.minBid) * scale[type] : v,
+        value: v,
         drafted: slot[i] !== null, slot: slot[i], valuedAt: side.byPos.valuedAt[i], stats, breakdown: partsOf[i],
       });
     }
@@ -848,10 +848,10 @@ export function auctionValues(H, P, s) {
 
   // Each slot type's scarcity in dollars: how much more a player there is worth than the same
   // player at his side's deepest position
-  const premiums = (side, key) => side.byPos.levels
-    .map((l) => ({ slot: l.slot, slots: l.slots, level: l.level, worst: l.worst, side: key, premium: (side.deepLevel - l.level) * perSGP }))
+  const premiums = (side, key, r) => side.byPos.levels
+    .map((l) => ({ slot: l.slot, slots: l.slots, level: l.level, worst: l.worst, side: key, premium: (side.deepLevel - l.level) * r.perSGP }))
     .sort((a, b) => b.premium - a.premium);
-  const positions = [...premiums(h, "h"), ...premiums(p, "p")];
+  const positions = [...premiums(h, "h", hRate), ...premiums(p, "p", pRate)];
   // The weights: standings points per unit (G), its inverse (the SGP denominator D), and
   // what went into it
   const weights = (side, specs) => specs.map((sp, k) => ({
@@ -862,7 +862,8 @@ export function auctionValues(H, P, s) {
   const pSpecs = points ? pPoints.map(([c]) => ({ cat: c, unit: "points" })) : pitcherCats.map((c) => ({ cat: c, unit: (RATE_SPECS.p[c] || {}).unit || c }));
   return {
     players, hitterCols, pitcherCols, positions, valueCols: { h: hitterCats, p: pitcherCats },
-    weights: { h: weights(h, hSpecs), p: weights(p, pSpecs) }, split, perSGP, market: scale ? market : null,
+    weights: { h: weights(h, hSpecs), p: weights(p, pSpecs) }, split: { hitters: ownShare, pitchers: 1 - ownShare }, hitterShare: share,
+    perSGP: { h: hRate.perSGP, p: pRate.perSGP },
     iterations: { h: h.iterations, p: p.iterations }, converged: h.converged && p.converged,
     fillTargets: { h: h.targets, p: p.targets },
     // the last pass's workings, for tools/auction_calculator/sgp_check.py
