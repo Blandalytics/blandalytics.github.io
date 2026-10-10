@@ -576,7 +576,9 @@ $("download").onclick = () => {
       ...pitcherCols.map((c) => sideValue(p, "p", c))].map((v) => cell(String(v))).join(","));
   }
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
+  // UTF-8 with a byte-order mark: without one, Excel reads a CSV in the system code page and
+  // turns José Ramírez into JosÃ© RamÃ­rez
+  a.href = URL.createObjectURL(new Blob(["\uFEFF" + lines.join("\n") + "\n"], { type: "text/csv;charset=utf-8" }));
   a.download = "auction_values.csv";
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
