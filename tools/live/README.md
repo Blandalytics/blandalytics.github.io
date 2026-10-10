@@ -15,6 +15,10 @@ speeds, and only games that turn out to be tracked get the full feed.
 | `src/index.js` | `scheduled()` polls and writes; `fetch()` serves `live/` read-only |
 | `test/harness.mjs` | `npm test`: one cron pass against an in-memory bucket, plus the probe on games with known answers |
 | `test/dispatch.mjs` | `npm test`: the card-rebuild throttle and window, with no network |
+| `src/cards/pack.js` | reads a model pack (written by `tools/pitcher_card/model_pack.py`, layout there) as zero-copy typed arrays |
+| `src/cards/trees.js` | LightGBM and XGBoost tree ensembles evaluated from a pack, matching the Python libraries bit for bit on raw scores / margins |
+| `test/trees.mjs` | `npm test`: those evaluators against small committed models with the libraries' outputs (`test/fixtures/trees.pack`, from `tools/pitcher_card/make_tree_fixture.py`) |
+| `test/parity.mjs` | the comparison behind `trees.mjs`; `tools/pitcher_card/check_trees.py` runs it on the real pitch-modeling and xSLG models |
 | `wrangler.jsonc` | Worker name, cron window (game hours, UTC) and the R2 binding |
 | `cors.json` | bucket CORS policy, for when the bucket is served from its own domain |
 
