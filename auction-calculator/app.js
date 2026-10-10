@@ -1,7 +1,7 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=8";
+import * as C from "./calc.js?v=9";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -14,7 +14,11 @@ const STORE = "auction-calculator:v1";
 const VIEW_STORE = "auction-calculator:view";
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
 const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
-const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "split", "span", ...SLOT_IDS, ...PSLOT_IDS];
+const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "span", "weeks", "phi", "pt_cv", ...SLOT_IDS, ...PSLOT_IDS];
+// Optional numbers (empty is allowed) and the checkboxes and selects saved with the settings
+const OPTIONAL_INPUTS = ["market"];
+const CHECKS = ["min_bench", "include_fa", "fill_pt", "specialists"];
+const SELECTS = ["pool", "format"];
 const slotsOf = (types, prefix) => Object.fromEntries(Object.keys(types).map((t) => [t, Number($(prefix + t).value)]));
 const total = (slots) => Object.values(slots).reduce((a, b) => a + b, 0);
 
@@ -194,19 +198,26 @@ function syncOptions(H, P) {
   }
 }
 
-// Streamlit resets the split to its default when the league type changes
+// The categories format (and its weeks, and the specialist correction) only apply to categories
+function showFormat() {
+  const cats = style() === "Categories";
+  $("cats_ui").hidden = !cats;
+  $("points_ui").hidden = cats;
+  $("format_field").hidden = !cats;
+  $("weeks_field").hidden = !cats || $("format").value === "roto";
+  $("spec_field").hidden = !cats || $("format").value !== "roto";
+}
 document.querySelectorAll('input[name="style"]').forEach((r) => r.addEventListener("change", () => {
-  $("split").value = style() === "Categories" ? 65 : 50;
-  $("cats_ui").hidden = style() !== "Categories";
-  $("points_ui").hidden = style() === "Categories";
+  showFormat();
   options = { h: [], p: [] };   // re-render the controls for the other style
   changed();
 }));
+$("format").addEventListener("change", showFormat);
 
 // ---- settings ----------------------------------------------------------------------
 
 function readSettings() {
-  const bad = NUM_INPUTS.filter((id) => !$(id).checkValidity() || $(id).value === "");
+  const bad = [...NUM_INPUTS, ...OPTIONAL_INPUTS].filter((id) => !$(id).checkValidity() || (NUM_INPUTS.includes(id) && $(id).value === ""));
   if (bad.length) {
     const names = bad.map((id) => (id.includes("slot_") ? "the " : "") + $(id).closest("label").querySelector("b").textContent + (id.includes("slot_") ? " slots" : ""));
     return { error: `Check ${names.join(", ")}: ${bad.map((id) => $(id).validationMessage).filter(Boolean)[0] || "a number is needed"}` };
@@ -218,7 +229,10 @@ function readSettings() {
   const s = {
     slots, pitcherSlots, hitters: total(slots), pitchers: total(pitcherSlots), bench: n("bench"), span: n("span"),
     minimizeBench: $("min_bench").checked, style: style(), teams: n("teams"), minBid: n("min_bid"),
-    budget: n("budget"), hitterSplit: n("split") / 100, pool: $("pool").value, includeFa: $("include_fa").checked,
+    budget: n("budget"), pool: $("pool").value, includeFa: $("include_fa").checked,
+    format: $("format").value, weeks: n("weeks"), phi: n("phi"), ptCV: n("pt_cv"),
+    fillPT: $("fill_pt").checked, specialists: $("specialists").checked,
+    marketHitterShare: $("market").value === "" ? null : n("market") / 100,
     hitterCats: cats.h, pitcherCats: cats.p, hitterPoints: points.h, pitcherPoints: points.p,
   };
   const minBudget = (s.minBid + 1) * (s.hitters + s.pitchers + (s.minimizeBench ? 0 : s.bench));
@@ -227,8 +241,9 @@ function readSettings() {
 }
 
 function save() {
-  const form = { style: style(), pool: $("pool").value, min_bench: $("min_bench").checked, include_fa: $("include_fa").checked, cats, points };
-  for (const id of NUM_INPUTS) form[id] = $(id).value;
+  const form = { style: style(), cats, points };
+  for (const id of [...NUM_INPUTS, ...OPTIONAL_INPUTS, ...SELECTS]) form[id] = $(id).value;
+  for (const id of CHECKS) form[id] = $(id).checked;
   try { localStorage.setItem(STORE, JSON.stringify(form)); } catch { /* private mode */ }
 }
 
@@ -236,14 +251,11 @@ function restore() {
   let form;
   try { form = JSON.parse(localStorage.getItem(STORE)); } catch { return; }
   if (!form) return;
-  for (const id of NUM_INPUTS) if (form[id] !== undefined) $(id).value = form[id];
-  if (form.pool) $("pool").value = form.pool;
-  if (typeof form.min_bench === "boolean") $("min_bench").checked = form.min_bench;
-  if (typeof form.include_fa === "boolean") $("include_fa").checked = form.include_fa;
+  for (const id of [...NUM_INPUTS, ...OPTIONAL_INPUTS]) if (form[id] !== undefined) $(id).value = form[id];
+  for (const id of SELECTS) if (form[id] && [...$(id).options].some((o) => o.value === form[id])) $(id).value = form[id];
+  for (const id of CHECKS) if (typeof form[id] === "boolean") $(id).checked = form[id];
   const r = document.querySelector(`input[name="style"][value="${form.style}"]`);
   if (r) r.checked = true;
-  $("cats_ui").hidden = style() !== "Categories";
-  $("points_ui").hidden = style() === "Categories";
   if (form.cats?.h && form.cats?.p) cats = form.cats;
   if (Array.isArray(form.points?.h) && Array.isArray(form.points?.p)) points = form.points;
 }
@@ -344,9 +356,12 @@ function update() {
   result = C.auctionValues(H, P, s);
   result.settings = s;
   const noTeams = (t) => t.data.Team.every((x) => x === null);
-  status(s.pool !== "All" && (noTeams(raw("h")) || noTeams(raw("p")))
-    ? "Projections without a Team column can't be filtered to AL/NL-Only; that side is priced over every player." : "",
-  "warn");
+  const warnings = [];
+  if (s.pool !== "All" && (noTeams(raw("h")) || noTeams(raw("p")))) {
+    warnings.push("Projections without a Team column can't be filtered to AL/NL-Only; that side is priced over every player.");
+  }
+  if (!result.converged) warnings.push("The values didn't settle in 20 passes; these use the mean of the last two.");
+  status(warnings.join(" "), "warn");
   $("download").disabled = false;
   render();
 }
@@ -363,6 +378,9 @@ const INFO = [
 const SLOT_COL = { key: "slot", label: "Slot", get: (p) => p.slot ?? "", cell: (p) => esc(p.slot ?? ""), cls: "l muted", text: true };
 const POINTS_COL = { key: "points", label: "Points", get: (p) => p.points, cell: (p) => fmt("", p.points) };
 const VALUE_COL = { key: "value", label: "Auction $", get: (p) => p.value, cell: (p) => money(p.value), cls: (p) => "val" + (p.value < result.settings.minBid ? " neg" : "") };
+// Bid prices, moved toward a market's hitter/pitcher split (shown when one is set)
+const BID_COL = { key: "bid", label: "Bid $", title: "Moved toward the market's hitter/pitcher split; the values keep their own", get: (p) => p.bid,
+  cell: (p) => money(p.bid), cls: (p) => (p.bid < result.settings.minBid ? "muted" : "") };
 
 // ---- the value breakdown -------------------------------------------------------------------
 
@@ -371,22 +389,25 @@ const signed = (v) => (Number.isNaN(v) ? "" : Math.abs(v) < 0.005 ? "$0.00" : (v
 const signCls = (v) => (Number.isNaN(v) ? "" : Math.abs(v) < 0.005 ? "nil" : v > 0 ? "up" : "down");
 const part = (key, label, title, get, extra = {}) => ({ key, label, title, get, cell: (p) => signed(get(p)), cls: (p) => signCls(get(p)), ...extra });
 
-// Min bid + baseline + position + each stat (+ the no-roster-spot hold-down) = the player's dollars
+// Min bid + baseline + position + playing time + each stat + specialist (+ the no-roster-spot
+// hold-down) = the player's dollars
 function breakdownColumns() {
   const b = (p) => p.breakdown;
+  const any = (key) => result.players.some((p) => b(p) && Math.abs(b(p)[key]) >= 0.005);
   const base = [
     part("b:min", "Min bid", "Every drafted player's floor", (p) => (b(p) ? b(p).minBid : NaN)),
-    part("b:base", "Baseline", result.settings.style === "Points"
-      ? "Less the points of his side's replacement level, at its dollars per point"
-      : "What a player with average stats at his side's deepest position is worth over the min bid", (p) => (b(p) ? b(p).replacement : NaN)),
+    part("b:base", "Baseline", "The same for everyone on a side: less the last drafted player's value over replacement",
+      (p) => (b(p) ? b(p).baseline : NaN)),
     part("b:pos", "Position", "His position's premium over his side's deepest position", (p) => (b(p) ? b(p).position : NaN)),
   ];
-  if (result.players.some((p) => b(p) && b(p).other)) {
-    base.push(part("b:other", "No spot", "Held under the min bid: no legal roster has room for him", (p) => (b(p) ? b(p).other : NaN)));
-  }
+  if (any("fill")) base.push(part("b:fill", "Playing time", "What his team gets from replacement production in the time he doesn't play", (p) => (b(p) ? b(p).fill : NaN)));
+  if (any("specialist")) base.push(part("b:spec", "Specialist", "Roto: a category far above replacement buys standings points on a curve, not a line", (p) => (b(p) ? b(p).specialist : NaN)));
+  if (any("other")) base.push(part("b:other", "No spot", "Held under the min bid: no legal roster has room for him", (p) => (b(p) ? b(p).other : NaN)));
   base.forEach((c, i) => Object.assign(c, { group: "v", first: i === 0 }));
+  const unit = (side, cat) => (result.weights[side].find((w) => w.cat === cat) || {}).unit;
   const stat = (type, cat, i) => part(`$${type}:${cat}`, cat,
-    `What his ${cat} adds to his dollars${result.settings.style === "Points" ? " (points × his dollars per point)" : ", against the average"}`,
+    `What his ${cat} adds over his side's deepest replacement, in his own playing time`
+      + (unit(type, cat) && unit(type, cat) !== cat && unit(type, cat) !== "points" ? ` (as ${unit(type, cat)} against the drafted pool's rate)` : ""),
     (p) => (p.type === type && b(p) ? b(p).stats[cat] : NaN), { group: type + "$", first: i === 0 });
   return [...base, ...result.valueCols.h.map((c, i) => stat("h", c, i)), ...result.valueCols.p.map((c, i) => stat("p", c, i))];
 }
@@ -394,7 +415,7 @@ const GROUPS = { h: "Hitting", p: "Pitching", v: "Value", h$: "Hitting $", p$: "
 
 function columns() {
   // The dollars sit by the name, so they're on screen on a phone too
-  const info = [INFO[0], INFO[1], VALUE_COL, INFO[2], INFO[3], SLOT_COL,
+  const info = [INFO[0], INFO[1], VALUE_COL, ...(result.market !== null ? [BID_COL] : []), INFO[2], INFO[3], SLOT_COL,
     ...(result.settings.style === "Points" ? [POINTS_COL] : [])];
   const stat = (type, cat, first) => ({
     key: `${type}:${cat}`, label: cat, group: type, first,
@@ -437,8 +458,12 @@ function render() {
   const spots = s.hitters + s.pitchers + (s.minimizeBench ? 0 : s.bench);
   $("summary").innerHTML = `<b>${int(result.players.length)}</b> players priced · <b>${int(drafted.length)}</b> drafted at $${s.minBid}+ `
     + `(${s.teams} teams × ${spots} ${s.minimizeBench ? "lineup" : "roster"} spots) for <b>$${int(Math.round(spent))}</b> (${s.teams} × $${int(s.budget)})`
+    + ` · values split <b>${Math.round(100 * result.split.hitters)}/${Math.round(100 * result.split.pitchers)}</b> hitters/pitchers`
+    + (result.market !== null ? `, bids ${Math.round(100 * result.market)}/${Math.round(100 - 100 * result.market)}` : "")
+    + ` · $${result.perSGP.toFixed(2)} per ${s.style === "Points" ? "point" : "SGP"}`
     + `${rows.length !== result.players.length ? ` · showing <b>${int(rows.length)}</b>` : ""}`;
   $("summary").hidden = false;
+  renderWeights();
   renderScarcity();
 
   // The group row: a cell spanning each run of columns in one group
@@ -464,6 +489,19 @@ function render() {
     : `<tr><td class="empty l" colspan="${cols.length}">No players match.</td></tr>`;
   $("table").innerHTML = head + `<tbody>${body}</tbody>`;
   $("tbl").hidden = false;
+}
+
+// The SGP denominators: how many of each category buy one standings point (or category win)
+function renderWeights() {
+  const el = $("weights");
+  if (result.settings.style === "Points") { el.hidden = true; return; }
+  const per = result.settings.format === "roto" ? "standings point" : "category win";
+  const chip = (w) => `<span class="prem" title="${w.cat}: ${w.D.toFixed(2)} ${esc(w.unit)} per ${per}`
+    + `${w.rate ? `, counted against the drafted pool's ${fmt(w.cat, w.rate)}` : ""} · draft spread ${w.sigmaDraft.toFixed(1)}, season luck ${w.noise.toFixed(1)} (team SDs)">`
+    + `<b>${esc(w.cat)}</b>${w.D.toFixed(w.D < 10 ? 2 : 1)}${w.unit !== w.cat ? `<span class="unit">${esc(w.unit)}</span>` : ""}</span>`;
+  el.innerHTML = `<span title="How much of each category buys one ${per} in this league, from the spread of team totals">SGP denominators</span>`
+    + `<span class="side">Hitters</span>${result.weights.h.map(chip).join("")}<span class="side">Pitchers</span>${result.weights.p.map(chip).join("")}`;
+  el.hidden = false;
 }
 
 // Each position's premium over its side's deepest one, scarcest first, as the data has it
@@ -511,7 +549,8 @@ $("download").onclick = () => {
   const both = new Set(hitterCols.filter((c) => pitcherCols.includes(c)));
   const name = (c, side) => (byValue ? c + " $" : c) + (both.has(c) ? "_" + side : "");
   const extra = byValue ? breakdownColumns().filter((c) => c.group === "v") : [];
-  const head = ["Rank", "Name", "Team", "Y! Pos", "Slot", ...(settings.style === "Points" ? ["Points"] : []), "Value",
+  const bids = result.market !== null;
+  const head = ["Rank", "Name", "Team", "Y! Pos", "Slot", ...(settings.style === "Points" ? ["Points"] : []), "Value", ...(bids ? ["Bid"] : []),
     ...extra.map((c) => c.label), ...hitterCols.map((c) => name(c, "h")), ...pitcherCols.map((c) => name(c, "p"))];
   const num = (v, d) => (v === undefined || Number.isNaN(v) ? "" : d === undefined ? String(v) : v.toFixed(d));
   const cell = (v) => (/[",\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v);
@@ -519,6 +558,7 @@ $("download").onclick = () => {
   const lines = [head.map(cell).join(",")];
   for (const p of players) {
     lines.push([num(p.rank), p.name, p.team, p.pos, p.slot ?? "", ...(settings.style === "Points" ? [num(p.points, 2)] : []), num(p.value, 2),
+      ...(bids ? [num(p.bid, 2)] : []),
       ...extra.map((c) => num(c.get(p), 2)),
       ...hitterCols.map((c) => sideValue(p, "h", c)),
       ...pitcherCols.map((c) => sideValue(p, "p", c))].map((v) => cell(String(v))).join(","));
@@ -531,6 +571,7 @@ $("download").onclick = () => {
 };
 
 restore();
+showFormat();
 showSlotTotals();
 showPreset();
 renderSources();
