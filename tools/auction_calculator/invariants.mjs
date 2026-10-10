@@ -18,12 +18,12 @@ const fmts = {
 const variants = [
   {}, { span: 0 }, { span: 6 }, { bench: 0 }, { bench: 7, minimizeBench: false }, { minBid: 0 }, { minBid: 2, budget: 300 },
   { style: "Points", hitterPoints: C.DEFAULT_HITTER_POINTS, pitcherPoints: C.DEFAULT_PITCHER_POINTS },
-  { pool: "AL-Only" }, { pool: "NL-Only", includeFa: false }, { positions: "catchers", catchers: 1 }, { positions: "catchers", catchers: 2, bench: 0 },
+  { pool: "AL-Only" }, { pool: "NL-Only", includeFa: false }, { span: 3, bench: 0, teams: 15 }, { span: 1, minimizeBench: false, bench: 2 },
   { hitterCats: ["R", "HR", "RBI", "SB", "OBP", "K%"], pitcherCats: ["K/BB", "W+QS", "ERA", "WHIP", "SV+H"] }, { hitterSplit: 0.5 },
 ];
 let fails = 0, runs = 0;
 for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (const v of variants) {
-  const s = { positions: "slots", slots, pitcherSlots, hitters: sum(slots), pitchers: sum(pitcherSlots), catchers: slots.C,
+  const s = { slots, pitcherSlots, hitters: sum(slots), pitchers: sum(pitcherSlots),
     bench: 5, minimizeBench: true, style: "Categories", teams, minBid: 1, budget: 260, hitterSplit: 0.65, span: 3,
     hitterCats: C.DEFAULT_HITTER_CATS, pitcherCats: C.DEFAULT_PITCHER_CATS, pool: "All", includeFa: true, ...v };
   const H = C.prepHitters(raw.h, s.pool, s.includeFa), P = C.prepPitchers(raw.p, s.pool, s.includeFa);
@@ -39,15 +39,14 @@ for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (co
   const legal = ["h", "p"].every((side) => {
     const T = side === "h" ? C.SLOT_TYPES : C.PITCHER_SLOT_TYPES;
     const ps = res.players.filter((p) => p.type === side && p.drafted);
-    const per = s.positions === "slots" ? (side === "h" ? slots : pitcherSlots)
-      : side === "h" ? { C: s.catchers, UT: s.hitters - s.catchers } : { P: s.pitchers };
+    const per = side === "h" ? slots : pitcherSlots;
     const caps = Object.fromEntries(Object.entries(per).map(([t, n]) => [t, s.teams * n]));
     const any = side === "h" ? "UT" : "P";
     caps[any] = (caps[any] || 0) + (side === "h" ? benchH : s.teams * effBench - benchH);
     const r = C.positionReplacement(ps.map(() => 1), ps.map((p) => p.pos), caps, T, 0);
     return r.slot.every((x) => x !== null) && ps.length === sum(caps);
   });
-  const slotsAgree = s.positions !== "slots" || res.players.every((p) => p.drafted === (p.slot !== null));
+  const slotsAgree = res.players.every((p) => p.drafted === (p.slot !== null));
   // the breakdown adds back up to every player's dollars
   const parts = (b) => b.minBid + Object.values(b.stats).reduce((a, v) => a + v, 0) + b.position + b.replacement + b.other;
   const adds = res.players.every((p) => (p.breakdown ? Math.abs(parts(p.breakdown) - p.value) < 1e-6 : Number.isNaN(p.value)));
