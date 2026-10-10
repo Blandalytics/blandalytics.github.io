@@ -822,40 +822,49 @@ In `model-drilldown/`, run `npm install`, then `npm run check` (lint plus a form
 [blandalytics.com/auction-calculator/](https://blandalytics.com/auction-calculator/) — auction
 dollar values for every projected hitter and pitcher, priced for a league's settings. The sidebar
 holds a **League format**, which fills in a site's default teams and lineup slots (below; editing
-any of them makes it Custom); a **Replacement span**; lineup slots per team for C, 1B, 2B, 3B, SS,
-CI, MI, OF and UT, and for SP, RP and P, in place of the script's Hitters, Catchers and Pitchers;
-**Bench spots**, **Minimize bench value**;
-**League type** (Categories or Points), **Teams**, **Min bid**, **Team budget**,
-**Player pool** (All, NL-Only, AL-Only), **Hitter split (%)** and **Include free agents**; optional
-hitter and pitcher projection CSVs; and the scoring, as category toggles (5x5 roto by default) or
-editable points tables. Any change reprices at once. The table beside it is every player by
-auction dollars, with the scored stats grouped under Hitting and Pitching (a **Slot** column says
-where each drafted player plays, BN for the bench, and a row of **Position premiums**
-over it says what each position is worth over its side's deepest one); a summary line counts the
-drafted players and what they cost; any header sorts it, a
-search box and position filter narrow it, and **Download CSV** saves the whole table in the
-script's layout (a stat both sides score is suffixed `_h` / `_p`). **View** switches the stat
-columns for a **Value breakdown**: each player's dollars split into the min bid, a baseline, his
-position and each scored stat (below), and the CSV follows it. Settings are kept in the
-browser between visits; **Reset all settings** clears them.
+any of them makes it Custom); lineup slots per team for C, 1B, 2B, 3B, SS, CI, MI, OF and UT, and for
+SP, RP and P; **Bench spots**, **Minimize bench value**; **League type** (Categories or Points),
+**Teams**, **Min bid**, **Team budget**, **Categories format** (Roto, Head-to-head or H2H all-play,
+with **Weeks** for the H2H formats), **Player pool** (All, NL-Only, AL-Only), an optional **Bid
+hitter share (%)** and **Include free agents**; optional hitter and pitcher projection CSVs; the
+scoring, as category toggles (5x5 roto by default) or editable points tables; and, under
+**Valuation details**, the **Replacement span**, **Fill missing playing time**, **Specialist
+correction** and the noise placeholders (**Count noise φ**, **Playing-time CV**). Any change
+reprices at once. The table beside it is every player by auction dollars (and **Bid $** when a bid
+hitter share is set), with the scored stats grouped under Hitting and Pitching; a **Slot** column
+says where each drafted player plays, BN for the bench. Over it, a summary line counts the drafted
+players, what they cost, the hitter/pitcher split the values make and the dollars per SGP; a row of
+**SGP denominators** says how much of each category buys one standings point (or category win); a
+row of **Position premiums** says what each position is worth over its side's deepest one. Any
+header sorts the table, a search box and position filter narrow it, and **Download CSV** saves the
+whole table in the script's layout (a stat both sides score is suffixed `_h` / `_p`). **View**
+switches the stat columns for a **Value breakdown** of each player's dollars (below), and the CSV
+follows it. Settings are kept in the browser between visits; **Reset all settings** clears them.
 
-It is [plv_viz `auction_calc.py`](https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py)
-(the PL Auction Calculator Streamlit app) ported to the browser. It scores every player exactly as
-the script does (`tools/auction_calculator/` runs the script itself on the same CSVs and compares
-each player's z-score total or points), then prices those scores its own way:
+It began as [plv_viz `auction_calc.py`](https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py)
+(the PL Auction Calculator Streamlit app) ported to the browser, and it still reads projections as
+the script does and starts from its z-scores (`tools/auction_calculator/` runs the script itself
+on the same CSVs and compares every player's start value). From there it values players by
+standings gain, the generalized SGP procedure (no league history needed), and prices them its own
+way:
 
+- **SGP, not z-scores.** A z-score divides by the spread of player stats, which isn't tied to
+  standings. The page weights each category by the standings points one more unit buys a team,
+  from the spread of team totals (below).
+- **Rate stats as counts.** The script regresses each rate toward the league; the page counts what
+  a player adds above the drafted pool's rate (hits above it, earned runs saved below it), so a
+  rate carries its playing time.
+- **Playing time.** What a player doesn't play is filled with replacement production for his role.
+- **The split.** The script splits the dollars 65/35 (50/50 in points) by fiat; here the values set
+  it, at one price per SGP on both sides. A bid hitter share moves bid prices, not values.
 - **Drafted players and dollars.** The script prices every player at min bid + value × dollars per
-  value, then scales every positive value so they add up to the budget, so neither the number of
-  players at $1+ nor what they cost matches the league. The page drafts exactly the players who fill
-  every team's legal roster, prices the last of them at the min bid, and hands out the rest of the
-  budget by value over him (below): exactly `teams × roster spots` come out at $1+, and they cost
-  exactly `teams × budget`.
-- **Replacement by lineup slot.** The script prices catchers against catchers, every other
-  hitter in one pool and every pitcher in another. The page sets a replacement level for every
-  position, SP and RP included, from the league's best lineups instead (below), so how much a SS
-  is worth over a 1B, or an RP over an SP, comes from the projections and the roster, not a fixed
-  order. With UT and P slots that ends up close to the script on these projections (C carries
-  nearly all the scarcity); without them, positions separate.
+  value, then scales every positive value to the budget, so neither the number of players at $1+
+  nor what they cost matches the league. The page drafts exactly the players who fill every team's
+  legal roster: exactly `teams × roster spots` come out at $1+, for exactly `teams × budget`.
+- **Replacement by lineup slot.** The script prices catchers against catchers, every other hitter
+  in one pool and every pitcher in another. The page sets a replacement level for every position,
+  SP and RP included, from the league's best lineups, so scarcity comes from the projections and
+  the roster, not a fixed order.
 - **Default projections from the bucket.** `https://data.blandalytics.com/projections/hitters_auction_ev.csv`
   and `pitchers_auction_ev.csv`, not the app's Google Sheet; `?data=<base>` reads them from elsewhere.
 - **Team abbreviations.** The All pool keeps every player whatever their team (the script drops a
@@ -866,61 +875,86 @@ each player's z-score total or points), then prices those scores its own way:
 
 ### How it works
 
-Hitters are scored against the top `teams × (hitters + bench/2) × 1.1` by PA, pitchers against
-everyone with at least `min(50, IP of the last starter)` IP. In categories each stat is a z-score
-over that sample (fewer is better for K, CS, ERA, WHIP, BB and the like), with rate stats regressed
-toward the league by `hitters − 1` (or `pitchers − 1`) players' worth of average playing time
-before scoring, so a rate over few PA or IP moves less; in points, value is the points. Each
-player's value above replacement is that less his position's replacement level (below).
+Each side (hitters, pitchers) is valued on its own, from the script's z-scores (or points) as a
+start, then in passes until it settles:
 
-**Drafted players and dollars.** The drafted players are the ones that fill every team's legal
-roster: each side's lineup slots, plus half the bench each (as BN slots anyone fits) unless
-**Minimize bench value** is on, filled for the most value above replacement by the same fill as
-below. That's `teams × (hitters + pitchers + bench)` players, or `teams × (hitters + pitchers)` with
-the bench minimized. Every drafted player gets the min bid; the rest of the budget is split by
-**Hitter split** and handed out within each side in proportion to value over its last drafted
-player. So the last drafted player on each side goes for exactly the min bid, exactly the drafted
-players are at the min bid or more, and together they cost `teams × budget`. A player no legal
-roster has room for (a 13th catcher when nothing else takes him, say) stays under the min bid,
-even if his value is a touch higher than the last one in. The position premiums are in the same
-dollars. `tools/auction_calculator/invariants.mjs` checks all of this over 70 leagues.
+1. **The drafted pool**: the league's lineup slots (plus half the bench each side unless it's
+   minimized) filled for the most value, below.
+2. **Rate stats as counts** against the pool's own rate: `xH = H − r·AB` for AVG,
+   `xER = r·IP/9 − ER` for ERA, `xWHIP = r·IP − (BB+H)` for WHIP, and the same for OBP, SLG, ISO,
+   K%, BB%, K/9, BB/9, HR/9, K-BB% and K/BB, from the components when the file has them
+   (`r·PA × rate` for OPS and wOBA). Never the all-MLB rate, which counts players nobody drafts.
+3. **Playing time**: what each player doesn't play is filled with replacement production for his
+   role (C or other hitter; SP or RP, by starts): the per-PA (per-IP) output of the players a tier
+   (N) either side of the role's cutoff, ranked by their own projections, up to the role's 90th
+   percentile among drafted players. That production is set once, from the side valued without any
+   fill, then held: set from the filled values, the cutoff fills with part-timers whose rates no
+   free agent supplies over a season, and the pool and the fill chase each other.
+4. **The draft's spread** (σ²_draft): the pool in draft order cut into tiers of N (one player per
+   team, as a snake draft deals them), and each tier's variance added up; catchers are a tier list
+   of their own when the league has catcher slots, and a flex slot group (P) is one list.
+5. **A season's luck** (ν): each drafted player's outcome variance, summed and divided by N. From
+   the projections' 10th and 90th percentiles where the file has them (`HR_p10`, `HR_p90`, …: SD =
+   (p90 − p10) / 2.563; for a rate stat, the rate's spread times its denominator, plus the playing
+   time's); elsewhere count noise φ × the count plus (CV × the contribution)², with each player's CV
+   from his PA/IP percentiles when there are some. φ = 1 and CV = 0.15 are placeholders until
+   they're fit to projection errors. No strategy term (τ² = 0), so SB and SV may weigh a little
+   heavy.
+6. **The weights**: `G = C / (2√π · √(σ²_draft + P·ν))` standings points per unit, with C
+   comparisons per category and P scoring periods a season: roto N − 1 and 1, head-to-head W and W,
+   all-play W·(N − 1) and W weeks. The SGP denominator is `D = 1 / G`. Points leagues skip this: a
+   point is the unit.
+7. **SGP** is Σ G × contribution; **SGP above replacement** subtracts the player's position's
+   replacement level (below), category by category. In roto, a category more than half a
+   standings SD over replacement gains on a curve instead of a line (the **Specialist
+   correction**): `(N − 1)(Φ(Δ / (√2 σ)) − ½)`, so 50 SB over replacement at σ = 27 is 4.4 SGP,
+   not 5.7.
 
-**Value breakdown.** A player's dollars are the min bid plus `(value above replacement − the last
-drafted player's) × his side's dollars per unit`, and value above replacement is his score less
-his position's level, so they split exactly into:
+The passes stop when the pool doesn't change and no denominator moves 1%; a pool that only swaps
+marginal players back and forth with weights within 3% has settled on the mean of its states; after
+20 passes, the mean of the last two (the page says so). On the 2027 projections the Yahoo format
+settles in 4 passes a side, in about 0.2 s. Its denominators: R 23.1, HR 10.6, RBI 24.7, SB 10.1,
+AVG 14.0 hits; W 4.2, SV 9.8, K 58, ERA 10.4 earned runs, WHIP 16.2 walks + hits.
 
-- **Min bid**, the same for everyone;
-- **Baseline**, the same for everyone on a side: in categories, what a player with average stats
-  (z-scores are against the scoring pool's average) at the side's deepest position is worth over
-  the min bid; in points, the replacement level's points, taken away;
-- **Position**, his position's premium over his side's deepest one (the premium row's dollars);
-- **each stat**, its z-score (or its points) at the side's dollars per unit, so a stat below the
-  average takes dollars away;
-- **No spot**, shown only when it isn't zero: what holds a player no legal roster has room for
-  under the min bid.
+**Dollars.** The drafted players are the ones that fill every team's legal roster: each side's
+lineup slots, plus half the bench each (as BN slots anyone fits) unless **Minimize bench value** is
+on, filled for the most SGP above replacement. That's `teams × (hitters + pitchers + bench)`
+players, or `teams × (hitters + pitchers)` with the bench minimized. Every drafted player gets the
+min bid, the last drafted on each side exactly that, and the rest of the budget goes out at one
+price per SGP above him, on both sides; so exactly the drafted players are at the min bid or more,
+together they cost `teams × budget`, and the hitter/pitcher split is the values' own. A player no
+legal roster has room for (a 13th catcher when nothing else takes him, say) stays under the min
+bid. A **Bid hitter share** scales each side's dollars above the min bid to that share (bids only;
+the count and the total stay). On the 2027 projections the Yahoo format splits 50/50 at $10.64 per
+SGP; without the playing time fill, 60/40 at $6.43. The fill moves value to part-timers with good
+rates (Byron Buxton, Luis Robert Jr., closers) and away from full-time players near replacement
+rates (Bo Bichette, Luis Arraez, back-end starters).
 
-They add back up to the dollars to the cent for every player, which `invariants.mjs` checks too.
+**Value breakdown.** A player's dollars split exactly into: **Min bid**; **Baseline**, the same for
+everyone on a side (less the last drafted player's SGP above replacement); **Position**, his
+position's premium over his side's deepest one; **Playing time**, the replacement production filled
+in for the time he doesn't play; **each stat**, what it adds over the deepest position's replacement
+in his own playing time; **Specialist**, the roto curve's correction; and **No spot**, shown only
+when it isn't zero, what holds a player no legal roster has room for under the min bid. They add
+back up to the dollars to the cent for every player.
 
-**Replacement by lineup slot.** Each side's slots (`teams ×` each slot, plus `teams × bench/2` more UT or P
-when the bench isn't minimized; bench is 0 when **Minimize bench value** is on) are filled for the
-most total value: players in order of value, each one placed if a slot it fits is open or can be
-opened by shifting starters already placed (a 2B,SS moving from SS to MI, or an SP,RP from RP to
-P, say). The sets of hitters that fit the slots form a transversal
-matroid, so this greedy fill is optimal. Hitters and pitchers are filled separately, each with
-its own share of the dollars. A slot type's replacement level is then the value of the slots
-around its cutoff: refill the league with **Replacement span** fewer and that many more of those
-slots, and divide the difference in total value by the players it moves. Chains and all, that's
-the average of the last few starters it could lose and the first few non-starters it could add, so
-one player's projection doesn't set a position's price (the default span is 3; 0 is the single
-last starter, the price of a slot in the linear program the fill solves). A hitter is
-priced against the lowest replacement level among the slots he fits; one no slot takes (a DH when
-there's no UT) is worth a bench spot at most. Consequences, all from the data: a position whose
-starters spill into UT, P or a flex slot is exactly as deep as it, and a position is scarce only
-when its margin is worse than everything it could shift to. On the 2027 projections with a span
-of 3, the Yahoo format (two UT, four P) prices C at +$10.27, RP +$0.18 and everything else level;
-CBS (one UT, 5 SP and 2 RP, no P) has C +$17.08, RP +$1.89 and 2B / 3B / SS +$0.13; five OF and
-no UT goes C +$18.77, OF +$12.92, 2B / 3B / SS +$7.64, 1B $0. Without any position info in the projections, every slot takes
-anyone.
+**Replacement by lineup slot.** Each side's slots (`teams ×` each slot, plus `teams × bench/2` more
+UT or P when the bench isn't minimized) are filled for the most total value: players in order of
+value, each one placed if a slot it fits is open or can be opened by shifting starters already
+placed (a 2B,SS moving from SS to MI, or an SP,RP from RP to P, say). The sets of players that fit
+the slots form a transversal matroid, so this greedy fill is optimal (it matches scipy's
+`linear_sum_assignment` over player × slot). A slot type's replacement level is then the value of
+the slots around its cutoff: refill the league with **Replacement span** fewer and that many more of
+those slots, and divide the difference in total value (and in each category) by the players it
+moves. Chains and all, that's the average of the last few starters it could lose and the first few
+non-starters it could add, so one player's projection doesn't set a position's price (the default
+span is 3; 0 is the single last starter). A player is priced against the lowest replacement level
+among the slots he fits; one no slot takes (a DH when there's no UT) is worth a bench spot at most.
+A position whose starters spill into UT, P or a flex slot is exactly as deep as it. On the 2027
+projections the Yahoo format prices C at +$8.02 and everything else level; CBS (one UT, 5 SP and 2
+RP, no P) has C +$9.94, SP +$1.43, 2B / 3B +$0.48, SS +$0.27; five OF, no UT, 6 SP and 3 RP goes C
++$8.32, SP +$1.65, 2B / 3B / OF +$0.93, SS +$0.42. Without any position info in the projections,
+every slot takes anyone.
 
 The league formats set teams, hitter slots and pitcher slots only; budget ($260), bench and scoring
 stay as they are. Yahoo, the page's default, and ESPN are from the sites' own help pages; CBS is
@@ -936,15 +970,22 @@ count assumed.
 | Fantrax | 12 | 2 C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT | 9 P |
 | NFBC | 15 | 2 C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT | 9 P |
 
+Not done from the procedure: the draft-state weights (Task 12, re-weighting categories for one
+team during a live draft), risk as an option value, a convex dollar curve, and the history check
+against real standings (Task 13.4). The method is checked by simulation only, not against real
+league standings.
+
 | file | role |
 |---|---|
-| `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`), the player pool, z-scores and points, replacement (`positionReplacement` for lineup slots, with a span), the drafted players and dollars (`price`), the value breakdown (`breakdown`), rank; no DOM, so Node runs it too |
+| `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`), the player pool, the start z-scores and points, the SGP passes (`valueSide`), replacement by lineup slot (`positionReplacement`, with a span and per category), the drafted players, dollars and value breakdown (`auctionValues`), rank; no DOM, so Node runs it too |
 | `auction-calculator/index.html`, `app.js` | the page: settings and the league formats (`PRESETS`), uploads (UTF-8 or Windows-1252), the scoring controls, the table, the CSV |
 | `tools/auction_calculator/run_ref.py` | runs `auction_calc.py` headless through a stub `streamlit` (`stub/`), on local CSVs with settings from `ST_OVERRIDES`, and prints every player's score (its `unadjusted_value`) |
-| `tools/auction_calculator/compare.mjs` | scores the same CSVs and settings with `calc.js` and checks every player's score against the script's |
-| `tools/auction_calculator/invariants.mjs` | over 70 leagues (every format; bench on and off, Points, AL/NL-only, min bids, spans, other categories), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget, and that every value breakdown adds up |
+| `tools/auction_calculator/compare.mjs` | scores the same CSVs and settings with `calc.js` and checks every player's start value against the script's |
+| `tools/auction_calculator/sgp_dump.mjs`, `sgp_check.py` | dumps one league's last pass and recomputes it independently in Python (numpy, scipy): pool rates and rate-stat counts from the raw CSVs, tier variance, noise, G, SGP, the specialist curve with the procedure's reference code, and the drafted pool against `linear_sum_assignment` |
+| `tools/auction_calculator/sgp_checks.mjs` | the procedure's own validation: the 2√π / (N − 1) constant against simulated standings (within 2%), the tier variance against 3000 simulated snake drafts with ADP noise (within 5%), and a report of players who moved more than 20 places against the z-scores, with why |
+| `tools/auction_calculator/invariants.mjs` | over 90 leagues (every format; bench on and off, Points, roto / H2H / all-play, AL/NL-only, min bids, spans, fill and specialists off, a bid share, other categories), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget, that every value breakdown adds up, that bids keep both, and that the values settled |
 
-To check the port after a change to either side (pandas and Pillow for the script):
+To check the model after a change (pandas, Pillow, numpy and scipy for the Python side):
 
 ```bash
 curl -sO https://data.blandalytics.com/projections/hitters_auction_ev.csv
@@ -953,12 +994,15 @@ curl -sO https://raw.githubusercontent.com/blandalytics/plv_viz/main/auction_cal
 export ST_OVERRIDES='{"League Type": "Points", "Number of Teams": 15}'   # or {} for the defaults
 python tools/auction_calculator/run_ref.py auction_calc.py hitters_auction_ev.csv pitchers_auction_ev.csv > ref.json
 node tools/auction_calculator/compare.mjs hitters_auction_ev.csv pitchers_auction_ev.csv ref.json
+node tools/auction_calculator/sgp_dump.mjs hitters_auction_ev.csv pitchers_auction_ev.csv '{"format": "h2h"}' > dump.json
+python tools/auction_calculator/sgp_check.py hitters_auction_ev.csv pitchers_auction_ev.csv dump.json
+node tools/auction_calculator/sgp_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
 node tools/auction_calculator/invariants.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
 ```
 
 To update the projections, upload new `hitters_auction_ev.csv` / `pitchers_auction_ev.csv` to the
 bucket's `projections/` folder with the same columns (`Name`, `MLBAMID`, `Team`, `Y! Pos`, then
-the stats). The zone caches them for four hours; purge their URLs to show them sooner. After
+the stats, and the `<stat>_p10` / `<stat>_p90` percentiles the season's luck is read from). The zone caches them for four hours; purge their URLs to show them sooner. After
 any change to the JavaScript, bump the `?v=` on the script tag in `index.html` and on `app.js`'s
 import of `calc.js`.
 

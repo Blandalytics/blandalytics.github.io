@@ -79,6 +79,10 @@ label.block{margin-bottom:12px}
 .scarcity .prem{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:12.5px; background:var(--raise); border:1px solid var(--rule); border-radius:999px; padding:1px 9px; color:var(--faint)}
 .scarcity .prem b{font-family:"DM Sans",system-ui,sans-serif; color:var(--ink); font-weight:600; margin-right:5px}
 .scarcity .prem.up{color:var(--good); border-color:#2c4a36}
+details.adv{margin:14px 0 10px; border-top:1px solid var(--rule); padding-top:10px}
+details.adv summary{cursor:pointer; font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em}
+details.adv[open] summary{margin-bottom:10px}
+.scarcity .unit{color:var(--faint); font-family:"DM Sans",system-ui,sans-serif; font-size:11.5px; margin-left:3px}
 .addrow{font-size:13px; padding:4px 10px; margin-bottom:12px}
 .src{font-size:12.5px; color:var(--muted); margin:-2px 0 10px}
 .src b{color:var(--ink); font-weight:500}
@@ -137,8 +141,6 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
         <option value="yahoo">Yahoo</option><option value="espn">ESPN</option><option value="cbs">CBS</option>
         <option value="fantrax">Fantrax</option><option value="nfbc">NFBC</option><option value="custom">Custom</option></select>
         <small>Each site's default teams and lineup slots; change any of them for Custom</small></label>
-      <label class="block"><b>Replacement span</b><input id="span" type="number" min="0" max="10" step="1" value="3" required>
-        <small>Players either side of each position's cutoff averaged into its replacement level; 0 is the last starter alone</small></label>
       <fieldset id="slots_ui"><legend>Hitter slots <span id="slot_total" class="hint"></span></legend>
         <div class="slots">
           <label><b>C</b><input id="slot_C" type="number" min="0" max="5" step="1" value="1" required></label>
@@ -175,8 +177,11 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
         <label><b>Teams</b><input id="teams" type="number" min="4" max="30" step="1" value="12" required></label>
         <label><b>Min bid</b><input id="min_bid" type="number" min="0" step="1" value="1" required></label>
         <label><b>Team budget</b><input id="budget" type="number" min="1" step="1" value="260" required></label>
+        <label id="format_field"><b>Categories format</b><select id="format">
+          <option value="roto">Roto</option><option value="h2h">Head-to-head</option><option value="allplay">H2H all-play</option></select></label>
+        <label id="weeks_field" hidden><b>Weeks</b><input id="weeks" type="number" min="1" max="30" step="1" value="23" required><small>Scoring periods in the season</small></label>
         <label><b>Player pool</b><select id="pool"><option>All</option><option>NL-Only</option><option>AL-Only</option></select></label>
-        <label><b>Hitter split (%)</b><input id="split" type="number" min="0" max="100" step="1" value="65" required><small>Of the dollars above min bids</small></label>
+        <label><b>Bid hitter share (%)</b><input id="market" type="number" min="0" max="100" step="1" placeholder="from values"><small>Optional: moves bid prices toward a market's split (NFBC ≈ 63, LABR/Tout ≈ 70); values keep their own</small></label>
       </div>
       <label class="check"><input id="include_fa" type="checkbox" checked><span>Include free agents<small>Players without a team stay in the pool</small></span></label>
 
@@ -198,6 +203,18 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
         <fieldset><legend>Pitching points</legend><table class="points"><tbody id="pts_p"></tbody></table>
           <button type="button" class="addrow" data-add="p">+ Add category</button></fieldset>
       </div>
+      <details class="adv" id="adv">
+        <summary>Valuation details</summary>
+        <label class="block"><b>Replacement span</b><input id="span" type="number" min="0" max="10" step="1" value="3" required>
+          <small>Players either side of each position's cutoff averaged into its replacement level; 0 is the last starter alone</small></label>
+        <label class="check"><input id="fill_pt" type="checkbox" checked><span>Fill missing playing time<small>What a player doesn't play, his team fills with replacement production for his role</small></span></label>
+        <label class="check" id="spec_field"><input id="specialists" type="checkbox" checked><span>Specialist correction<small>Roto: a category far above replacement buys standings points on a curve, not a line</small></span></label>
+        <div class="pair">
+          <label><b>Count noise φ</b><input id="phi" type="number" min="0" max="5" step="0.1" value="1" required></label>
+          <label><b>Playing-time CV</b><input id="pt_cv" type="number" min="0" max="1" step="0.01" value="0.15" required></label>
+        </div>
+        <p class="hint">A season's luck in each category comes from the projections' 10th/90th percentiles where the file has them; elsewhere from count noise (φ × the count) and playing-time noise (CV, or each player's from his PA/IP percentiles). Placeholders until fit to projection errors.</p>
+      </details>
       <button type="button" class="link" id="reset">Reset all settings</button>
     </form>
 
@@ -211,19 +228,20 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
         <fieldset class="view"><legend>View</legend>
           <div class="seg">
             <label title="The projected stats"><input type="radio" name="view" value="stats" checked>Stats</label>
-            <label title="Each player's dollars split into the min bid, the baseline, his position and each stat"><input type="radio" name="view" value="value">Value breakdown</label>
+            <label title="Each player's dollars split into the min bid, the baseline, his position, playing time and each stat"><input type="radio" name="view" value="value">Value breakdown</label>
           </div>
         </fieldset>
         <button type="button" id="download" disabled>Download CSV</button>
       </div>
       <p id="status" class="status">Loading projections…</p>
       <p id="summary" class="summary" hidden></p>
+      <div id="weights" class="scarcity" hidden></div>
       <div id="scarcity" class="scarcity" hidden></div>
       <div class="tbl" id="tbl" hidden><table class="values" id="table"></table></div>
-      <p class="note">Each player is scored against the pool (z-scores per category, with rate stats weighted by playing time, or points), less replacement level. The league's hitter and pitcher slots are filled with the most total value; a position's replacement level is the average value of the slots around its cutoff (the last few starters there and the first few left over), so its scarcity comes from the projections, not a fixed order, and a player is priced at the scarcest position he plays. Exactly the players who fill every team's legal roster (lineups, plus the bench unless it's minimized) are drafted: the last of them goes for the min bid, the dollars above the min bids are split between hitters and pitchers and handed out by value over him, and they add up to the league's budget. A port of <a href="https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py">auction_calc.py</a>.</p>
+      <p class="note">Players are valued in standings points (SGP). Each category's weight is the standings points one more unit buys a team, from how far apart team totals land: the spread the draft leaves (tiers of one player per team, in draft order) plus a season's luck. Rate stats count as what a player adds above the drafted pool's rate (hits above it, earned runs saved below it), so they carry his playing time; what he doesn't play is filled with replacement production. The league's lineup slots are filled for the most value; a position's replacement level is the average of the players around its cutoff, so its scarcity comes from the projections, not a fixed order. Exactly the players who fill every team's legal roster are drafted: the last on each side goes for the min bid, the rest of the budget goes out at one price per SGP, and the hitter/pitcher split is what the values make. Starts from the z-scores of <a href="https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py">auction_calc.py</a>.</p>
     </section>
   </div>
 </main>
-<script type="module" src="app.js?v=9"></script>
+<script type="module" src="app.js?v=10"></script>
 </body>
 </html>
