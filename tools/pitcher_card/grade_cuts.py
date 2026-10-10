@@ -4,13 +4,13 @@ share of each letter.
 Every MLB pitcher-game in the bucket's data files is scored as its card is (the values a
 game scored alone gets, blank where the tracking the models need is missing) and averaged
 into the card's three game grades: stuffGrade_game, locGrade_game and plvGrade_game. Each
-grade's cuts are the quantiles of those outing means at the target's cumulative shares,
-with every outing weighted by its pitches, so the share of pitches thrown in, say, B+
-outings is the target's share of B+.
+grade's cuts are the quantiles of the starts' means at the target's cumulative shares,
+with every start weighted by its pitches, so the share of starters' pitches thrown in,
+say, B+ starts is the target's share of B+. Relief outings are graded on the same cuts.
 
-    python grade_cuts.py                       # every season in the data files
+    python grade_cuts.py                       # starts, every season in the data files
     python grade_cuts.py --seasons 2022 2025   # a span of seasons
-    python grade_cuts.py --starts              # starters' outings only
+    python grade_cuts.py --all                 # every outing, relief included
 
 A season's outing means are cached beside the data files (grade_games_<year>.parquet);
 --rescore scores them again. Prints the cuts as grades.py and build.js spell them, and
@@ -82,12 +82,28 @@ def outings(df: pd.DataFrame, values: pd.DataFrame, pm: pitch_model.PitchModel) 
     return out.reset_index()
 
 
+def _home_pitchers(game: pd.DataFrame) -> set:
+    """Everyone who pitched for the side that threw the game's first pitch. A pitcher only
+    faces the other side's batters, so pitchers -> the batters they faced -> the pitchers
+    who faced those batters, until nobody new turns up."""
+    home = {game["pitcher"].iat[0]}
+    while True:
+        faced = game.loc[game["pitcher"].isin(home), "batter"]
+        more = set(game.loc[game["batter"].isin(faced), "pitcher"])
+        if more <= home:
+            return home
+        home |= more
+
+
 def starters(df: pd.DataFrame) -> pd.MultiIndex:
-    """(game_pk, pitcher) of each game's two starters: the first two pitchers to appear in
-    the first inning."""
-    first = df[df["inning"] == 1].sort_values(["game_pk", "at_bat_index", "pitch_number"])
-    first = first.drop_duplicates(["game_pk", "pitcher"]).groupby("game_pk").head(2)
-    return pd.MultiIndex.from_frame(first[["game_pk", "pitcher"]].astype(int))
+    """(game_pk, pitcher) of each game's starters: each side's first pitcher, the one its
+    box score lists first. Matches statsapi's games started for every 2025 pitcher."""
+    ab = df.drop_duplicates(["game_pk", "at_bat_index"]).sort_values(["game_pk", "at_bat_index"])
+    out = []
+    for pk, game in ab[["game_pk", "pitcher", "batter"]].groupby("game_pk", sort=False):
+        away = game.loc[~game["pitcher"].isin(_home_pitchers(game)), "pitcher"]
+        out += [(pk, p) for p in (game["pitcher"].iat[0], *away.iloc[:1])]
+    return pd.MultiIndex.from_tuples(out, names=["game_pk", "pitcher"])
 
 
 def score_season(store: fetch.DataStore, year: int, workers: int) -> pd.DataFrame:
@@ -148,7 +164,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--seasons", type=int, nargs=2, metavar=("FIRST", "LAST"),
                     help="a span of seasons (default: every one in the data files)")  # fmt: skip
-    ap.add_argument("--starts", action="store_true", help="starters' outings only")
+    ap.add_argument("--all", action="store_true", help="every outing, not just starts")
     ap.add_argument("--rescore", action="store_true", help="score cached seasons again")
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 1)
     ap.add_argument("--cache", default=DEFAULT_CACHE, help="the data-file / model cache")
@@ -160,7 +176,7 @@ def main(argv=None) -> int:
         [season_games(store, y, a.workers, a.rescore) for y in range(first, last + 1)],
         ignore_index=True,
     )
-    if a.starts:
+    if not a.all:
         games = games[games["start"]]
     print(f"seasons {first}-{last}: {len(games):,} pitcher-games\n")
     report(games)

@@ -38,12 +38,13 @@ def bin_index(value: float, cuts: tuple[float, ...]) -> int:
 
 LETTERS = ("F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+")
 # Cut points for the three model grades, on the 100 +/- 15 scale: grade_cuts.py's fit of
-# every 2020-26 MLB pitcher-game, weighted by its pitches, to the modeled grade distribution
-# of 2022-2025 starts (F 6.2% ... A+ 3.4%). Location's also grade each side of the plate.
+# every 2020-26 MLB start, weighted by its pitches, to the modeled grade distribution of
+# 2022-2025 starts (F 6.2% ... A+ 3.4%). Relief outings are graded on the same cuts, and
+# Location's also grade each side of the plate.
 GRADE_CUTS = {
-    "stuff": (79.2, 83, 86.4, 89.2, 91.6, 94.7, 97.8, 101.6, 105.8, 110.9, 117.2, 129.4),
-    "loc": (75.2, 82.5, 87.6, 91.2, 93.9, 97.1, 100, 103.1, 106.4, 110, 114.1, 122.4),
-    "plv": (77, 83, 87.5, 90.8, 93.3, 96.4, 99.3, 102.5, 106, 110.2, 115, 125.6),
+    "stuff": (77.7, 81.2, 84.3, 86.9, 89, 91.8, 94.6, 98, 101.9, 106.3, 111.6, 122.4),
+    "loc": (85.3, 89.1, 92.1, 94.5, 96.4, 98.9, 101.1, 103.7, 106.3, 109.3, 112.6, 118.3),
+    "plv": (83.5, 87.3, 90.2, 92.5, 94.5, 97, 99.4, 102, 104.8, 108.2, 111.9, 118.8),
 }
 
 
