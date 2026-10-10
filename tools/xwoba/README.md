@@ -128,8 +128,8 @@ has no xwOBA here.
 |---|---|
 | `savant.py` | pulls every regular-season ball in play from Savant a week at a time, caches each week under `cache/`, and turns them into the model's frame |
 | `model.py` | the model: the grid, the local-linear smoother, prediction, and the JSON format |
-| `build.py` | fits the model on every season with bat tracking and writes `model.json`; `--tune` cross-validates the parameters first |
-| `evaluate.py` | holds out the latest season and writes `evaluation.md` |
+| `build.py` | fits the model on every season with bat tracking and writes `model.json`; `--cv` scores the parameters out of fold first, `--tune` searches them |
+| `evaluate.py` | holds out a season (the current one by default), compares the model with its ablations, gradient boosting and Savant's xwOBA, and writes `evaluation.md` |
 | `plot.py` | draws `surface.png` from `model.json` |
 
 ## Rebuilding
@@ -138,12 +138,13 @@ From the repo root:
 
 ```bash
 pip install -r tools/xwoba/requirements.txt
-python tools/xwoba/build.py --cv     # pulls what isn't cached (~5 minutes cold), fits, writes model.json
-python tools/xwoba/evaluate.py       # evaluation.md, testing on the current season
+python tools/xwoba/build.py --cv     # model.json: the pull, then ~5 minutes of fitting
+python tools/xwoba/evaluate.py       # evaluation.md, testing on the current season: ~10 minutes
 python tools/xwoba/plot.py           # surface.png
 ```
 
-`build.py --tune` searches the parameters on squared error alone (about an hour); weigh what it
-finds against log loss and calibration (`evaluate.py`) before moving `model.Params`' defaults. The first pull asks Savant for ~130 weeks of balls in play, three at
-a time; after that only weeks newer than three days are fetched again. The code passes
+The first pull asks Savant for ~130 weeks of balls in play, three at a time (about 5 minutes);
+after that only weeks newer than three days are fetched again. `build.py --tune` searches the
+parameters on squared error alone (about an hour); weigh what it finds against log loss and
+calibration (`evaluate.py`) before moving `model.Params`' defaults. The code passes
 `ruff check` and `ruff format` with the config in `ruff.toml`.

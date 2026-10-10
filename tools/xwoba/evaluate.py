@@ -190,12 +190,12 @@ def storage_section(grid: Grid, test: pd.DataFrame) -> str:
         rows.append(
             {
                 "grid": "{}° × {}° × {} mph".format(*strides),
-                "mean |change|": np.abs(d).mean(),
+                "mean abs. change": np.abs(d).mean(),
                 "99th pct": np.quantile(np.abs(d), 0.99),
                 "worst launch-angle degree": by_degree.abs().max(),
             }
         )
-    cols = ["grid", "mean |change|", "99th pct", "worst launch-angle degree"]
+    cols = ["grid", "mean abs. change", "99th pct", "worst launch-angle degree"]
     return table(rows, cols, {c: "{:.4f}" for c in cols[1:]})
 
 
