@@ -17,7 +17,7 @@ Cards is hidden from all three for now: its tile and links are commented out in 
 | `assets/css/main.css`, `assets/js/` | the Phantom template, unchanged |
 | `assets/css/blandalytics.css` | the site's palette and font over the template, the tile scrim, the footer wordmark |
 | `images/tile-*.webp` | the tile pictures, one per tool: `tile-NAME.webp` at 900 px and `tile-NAME-720.webp`, offered through `srcset` |
-| `tools/homepage/grab_app_pngs.py` | runs each tool in headless Chrome and saves the PNG from its own export button (the NHL Draft Tool has none, so it screenshots the options table of a mock draft) |
+| `tools/homepage/grab_app_pngs.py` | runs each tool in headless Chrome and saves the PNG from its own export button (the NHL Draft Tool and the Auction Calculator have none, so it screenshots the options table of a mock draft and the top of the values table) |
 | `tools/homepage/make_tiles.py` | crops those exports into square tiles (a figure whose edges carry text, like Batted Ball Charts and Swing Profiles, is padded out with its background instead); `blandalytics.css` holds every tile at 1:1 |
 
 ### Updating the tiles
@@ -771,6 +771,72 @@ The code is linted with ESLint (its recommended rules, for browser modules) and 
 Prettier (120 columns, single quotes). There is no build step; `package.json` holds only the tooling.
 In `model-drilldown/`, run `npm install`, then `npm run check` (lint plus a format check),
 `npm run lint` or `npm run format`.
+
+## MLB Auction Calculator
+
+[blandalytics.com/auction-calculator/](https://blandalytics.com/auction-calculator/) — auction
+dollar values for every projected hitter and pitcher, priced for a league's settings. The sidebar
+holds the app's settings: **Hitters**, **Pitchers**, **Catchers** and **Bench spots**, **Minimize
+bench value**; **League type** (Categories or Points), **Teams**, **Min bid**, **Team budget**,
+**Player pool** (All, NL-Only, AL-Only), **Hitter split (%)** and **Include free agents**; optional
+hitter and pitcher projection CSVs; and the scoring, as category toggles (5x5 roto by default) or
+editable points tables. Any change reprices at once. The table beside it is every player by
+auction dollars, with the scored stats grouped under Hitting and Pitching; any header sorts it, a
+search box and position filter narrow it, and **Download CSV** saves the whole table in the
+script's layout (a stat both sides score is suffixed `_h` / `_p`). Settings are kept in the
+browser between visits; **Reset all settings** clears them.
+
+It is [plv_viz `auction_calc.py`](https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py)
+(the PL Auction Calculator Streamlit app) ported to the browser, and it prices to the cent of the
+script: `tools/auction_calculator/` runs the script itself on the same CSVs and compares every
+player. It departs from the script in a few places:
+
+- **Default projections from the bucket.** `https://data.blandalytics.com/projections/hitters_auction_ev.csv`
+  and `pitchers_auction_ev.csv`, not the app's Google Sheet; `?data=<base>` reads them from elsewhere.
+- **Zero catcher slots.** The script leaves catchers unpriced (blank) when Catchers is 0; the page
+  prices them in the one pool with every other hitter.
+- **Team abbreviations.** The All pool keeps every player whatever their team (the script drops a
+  team it doesn't know), and AL/NL-Only also knows `TB`, `SD`, `SF`, `KC`, `WSH`, `CWS` and `AZ`.
+  A blank team, `FA` or `- - -` is a free agent.
+- **Pitchers' positions.** The table shows SP / RP from the projections rather than `P`, and the
+  dollar column sits by the name so it stays on screen on a phone.
+
+### How it works
+
+Hitters are scored against the top `teams × (hitters + bench/2) × 1.1` by PA, pitchers against
+everyone with at least `min(50, IP of the last starter)` IP. In categories each stat is a z-score
+over that sample (fewer is better for K, CS, ERA, WHIP, BB and the like), with rate stats regressed
+toward the league by `hitters − 1` (or `pitchers − 1`) players' worth of average playing time
+before scoring, so a rate over few PA or IP moves less; in points, value is the points. Replacement
+level is the value of the last starter: catchers against the top `teams × catchers` catchers, other
+hitters against the rest, pitchers against the top `teams × (pitchers + bench/2)` (bench is 0 when
+**Minimize bench value** is on). The dollars above every roster spot's min bid are split by **Hitter
+split**, handed out in proportion to value above replacement, and scaled so the positive values
+spend exactly `teams × budget`.
+
+| file | role |
+|---|---|
+| `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`), the player pool, z-scores and points, replacement, dollars, rank; no DOM, so Node runs it too |
+| `auction-calculator/index.html`, `app.js` | the page: settings, uploads (UTF-8 or Windows-1252), the scoring controls, the table, the CSV |
+| `tools/auction_calculator/run_ref.py` | runs `auction_calc.py` headless through a stub `streamlit` (`stub/`), on local CSVs with settings from `ST_OVERRIDES`, and prints its table |
+| `tools/auction_calculator/compare.mjs` | prices the same CSVs and settings with `calc.js` and checks every player's dollars and rank |
+
+To check the port after a change to either side (pandas and Pillow for the script):
+
+```bash
+curl -sO https://data.blandalytics.com/projections/hitters_auction_ev.csv
+curl -sO https://data.blandalytics.com/projections/pitchers_auction_ev.csv
+curl -sO https://raw.githubusercontent.com/blandalytics/plv_viz/main/auction_calc.py
+export ST_OVERRIDES='{"League Type": "Points", "Number of Teams": 15}'   # or {} for the defaults
+python tools/auction_calculator/run_ref.py auction_calc.py hitters_auction_ev.csv pitchers_auction_ev.csv > ref.json
+node tools/auction_calculator/compare.mjs hitters_auction_ev.csv pitchers_auction_ev.csv ref.json
+```
+
+To update the projections, upload new `hitters_auction_ev.csv` / `pitchers_auction_ev.csv` to the
+bucket's `projections/` folder with the same columns (`Name`, `MLBAMID`, `Team`, `Y! Pos`, then
+the stats). The zone caches them for four hours; purge their URLs to show them sooner. After
+any change to the JavaScript, bump the `?v=` on the script tag in `index.html` and on `app.js`'s
+import of `calc.js`.
 
 ## NHL Draft Tool
 
