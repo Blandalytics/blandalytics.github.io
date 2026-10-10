@@ -135,8 +135,10 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
         <option value="fantrax">Fantrax</option><option value="nfbc">NFBC</option><option value="custom">Custom</option></select>
         <small>Each site's default teams and lineup slots; change any of them for Custom</small></label>
       <label class="block"><b>Position adjustment</b><select id="pos_mode">
-        <option value="slots">By lineup slot</option><option value="catchers">Catchers only (the original script)</option></select>
+        <option value="slots">By lineup slot</option><option value="catchers">Catchers only (the original script's)</option></select>
         <small id="pos_mode_hint"></small></label>
+      <label class="block" id="span_field"><b>Replacement span</b><input id="span" type="number" min="0" max="10" step="1" value="3" required>
+        <small>Players either side of each position's cutoff averaged into its replacement level; 0 is the last starter alone</small></label>
       <fieldset id="slots_ui"><legend>Hitter slots <span id="slot_total" class="hint"></span></legend>
         <div class="slots">
           <label><b>C</b><input id="slot_C" type="number" min="0" max="5" step="1" value="1" required></label>
@@ -163,7 +165,7 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
         <label id="catchers_field" hidden><b>Catchers</b><input id="catchers" type="number" min="0" max="3" step="1" value="1" required></label>
         <label><b>Bench spots</b><input id="bench" type="number" min="0" max="20" step="1" value="5" required></label>
       </div>
-      <label class="check"><input id="min_bench" type="checkbox" checked><span>Minimize bench value<small>Leaves bench players out when setting replacement level</small></span></label>
+      <label class="check"><input id="min_bench" type="checkbox" checked><span>Minimize bench value<small>Leaves bench players out of replacement level and the drafted pool</small></span></label>
 
       <h3>League settings</h3>
       <div class="pair">
@@ -215,10 +217,10 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
       <p id="summary" class="summary" hidden></p>
       <div id="scarcity" class="scarcity" hidden></div>
       <div class="tbl" id="tbl" hidden><table class="values" id="table"></table></div>
-      <p class="note">Each player is scored against the pool (z-scores per category, with rate stats weighted by playing time, or points), less replacement level. By lineup slot, the league's hitter and pitcher slots are filled with the most total value; a position's replacement level is what the league would lose with one fewer slot there, so its scarcity comes from the projections, not a fixed order, and a player is priced at the scarcest position he plays. The dollars above the min bids are split between hitters and pitchers by that value. A port of <a href="https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py">auction_calc.py</a>.</p>
+      <p class="note">Each player is scored against the pool (z-scores per category, with rate stats weighted by playing time, or points), less replacement level. By lineup slot, the league's hitter and pitcher slots are filled with the most total value; a position's replacement level is the average value of the slots around its cutoff (the last few starters there and the first few left over), so its scarcity comes from the projections, not a fixed order, and a player is priced at the scarcest position he plays. Exactly the players who fill every team's legal roster (lineups, plus the bench unless it's minimized) are drafted: the last of them goes for the min bid, the dollars above the min bids are split between hitters and pitchers and handed out by value over him, and they add up to the league's budget. A port of <a href="https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py">auction_calc.py</a>.</p>
     </section>
   </div>
 </main>
-<script type="module" src="app.js?v=4"></script>
+<script type="module" src="app.js?v=7"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=3";
+import * as C from "./calc.js?v=6";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -13,11 +13,12 @@ const FILES = { h: "hitters_auction_ev.csv", p: "pitchers_auction_ev.csv" };
 const STORE = "auction-calculator:v1";
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
 const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
-const NUM_INPUTS = ["hitters", "pitchers", "catchers", "bench", "teams", "min_bid", "budget", "split", ...SLOT_IDS, ...PSLOT_IDS];
+const NUM_INPUTS = ["hitters", "pitchers", "catchers", "bench", "teams", "min_bid", "budget", "split", "span", ...SLOT_IDS, ...PSLOT_IDS];
 const SCRIPT_ONLY = new Set(["hitters", "pitchers", "catchers"]);
+const SLOTS_ONLY = (id) => id.includes("slot_") || id === "span";
 const bySlots = () => $("pos_mode").value === "slots";
 // The inputs the position adjustment in use reads
-const activeInputs = () => NUM_INPUTS.filter((id) => (bySlots() ? !SCRIPT_ONLY.has(id) : !id.includes("slot_")));
+const activeInputs = () => NUM_INPUTS.filter((id) => (bySlots() ? !SCRIPT_ONLY.has(id) : !SLOTS_ONLY(id)));
 const slotsOf = (types, prefix) => Object.fromEntries(Object.keys(types).map((t) => [t, Number($(prefix + t).value)]));
 const total = (slots) => Object.values(slots).reduce((a, b) => a + b, 0);
 
@@ -221,7 +222,7 @@ function readSettings() {
   const s = {
     positions: $("pos_mode").value, slots, pitcherSlots,
     hitters: bySlots() ? total(slots) : n("hitters"), pitchers: bySlots() ? total(pitcherSlots) : n("pitchers"),
-    catchers: bySlots() ? slots.C : n("catchers"), bench: n("bench"),
+    catchers: bySlots() ? slots.C : n("catchers"), bench: n("bench"), span: bySlots() ? n("span") : 0,
     minimizeBench: $("min_bench").checked, style: style(), teams: n("teams"), minBid: n("min_bid"),
     budget: n("budget"), hitterSplit: n("split") / 100, pool: $("pool").value, includeFa: $("include_fa").checked,
     hitterCats: cats.h, pitcherCats: cats.p, hitterPoints: points.h, pitcherPoints: points.p,
@@ -257,11 +258,11 @@ function restore() {
 // ---- position adjustment ---------------------------------------------------------------
 
 function showPositionMode() {
-  for (const id of ["slots_ui", "pslots_ui"]) $(id).hidden = !bySlots();
+  for (const id of ["slots_ui", "pslots_ui", "span_field"]) $(id).hidden = !bySlots();
   for (const id of ["hitters_field", "pitchers_field", "catchers_field"]) $(id).hidden = bySlots();
   $("pos_mode_hint").textContent = bySlots()
     ? "Each position's replacement level comes from the league's best lineups"
-    : "Catchers against catchers, every other hitter in one pool";
+    : "The script's replacement: catchers against catchers, every other hitter in one pool, every pitcher in another";
   const count = (ids) => ids.reduce((a, id) => a + (Number($(id).value) || 0), 0);
   $("slot_total").textContent = `${count(SLOT_IDS)} per team`;
   $("pslot_total").textContent = `${count(PSLOT_IDS)} per team`;
@@ -416,9 +417,12 @@ function render() {
   });
 
   const s = result.settings;
-  const priced = result.players.filter((p) => p.value >= s.minBid).length;
-  $("summary").innerHTML = `<b>${int(result.players.length)}</b> players priced · <b>${int(priced)}</b> at or above the $${s.minBid} min bid · `
-    + `${s.teams} teams × $${int(s.budget)}${rows.length !== result.players.length ? ` · showing <b>${int(rows.length)}</b>` : ""}`;
+  const drafted = result.players.filter((p) => p.drafted);
+  const spent = drafted.reduce((a, p) => a + p.value, 0);
+  const spots = s.hitters + s.pitchers + (s.minimizeBench ? 0 : s.bench);
+  $("summary").innerHTML = `<b>${int(result.players.length)}</b> players priced · <b>${int(drafted.length)}</b> drafted at $${s.minBid}+ `
+    + `(${s.teams} teams × ${spots} ${s.minimizeBench ? "lineup" : "roster"} spots) for <b>$${int(Math.round(spent))}</b> (${s.teams} × $${int(s.budget)})`
+    + `${rows.length !== result.players.length ? ` · showing <b>${int(rows.length)}</b>` : ""}`;
   $("summary").hidden = false;
   renderScarcity();
 
@@ -433,7 +437,8 @@ function render() {
   const body = rows.length
     ? rows.map((p) => `<tr class="${p.type}">` + cols.map((c) => {
       const cls = [typeof c.cls === "function" ? c.cls(p) : c.cls, c.first ? "gp" : ""].filter(Boolean).join(" ");
-      const title = c.key === "name" ? p.name : c.key === "pos" && p.valuedAt ? `Priced at ${p.valuedAt}` : "";
+      const title = c.key === "name" ? p.name : c.key === "pos" && p.valuedAt ? `Priced at ${p.valuedAt}`
+        : c.key === "value" && !p.drafted ? "Not on a drafted roster" : "";
       return `<td${cls ? ` class="${cls}"` : ""}${title ? ` title="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
     }).join("") + `</tr>`).join("")
     : `<tr><td class="empty l" colspan="${cols.length}">No players match.</td></tr>`;
