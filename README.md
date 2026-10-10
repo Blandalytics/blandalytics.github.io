@@ -243,8 +243,7 @@ the ABS adjustment, as the scale was. The card uses whole outings for the three 
 one outing for the plvStuff+ and PLV+ columns. Each grade's letters have their own cut
 points, fitted by `grade_cuts.py` to a target share of each letter: every MLB pitcher-game
 in the data files is scored as its card is, and the cuts are the pitch-weighted quantiles of
-the starts' means. Relief outings are graded on the same cuts, and Location's also grade
-each side of the plate. The
+the outings' means (Location's cuts also grade each side of the plate). The
 per-pitch-type colour bins are the 10th, 30th, 70th and 90th percentiles of that pitch
 type's 2026 pitcher-games. A pitch the chain does not model — a position player's eephus,
 anything missing tracking — simply has no value, and the card shows a dash. Expected
