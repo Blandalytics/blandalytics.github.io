@@ -34,10 +34,10 @@ kernel average:
   reads it at the node (a local-linear fit). Around an 80 mph swing there are far more 75 mph
   swings than 85 mph ones, so a plain average drags the fastest swings' home-run rate toward
   the slower ones'; on simulated data with a known answer the plane halved that bias, and out
-  of fold on real data it beats the plain average at every width.
+  of fold on real data it beat the plain average at each width tried.
 - **A second pass.** Any kernel flattens what is sharp: the line-drive peak at 12–13° of launch
-  angle (actual wOBA .798), the dip just above it where liners carry to the outfielders (.65 at
-  17–20°), the edges of the home-run band. Squared error barely notices, since one ball's
+  angle (actual wOBA .80), the dip just above it where liners carry to the outfielders (.63–.65
+  at 17–20°), the edges of the home-run band. Squared error barely notices, since one ball's
   outcome is mostly noise, but a hitter's xwOBA averages hundreds of balls and keeps the bias.
   So the residuals of the first pass are smoothed the same way and added back (Tukey's
   "twicing"), each probability kept to at least half its first-pass value so no outcome is
@@ -50,9 +50,11 @@ The sums the fits need at every node are Gaussian blurs (and derivatives of them
 histogram of the balls, so the whole 2-million-node grid fits in seconds. The parameters were
 chosen by five-fold cross-validation over games on 2023–2025, on squared error, log loss and
 calibration together: squared error alone would take a 2° launch-angle kernel and leave the
-line-drive peak 0.016 low. The saved grid keeps every other node (2° × 2° × 2 mph), which costs
-nothing measurable; a ball is read off it by trilinear interpolation, with inputs beyond the
-grid clamped to its edge.
+5° launch-angle bands around the line-drive peak up to 0.016 off. The saved grid keeps every
+whole degree of launch angle (the input is recorded in whole degrees, and a 2° step would read
+every odd degree off a line between its neighbours, 0.014 off at worst), every 2° of spray and
+every 3 mph of bat speed, where the kernels are wide enough to read between nodes; a ball is
+read off it by trilinear interpolation, with inputs beyond the grid clamped to its edge.
 
 **Data.** Every regular-season ball in play with bat tracking from Baseball Savant's Statcast
 search (bat tracking starts on 14 July 2023), less bunts, sac bunts and catcher's interference,
@@ -81,7 +83,44 @@ between the eight surrounding nodes.
 
 ## How well it does
 
-See [evaluation.md](evaluation.md).
+Fit on 2023–2025 and scored on all 118,189 balls in play from 2026, which the fit never saw
+(the full report, with calibration tables, is [evaluation.md](evaluation.md)):
+
+| model | RMSE | R² | log loss |
+|---|--:|--:|--:|
+| League average | 0.5724 | 0.000 | 0.939 |
+| Launch angle alone | 0.5111 | 0.203 | 0.718 |
+| Launch angle + bat speed | 0.5006 | 0.235 | 0.700 |
+| Spray + launch angle | 0.4701 | 0.326 | 0.623 |
+| **3D model** | **0.4610** | **0.351** | **0.608** |
+| Gradient boosting on the same three inputs | 0.4612 | 0.351 | 0.607 |
+| Savant's xwOBA (exit velocity + launch angle) | 0.4287 | 0.439 | – |
+
+- **Every input earns its place.** Spray direction is worth more than bat speed (it is where
+  the fielders are), but bat speed still adds on top of the other two.
+- **It matches gradient boosting** on the same inputs, and is smooth where boosting is a sum of
+  steps. Out of fold on 2023–2025 its calibration error is 0.0066 (boosting 0.0045; about 0.004
+  is sampling noise), against 0.0158 for one pass without twicing.
+- **It trails Savant's xwOBA, as it should.** Exit velocity says how squarely the ball was
+  hit; bat speed says only how hard the swing was.
+
+**Hitters.** Per hitter-season (100+ batted balls), 3D xwOBA on contact is much steadier year
+to year than wOBA on contact (r = 0.66 against 0.49; Savant's xwOBA 0.75), but it predicts the
+next season's wOBA on contact no better than wOBA on contact itself does (0.49 against 0.49;
+Savant's 0.60). What it measures is a hitter's swing speed and where they hit the ball, not
+how often they square it up, and the second matters to next year's results too.
+
+**Seasons differ.** Mean bat speed on balls in play rose from 71.2 mph in 2024 to 71.7 in 2026
+with no more wOBA on contact to show for it (exit velocity at a given bat speed fell), so the
+model fit on 2023–2025 reads 2026 0.012 high, as Savant's exit-velocity model reads it 0.011
+low. Compare hitters within a season, or against the season's league-wide xwOBA, rather than
+raw values across seasons.
+
+**What it leaves out**, beyond exit velocity: the batter's sprint speed (Savant's xwOBA uses it
+on topped and weakly hit balls), the park, the fielders' positioning, the weather. Spray is
+measured from the pull line, so the two sides of a park are averaged and left- and
+right-handed hitters share one surface. Bunts are left out, and a swing without bat tracking
+has no xwOBA here.
 
 ## Files
 

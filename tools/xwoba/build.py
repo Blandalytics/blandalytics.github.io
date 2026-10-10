@@ -9,10 +9,11 @@ of the predicted wOBA value.
 Squared error alone is not how the defaults in model.Params were settled. A single
 ball's outcome is mostly noise, so squared error barely moves when the kernel
 flattens a sharp feature, and on its own it prefers a 2-degree launch-angle kernel
-that leaves the line-drive peak 0.016 low. The defaults are the point near the best
-on squared error, log loss and calibration together (out of fold on 2023-2025:
-RMSE 0.46299, log loss 0.6158, calibration error 0.0066 -- see evaluation.md for
-the measure), with every 5-degree launch-angle band within 0.01.
+that leaves the 5-degree launch-angle bands around the line-drive peak up to 0.016
+off. The defaults are the point near the best on squared error, log loss and
+calibration together (out of fold on 2023-2025: RMSE 0.46299, log loss 0.6158,
+calibration error 0.0066 -- see evaluation.md for the measure), with every 5-degree
+launch-angle band within 0.01.
 
     python tools/xwoba/build.py --cv                     # every season with bat tracking
     python tools/xwoba/build.py --tune                   # cross-validate the parameters first
@@ -38,10 +39,13 @@ import savant  # noqa: E402
 from model import AXES, WEIGHTS, Grid, Params, fit, histogram, smooth  # noqa: E402
 
 OUT = HERE / "model.json"
-# The saved grid keeps every other node: 2 degrees of spray and launch angle, 2 mph of
-# bat speed. The kernels are wider than that, so reading between nodes loses nothing
-# measurable (evaluate.py compares the two).
-STRIDE = 2
+# The saved grid keeps every 2nd node of spray (2 degrees), every launch angle (1 degree)
+# and every 3rd mph of bat speed. Launch angle is recorded in whole degrees and the
+# surface is sharpest along it, so a coarser step there would read every odd degree off
+# a line between its neighbours and miss the line-drive peak by 0.025; along the other
+# two the kernels are wide enough to read between nodes (evaluate.py measures the saved
+# grid against the full one).
+STRIDES = (2, 1, 3)
 FOLDS = 5
 
 # What --tune tries for each parameter, one parameter at a time from the defaults.
@@ -127,7 +131,7 @@ def choose(df: pd.DataFrame, tuning: bool, scoring: bool, verbose: bool):
 
 # ---- the build -------------------------------------------------------------------------------
 def build(df: pd.DataFrame, params: Params, cv: tuple[float, float] | None) -> dict:
-    grid = fit(df, params).coarsen(STRIDE)
+    grid = fit(df, params).coarsen(STRIDES)
     meta = {
         "model": "xwOBA from spray angle, launch angle and bat speed",
         "built": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),

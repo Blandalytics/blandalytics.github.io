@@ -37,7 +37,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import savant  # noqa: E402
-from build import FOLDS, STRIDE, current_season, load  # noqa: E402
+from build import FOLDS, STRIDES, current_season, load  # noqa: E402
 from model import AXES, CLASSES, WEIGHTS, Grid, Params, fit  # noqa: E402
 
 OUT = HERE / "evaluation.md"
@@ -46,7 +46,7 @@ SAVANT = "estimated_woba_using_speedangle"
 AXIS = {a.name: a for a in AXES}
 MODEL = "**3D model**"
 ONE_PASS = "3D model, one pass (no twicing)"
-SAVED = f"3D model, saved grid ({STRIDE}° × {STRIDE}° × {STRIDE} mph)"
+SAVED = "3D model, saved grid ({}° × {}° × {} mph)".format(*STRIDES)
 BOOSTED = "Gradient boosting, same 3 inputs"
 BINS = 20  # equal-count bins of xwOBA for the calibration error
 
@@ -88,7 +88,7 @@ def contenders(train, test, params, grid: Grid) -> dict:
         "Launch angle + bat speed": smoother(train, test, ["launch_angle", "bat_speed"], params),
         ONE_PASS: smoother(train, test, list(AXIS), replace(params, twice=False)),
         MODEL: grid.predict_frame(test),
-        SAVED: grid.coarsen(STRIDE).predict_frame(test),
+        SAVED: grid.coarsen(STRIDES).predict_frame(test),
         BOOSTED: boosted(train, test),
         "Savant xwOBA (exit velo + launch angle)": test[SAVANT].to_numpy(),
     }
@@ -100,6 +100,12 @@ def calibration_error(x: np.ndarray, y: np.ndarray) -> float:
     q = np.argsort(np.argsort(x, kind="stable")) * BINS // len(x)
     g = pd.DataFrame({"q": q, "d": x - y}).groupby("q")["d"]
     return float((g.mean().abs() * g.size()).sum() / len(x))
+
+
+def noise_floor(y: np.ndarray) -> float:
+    """The calibration error a perfect model would still show from the sampling noise of
+    the bins' means alone: E|N(0, sd / sqrt(n))| = sqrt(2 / pi) sd / sqrt(n)."""
+    return float(np.sqrt(2 / np.pi) * y.std() / np.sqrt(len(y) / BINS))
 
 
 def metrics(pred, test) -> dict:
@@ -171,6 +177,26 @@ def season_section(df: pd.DataFrame) -> str:
     fmt = {"wOBA": "{:.3f}", "3D xwOBA": "{:.3f}", "Savant xwOBA": "{:.3f}", "bat speed": "{:.2f}"}
     fmt["balls"] = "{:,.0f}"
     return table(rows, ["season", "balls", "wOBA", "3D xwOBA", "Savant xwOBA", "bat speed"], fmt)
+
+
+def storage_section(grid: Grid, test: pd.DataFrame) -> str:
+    """The saved grid against the full one: how far a ball's xwOBA moves, and the worst
+    mean shift of any whole degree of launch angle."""
+    full = grid.predict_frame(test) @ WEIGHTS
+    rows = []
+    for strides in ((2, 2, 2), STRIDES):
+        d = grid.coarsen(strides).predict_frame(test) @ WEIGHTS - full
+        by_degree = pd.Series(d).groupby(test["launch_angle"].to_numpy()).mean()
+        rows.append(
+            {
+                "grid": "{}° × {}° × {} mph".format(*strides),
+                "mean |change|": np.abs(d).mean(),
+                "99th pct": np.quantile(np.abs(d), 0.99),
+                "worst launch-angle degree": by_degree.abs().max(),
+            }
+        )
+    cols = ["grid", "mean |change|", "99th pct", "worst launch-angle degree"]
+    return table(rows, cols, {c: "{:.4f}" for c in cols[1:]})
 
 
 def calibration(x, test, by: pd.Series, label: str) -> str:
@@ -255,6 +281,7 @@ def report(train, test, test_season, params) -> str:
     every = pd.concat([train.assign(x3=x_oof), test.assign(x3=x3)])
     seasons = sorted(train["game_year"].unique())
     span = f"{seasons[0]}–{seasons[-1]}"
+    y_test = test["woba_value"].to_numpy()
     return "\n".join(
         [
             "# 3D xwOBA model: evaluation",
@@ -269,24 +296,37 @@ def report(train, test, test_season, params) -> str:
             "RMSE of the predicted against the actual wOBA value of each ball; R² against the "
             "test season's own variance; log loss of the five-outcome probabilities; the "
             f"calibration error, the mean gap between predicted and actual wOBA over {BINS} "
-            "equal-count bins of the prediction (lower is better for all three); and the mean "
-            f"prediction, against an actual {test_season} mean of "
-            f"{test['woba_value'].mean():.3f}. The league average row is the fit seasons' mean, "
-            f"and the gap between it and {test_season}'s is in every model's calibration error.",
+            "equal-count bins of the prediction (lower is better for all three; with "
+            f"{len(test) // BINS:,} balls in a bin, about {noise_floor(y_test):.3f} of it is "
+            "noise); and the mean prediction, against an actual "
+            f"{test_season} mean of {y_test.mean():.3f}. Each model's calibration error here "
+            f"also holds how {test_season} differs from the seasons it was fit on (see *Season "
+            "by season*); the out-of-fold comparison after this one is free of that.",
             "",
             ball_section(preds, test),
+            "### The saved grid",
+            "",
+            "How far a ball's xwOBA moves when it is read off a saved grid rather than the "
+            "full 1° × 1° × 1 mph one, and the most any whole degree of launch angle moves on "
+            "average. Launch angle is recorded in whole degrees, so a 2° step reads every odd "
+            "degree off a line between its neighbours.",
+            "",
+            storage_section(grid, test),
             f"## Batted balls, out of fold on {span}",
             "",
             "Five folds by game on the fit seasons, each fold predicted by a model fit on the "
             "other four. With the seasons pooled there is no drift between fit and test, so "
-            "the calibration error is the model's own (with ~19,000 balls in a bin, about "
-            "0.004 of it is noise).",
+            f"the calibration error is the model's own (with {len(train) // BINS:,} balls in a "
+            f"bin, about {noise_floor(train['woba_value'].to_numpy()):.3f} of it is noise).",
             "",
             folds,
             "## Season by season",
             "",
             f"Mean predicted against actual wOBA on contact: out of fold for {span}, the "
-            f"held-out fit's for {test_season}.",
+            f"held-out fit's for {test_season}. Each season is fit with the others, so a "
+            "season that hit better or worse than its inputs suggest (the ball, the weather, "
+            "how squarely bat met ball) shows as a gap; bat speed is the season's mean on "
+            "balls in play.",
             "",
             season_section(every),
             f"## Calibration in {test_season}",

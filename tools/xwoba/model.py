@@ -33,7 +33,7 @@ outcome of a single ball is mostly noise), but a hitter's xwOBA averages hundred
 balls, so a flattened peak shortchanges the hitters who live on it. So the fit is
 made twice (Tukey's "twicing"): the residuals of the first pass -- each ball's
 outcome less its node's estimate -- are smoothed the same way and added back, which
-restores most of what the first pass flattened. A probability the correction would
+restores much of what the first pass flattened. A probability the correction would
 push down is kept to at least `floor` of its first-pass value, so no outcome the
 first pass allowed is ever ruled out.
 
@@ -252,13 +252,13 @@ class Grid:
         """xwOBA at every grid node."""
         return np.tensordot(WEIGHTS, self.probs, axes=1)
 
-    def coarsen(self, stride: int) -> Grid:
-        """Every stride-th node of each axis (the ends kept when they fall on the stride)."""
+    def coarsen(self, strides: tuple[int, ...]) -> Grid:
+        """Every k-th node of each axis, k per axis (the end kept when it falls on a k)."""
         axes = tuple(
-            Axis(a.name, a.lo, a.lo + a.step * stride * ((a.n - 1) // stride), a.step * stride)
-            for a in self.axes
+            Axis(a.name, a.lo, a.lo + a.step * k * ((a.n - 1) // k), a.step * k)
+            for a, k in zip(self.axes, strides, strict=True)
         )
-        sl = tuple(slice(None, None, stride) for _ in self.axes)
+        sl = tuple(slice(None, None, k) for k in strides)
         return Grid(axes, self.probs[(slice(None), *sl)], self.params)
 
     # Probabilities are stored as integers in units of 1/SCALE; the out class is

@@ -365,6 +365,36 @@ batted balls in it. Locally, `python tools/batted_balls/build_data.py --out batt
 them with `?data=data/`. After any change to the JavaScript, bump the `?v=` query on the two
 script tags in `index.html` so browsers fetch the new files.
 
+## 3D xwOBA
+
+[`tools/xwoba/`](tools/xwoba/) — expected wOBA of a batted ball from **spray direction, launch
+angle and bat speed** alone, with no exit velocity: the probability of each wOBA outcome (out,
+single, double, triple, home run) on a 3D grid, and xwOBA as their weighted sum with Savant's
+weights. It is fit on every regular-season MLB ball in play with bat tracking since bat
+tracking began (14 July 2023 to the end of the 2026 regular season, 401,321 balls), which comes from Baseball
+Savant's Statcast search: the completed-games Parquet the rest of the site uses is built from
+the Stats API, which carries no bat speed. Spray is the Batted Ball Charts page's (0° at the
+pull line, 45° centre, 90° the opposite line).
+
+Each grid node fits a kernel-weighted plane through the outcomes of the balls around it, and a
+second pass smooths the first pass's residuals and adds them back, so the sharp parts of the
+surface (the line-drive peak, the pockets where outfielders stand, the edges of the home-run
+band) survive the smoothing. Fit on 2023–2025 and tested on 2026, it explains 35% of the
+variance in a ball's wOBA value (R² 0.351), level with gradient boosting on the same inputs
+and behind Savant's exit-velocity xwOBA (0.439). For hitters it is steadier year to year than
+wOBA on contact (r = 0.66 against 0.49).
+
+| file | role |
+|---|---|
+| `tools/xwoba/model.json` | the fitted model: four hit probabilities on a 2° (spray) × 1° (launch angle) × 3 mph (bat speed) grid, read by trilinear interpolation |
+| `tools/xwoba/model.py` | the smoother, prediction, and the JSON format (`Grid.from_json(...).xwoba(spray, launch_angle, bat_speed)`) |
+| `tools/xwoba/savant.py` | the weekly Savant pulls, cached under `tools/xwoba/cache/` |
+| `tools/xwoba/build.py`, `evaluate.py`, `plot.py` | the fit, the held-out evaluation ([`evaluation.md`](tools/xwoba/evaluation.md)), the figure |
+
+Nothing on the site reads it yet. Method, use, results and limits are in
+[`tools/xwoba/README.md`](tools/xwoba/README.md); `python tools/xwoba/build.py --cv` rebuilds
+it.
+
 ## NHL Draft Tool
 
 [blandalytics.com/nhl-draft/](https://blandalytics.com/nhl-draft/) — a draft tool for a 12-team
