@@ -1,7 +1,7 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=1";
+import * as C from "./calc.js?v=7";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -11,7 +11,17 @@ const params = new URLSearchParams(location.search);
 const DATA = new URL(params.get("data") || "https://data.blandalytics.com/projections/", location.href).href;
 const FILES = { h: "hitters_auction_ev.csv", p: "pitchers_auction_ev.csv" };
 const STORE = "auction-calculator:v1";
-const NUM_INPUTS = ["hitters", "pitchers", "catchers", "bench", "teams", "min_bid", "budget", "split"];
+const VIEW_STORE = "auction-calculator:view";
+const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
+const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
+const NUM_INPUTS = ["hitters", "pitchers", "catchers", "bench", "teams", "min_bid", "budget", "split", "span", ...SLOT_IDS, ...PSLOT_IDS];
+const SCRIPT_ONLY = new Set(["hitters", "pitchers", "catchers"]);
+const SLOTS_ONLY = (id) => id.includes("slot_") || id === "span";
+const bySlots = () => $("pos_mode").value === "slots";
+// The inputs the position adjustment in use reads
+const activeInputs = () => NUM_INPUTS.filter((id) => (bySlots() ? !SCRIPT_ONLY.has(id) : !SLOTS_ONLY(id)));
+const slotsOf = (types, prefix) => Object.fromEntries(Object.keys(types).map((t) => [t, Number($(prefix + t).value)]));
+const total = (slots) => Object.values(slots).reduce((a, b) => a + b, 0);
 
 const defaults = { h: null, p: null };   // the bucket's projections, parsed
 const uploads = { h: null, p: null };    // { name, table } from the file inputs
@@ -201,14 +211,19 @@ document.querySelectorAll('input[name="style"]').forEach((r) => r.addEventListen
 // ---- settings ----------------------------------------------------------------------
 
 function readSettings() {
-  const bad = NUM_INPUTS.filter((id) => !$(id).checkValidity() || $(id).value === "");
+  const bad = activeInputs().filter((id) => !$(id).checkValidity() || $(id).value === "");
   if (bad.length) {
-    const names = bad.map((id) => $(id).closest("label").querySelector("b").textContent);
+    const names = bad.map((id) => (id.includes("slot_") ? "the " : "") + $(id).closest("label").querySelector("b").textContent + (id.includes("slot_") ? " slots" : ""));
     return { error: `Check ${names.join(", ")}: ${bad.map((id) => $(id).validationMessage).filter(Boolean)[0] || "a number is needed"}` };
   }
   const n = (id) => Number($(id).value);
+  const slots = slotsOf(C.SLOT_TYPES, "slot_"), pitcherSlots = slotsOf(C.PITCHER_SLOT_TYPES, "pslot_");
+  if (bySlots() && (total(slots) < 4 || total(slots) > 30)) return { error: `A lineup needs 4 to 30 hitter slots; this one has ${total(slots)}.` };
+  if (bySlots() && (total(pitcherSlots) < 4 || total(pitcherSlots) > 20)) return { error: `A staff needs 4 to 20 pitcher slots; this one has ${total(pitcherSlots)}.` };
   const s = {
-    hitters: n("hitters"), pitchers: n("pitchers"), catchers: n("catchers"), bench: n("bench"),
+    positions: $("pos_mode").value, slots, pitcherSlots,
+    hitters: bySlots() ? total(slots) : n("hitters"), pitchers: bySlots() ? total(pitcherSlots) : n("pitchers"),
+    catchers: bySlots() ? slots.C : n("catchers"), bench: n("bench"), span: bySlots() ? n("span") : 0,
     minimizeBench: $("min_bench").checked, style: style(), teams: n("teams"), minBid: n("min_bid"),
     budget: n("budget"), hitterSplit: n("split") / 100, pool: $("pool").value, includeFa: $("include_fa").checked,
     hitterCats: cats.h, pitcherCats: cats.p, hitterPoints: points.h, pitcherPoints: points.p,
@@ -219,7 +234,7 @@ function readSettings() {
 }
 
 function save() {
-  const form = { style: style(), pool: $("pool").value, min_bench: $("min_bench").checked, include_fa: $("include_fa").checked, cats, points };
+  const form = { style: style(), pos_mode: $("pos_mode").value, pool: $("pool").value, min_bench: $("min_bench").checked, include_fa: $("include_fa").checked, cats, points };
   for (const id of NUM_INPUTS) form[id] = $(id).value;
   try { localStorage.setItem(STORE, JSON.stringify(form)); } catch { /* private mode */ }
 }
@@ -230,6 +245,7 @@ function restore() {
   if (!form) return;
   for (const id of NUM_INPUTS) if (form[id] !== undefined) $(id).value = form[id];
   if (form.pool) $("pool").value = form.pool;
+  if (form.pos_mode === "slots" || form.pos_mode === "catchers") $("pos_mode").value = form.pos_mode;
   if (typeof form.min_bench === "boolean") $("min_bench").checked = form.min_bench;
   if (typeof form.include_fa === "boolean") $("include_fa").checked = form.include_fa;
   const r = document.querySelector(`input[name="style"][value="${form.style}"]`);
@@ -238,6 +254,59 @@ function restore() {
   $("points_ui").hidden = style() === "Categories";
   if (form.cats?.h && form.cats?.p) cats = form.cats;
   if (Array.isArray(form.points?.h) && Array.isArray(form.points?.p)) points = form.points;
+}
+
+// ---- position adjustment ---------------------------------------------------------------
+
+function showPositionMode() {
+  for (const id of ["slots_ui", "pslots_ui", "span_field"]) $(id).hidden = !bySlots();
+  for (const id of ["hitters_field", "pitchers_field", "catchers_field"]) $(id).hidden = bySlots();
+  $("pos_mode_hint").textContent = bySlots()
+    ? "Each position's replacement level comes from the league's best lineups"
+    : "The script's replacement: catchers against catchers, every other hitter in one pool, every pitcher in another";
+  const count = (ids) => ids.reduce((a, id) => a + (Number($(id).value) || 0), 0);
+  $("slot_total").textContent = `${count(SLOT_IDS)} per team`;
+  $("pslot_total").textContent = `${count(PSLOT_IDS)} per team`;
+}
+$("pos_mode").addEventListener("change", showPositionMode);
+$("slots_ui").addEventListener("input", showPositionMode);
+$("pslots_ui").addEventListener("input", showPositionMode);
+
+// ---- league formats ------------------------------------------------------------------------
+
+// Each site's default league: teams, hitter slots and pitcher slots.
+// Yahoo and ESPN are from their own help pages; CBS and Fantrax from third-party write-ups.
+const PRESETS = {
+  yahoo: { teams: 12, slots: { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UT: 2 }, pslots: { SP: 2, RP: 2, P: 4 } },
+  espn: { teams: 10, slots: { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 1, MI: 1, OF: 5, UT: 1 }, pslots: { P: 9 } },
+  cbs: { teams: 12, slots: { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UT: 1 }, pslots: { SP: 5, RP: 2 } },
+  fantrax: { teams: 12, slots: { C: 2, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 1, MI: 1, OF: 5, UT: 1 }, pslots: { P: 9 } },
+  nfbc: { teams: 15, slots: { C: 2, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 1, MI: 1, OF: 5, UT: 1 }, pslots: { P: 9 } },
+};
+// Every slot input and the value a format gives it
+const presetInputs = (preset) => [
+  ...Object.keys(C.SLOT_TYPES).map((t) => ["slot_" + t, preset.slots[t] ?? 0]),
+  ...Object.keys(C.PITCHER_SLOT_TYPES).map((t) => ["pslot_" + t, preset.pslots[t] ?? 0]),
+];
+
+$("preset").addEventListener("change", () => {
+  const preset = PRESETS[$("preset").value];
+  if (!preset) return;   // Custom: keep what's there
+  $("teams").value = preset.teams;
+  for (const [id, v] of presetInputs(preset)) $(id).value = v;
+  $("pos_mode").value = "slots";
+  showPositionMode();
+  changed();
+});
+
+// The select follows the settings: a format whose teams and slots they match, or Custom
+function showPreset() {
+  const n = (id) => Number($(id).value);
+  const match = bySlots() && Object.keys(PRESETS).find((k) => {
+    const p = PRESETS[k];
+    return n("teams") === p.teams && presetInputs(p).every(([id, v]) => n(id) === v);
+  });
+  $("preset").value = match || "custom";
 }
 
 $("reset").onclick = () => {
@@ -250,8 +319,11 @@ function changed() {
   clearTimeout(timer);
   timer = setTimeout(() => { save(); update(); }, 120);
 }
-// The points table, the file inputs and the league type have their own handlers
-$("settings").addEventListener("input", (e) => { if (!e.target.closest(".points") && e.target.type !== "file" && e.target.name !== "style") changed(); });
+// The points table, the file inputs, the league type and the format have their own handlers
+$("settings").addEventListener("input", (e) => {
+  if (e.target.id !== "preset") showPreset();
+  if (!e.target.closest(".points") && e.target.type !== "file" && e.target.name !== "style" && e.target.id !== "preset") changed();
+});
 
 // ---- pricing ---------------------------------------------------------------------------
 
@@ -260,6 +332,7 @@ function fail(msg) {
   status(msg, "err");
   $("tbl").hidden = true;
   $("summary").hidden = true;
+  $("scarcity").hidden = true;
   $("download").disabled = true;
 }
 
@@ -301,16 +374,48 @@ const INFO = [
   { key: "team", label: "Team", get: (p) => p.team, cell: (p) => esc(p.team), cls: "l muted", text: true },
   { key: "pos", label: "Pos", get: (p) => p.pos, cell: (p) => esc(p.pos), cls: "l muted", text: true },
 ];
+// The slot a hitter fills in the league's best lineups (blank: not a starter)
+const SLOT_COL = { key: "slot", label: "Slot", get: (p) => p.slot ?? "", cell: (p) => esc(p.slot ?? ""), cls: "l muted", text: true };
 const POINTS_COL = { key: "points", label: "Points", get: (p) => p.points, cell: (p) => fmt("", p.points) };
 const VALUE_COL = { key: "value", label: "Auction $", get: (p) => p.value, cell: (p) => money(p.value), cls: (p) => "val" + (p.value < result.settings.minBid ? " neg" : "") };
 
+// ---- the value breakdown -------------------------------------------------------------------
+
+const view = () => document.querySelector('input[name="view"]:checked').value;
+const signed = (v) => (Number.isNaN(v) ? "" : Math.abs(v) < 0.005 ? "$0.00" : (v > 0 ? "+" : "") + money(v));
+const signCls = (v) => (Number.isNaN(v) ? "" : Math.abs(v) < 0.005 ? "nil" : v > 0 ? "up" : "down");
+const part = (key, label, title, get, extra = {}) => ({ key, label, title, get, cell: (p) => signed(get(p)), cls: (p) => signCls(get(p)), ...extra });
+
+// Min bid + baseline + position + each stat (+ the no-roster-spot hold-down) = the player's dollars
+function breakdownColumns() {
+  const b = (p) => p.breakdown;
+  const base = [
+    part("b:min", "Min bid", "Every drafted player's floor", (p) => (b(p) ? b(p).minBid : NaN)),
+    part("b:base", "Baseline", result.settings.style === "Points"
+      ? "Less the points of his side's replacement level, at its dollars per point"
+      : "What a player with average stats at his side's deepest position is worth over the min bid", (p) => (b(p) ? b(p).replacement : NaN)),
+    part("b:pos", "Position", "His position's premium over his side's deepest position", (p) => (b(p) ? b(p).position : NaN)),
+  ];
+  if (result.players.some((p) => b(p) && b(p).other)) {
+    base.push(part("b:other", "No spot", "Held under the min bid: no legal roster has room for him", (p) => (b(p) ? b(p).other : NaN)));
+  }
+  base.forEach((c, i) => Object.assign(c, { group: "v", first: i === 0 }));
+  const stat = (type, cat, i) => part(`$${type}:${cat}`, cat,
+    `What his ${cat} adds to his dollars${result.settings.style === "Points" ? " (points × his dollars per point)" : ", against the average"}`,
+    (p) => (p.type === type && b(p) ? b(p).stats[cat] : NaN), { group: type + "$", first: i === 0 });
+  return [...base, ...result.valueCols.h.map((c, i) => stat("h", c, i)), ...result.valueCols.p.map((c, i) => stat("p", c, i))];
+}
+const GROUPS = { h: "Hitting", p: "Pitching", v: "Value", h$: "Hitting $", p$: "Pitching $" };
+
 function columns() {
   // The dollars sit by the name, so they're on screen on a phone too
-  const info = [INFO[0], INFO[1], VALUE_COL, INFO[2], INFO[3], ...(result.settings.style === "Points" ? [POINTS_COL] : [])];
+  const info = [INFO[0], INFO[1], VALUE_COL, INFO[2], INFO[3], ...(result.positions ? [SLOT_COL] : []),
+    ...(result.settings.style === "Points" ? [POINTS_COL] : [])];
   const stat = (type, cat, first) => ({
     key: `${type}:${cat}`, label: cat, group: type, first,
     get: (p) => (p.type === type ? p.stats[cat] : NaN), cell: (p) => (p.type === type ? fmt(cat, p.stats[cat]) : ""),
   });
+  if (view() === "value" && result.valueCols) return [...info, ...breakdownColumns()];
   return [
     ...info,
     ...result.hitterCols.map((c, i) => stat("h", c, i === 0)),
@@ -318,7 +423,7 @@ function columns() {
   ];
 }
 
-const fold = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const fold = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 function matchesPos(p, pos) {
   if (!pos) return true;
   if (pos === "h" || pos === "p") return p.type === pos;
@@ -342,27 +447,49 @@ function render() {
   });
 
   const s = result.settings;
-  const priced = result.players.filter((p) => p.value >= s.minBid).length;
-  $("summary").innerHTML = `<b>${int(result.players.length)}</b> players priced · <b>${int(priced)}</b> at or above the $${s.minBid} min bid · `
-    + `${s.teams} teams × $${int(s.budget)}${rows.length !== result.players.length ? ` · showing <b>${int(rows.length)}</b>` : ""}`;
+  const drafted = result.players.filter((p) => p.drafted);
+  const spent = drafted.reduce((a, p) => a + p.value, 0);
+  const spots = s.hitters + s.pitchers + (s.minimizeBench ? 0 : s.bench);
+  $("summary").innerHTML = `<b>${int(result.players.length)}</b> players priced · <b>${int(drafted.length)}</b> drafted at $${s.minBid}+ `
+    + `(${s.teams} teams × ${spots} ${s.minimizeBench ? "lineup" : "roster"} spots) for <b>$${int(Math.round(spent))}</b> (${s.teams} × $${int(s.budget)})`
+    + `${rows.length !== result.players.length ? ` · showing <b>${int(rows.length)}</b>` : ""}`;
   $("summary").hidden = false;
+  renderScarcity();
 
-  const nInfo = cols.filter((c) => !c.group).length;
-  const nH = result.hitterCols.length, nP = result.pitcherCols.length;
-  const head = `<thead><tr><th colspan="${nInfo}"></th><th colspan="${nH}" class="gp">Hitting</th><th colspan="${nP}" class="gp">Pitching</th></tr><tr>`
+  // The group row: a cell spanning each run of columns in one group
+  const runs = [];
+  for (const c of cols) {
+    const last = runs[runs.length - 1];
+    if (last && last.group === c.group) last.n++;
+    else runs.push({ group: c.group, n: 1 });
+  }
+  const head = `<thead><tr>${runs.map((r) => (r.group ? `<th colspan="${r.n}" class="gp">${GROUPS[r.group]}</th>` : `<th colspan="${r.n}"></th>`)).join("")}</tr><tr>`
     + cols.map((c) => {
       const cls = [c.text ? "l" : "", c.key === "name" ? "name" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
       const aria = c.key === sort.key ? ` aria-sort="${sort.dir < 0 ? "descending" : "ascending"}"` : "";
-      return `<th data-key="${esc(c.key)}"${cls ? ` class="${cls}"` : ""}${aria} scope="col">${esc(c.label)}</th>`;
+      return `<th data-key="${esc(c.key)}"${cls ? ` class="${cls}"` : ""}${aria}${c.title ? ` title="${esc(c.title)}"` : ""} scope="col">${esc(c.label)}</th>`;
     }).join("") + `</tr></thead>`;
   const body = rows.length
     ? rows.map((p) => `<tr class="${p.type}">` + cols.map((c) => {
       const cls = [typeof c.cls === "function" ? c.cls(p) : c.cls, c.first ? "gp" : ""].filter(Boolean).join(" ");
-      return `<td${cls ? ` class="${cls}"` : ""}${c.key === "name" ? ` title="${esc(p.name)}"` : ""}>${c.cell(p)}</td>`;
+      const title = c.key === "name" ? p.name : c.key === "pos" && p.valuedAt ? `Priced at ${p.valuedAt}`
+        : c.key === "value" && !p.drafted ? "Not on a drafted roster" : "";
+      return `<td${cls ? ` class="${cls}"` : ""}${title ? ` title="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
     }).join("") + `</tr>`).join("")
     : `<tr><td class="empty l" colspan="${cols.length}">No players match.</td></tr>`;
   $("table").innerHTML = head + `<tbody>${body}</tbody>`;
   $("tbl").hidden = false;
+}
+
+// Each position's premium over its side's deepest one, scarcest first, as the data has it
+function renderScarcity() {
+  const el = $("scarcity");
+  if (!result.positions) { el.hidden = true; return; }
+  const chips = (side) => result.positions.filter((p) => p.side === side).map((p) =>
+    `<span class="prem${p.premium >= 0.005 ? " up" : ""}" title="${p.slots} slots · replacement ${p.level.toFixed(2)} · last starter ${p.worst.toFixed(2)}"><b>${esc(p.slot)}</b>${p.premium >= 0.005 ? "+" + money(p.premium) : "$0"}</span>`).join("");
+  el.innerHTML = `<span title="What a player is worth over the same player at his side's deepest position, from this league's best lineups">Position premium</span>`
+    + `<span class="side">Hitters</span>${chips("h")}<span class="side">Pitchers</span>${chips("p")}`;
+  el.hidden = false;
 }
 
 $("table").addEventListener("click", (e) => {
@@ -377,23 +504,41 @@ $("table").addEventListener("click", (e) => {
 let searchTimer = 0;
 $("search").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => result && render(), 100); });
 $("pos").addEventListener("change", () => result && render());
+document.querySelectorAll('input[name="view"]').forEach((r) => r.addEventListener("change", () => {
+  try { localStorage.setItem(VIEW_STORE, view()); } catch { /* private mode */ }
+  if (result) render();
+}));
+try {
+  const saved = localStorage.getItem(VIEW_STORE);
+  const r = saved && document.querySelector(`input[name="view"][value="${saved}"]`);
+  if (r) r.checked = true;
+} catch { /* private mode */ }
 
 // ---- download ------------------------------------------------------------------------------
 
-// The script's CSV: every player by value, a stat both sides score suffixed _h / _p
+// The script's CSV: every player by value, a stat both sides score suffixed _h / _p. In the value
+// breakdown it carries the breakdown instead of the stats, each stat as "<stat> $"
 $("download").onclick = () => {
   if (!result) return;
-  const { hitterCols, pitcherCols, players, settings } = result;
+  const { players, settings } = result;
+  const byValue = view() === "value" && result.valueCols;
+  const hitterCols = byValue ? result.valueCols.h : result.hitterCols;
+  const pitcherCols = byValue ? result.valueCols.p : result.pitcherCols;
   const both = new Set(hitterCols.filter((c) => pitcherCols.includes(c)));
-  const head = ["Rank", "Name", "Team", "Y! Pos", ...(settings.style === "Points" ? ["Points"] : []), "Value",
-    ...hitterCols.map((c) => (both.has(c) ? c + "_h" : c)), ...pitcherCols.map((c) => (both.has(c) ? c + "_p" : c))];
+  const slots = !!result.positions;
+  const name = (c, side) => (byValue ? c + " $" : c) + (both.has(c) ? "_" + side : "");
+  const extra = byValue ? breakdownColumns().filter((c) => c.group === "v") : [];
+  const head = ["Rank", "Name", "Team", "Y! Pos", ...(slots ? ["Slot"] : []), ...(settings.style === "Points" ? ["Points"] : []), "Value",
+    ...extra.map((c) => c.label), ...hitterCols.map((c) => name(c, "h")), ...pitcherCols.map((c) => name(c, "p"))];
   const num = (v, d) => (v === undefined || Number.isNaN(v) ? "" : d === undefined ? String(v) : v.toFixed(d));
   const cell = (v) => (/[",\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v);
+  const sideValue = (p, side, c) => (p.type !== side ? "" : byValue ? num(p.breakdown ? p.breakdown.stats[c] : NaN, 2) : num(p.stats[c]));
   const lines = [head.map(cell).join(",")];
   for (const p of players) {
-    lines.push([num(p.rank), p.name, p.team, p.pos, ...(settings.style === "Points" ? [num(p.points, 2)] : []), num(p.value, 2),
-      ...hitterCols.map((c) => (p.type === "h" ? num(p.stats[c]) : "")),
-      ...pitcherCols.map((c) => (p.type === "p" ? num(p.stats[c]) : ""))].map((v) => cell(String(v))).join(","));
+    lines.push([num(p.rank), p.name, p.team, p.pos, ...(slots ? [p.slot ?? ""] : []), ...(settings.style === "Points" ? [num(p.points, 2)] : []), num(p.value, 2),
+      ...extra.map((c) => num(c.get(p), 2)),
+      ...hitterCols.map((c) => sideValue(p, "h", c)),
+      ...pitcherCols.map((c) => sideValue(p, "p", c))].map((v) => cell(String(v))).join(","));
   }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
@@ -403,5 +548,7 @@ $("download").onclick = () => {
 };
 
 restore();
+showPositionMode();
+showPreset();
 renderSources();
 loadDefaults();

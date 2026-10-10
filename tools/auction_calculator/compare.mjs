@@ -14,6 +14,7 @@ const fa = g("Include FA?", true);
 const H = C.prepHitters(C.readProjections(readFileSync(hcsv, "utf8")), pool, fa);
 const P = C.prepPitchers(C.readProjections(readFileSync(pcsv, "utf8")), pool, fa);
 const res = C.auctionValues(H, P, {
+  positions: "catchers", dollars: "script",   // the script's split and dollars; the rest is the page's own
   hitters: g("Hitters", 10), pitchers: g("Pitchers", 8), catchers: g("Catchers", 1), bench: g("Bench spots", 5),
   minimizeBench: g("Minimize bench value", true), style, teams: g("Number of Teams", 12), minBid: g("Min bid", 1),
   budget: g("Team Budget", 260), hitterSplit: g("Hitter Split (%)", style === "Categories" ? 65 : 50) / 100,
