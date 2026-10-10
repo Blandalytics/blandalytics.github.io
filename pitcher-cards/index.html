@@ -68,8 +68,9 @@ select:disabled{opacity:.45; cursor:default}
 
 /* ---------- the card ---------- */
 .stage{flex:1; min-height:0; position:relative; display:flex; justify-content:center; overflow:auto; padding:12px}
-iframe{border:0; background:var(--card); height:100%; aspect-ratio:3/4; max-width:100%; border-radius:6px; display:block}
-iframe[hidden]{display:none}
+.card,iframe{border:0; background:var(--card); height:100%; aspect-ratio:3/4; max-width:100%; border-radius:6px; display:block; overflow:hidden}
+.card svg{display:block; width:100%; height:100%}
+.card[hidden],iframe[hidden]{display:none}
 .empty{
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
   color:var(--muted); font-size:15px; text-align:center; padding:0 20px;
@@ -84,7 +85,7 @@ iframe[hidden]{display:none}
   .field{flex:1; min-width:0}
   #pitcher{min-width:0; flex-basis:100%}
   .stage{display:block; padding:8px}
-  iframe{width:100%; height:auto}
+  .card,iframe{width:100%; height:auto}
 }
 </style>
 </head>
@@ -120,6 +121,7 @@ iframe[hidden]{display:none}
 </header>
 
 <main class="stage">
+  <div class="card" id="card" hidden></div>
   <iframe id="frame" title="PLV Pitcher Game Card" hidden></iframe>
   <div class="empty" id="empty">Pick a date, a game and a pitcher.</div>
 </main>
@@ -127,31 +129,39 @@ iframe[hidden]{display:none}
 <footer class="note">
   Data (especially pitch types) are subject to change. Cards are built each morning for the previous
   day's completed MLB games, back to the start of the season; while games are on, a <b>Live</b> entry
-  carries cards for the pitchers in them, refreshed every 15 minutes. Please send any feedback to Kyle Bland, on
+  carries cards for the pitchers in them, updated within a minute of each pitch. Please send any feedback to Kyle Bland, on
   <a href="https://bsky.app/profile/blandalytics.pitcherlist.com" target="_blank" rel="noopener">Bluesky</a> or
   <a href="https://x.com/blandalytics" target="_blank" rel="noopener">Twitter</a>.
 </footer>
 
+<script src="card.js"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var dateSel = $('date'), gameSel = $('game'), pitcherSel = $('pitcher');
   var compare = $('compare'), compareWrap = $('compareWrap'), yearSel = $('year');
-  var frame = $('frame'), empty = $('empty'), open = $('open'), png = $('png'), status = $('status');
+  var cardEl = $('card'), frame = $('frame'), empty = $('empty'), open = $('open'), png = $('png');
+  var status = $('status');
   var index = {days: {}, games: {}};   // dates built, and gamePk -> date
   var day = {};                        // the selected date's games: gamePk -> {home, away, pitchers}
-  var dayCache = {};
+  var dayCache = {}, dataCache = {};
   // the cards and their manifests live in the bucket, not the repo: the index, the day
-  // manifests beside it and the pages beside those. ?index=<url> points at a local build
-  // while developing (python tools/pitcher_card/build_site.py --out pitcher-cards, then
+  // manifests beside it, and each day's card dicts in data/<date>.json beside those. The
+  // cards are drawn here, by card.js. ?index=<url> points at a local build while
+  // developing (python tools/pitcher_card/build_site.py --out pitcher-cards, then
   // ?index=cards/index.json)
   var params = new URLSearchParams(location.search);
   var INDEX = new URL(params.get('index') || 'https://data.blandalytics.com/cards/index.json', location.href).href;
-  // cards for the games in progress, built every 15 minutes; ?live=<url> likewise
+  // cards for the games in progress, rebuilt by the live poller as each pitcher's count
+  // moves; ?live=<url> likewise
   var LIVE = new URL(params.get('live') || 'https://data.blandalytics.com/live/cards/index.json', location.href).href;
   var LIVE_KEY = 'live';
+  var LIVE_POLL_MS = 20000;
+  var LOGO = 'PitcherList_Stats_watermark_with_logo.webp';
   var live = {games: {}};              // the live index as last fetched
   var liveTimer = null;
+  var shown = null;                    // what is on the stage: {key, card, svg} or {key, framed}
+  var wanted = null;                   // the card the latest load is for
 
   var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   function niceDate(iso) {              // 2026-09-17 -> Thu, Sep 17 2026
@@ -181,8 +191,12 @@ iframe[hidden]{display:none}
   }
   function team(g, p) { return p.side === 'home' ? g.home : g.away; }
   // a manifest's file is relative to the manifest (the live one uses full URLs; both work)
-  function cardUrl(p) { return new URL(p.file, isLive() ? LIVE : INDEX).href; }
+  function fileUrl(p) { return new URL(p.file, isLive() ? LIVE : INDEX).href; }
   function opp(g, p) { return p.side === 'home' ? 'vs ' + g.away : '@ ' + g.home; }
+  function getJson(url) {
+    return fetch(url, {cache: 'no-cache'})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  }
 
   // ---- the game list for a date, and the pitcher list for a game (or the whole day) ----
   function pks() {
@@ -217,6 +231,25 @@ iframe[hidden]{display:none}
     onPitcher();
   }
 
+  // ---- the card itself: a day's are in one data file, a live one in its own, versioned
+  // by the pitch count it was built at. A day the nightly build has not yet written as
+  // data still has its old pages, which are framed as before.
+  function loadData(date) {
+    if (!(date in dataCache)) {
+      dataCache[date] = getJson(new URL('data/' + date + '.json', INDEX).href)
+        .catch(function () { return null; });
+    }
+    return dataCache[date];
+  }
+  function loadCard(sel) {
+    var p = sel.pitcher;
+    if (isLive()) {
+      if (!/\.json$/.test(p.file || '')) return Promise.resolve(null);
+      return getJson(fileUrl(p) + '?v=' + p.pitches).catch(function () { return null; });
+    }
+    return loadData(dateSel.value).then(function (d) { return d ? d[sel.pk + '-' + p.id] || null : null; });
+  }
+
   // ---- showing a card ----
   function selected() {
     var v = pitcherSel.value.split('-');
@@ -228,12 +261,36 @@ iframe[hidden]{display:none}
   function cmpYear() {
     return compare.checked && !yearSel.disabled ? yearSel.value : '0';
   }
+  function clearStage(text) {
+    shown = null; wanted = null;
+    cardEl.hidden = true; cardEl.innerHTML = '';
+    frame.hidden = true; frame.removeAttribute('src');
+    empty.hidden = false; open.hidden = true; png.hidden = true;
+    empty.textContent = text;
+  }
+  function onStage(key, framed) {
+    cardEl.hidden = framed; frame.hidden = !framed;
+    if (framed) cardEl.innerHTML = ''; else frame.removeAttribute('src');
+    empty.hidden = true; open.hidden = false; png.hidden = false;
+  }
+  function drawCard(key, card, sel) {
+    var svg = PitcherCard.draw(cardEl, card, {logo: LOGO});
+    PitcherCard.show(svg, +cmpYear());
+    shown = {key: key, card: card, svg: svg};
+    open.href = 'card.html' + location.search + '#' + sel.pk + '-' + sel.pitcher.id;
+    onStage(key, false);
+  }
+  function frameCard(key, sel) {
+    var p = sel.pitcher;
+    frame.src = fileUrl(p) + (p.pitches ? '?v=' + p.pitches : '') + '#cmp=' + cmpYear();
+    shown = {key: key, framed: true};
+    open.href = fileUrl(p);
+    onStage(key, true);
+  }
   function onPitcher() {
     var sel = selected();
     if (!sel) {
-      frame.hidden = true; frame.removeAttribute('src');
-      empty.hidden = false; open.hidden = true; png.hidden = true;
-      empty.textContent = 'No cards match.';
+      clearStage('No cards match.');
       document.title = 'PLV Pitcher Game Card';
       return;
     }
@@ -242,33 +299,38 @@ iframe[hidden]{display:none}
     compare.disabled = years.length === 0;
     compareWrap.classList.toggle('off', years.length === 0);
     yearSel.disabled = years.length === 0 || !compare.checked;
-    var v = p.pitches ? '?v=' + p.pitches : '';   // a rebuilt live card must reload
-    frame.src = cardUrl(p) + v + '#cmp=' + cmpYear();
-    open.href = cardUrl(p);
-    frame.hidden = false; empty.hidden = true; open.hidden = false; png.hidden = false;
     document.title = p.name + ' — ' + p.line.split(' - ')[0] + ' — PLV Pitcher Game Card';
     var hash = '#' + sel.pk + '-' + p.id;
     if (location.hash !== hash) history.replaceState(null, '', hash);
+    // a rebuilt live card has moved on a pitch; anything else on stage already is this one
+    var key = dateSel.value + ':' + sel.pk + '-' + p.id + ':' + (p.pitches || '');
+    if (shown && shown.key === key) { onCompare(); return; }
+    if (wanted === key) return;
+    wanted = key;
+    loadCard(sel).then(function (card) {
+      if (wanted !== key) return;      // a later pick has superseded this one
+      wanted = null;
+      if (card) drawCard(key, card, sel);
+      else if (p.file) frameCard(key, sel);
+      else clearStage('Could not load this card.');
+    });
   }
   function onCompare() {
-    var sel = selected();
-    if (!sel) return;
+    if (!shown) return;
     yearSel.disabled = compare.disabled || !compare.checked;
-    // the card comes from the bucket, another origin, so it is asked by message
-    frame.contentWindow.postMessage({type: 'cmp', year: cmpYear()}, '*');
+    if (shown.svg) PitcherCard.show(shown.svg, +cmpYear());
+    // an old page comes from the bucket, another origin, so it is asked by message
+    else frame.contentWindow.postMessage({type: 'cmp', year: cmpYear()}, '*');
   }
 
   // ---- loading a date ----
   function loadLive() {
-    return fetch(LIVE, {cache: 'no-cache'})
-      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(function (d) { live = d; return d.games || {}; });
+    return getJson(LIVE).then(function (d) { live = d; return d.games || {}; });
   }
   function loadDay(date) {
     if (date === LIVE_KEY) return loadLive();
     if (dayCache[date]) return Promise.resolve(dayCache[date]);
-    return fetch(new URL('days/' + date + '.json', INDEX).href, {cache: 'no-cache'})
-      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    return getJson(new URL('days/' + date + '.json', INDEX).href)
       .then(function (d) { dayCache[date] = d; return d; });
   }
   function onDate() {
@@ -286,24 +348,21 @@ iframe[hidden]{display:none}
         : 'Could not load the cards for ' + niceDate(date) + '.';
     });
   }
-  // while the live entry is showing, pick up new pitchers and rebuilt cards every minute
+  // while the live entry is showing, pick up new pitchers and rebuilt cards
   function watchLive() {
     if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
     if (!isLive()) return;
     liveTimer = setInterval(function () {
       if (document.hidden || !isLive()) return;
-      var before = selected(), had = before ? before.pitcher.pitches : null;
       loadLive().then(function (d) {
         if (!isLive()) return;
         day = d;
         dateSel.options[0].textContent = liveLabel();
         fillGames();
         fill(pitcherSel, pitcherItems(), true);
-        var now = selected();
-        if (!now) { onPitcher(); return; }
-        if (!before || now.pitcher.id !== before.pitcher.id || now.pitcher.pitches !== had) onPitcher();
+        onPitcher();                   // redraws only if the pitcher's count has moved
       }).catch(function () {});
-    }, 60000);
+    }, LIVE_POLL_MS);
   }
 
   dateSel.addEventListener('change', function () { gameSel.value = ''; onDate(); });
@@ -311,39 +370,34 @@ iframe[hidden]{display:none}
   pitcherSel.addEventListener('change', onPitcher);
   compare.addEventListener('change', onCompare);
   yearSel.addEventListener('change', onCompare);
-  // the PNG is drawn inside the frame and handed back as a blob, so the copy happens
-  // here, on this page's click. clipboard.write is handed a promise rather than a
-  // blob and is started inside the click: the round trip and the 3000x4000 render
-  // outlive the click's user activation, and a write begun after it has lapsed is
-  // refused. Falls back to a download where the clipboard will not take an image.
+
+  // Copy PNG: drawn here when the card is drawn here. card.js starts the clipboard write
+  // inside the click, as it has to be; an old framed page renders it and hands it back.
   var pendingPng = null;
-  function downloadPng(p) {
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(p.blob); a.download = p.filename; a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
-  }
-  function copyPng(p) {
-    var saved = function () { return p.then(downloadPng).then(function () { return 'Saved PNG'; }); };
-    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
-      return saved();
-    }
+  function framedPng() {
+    var p = new Promise(function (resolve, reject) {
+      pendingPng = resolve;
+      setTimeout(function () { reject(new Error('the card did not answer')); }, 15000);
+    });
+    frame.contentWindow.postMessage({type: 'png'}, '*');
+    var saved = function () {
+      return p.then(function (x) { PitcherCard.download(x.blob, x.filename); return 'Saved PNG'; });
+    };
+    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) return saved();
     var blob = p.then(function (x) { return x.blob; });
     return navigator.clipboard.write([new ClipboardItem({'image/png': blob})])
       .then(function () { return 'Copied'; }, saved);
   }
   png.addEventListener('click', function () {
+    if (!shown) return;
     var label = png.textContent;
     png.disabled = true;
-    var p = new Promise(function (resolve, reject) {
-      pendingPng = resolve;
-      setTimeout(function () { reject(new Error('the card did not answer')); }, 15000);
-    });
     var done = function (text) {
       png.textContent = text;
       setTimeout(function () { png.textContent = label; png.disabled = false; }, 1500);
     };
-    frame.contentWindow.postMessage({type: 'png'}, '*');
-    copyPng(p).then(done, function () { done('Copy failed'); });
+    var job = shown.svg ? PitcherCard.copyPng(shown.svg, PitcherCard.filename(shown.card)) : framedPng();
+    job.then(done, function () { done('Copy failed'); });
   });
   window.addEventListener('message', function (e) {
     var d = e.data || {};
@@ -366,16 +420,13 @@ iframe[hidden]{display:none}
       fill(pitcherSel, pitcherItems(), false);
       pitcherSel.value = m[1] + '-' + m[2];
       onPitcher();
+      watchLive();
     });
     return true;
   }
   window.addEventListener('hashchange', selectFromHash);
 
-  Promise.all([
-    fetch(INDEX, {cache: 'no-cache'})
-      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }),
-    loadLive().catch(function () { return {}; })
-  ])
+  Promise.all([getJson(INDEX), loadLive().catch(function () { return {}; })])
     .then(function (both) {
       var m = both[0];
       index = m;
