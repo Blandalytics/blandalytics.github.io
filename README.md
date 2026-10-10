@@ -860,7 +860,8 @@ way:
 - **Drafted players and dollars.** The script prices every player at min bid + value × dollars per
   value, then scales every positive value to the budget, so neither the number of players at $1+
   nor what they cost matches the league. The page drafts exactly the players who fill every team's
-  legal roster: exactly `teams × roster spots` come out at $1+, for exactly `teams × budget`.
+  legal roster: exactly `teams × roster spots` come out at $1+, for exactly `teams × budget` (less
+  a minimized bench's min bids).
 - **Replacement by lineup slot.** The script prices catchers against catchers, every other hitter
   in one pool and every pitcher in another. The page sets a replacement level for every position,
   SP and RP included, from the league's best lineups, so scarcity comes from the projections and
@@ -919,14 +920,17 @@ AVG 14.0 hits; W 4.2, SV 9.8, K 58, ERA 10.4 earned runs, WHIP 16.2 walks + hits
 **Dollars.** The drafted players are the ones that fill every team's legal roster: each side's
 lineup slots, plus half the bench each (as BN slots anyone fits) unless **Minimize bench value** is
 on, filled for the most SGP above replacement. That's `teams × (hitters + pitchers + bench)`
-players, or `teams × (hitters + pitchers)` with the bench minimized. Every drafted player gets the
-min bid, the last drafted on each side exactly that, and the rest of the budget goes out at one
-price per SGP above him, on both sides; so exactly the drafted players are at the min bid or more,
-together they cost `teams × budget`, and the hitter/pitcher split is the values' own. A player no
+players, or `teams × (hitters + pitchers)` with the bench minimized. Every roster spot's min bid
+comes out of the budget first, bench included: a minimized bench is still drafted, at the min bid,
+just not priced. Every drafted player gets the min bid, the last drafted on each side exactly that,
+and the rest of the budget goes out at one price per SGP above him, on both sides; so exactly the
+drafted players are at the min bid or more, together they cost `teams × budget` (less
+`teams × bench × min bid` for a minimized bench), and the hitter/pitcher split is the values' own. A player no
 legal roster has room for (a 13th catcher when nothing else takes him, say) stays under the min
 bid. A **Bid hitter share** scales each side's dollars above the min bid to that share (bids only;
-the count and the total stay). On the 2027 projections the Yahoo format splits 50/50 at $10.64 per
-SGP; without the playing time fill, 60/40 at $6.43. The fill moves value to part-timers with good
+the count and the total stay). On the 2027 projections the Yahoo format (bench minimized) prices its
+216 lineup players for $3,060 (12 × $260, less 60 bench spots at $1), split 50/50 at $10.42 per SGP;
+without the playing time fill, 60/40 at $6.30. The fill moves value to part-timers with good
 rates (Byron Buxton, Luis Robert Jr., closers) and away from full-time players near replacement
 rates (Bo Bichette, Luis Arraez, back-end starters).
 
@@ -983,7 +987,7 @@ league standings.
 | `tools/auction_calculator/compare.mjs` | scores the same CSVs and settings with `calc.js` and checks every player's start value against the script's |
 | `tools/auction_calculator/sgp_dump.mjs`, `sgp_check.py` | dumps one league's last pass and recomputes it independently in Python (numpy, scipy): pool rates and rate-stat counts from the raw CSVs, tier variance, noise, G, SGP, the specialist curve with the procedure's reference code, and the drafted pool against `linear_sum_assignment` |
 | `tools/auction_calculator/sgp_checks.mjs` | the procedure's own validation: the 2√π / (N − 1) constant against simulated standings (within 2%), the tier variance against 3000 simulated snake drafts with ADP noise (within 5%), and a report of players who moved more than 20 places against the z-scores, with why |
-| `tools/auction_calculator/invariants.mjs` | over 90 leagues (every format; bench on and off, Points, roto / H2H / all-play, AL/NL-only, min bids, spans, fill and specialists off, a bid share, other categories), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget, that every value breakdown adds up, that bids keep both, and that the values settled |
+| `tools/auction_calculator/invariants.mjs` | over 90 leagues (every format; bench on and off, Points, roto / H2H / all-play, AL/NL-only, min bids, spans, fill and specialists off, a bid share, other categories), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget (less a minimized bench's min bids), that every value breakdown adds up, that bids keep both, and that the values settled |
 
 To check the model after a change (pandas, Pillow, numpy and scipy for the Python side):
 

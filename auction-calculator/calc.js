@@ -726,8 +726,9 @@ function draftPool(value, posStrings, caps, types, benchSlots) {
  *   phi, ptCV (noise where the projections have no percentiles), fillPT, specialists,
  *   hitterCats, pitcherCats (Categories), hitterPoints, pitcherPoints ([[cat, pts]], Points)
  * Exactly the players on legal rosters (lineups, plus the bench unless it's minimized) are
- * worth the min bid or more, and they add up to the league's budget; one $/SGP across
- * hitters and pitchers, so the values set the split.
+ * worth the min bid or more, and they add up to the league's budget (less a minimized bench's
+ * min bids, which it's drafted at); one $/SGP across hitters and pitchers, so the values set
+ * the split.
  * Returns { players, hitterCols, pitcherCols, positions, valueCols, weights, split,
  * perSGP, iterations, converged }, players sorted by value.
  */
@@ -771,11 +772,13 @@ export function auctionValues(H, P, s) {
 
   // Task 11: dollars. The drafted players fill every team's legal roster (lineups, and half the
   // bench each side unless it's minimized); each side's last one goes for the min bid, and the
-  // dollars beyond the min bids go out at one rate per SGP above him, whichever side he's on
+  // dollars beyond the min bids go out at one rate per SGP above him, whichever side he's on.
+  // Every bench spot's min bid comes out of the budget either way: a minimized bench is still
+  // drafted, at the min bid, just not priced
   const benchH = Math.floor((s.teams * bench) / 2);
   const hSlot = draftPool(h.sgpar, hPos, hCaps, SLOT_TYPES, benchH);
   const pSlot = draftPool(p.sgpar, pPos, pCaps, PITCHER_SLOT_TYPES, s.teams * bench - benchH);
-  const spare = s.teams * s.budget - s.teams * (hitters + pitchers + bench) * s.minBid;
+  const spare = s.teams * s.budget - s.teams * (hitters + pitchers + s.bench) * s.minBid;
   const baseOf = (v, slot) => Math.min(...v.filter((_, i) => slot[i] !== null));
   const hBase = baseOf(h.sgpar, hSlot), pBase = baseOf(p.sgpar, pSlot);
   const over = (v, slot, base) => v.reduce((a, x, i) => (slot[i] !== null ? a + x - base : a), 0);

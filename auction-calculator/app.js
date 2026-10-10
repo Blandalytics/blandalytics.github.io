@@ -1,7 +1,7 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=9";
+import * as C from "./calc.js?v=10";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -235,8 +235,11 @@ function readSettings() {
     marketHitterShare: $("market").value === "" ? null : n("market") / 100,
     hitterCats: cats.h, pitcherCats: cats.p, hitterPoints: points.h, pitcherPoints: points.p,
   };
-  const minBudget = (s.minBid + 1) * (s.hitters + s.pitchers + (s.minimizeBench ? 0 : s.bench));
-  if (s.budget < minBudget) return { error: `Team budget must be at least $${minBudget}: one dollar over the min bid for every roster spot.` };
+  // one dollar over the min bid for every priced spot, and the min bid for a minimized bench
+  const minBudget = (s.minBid + 1) * (s.hitters + s.pitchers + (s.minimizeBench ? 0 : s.bench)) + (s.minimizeBench ? s.minBid * s.bench : 0);
+  if (s.budget < minBudget) {
+    return { error: `Team budget must be at least $${minBudget}: one dollar over the min bid for every ${s.minimizeBench ? "lineup spot, and the min bid for every bench spot" : "roster spot"}.` };
+  }
   return s;
 }
 
@@ -457,7 +460,8 @@ function render() {
   const spent = drafted.reduce((a, p) => a + p.value, 0);
   const spots = s.hitters + s.pitchers + (s.minimizeBench ? 0 : s.bench);
   $("summary").innerHTML = `<b>${int(result.players.length)}</b> players priced · <b>${int(drafted.length)}</b> drafted at $${s.minBid}+ `
-    + `(${s.teams} teams × ${spots} ${s.minimizeBench ? "lineup" : "roster"} spots) for <b>$${int(Math.round(spent))}</b> (${s.teams} × $${int(s.budget)})`
+    + `(${s.teams} teams × ${spots} ${s.minimizeBench ? "lineup" : "roster"} spots) for <b>$${int(Math.round(spent))}</b> (${s.teams} × $${int(s.budget)}`
+    + (s.minimizeBench && s.bench ? `, less ${s.teams} × ${s.bench} bench spots at $${s.minBid})` : ")")
     + ` · values split <b>${Math.round(100 * result.split.hitters)}/${Math.round(100 * result.split.pitchers)}</b> hitters/pitchers`
     + (result.market !== null ? `, bids ${Math.round(100 * result.market)}/${Math.round(100 - 100 * result.market)}` : "")
     + ` · $${result.perSGP.toFixed(2)} per ${s.style === "Points" ? "point" : "SGP"}`

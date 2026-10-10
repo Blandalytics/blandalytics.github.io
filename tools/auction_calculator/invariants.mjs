@@ -1,5 +1,6 @@
 // Checks that every league prices exactly its roster spots (lineups, plus the bench unless it is
-// minimized) at the min bid or more, costing exactly teams × budget, on rosters that fill every slot
+// minimized) at the min bid or more, costing exactly teams × budget (less a minimized bench's min
+// bids, which it's drafted at), on rosters that fill every slot
 // legally; that the Slot column agrees with who is drafted; and that each player's value breakdown
 // adds back up to his dollars; that bid prices toward a market split keep the count and the budget;
 // and that the valuation settled.
@@ -32,6 +33,8 @@ for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (co
   const res = C.auctionValues(H, P, s);
   const effBench = s.minimizeBench ? 0 : s.bench;
   const spots = s.teams * (s.hitters + s.pitchers + effBench);
+  // what the priced players cost: the budget, less a minimized bench's min bids (it's drafted at them)
+  const budget = s.teams * s.budget - s.teams * (s.bench - effBench) * s.minBid;
   const atMin = res.players.filter((p) => p.value >= s.minBid - 1e-9);
   const total = atMin.reduce((a, p) => a + p.value, 0);
   const drafted = res.players.filter((p) => p.drafted);
@@ -51,15 +54,15 @@ for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (co
   const slotsAgree = res.players.every((p) => p.drafted === (p.slot !== null));
   // bid prices (moved toward a market split) keep the same players at the min bid or more, and the budget
   const bidsAt = res.players.filter((p) => p.bid >= s.minBid - 1e-9);
-  const bidsOk = bidsAt.length === spots && Math.abs(bidsAt.reduce((a, p) => a + p.bid, 0) - s.teams * s.budget) < 1e-6
+  const bidsOk = bidsAt.length === spots && Math.abs(bidsAt.reduce((a, p) => a + p.bid, 0) - budget) < 1e-6
     && (s.marketHitterShare == null || Math.abs(res.players.filter((p) => p.drafted && p.type === "h").reduce((a, p) => a + p.bid - s.minBid, 0)
-      - s.marketHitterShare * (s.teams * s.budget - spots * s.minBid)) < 1e-6);
+      - s.marketHitterShare * (budget - spots * s.minBid)) < 1e-6);
   // the breakdown adds back up to every player's dollars
   const parts = (b) => b.minBid + Object.values(b.stats).reduce((a, v) => a + v, 0) + b.baseline + b.position + b.fill + b.specialist + b.other;
   const adds = res.players.every((p) => (p.breakdown ? Math.abs(parts(p.breakdown) - p.value) < 1e-6 : Number.isNaN(p.value)));
-  const ok = atMin.length === spots && Math.abs(total - s.teams * s.budget) < 1e-6 && sameSet && legal && slotsAgree && adds && bidsOk && res.converged;
+  const ok = atMin.length === spots && Math.abs(total - budget) < 1e-6 && sameSet && legal && slotsAgree && adds && bidsOk && res.converged;
   runs++;
-  if (!ok) { fails++; console.log(`FAIL ${name} ${JSON.stringify(v)}: ${atMin.length} at min bid+ (spots ${spots}), total $${total.toFixed(4)} (budget ${s.teams * s.budget}), same set ${sameSet}, legal ${legal}, slots agree ${slotsAgree}, breakdown adds up ${adds}, bids ${bidsOk}, settled ${res.converged}`); }
+  if (!ok) { fails++; console.log(`FAIL ${name} ${JSON.stringify(v)}: ${atMin.length} at min bid+ (spots ${spots}), total $${total.toFixed(4)} (budget ${budget}), same set ${sameSet}, legal ${legal}, slots agree ${slotsAgree}, breakdown adds up ${adds}, bids ${bidsOk}, settled ${res.converged}`); }
 }
 console.log(`${fails ? "FAIL" : "OK"}: ${runs} leagues, ${fails} failing`);
 process.exit(fails ? 1 : 0);
