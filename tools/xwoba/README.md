@@ -25,22 +25,34 @@ weights, which are the same every season:
 
     xwOBA = 0.90 p(1B) + 1.25 p(2B) + 1.60 p(3B) + 2.00 p(HR)
 
-**How it is fit.** Every grid node (1° of spray × 1° of launch angle × 1 mph of bat speed)
-gets the outcome mix of the batted balls around it, weighted by a Gaussian kernel with one
-width per input. Each node fits a kernel-weighted *plane* through the outcomes and reads it at
-the node (a local-linear fit) rather than taking a plain weighted average: around an 80 mph
-swing there are far more 75 mph swings than 85 mph ones, so a plain average drags the fastest
-swings' home-run rate toward the slower ones' (on simulated data with a known answer it
-understated swings of 74 mph and up by about 0.015 of xwOBA; the plane fit halves that,
-and what remains is curvature that only a narrower kernel removes, at the cost of noise). Where balls are scarce
-the estimate is shrunk toward the same neighbourhood seen through a kernel several times
-wider, and that toward the league's mix, so a 70° pop up off a 45 mph swing leans on its
-neighbours rather than a handful of balls. The sums the fits need at every node are Gaussian
-blurs (and derivatives of them) of a histogram of the balls, so the whole 2-million-node grid
-fits in a few seconds. The kernel widths, the shrinkage and the slopes' ridge were chosen by
-five-fold cross-validation over games on 2023–2025, scored on the squared error of the wOBA
-value. The saved grid keeps every other node (2° × 2° × 2 mph); a ball is read off it by
-trilinear interpolation, with inputs beyond the grid clamped to its edge.
+**How it is fit.** Every node of a fine grid (1° of spray × 1° of launch angle × 1 mph of bat
+speed) gets the outcome mix of the batted balls around it, weighted by a Gaussian kernel 3°
+wide in spray, 1.5° in launch angle and 6 mph in bat speed, with three refinements on a plain
+kernel average:
+
+- **A plane, not an average.** Each node fits a kernel-weighted plane through the outcomes and
+  reads it at the node (a local-linear fit). Around an 80 mph swing there are far more 75 mph
+  swings than 85 mph ones, so a plain average drags the fastest swings' home-run rate toward
+  the slower ones'; on simulated data with a known answer the plane halved that bias, and out
+  of fold on real data it beats the plain average at every width.
+- **A second pass.** Any kernel flattens what is sharp: the line-drive peak at 12–13° of launch
+  angle (actual wOBA .798), the dip just above it where liners carry to the outfielders (.65 at
+  17–20°), the edges of the home-run band. Squared error barely notices, since one ball's
+  outcome is mostly noise, but a hitter's xwOBA averages hundreds of balls and keeps the bias.
+  So the residuals of the first pass are smoothed the same way and added back (Tukey's
+  "twicing"), each probability kept to at least half its first-pass value so no outcome is
+  ever ruled out.
+- **Shrinkage where balls are scarce.** Each node is pulled toward the same neighbourhood seen
+  through a kernel twice as wide, by 25 balls' worth, and that toward the league's mix, so a
+  70° pop up off a 45 mph swing leans on its neighbours rather than a handful of balls.
+
+The sums the fits need at every node are Gaussian blurs (and derivatives of them) of a
+histogram of the balls, so the whole 2-million-node grid fits in seconds. The parameters were
+chosen by five-fold cross-validation over games on 2023–2025, on squared error, log loss and
+calibration together: squared error alone would take a 2° launch-angle kernel and leave the
+line-drive peak 0.016 low. The saved grid keeps every other node (2° × 2° × 2 mph), which costs
+nothing measurable; a ball is read off it by trilinear interpolation, with inputs beyond the
+grid clamped to its edge.
 
 **Data.** Every regular-season ball in play with bat tracking from Baseball Savant's Statcast
 search (bat tracking starts on 14 July 2023), less bunts, sac bunts and catcher's interference,
@@ -92,7 +104,7 @@ python tools/xwoba/evaluate.py       # evaluation.md, testing on the current sea
 python tools/xwoba/plot.py           # surface.png
 ```
 
-`build.py --tune` reruns the cross-validation (about half an hour); copy what it chooses into
-`model.Params`' defaults. The first pull asks Savant for ~130 weeks of balls in play, three at
+`build.py --tune` searches the parameters on squared error alone (about an hour); weigh what it
+finds against log loss and calibration (`evaluate.py`) before moving `model.Params`' defaults. The first pull asks Savant for ~130 weeks of balls in play, three at
 a time; after that only weeks newer than three days are fetched again. The code passes
 `ruff check` and `ruff format` with the config in `ruff.toml`.

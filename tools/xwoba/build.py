@@ -1,12 +1,18 @@
 """Fits the three-dimensional xwOBA model and writes it to tools/xwoba/model.json.
 
 Every regular-season ball in play with bat tracking (savant.py) is counted into the
-model's grid and smoothed (model.py). With --tune the kernel widths, the prior's
-weight and width and the ridge are first chosen by five-fold cross-validation over
-games, a parameter at a time, scored on the squared error of the predicted wOBA
-value; the chosen values are what model.Params defaults to, so a plain rebuild
-reuses them. --cv scores the defaults the same way without tuning, so model.json
-records how well they do out of fold.
+model's grid and smoothed (model.py). --cv scores the parameters by five-fold
+cross-validation over games first, so model.json records how well they do out of
+fold. --tune searches them the same way, a parameter at a time, on the squared error
+of the predicted wOBA value.
+
+Squared error alone is not how the defaults in model.Params were settled. A single
+ball's outcome is mostly noise, so squared error barely moves when the kernel
+flattens a sharp feature, and on its own it prefers a 2-degree launch-angle kernel
+that leaves the line-drive peak 0.016 low. The defaults are the point near the best
+on squared error, log loss and calibration together (out of fold on 2023-2025:
+RMSE 0.46299, log loss 0.6158, calibration error 0.0066 -- see evaluation.md for
+the measure), with every 5-degree launch-angle band within 0.01.
 
     python tools/xwoba/build.py --cv                     # every season with bat tracking
     python tools/xwoba/build.py --tune                   # cross-validate the parameters first

@@ -97,12 +97,13 @@ class Params:
     that steadies a fit's slopes where the balls are few or one-sided (as a share of
     the kernel's own spread); and whether to twice the fit, with the share of a
     first-pass probability the second pass keeps at least. The defaults are what
-    cross-validation chose (see build.py)."""
+    cross-validation chose on squared error, log loss and calibration together (see
+    build.py)."""
 
-    spray: float = 2.0
+    spray: float = 3.0
     launch_angle: float = 1.5
     bat_speed: float = 6.0
-    prior: float = 10.0
+    prior: float = 25.0
     widen: float = 2.0
     degree: int = 1
     ridge: float = 0.01
