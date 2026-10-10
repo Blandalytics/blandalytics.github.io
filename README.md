@@ -105,6 +105,8 @@ tracking (all of MLB and Triple-A have it, plus the odd lower-level park):
   score, inning, sport, venue and a `tracked` flag
 - `live/games/<gamePk>.json` — plays and pitches (type, velocity, location, spin, EV/LA)
   for tracked games
+- `live/cards/` — the PLV pitcher cards for the MLB games in progress, rebuilt from the same
+  feed as each pitcher's count moves (see *PLV Pitcher Game Cards*)
 
 Nothing is committed to the repo; the objects expire after a week and the nightly
 scorecard build remains the record for finished games.
@@ -132,39 +134,71 @@ is the same one the Streamlit app in
 (`pitcher_game_card.py`), rebuilt as a page: the box-score line and game grade, the Stuff /
 Locations / PLV grades, the primary fastball's shape, usage against each side of the plate,
 movement with the arm angle and the comparison season's shaded regions, locations against
-each side, and the per-pitch-type metrics table. **Save PNG** rasterises the card at 2x with
-the font and logo embedded.
+each side, and the per-pitch-type metrics table. **Copy PNG** rasterises the card at 2x with
+the font and logo embedded and puts it on the clipboard (or saves it where the browser won't).
 
 ### How it works
 
-The pages are pre-built by a scheduled workflow, into the same R2 bucket as the data
-files rather than the repo — a season is ~22,000 cards, more than a GitHub Pages site may
-hold — and the picker in [`pitcher-cards/index.html`](pitcher-cards/index.html) reads them
-from there:
+The cards are data, drawn in the browser. The pipeline writes each pitcher's card as a dict
+of numbers into the same R2 bucket as the data files (a season is ~22,000 cards, more than a
+GitHub Pages site may hold), and [`pitcher-cards/card.js`](pitcher-cards/card.js) draws it:
+one SVG in the original figure's 1500 × 2000 coordinate system, so every panel keeps the
+matplotlib layout, with every format and colour decided there. So a change to how the card
+looks is a commit to `card.js` and needs no rebuild; only a change to the data does.
+The picker in [`pitcher-cards/index.html`](pitcher-cards/index.html) draws the card in the
+page, and [`pitcher-cards/card.html`](pitcher-cards/card.html)`#<gamePk>-<pitcherId>` shows
+one full size (`&cmp=<year>` picks the comparison season, `&cmp=0` none). A card can be
+linked in the picker as `pitcher-cards/#<gamePk>-<pitcherId>`.
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones
   [Blandalytics/statcast_scraper](https://github.com/Blandalytics/statcast_scraper) (the
   pitches) and [Blandalytics/player_cards](https://github.com/Blandalytics/player_cards) (the
-  PLV model files) and fetches the pitch-modeling chain from the bucket, then builds a card
-  for every pitcher who threw a tracked pitch the day before. A backfill splits its range into months and builds them as parallel jobs; the index
-  is rebuilt from the day manifests once they have all finished.
-- [`.github/workflows/pitcher-cards-live.yml`](.github/workflows/pitcher-cards-live.yml) runs
-  every 15 minutes through game hours and builds cards for the pitchers in the games in
-  progress — the same card, from the pitches thrown so far — into `live/cards/`. A card is
-  rebuilt only when its pitcher's pitch count has moved; a game gets one last build after it
-  ends, and leaves the live index as soon as the nightly run has written its permanent cards,
-  so the **Live** entry never carries a game the date entries already cover. The live pages
-  expire with the rest of `live/`.
-- `https://data.blandalytics.com/cards/<gamePk>-<pitcherId>.html` — one standalone page per
-  pitcher per game. The card is a single SVG drawn in the original figure's 1500 × 2000
-  coordinate system, so every panel keeps the matplotlib layout. Every comparison season's
-  layer is in the page, tagged `data-cmp="<year>"`; `#cmp=<year>` in the URL picks one and
-  `#cmp=0` hides them. The picker frames the page from the other origin and asks it, by
-  `postMessage`, to switch layers or hand back a PNG.
+  xSLG model) and fetches the pitch-modeling chain from the bucket, then builds a card for
+  every pitcher who threw a tracked pitch the day before. A backfill splits its range into
+  months and builds them as parallel jobs; the index is rebuilt from the day manifests once
+  they have all finished. A last job writes what the live cards need (below).
+- `https://data.blandalytics.com/cards/data/<date>.json` — that day's card dicts, keyed
+  `<gamePk>-<pitcherId>` (about 1.8 MB for a full slate, 320 KB compressed).
 - `https://data.blandalytics.com/cards/days/<date>.json` — that day's games and pitchers,
-  which the picker reads; `.../cards/index.json` lists the dates built and which date each
-  game is on. A card can be linked directly as `pitcher-cards/#<gamePk>-<pitcherId>`.
+  which the picker lists; `.../cards/index.json` lists the dates built and which date each
+  game is on.
+- Days built before the cards were data still have one page per card
+  (`.../cards/<gamePk>-<pitcherId>.html`, the manifest's `file`), which the picker frames as it
+  used to until a `force` run rebuilds the day.
+
+### Live cards
+
+While MLB games are on, the live Worker ([`tools/live/`](tools/live/)) builds the cards itself,
+from the same feed it polls every 30 seconds: a pitcher's card is rebuilt whenever his pitch
+count moves, so the picker's **Live** entry is within a minute of the last pitch (it re-reads
+the live index every 20 seconds and redraws the card in place). A game gets one last pass when
+it ends and leaves the live index once the nightly run has written its permanent cards.
+
+The Worker can't run the Python, so [`tools/live/src/cards/`](tools/live/src/cards/) is a
+JavaScript port of the card's pipeline: `feed.js` reads the feed into the scraper's rows,
+`scorer.js` (with `groups.js` and `abs.js`) is pitch-modeling's `score_pitches.py`,
+`pitch_groups.py`, `pitch_l1.py` and `abs_2026.py`, `trees.js` evaluates the LightGBM and
+XGBoost models, and `build.js` is `build_data.py`, down to its float32 arithmetic. The nightly
+job feeds it from the bucket:
+
+- `cards/models/scorer.pack` — the pitch-modeling models and constants, the Level 1
+  classifier and the xSLG model in one 17 MB pack (`export_scorer.py`, `model_pack.py`). A
+  retrained model goes straight through; changed pitch-modeling code doesn't, because the port
+  has to follow it: `export_scorer.py` pins the sources the port matches and refuses to
+  publish while they differ.
+- `cards/pitchers/<pitcherId>.json` — each pitcher's comparison seasons through the day
+  before (`packs.py`): appearances, pitch counts by batter side, velocity and flight time per
+  type, and the movement regions. `cards/arms/<season>.json` — Savant's arm angles.
+
+Before publishing the bundle the job checks the port against this pipeline on the previous
+day's games (`parity.py`, then `node tools/live/test/card_parity.mjs`): every number on the
+card has to match, bar a plus number or grade a hair from a rounding edge (the Python scorer
+averages in float32). So a change on either side stops there, with the Worker still on the
+last good bundle. One part is approximate by design: the comparison regions, which Python
+draws from the season's pitches of the types thrown that day at that day's flight times, are
+the season's whole-repertoire regions scaled to the game's (typically within a fifth of an
+inch; the nightly card is exact).
 
 The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 
@@ -172,15 +206,18 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 |---|---|
 | `card.py` | `pitcher_card(game_pk, pitcher_id)` → HTML string, for a finished game or one in progress; `cards_for_date(date)` → every pitcher that day |
 | `fetch.py` | the statsapi live feed (box score, bio, teams), Baseball Savant's arm angles, and `DataStore`: pitches by date from the data files in the bucket, topped up through the scraper for the days the files don't reach yet |
-| `live_cards.py` | the cards for the games in progress, published to the bucket; what `pitcher-cards-live.yml` runs |
 | `prep.py` | per-pitch metrics from the scraper's columns: counts before the pitch, approach angles, break as acceleration, fastball differences, the per-type tables |
 | `pitch_model.py` | Stuff, Locations and PLV: the pitch-modeling chain from the bucket, and the scale that turns its run values into the card's numbers |
 | `models.py` | expected slugging on contact, the one model still read from the `player_cards` checkout |
 | `shapes.py` | the comparison season's movement regions (seaborn's 90%-mass KDE contours) as SVG paths |
-| `grades.py` | palette, pitch-type names and colours, benchmark bins, letter grades and both game-score formulas |
-| `build_data.py` | assembles all of that into one card dict |
-| `render.py` | renders the dict as the page |
+| `grades.py` | pitch-type maps, letter grades and both game-score formulas |
+| `build_data.py` | assembles all of that into one card dict (numbers; `card.js` formats them) |
+| `render.py` | a standalone page around one card dict, drawn by `card.js` |
 | `build_site.py` | builds a date range into the bucket (or a folder with `--out`) and maintains the manifests; `--reindex` rebuilds the index alone |
+| `packs.py` | the live Worker's pitcher packs and arm angles |
+| `export_scorer.py`, `model_pack.py` | the live Worker's scorer bundle, and the pack format it is in |
+| `parity.py` | real games, carded here, for the Worker's port to be checked against |
+| `test/render.mjs` | `card.js` against the SVG the Python renderer drew for three real cards |
 
 ### The models
 
@@ -224,17 +261,19 @@ The code passes `ruff check` and `ruff format` with the config in
 [`tools/pitcher_card/ruff.toml`](tools/pitcher_card/ruff.toml), including a McCabe
 complexity limit of 5 per function.
 
-### Backfilling or re-rendering
+### Backfilling or rebuilding
 
 Run the workflow by hand from the **Actions** tab (*Build pitcher cards → Run workflow*)
-with a `start` and `end` date; tick `force` to re-render cards that already exist, which is
-what you want after changing anything in `render.py`. A day of games is roughly 150 cards
-at about half a second each; a whole season runs as one job per month, four at a time, in
-under an hour. Cards already in a day's manifest are skipped, so an interrupted backfill
-resumes where it stopped. The first run also downloads each comparison season's data file
-once (a few seconds per season), after which they come from the workflow's cache. Writing
-to the bucket needs the `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and
-`CLOUDFLARE_ACCOUNT_ID` secrets the data files use.
+with a `start` and `end` date; tick `force` to rebuild cards that already exist, which is
+what you want after changing the data or the models (a change to `card.js` needs nothing).
+A day of games is roughly 150 cards at about half a second each; a whole season runs as one
+job per month, four at a time, in under an hour. Cards already in a day's manifest are
+skipped, so an interrupted backfill resumes where it stopped. The first run also downloads
+each comparison season's data file once (a few seconds per season), after which they come
+from the workflow's cache. Tick `all_packs` to rebuild every pitcher's pack rather than the
+recent ones (the first run builds every pack it doesn't find). Writing to the bucket needs
+the `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `CLOUDFLARE_ACCOUNT_ID` secrets the data
+files use.
 
 Locally, from the repo root with the scraper and the models cloned alongside:
 
@@ -255,8 +294,14 @@ from tools.pitcher_card.card import pitcher_card
 html = pitcher_card(822845, 543243)
 ```
 
-The live cards can be run by hand too: `python tools/pitcher_card/live_cards.py --game <gamePk>`
-builds every pitcher in that game into the bucket, or into a folder with `--out`.
+The live port can be checked by hand against any games:
+
+```bash
+python tools/pitcher_card/parity.py /tmp/parity --game 822844 --game 823084
+node tools/live/test/card_parity.mjs /tmp/parity    # the scores and the card dicts
+node tools/live/test/live_cards.mjs /tmp/parity     # the Worker's builds and live index
+node tools/pitcher_card/test/render.mjs             # card.js's drawing
+```
 
 ## Sequencing Flow
 

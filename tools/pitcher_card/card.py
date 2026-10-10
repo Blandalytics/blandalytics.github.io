@@ -8,7 +8,8 @@ The game's pitches come from Blandalytics/statcast_scraper (one game at a time, 
 game in progress works too), the box score and bio from the MLB Stats API live feed, arm
 angles from Baseball Savant's leaderboard, and the comparison seasons from the data files
 in the bucket, topped up through the scraper. Every pitch is scored with the PLV models
-from Blandalytics/player_cards, and the card is rendered as a standalone page."""
+from Blandalytics/player_cards, and the card goes out as a standalone page that
+pitcher-cards/card.js draws."""
 
 from __future__ import annotations
 
@@ -123,10 +124,11 @@ def pitcher_order(feed: dict) -> list[int]:
     return [*home[:1], *away[:1], *home[1:], *away[1:]]
 
 
-def build_card(game_pk, pitcher_id, feed, df, session, store, logo=render.LOGO, values=None):
+def build_card(game_pk, pitcher_id, feed, df, session, store, logo=None, values=None):
     """(html, card dict) for one pitcher whose feed and pitches are in hand. ``logo`` is
-    the Pitcher List mark's URL as the page will see it; ``values`` the game's model
-    columns, scored here for this pitcher alone when a caller has none in hand."""
+    the Pitcher List mark's URL as the page will see it, when not card.js's own;
+    ``values`` the game's model columns, scored here for this pitcher alone when a
+    caller has none in hand."""
     date = dt.date.fromisoformat(feed["gameData"]["datetime"]["officialDate"])
     game_type = feed["gameData"]["game"]["type"]
     arm = fetch.arm_angles(session, date, game_type=game_type).get(pitcher_id, {})
@@ -134,7 +136,7 @@ def build_card(game_pk, pitcher_id, feed, df, session, store, logo=render.LOGO, 
     if values is None:
         values = game_values(df, session, store)
     card = build_data.build(game_pk, pitcher_id, feed, df, seasons, arm, models(), values)
-    return render.render_html(card, logo), card
+    return render.render_html(card, logo=logo), card
 
 
 def _try_card(game_pk, pid, feed, pitches, session, store, strict, logo, values):
@@ -150,7 +152,7 @@ def _try_card(game_pk, pid, feed, pitches, session, store, strict, logo, values)
 
 
 def cards_for_game(
-    game_pk, feed, df, session, store, strict=True, skip=None, logo=render.LOGO
+    game_pk, feed, df, session, store, strict=True, skip=None, logo=None
 ) -> Iterator:
     """Yields (pitcher id, html, card) for every pitcher with tracked pitches in a game.
     With ``strict`` off a pitcher whose card fails is logged and skipped; ``skip(game_pk,
@@ -165,9 +167,7 @@ def cards_for_game(
             yield pid, *built
 
 
-def cards_for_date(
-    date, session=None, store=None, strict=True, skip=None, logo=render.LOGO
-) -> Iterator:
+def cards_for_date(date, session=None, store=None, strict=True, skip=None, logo=None) -> Iterator:
     """Every completed game on a date, scraped once: yields (game_pk, pitcher id, html,
     card). Games with no tracked pitches are skipped; see cards_for_game for ``skip``."""
     date = dt.date.fromisoformat(str(date))
