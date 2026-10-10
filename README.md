@@ -332,9 +332,15 @@ double (1.250), `#FFE066` for a triple (1.600), `#F04542` for a home run (2.000)
 of .200 (*Discrete*, spread end to end as matplotlib's `contourf` spreads a colormap) or blended
 per cell (*Continuous*), with Tanaka (illuminated) contour lines at the levels' edges either way:
 each segment lit or shaded by which way its downhill side faces a light in the upper left, and
-wider the more squarely it faces or turns from it. The comparison doesn't apply. Isaac Paredes' current season loads on
+wider the more squarely it faces or turns from it. The comparison doesn't apply. **xwOBA vs MLB**
+(also 2024 on) draws the hitter's batted-ball density with each ball weighted by its xwOBA less
+MLB's xwOBA on contact at that ball's bat speed that season (.300 at 65 mph, .348 at 70, .420 at
+75 in 2026), on the batted-ball chart's scale and palette: red where the hitter's contact is
+worth more than MLB gets from the same swings, blue where it is worth less. The kernels are the
+hitter's own (Scott's factor on their points), so the grid sums to 100 times the average margin,
+and the boxes and axis figures are each zone's part of that margin, adding up to the subtitle's. Isaac Paredes' current season loads on
 arrival; a chart is linkable as `batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, with
-`-continuous`, `-self` and `-xwoba` suffixes. **Download PNG** saves the figure at 2x.
+`-continuous`, `-self`, `-xwoba` and `-value` suffixes. **Download PNG** saves the figure at 2x.
 
 It is the chart [batted-ball-charts.streamlit.app](https://batted-ball-charts.streamlit.app/)
 draws ([PLV_viz `batted_ball_charts.py`](https://github.com/Blandalytics/PLV_viz/blob/main/hitter_app/pages/batted_ball_charts.py)),
@@ -359,7 +365,9 @@ app's own files, and is reduced to small JSON files there that the page reads:
   hitter's balls count for the team they were hit for), the team list, and the league density
   on the grid. From 2024 each ball also carries its bat speed
   and its 3D xwOBA (null for a bunt or an untracked swing), and the file the league's average of
-  both. About 1.5 MB before 2024, 3 MB after (450 / 930 KB compressed).
+  both and its xwOBA on contact at each whole mph of bat speed (a Gaussian-weighted average of
+  the balls within a mph or two, held level where fewer than 200 balls' weight would make it
+  noise). About 1.5 MB before 2024, 3 MB after (450 / 930 KB compressed).
 - `https://data.blandalytics.com/batted-balls/xwoba.json` — the 3D xwOBA model's surface on the
   same 91 × 91 grid at each of its bat-speed nodes (every 3 mph), in thousandths; the page reads
   a hitter's surface by interpolating between the two slices around their bat speed, which is
@@ -377,7 +385,7 @@ app's own files, and is reduced to small JSON files there that the page reads:
 | file | role |
 |---|---|
 | `tools/batted_balls/build_data.py` | reads a season's files from the bucket, keeps regular-season balls in play with a launch angle and a landing spot, joins Savant's bat speeds and scores the 3D xwOBA from 2024, writes the season file, the surface file and the index |
-| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) or the heatmap, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed, its Tanaka lines and the zones' xwOBA on the same layout |
+| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) or the heatmap, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed, its Tanaka lines and the zones' xwOBA on the same layout; for xwOBA vs MLB the margin-weighted KDE and the zones' parts of the margin |
 | `batted-balls/index.html`, `app.js` | the page: season, hitter / team, view, colour scale and comparison controls, the link hash, the download |
 
 In the team-wide chart a traded hitter's batted balls count for the team each was hit for

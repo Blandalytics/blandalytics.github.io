@@ -8,7 +8,9 @@
 // The xwOBA view draws, on the same grid and layout, the 3D xwOBA model's surface
 // (tools/xwoba: spray, launch angle, bat speed) at the hitter's average bat speed,
 // with Tanaka's illuminated contour lines, and the model's xwOBA of the hitter's
-// balls by zone.
+// balls by zone. The value view draws the hitter's own density with each ball
+// weighted by its xwOBA less MLB's xwOBA on contact at its bat speed, on the
+// density chart's scale.
 
 (() => {
   "use strict";
@@ -22,7 +24,11 @@
   // n^(-1/6) on the sample covariance (ddof 1), the full bivariate kernel. Only the
   // shape matters after scaling, so the normalising constant is dropped. Row-major
   // by spray then launch angle, as np.mgrid lays it out.
-  function kdeGrid(points) {
+  //
+  // With weights, the same kernels (the bandwidth still from the points alone) summed
+  // with each ball's weight, on the same scale: so with every weight 1 it is the
+  // density, and the grid sums to 100 times the mean weight.
+  function kdeGrid(points, weights = null) {
     const n = points.length;
     if (n < 3) return null;
     let mx = 0, my = 0;
@@ -41,23 +47,27 @@
     const xs = new Float64Array(n), ys = new Float64Array(n);
     points.forEach(([x, y], i) => { xs[i] = x; ys[i] = y; });
     const out = new Float64Array(N * N);
+    const weighted = weights && new Float64Array(N * N);
     let total = 0;
     for (let ix = 0; ix < N; ix++) {
       const gx = SPRAY[0] + ix * (SPRAY[1] - SPRAY[0]) / (N - 1);
       for (let iy = 0; iy < N; iy++) {
         const gy = LAUNCH[0] + iy * (LAUNCH[1] - LAUNCH[0]) / (N - 1);
-        let s = 0;
+        let s = 0, sw = 0;
         for (let i = 0; i < n; i++) {
           const dx = gx - xs[i], dy = gy - ys[i];
-          s += Math.exp(-0.5 * (a * dx * dx + 2 * b * dx * dy + c * dy * dy));
+          const e = Math.exp(-0.5 * (a * dx * dx + 2 * b * dx * dy + c * dy * dy));
+          s += e;
+          if (weighted) sw += weights[i] * e;
         }
         out[ix * N + iy] = s;
+        if (weighted) weighted[ix * N + iy] = sw;
         total += s;
       }
     }
-    const k = 100 / total;
-    for (let i = 0; i < out.length; i++) out[i] *= k;
-    return out;
+    const k = 100 / total, grid = weighted || out;
+    for (let i = 0; i < grid.length; i++) grid[i] *= k;
+    return grid;
   }
 
   const inRange = ([x, y]) => x >= SPRAY[0] && x <= SPRAY[1] && y >= LAUNCH[0] && y <= LAUNCH[1];
@@ -150,6 +160,41 @@
     };
   }
 
+  // ---- the value view -------------------------------------------------------------
+  // MLB's xwOBA on contact at a bat speed, from the season file's table (a value per
+  // whole mph), read linearly between its points and held at its ends.
+  function leagueAt(table, batSpeed) {
+    const n = table.values.length;
+    const t = Math.min(Math.max((batSpeed - table.lo) / table.step, 0), n - 1);
+    const i = Math.min(Math.floor(t), n - 2), f = t - i;
+    return (1 - f) * table.values[i] + f * table.values[i + 1];
+  }
+
+  // What the value view needs: every tracked ball's xwOBA less MLB's xwOBA on contact
+  // at that ball's bat speed, spread over the grid with the hitter's own kernels (the
+  // in-range balls, as the density is) -- so the grid sums to 100 times the average
+  // margin -- and each zone's share of that margin over all the tracked balls, which
+  // add up to the whole.
+  function computeValue({ balls, league }) {
+    const tracked = balls.filter((b) => b[2] != null && b[3] != null);
+    const margin = (b) => b[3] - leagueAt(league, b[2]);
+    const inside = tracked.filter(inRange);
+    const diff = kdeGrid(inside, inside.map(margin));
+    if (!diff) return null;
+    const n = tracked.length;
+    const part = (keep) => tracked.reduce((s, b) => (keep(b) ? s + margin(b) : s), 0) / n;
+    return {
+      diff,
+      zones: {
+        spray: SPRAY_BUCKETS.map((f) => part(([x]) => f(x))),
+        launch: LAUNCH_BUCKETS.map((g) => part(([, y]) => g(y))),
+        cells: SPRAY_BUCKETS.map((f) => LAUNCH_BUCKETS.map((g) => part(([x, y]) => f(x) && g(y)))),
+      },
+      total: part(() => true),
+      tracked: n,
+    };
+  }
+
   // ---- colours ------------------------------------------------------------------
   const BACKGROUND = "#292C42";
   const WHITE = "#FEFEFE";
@@ -202,6 +247,8 @@
 
   // xwOBA as baseball writes it: .412, 1.023; a dash for a zone without balls
   const fmtXw = (v) => (v == null ? "–" : v < 1 ? v.toFixed(3).slice(1) : v.toFixed(3));
+  // and a margin of it: +.012, -.004
+  const fmtMargin = (v) => (v >= 0 ? "+" : "-") + fmtXw(Math.abs(v));
 
   // ---- layout, in the pixels of the app's 1390 x 1135 image ---------------------
   const W = 1390, H = 1135;
@@ -345,7 +392,7 @@
     ctx.fillRect(0, 0, W, H);
 
     const discrete = opts.scale !== "continuous";
-    const xw = opts.view === "xwoba";
+    const xw = opts.view === "xwoba", value = opts.view === "value";
     const flip = opts.hand === "L";  // the pull side stays on the left for right-handers, right for lefties
     const px = (spray) => AX.left + (flip ? 90 - spray : spray) * 10;
     const py = (launch) => AX.top + (60 - launch) * 10;
@@ -394,8 +441,8 @@
 
     // --- the shares (or the zones' xwOBA) in each cell, boxed --------------------
     const fmtShare = (v) => (opts.signed ? (v >= 0 ? "+" : "-") + Math.abs(v * 100).toFixed(1) : (v * 100).toFixed(1)) + "%";
-    const fmt = xw ? fmtXw : fmtShare;
-    const zones = xw ? result.zones : result.shares;
+    const fmt = xw ? fmtXw : value ? fmtMargin : fmtShare;
+    const zones = xw || value ? result.zones : result.shares;
     const sprayMid = [15, 45, 75], launchMid = [-10, 17.5, 37.5, 55];
     setFont(12);
     const box = lineBox();
@@ -448,7 +495,8 @@
         ctx.fillRect(CB.left, CB.top, CB.width, CB.height);
       }
       const cbx = AX.left + 1.115 * AX.size;
-      [["Less\nOften", -24, LABEL_BLUE], ["Same", 15, "#000000"], ["More\nOften", 53.5, LABEL_RED]]
+      const [less, more] = value ? ["Below\nMLB", "Above\nMLB"] : ["Less\nOften", "More\nOften"];
+      [[less, -24, LABEL_BLUE], ["Same", 15, "#000000"], [more, 53.5, LABEL_RED]]
         .forEach(([s, la, colour]) => text(s, cbx, py(la), { size: 15, weight: 500, colour }));
     }
 
@@ -499,5 +547,5 @@
     draw(canvas, result, { ...opts, logo });
   }
 
-  window.BattedBalls = { N, kdeGrid, compute, computeXwoba, surfaceAt, shares, render, inRange };
+  window.BattedBalls = { N, kdeGrid, compute, computeXwoba, computeValue, leagueAt, surfaceAt, shares, render, inRange };
 })();

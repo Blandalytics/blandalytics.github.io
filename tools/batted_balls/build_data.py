@@ -254,13 +254,28 @@ def player_rows(df: pd.DataFrame) -> list[dict]:
     return rows
 
 
+def by_bat_speed(bat_speed: np.ndarray, xwoba: np.ndarray, width: float = 1.5, floor: float = 200) -> dict:
+    """The league's xwOBA on contact at each whole mph from 30 to 90: a Gaussian-weighted
+    average (width in mph) of the balls hit off swings around that speed, held level
+    past the speeds with fewer than `floor` balls' weight, where it would be noise."""
+    nodes = np.arange(30, 91)
+    w = np.exp(-0.5 * ((nodes[:, None] - bat_speed[None, :]) / width) ** 2)
+    n = w.sum(axis=1)
+    v = (w @ xwoba) / np.maximum(n, 1e-12)
+    ok = np.flatnonzero(n >= floor)
+    v[:ok[0]], v[ok[-1] + 1:] = v[ok[0]], v[ok[-1]]
+    return {"lo": 30, "step": 1, "values": [round(float(x), 4) for x in v]}
+
+
 def xwoba_summary(df: pd.DataFrame) -> dict | None:
-    """The league's average bat speed and xwOBA over the balls the model covers."""
+    """The league's average bat speed and xwOBA over the balls the model covers, and its
+    xwOBA on contact by bat speed."""
     if "xwoba" not in df:
         return None
     has = df["xwoba"].notna()
-    return {"n": int(has.sum()), "bat_speed": round(float(df.loc[has, "bat_speed"].mean()), 2),
-            "xwoba": round(float(df.loc[has, "xwoba"].mean()), 4)}
+    bs, xw = df.loc[has, "bat_speed"].to_numpy(float), df.loc[has, "xwoba"].to_numpy(float)
+    return {"n": int(has.sum()), "bat_speed": round(float(bs.mean()), 2),
+            "xwoba": round(float(xw.mean()), 4), "by_bat_speed": by_bat_speed(bs, xw)}
 
 
 def season_file(season: int, df: pd.DataFrame, built: str) -> dict:

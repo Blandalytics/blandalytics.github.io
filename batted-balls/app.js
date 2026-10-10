@@ -129,13 +129,14 @@
   // ---- the chart -----------------------------------------------------------------------
   const possessive = (name) => name + (name.endsWith("s") ? "'" : "'s");
 
-  // The xwOBA view keeps the colour scale (a team's too) but not the comparison: it
-  // draws the hitter's own surface, not a difference.
+  // The xwOBA and value views keep the colour scale (a team's too) but not the
+  // comparison: one draws the hitter's own surface, the other is already measured
+  // against MLB.
   function selection() {
     const year = Number(el.season.value);
     const teamWide = el.teamWide.checked;
     const view = hasXwoba(year) ? radio("view") : "balls";
-    const xw = view === "xwoba";
+    const xw = view !== "balls";
     return {
       season: year,
       team: teamWide ? el.team.value : null,
@@ -149,11 +150,11 @@
   function hash(sel) {
     const who = sel.team || sel.id;
     return `#${sel.season}-${who}` + (sel.scale === "continuous" ? "-continuous" : "") + (sel.vs === "self" ? "-self" : "")
-      + (sel.view === "xwoba" ? "-xwoba" : "");
+      + (sel.view !== "balls" ? `-${sel.view}` : "");
   }
 
   function parseHash() {
-    const m = /^#(\d{4})-([A-Za-z0-9]+)((?:-(?:continuous|discrete|self|league|xwoba))*)$/.exec(location.hash);
+    const m = /^#(\d{4})-([A-Za-z0-9]+)((?:-(?:continuous|discrete|self|league|xwoba|value))*)$/.exec(location.hash);
     if (!m) return null;
     const flags = m[3].split("-").filter(Boolean);
     return {
@@ -161,7 +162,7 @@
       who: m[2],
       scale: flags.includes("continuous") ? "continuous" : "discrete",
       vs: flags.includes("self") ? "self" : "league",
-      view: flags.includes("xwoba") ? "xwoba" : "balls",
+      view: flags.includes("xwoba") ? "xwoba" : flags.includes("value") ? "value" : "balls",
     };
   }
 
@@ -199,6 +200,10 @@
       }
       if (sel.view === "xwoba") {
         await showXwoba(sel, data, hitter, name, hand, ticket);
+        return;
+      }
+      if (sel.view === "value") {
+        await showValue(sel, data, hitter, name, hand, ticket);
         return;
       }
       let prior = null;
@@ -261,6 +266,30 @@
     status("");
   }
 
+  // The value view: the hitter's batted balls, each weighted by its xwOBA less MLB's
+  // xwOBA on contact at that ball's bat speed.
+  const fmtMargin = (v) => (v >= 0 ? "+" : "-") + fmtXw(Math.abs(v));
+  async function showValue(sel, data, hitter, name, hand, ticket) {
+    const league = data.xwoba?.by_bat_speed;
+    if (!league) { status("this season's file predates this view; it needs rebuilding", "warn"); el.out.hidden = true; return; }
+    const result = BattedBalls.computeValue({ balls: hitter, league });
+    if (!result) { status(`not enough tracked swings to draw a density (${hitter.length} batted balls)`, "warn"); el.out.hidden = true; return; }
+    const opts = {
+      hand, scale: sel.scale, view: "value",
+      title: `${possessive(name)} ${sel.season} Batted Ball Value`,
+      subtitle: `(${fmtMargin(result.total)} xwOBA on contact vs MLB at the same bat speeds)`,
+    };
+    if (!(await drawn(result, opts, sel, name, ticket))) return;
+    const at = (mph) => `${fmtXw(BattedBalls.leagueAt(league, mph))} at ${mph}`;
+    el.note.textContent = `${hitter.length} batted balls${sel.team ? ` by ${sel.team} hitters` : ""}, regular season, through ${data.through}; `
+      + `${result.tracked} with a tracked swing (bunts and untracked swings have no xwOBA). `
+      + `Each is weighted by its xwOBA less MLB's xwOBA on contact at its bat speed (in ${sel.season}, ${at(65)}, ${at(70)}, ${at(75)} mph): `
+      + `red is where these balls beat what MLB gets from the same swings, blue where they fall short. `
+      + `The boxes and the figures along the axes are each zone's part of the ${fmtMargin(result.total)}.`;
+    history.replaceState(null, "", hash(sel));
+    status("");
+  }
+
   // ---- controls -----------------------------------------------------------------------
   function syncControls() {
     const year = Number(el.season.value);
@@ -268,14 +297,14 @@
     el.playerLabel.hidden = teamWide;
     el.teamLabel.hidden = !teamWide;
     const tracked = hasXwoba(year);
-    viewInputs().forEach((r) => { r.disabled = !tracked && r.value === "xwoba"; });
+    viewInputs().forEach((r) => { r.disabled = !tracked && r.value !== "balls"; });
     if (!tracked) setRadio("view", "balls");
     el.viewNote.textContent = tracked ? ""
       : year >= XWOBA_SEASON ? "xwOBA isn't built for this season yet"
         : `xwOBA needs bat speed, which Statcast tracks from ${XWOBA_SEASON}`;
-    const xw = radio("view") === "xwoba";
+    const xw = radio("view") !== "balls";
     // a team's batted-ball chart is always continuous against the league, as in the
-    // app; the xwOBA view has no comparison
+    // app; the xwOBA and value views have no comparison
     scaleInputs().forEach((r) => { r.disabled = teamWide && !xw; });
     const prior = hasPrior(year);
     vsInputs().forEach((r) => { r.disabled = teamWide || xw || (!prior && r.value === "self"); });
@@ -361,7 +390,7 @@
   el.dlPng.addEventListener("click", () => {
     if (!current) return;
     const who = (current.name || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
-    const what = current.view === "xwoba" ? "xwoba_surface" : "batted_balls";
+    const what = { xwoba: "xwoba_surface", value: "batted_ball_value" }[current.view] || "batted_balls";
     const name = `${who}_${current.season}_${what}${current.vs === "self" ? `_vs_${current.season - 1}` : ""}.png`;
     el.fig.toBlob((b) => {
       const url = URL.createObjectURL(b);
