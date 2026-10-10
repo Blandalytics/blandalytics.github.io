@@ -52,6 +52,7 @@ Savant's search directly.
 
 ```python
 import json, sys
+
 sys.path.insert(0, "tools/xwoba")
 from model import Grid
 
@@ -86,7 +87,7 @@ From the repo root:
 
 ```bash
 pip install -r tools/xwoba/requirements.txt
-python tools/xwoba/build.py          # pulls what isn't cached (~5 minutes cold), fits, writes model.json
+python tools/xwoba/build.py --cv     # pulls what isn't cached (~5 minutes cold), fits, writes model.json
 python tools/xwoba/evaluate.py       # evaluation.md, testing on the current season
 python tools/xwoba/plot.py           # surface.png
 ```

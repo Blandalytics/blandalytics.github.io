@@ -2,12 +2,14 @@
 
 Every regular-season ball in play with bat tracking (savant.py) is counted into the
 model's grid and smoothed (model.py). With --tune the kernel widths, the prior's
-weight and its width are first chosen by five-fold cross-validation over games, a
-parameter at a time, scored on the squared error of the predicted wOBA value; the
-chosen values are what model.Params defaults to, so a plain rebuild reuses them.
+weight and width and the ridge are first chosen by five-fold cross-validation over
+games, a parameter at a time, scored on the squared error of the predicted wOBA
+value; the chosen values are what model.Params defaults to, so a plain rebuild
+reuses them. --cv scores the defaults the same way without tuning, so model.json
+records how well they do out of fold.
 
-    python tools/xwoba/build.py                          # every season with bat tracking
-    python tools/xwoba/build.py --tune                   # cross-validate the widths first
+    python tools/xwoba/build.py --cv                     # every season with bat tracking
+    python tools/xwoba/build.py --tune                   # cross-validate the parameters first
     python tools/xwoba/build.py --seasons 2024 2025 --out /tmp/model.json
 """
 
@@ -106,6 +108,17 @@ def tune(folds: Folds, start: Params, rounds: int = 3, verbose: bool = True) -> 
     return best
 
 
+def choose(df: pd.DataFrame, tuning: bool, scoring: bool, verbose: bool):
+    """The parameters to fit with, and their out-of-fold (mse, log loss) if asked for."""
+    if not (tuning or scoring):
+        return Params(), None
+    folds = Folds(df)
+    params = tune(folds, Params(), verbose=verbose) if tuning else Params()
+    if verbose:
+        print(f"parameters: {asdict(params)}", file=sys.stderr)
+    return params, folds.score(params)
+
+
 # ---- the build -------------------------------------------------------------------------------
 def build(df: pd.DataFrame, params: Params, cv: tuple[float, float] | None) -> dict:
     grid = fit(df, params).coarsen(STRIDE)
@@ -133,6 +146,7 @@ def main(argv=None) -> None:
         help=f"seasons to fit on; default {savant.FIRST_SEASON} to the current one",
     )
     ap.add_argument("--tune", action="store_true", help="cross-validate the parameters first")
+    ap.add_argument("--cv", action="store_true", help="score the default parameters out of fold")
     ap.add_argument("--out", default=str(OUT))
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args(argv)
@@ -146,13 +160,7 @@ def main(argv=None) -> None:
             f"{df['game_date'].max().date()}",
             file=sys.stderr,
         )
-    params, cv = Params(), None
-    if a.tune:
-        folds = Folds(df)
-        params = tune(folds, params, verbose=verbose)
-        cv = folds.score(params)
-        if verbose:
-            print(f"chosen: {asdict(params)}", file=sys.stderr)
+    params, cv = choose(df, a.tune, a.cv, verbose)
     out = build(df, params, cv)
     Path(a.out).write_text(json.dumps(out, separators=(",", ":")))
     if verbose:

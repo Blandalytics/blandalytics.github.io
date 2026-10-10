@@ -87,13 +87,13 @@ class Params:
     of the kernel's own spread). The defaults are what cross-validation chose (see
     build.py)."""
 
-    spray: float = 3.0
-    launch_angle: float = 2.0
-    bat_speed: float = 2.0
+    spray: float = 2.0
+    launch_angle: float = 1.5
+    bat_speed: float = 6.0
     prior: float = 10.0
-    widen: float = 3.0
+    widen: float = 2.0
     degree: int = 1
-    ridge: float = 0.1
+    ridge: float = 0.01
 
     def widths(self, axes) -> tuple[float, ...]:
         return tuple(getattr(self, a.name) for a in axes)
