@@ -18,7 +18,11 @@ on:
         description: "Last date to build (YYYY-MM-DD). Default: today."
         required: false
       force:
-        description: "Re-render cards already built (after a rendering change)"
+        description: "Rebuild cards already built (after a change to the data or the models)"
+        type: boolean
+        default: false
+      all_packs:
+        description: "Rebuild every pitcher's pack of comparison seasons, not just the recent ones"
         type: boolean
         default: false
 
@@ -128,3 +132,55 @@ jobs:
 
       - name: Reindex
         run: python tools/pitcher_card/build_site.py --reindex
+
+  # what the live Worker builds its cards from: each pitcher's pack of comparison seasons,
+  # the season's arm angles, and the scorer bundle (the pitch models, which the Worker
+  # runs in a JS port). The bundle is checked against this pipeline on yesterday's games
+  # before it is published, so a model or code change that the port doesn't match stops
+  # here, with the Worker still on the last good bundle.
+  live-inputs:
+    needs: build
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/pitcher_card/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Fetch the scraper and the models
+        run: |
+          git clone --depth 1 https://github.com/Blandalytics/statcast_scraper.git
+          git clone --depth 1 https://github.com/Blandalytics/player_cards.git
+
+      - name: Install
+        run: pip install -r tools/pitcher_card/requirements.txt
+
+      - name: Restore the data cache
+        uses: actions/cache/restore@v4
+        with:
+          path: tools/pitcher_card/cache
+          key: pitcher-seasons-${{ github.run_id }}
+          restore-keys: pitcher-seasons-
+
+      - name: Pitcher packs and arm angles
+        run: |
+          ARGS=""
+          if [ "${{ inputs.all_packs }}" = "true" ]; then ARGS="--all"; fi
+          python tools/pitcher_card/packs.py $ARGS
+
+      - name: Check the Worker's port against yesterday's games
+        run: |
+          python tools/pitcher_card/parity.py "$RUNNER_TEMP/parity"
+          node tools/live/test/card_parity.mjs "$RUNNER_TEMP/parity"
+
+      - name: Publish the scorer bundle
+        run: python tools/pitcher_card/export_scorer.py
