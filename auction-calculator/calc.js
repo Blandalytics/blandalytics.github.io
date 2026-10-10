@@ -242,15 +242,107 @@ function pointsValue(table, points) {
   return total;
 }
 
+// ---- position replacement -----------------------------------------------------
+
+// A hitter slot takes anyone eligible at one of its positions; UT (and the bench) takes anyone
+export const SLOT_TYPES = {
+  C: ["C"], "1B": ["1B"], "2B": ["2B"], "3B": ["3B"], SS: ["SS"],
+  CI: ["1B", "3B"], MI: ["2B", "SS"], OF: ["OF", "LF", "CF", "RF"], UT: null,
+};
+export const DEFAULT_SLOTS = { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 0, MI: 0, OF: 3, UT: 2 };
+
+/**
+ * Replacement level by position, from the league's best lineups rather than a fixed
+ * hierarchy. Every team's slots are filled to the most total value: hitters in order of
+ * value, each placed if a chain of moves among the starters already placed opens a slot
+ * it can take. (Which sets of hitters fit the slots is a transversal matroid, so this
+ * greedy fill is the best one.) A slot type's replacement level is then what the league
+ * loses with one fewer of those slots: the worst starter it can shift to, through
+ * starters eligible elsewhere. So a position whose surplus spills into UT is exactly as
+ * deep as UT, and one whose starters can't move anywhere sits on its own last starter.
+ * A hitter is priced against the cheapest replacement among the slots he fits.
+ *
+ * caps: { slotType: number of slots in the league }. Returns per-hitter replacement
+ * (NaN for a hitter no slot takes), the slot each starter fills, and the levels.
+ */
+export function positionReplacement(raw, posStrings, caps) {
+  const types = Object.keys(caps).filter((t) => caps[t] > 0);
+  const tokens = posStrings.map((p) => p.split(/[,/ ]+/).map((x) => x.trim().toUpperCase()));
+  const fits = tokens.map((tok) => types.map((t) => SLOT_TYPES[t] === null || SLOT_TYPES[t].some((x) => tok.includes(x))));
+  const at = types.map(() => []);
+  const total = types.reduce((a, t) => a + caps[t], 0);
+  let filled = 0;
+
+  const order = [];
+  for (let i = 0; i < raw.length; i++) if (!Number.isNaN(raw[i])) order.push(i);
+  order.sort((a, b) => raw[b] - raw[a] || a - b);
+  for (const i of order) {
+    if (filled === total) break;
+    // breadth-first over slot types: an open slot, or starters moving along to one
+    const prev = new Array(types.length).fill(undefined);
+    const queue = [];
+    types.forEach((_, k) => { if (fits[i][k]) { prev[k] = null; queue.push(k); } });
+    let end = -1;
+    while (queue.length) {
+      const k = queue.shift();
+      if (at[k].length < caps[types[k]]) { end = k; break; }
+      for (const j of at[k]) {
+        types.forEach((_, m) => { if (prev[m] === undefined && fits[j][m]) { prev[m] = [k, j]; queue.push(m); } });
+      }
+    }
+    if (end < 0) continue;
+    let k = end;
+    while (prev[k] !== null) {
+      const [from, j] = prev[k];
+      at[k].push(j);
+      at[from].splice(at[from].indexOf(j), 1);
+      k = from;
+    }
+    at[k].push(i);
+    filled++;
+  }
+
+  // A slot type left short (too few eligible hitters) is as deep as its worst eligible hitter
+  const worst = types.map((_, k) => {
+    if (at[k].length === caps[types[k]]) return Math.min(...at[k].map((j) => raw[j]));
+    const eligible = order.filter((j) => fits[j][k]);
+    return eligible.length ? raw[eligible[eligible.length - 1]] : NaN;
+  });
+  const level = types.map((_, k) => {
+    const seen = new Set([k]), stack = [k];
+    while (stack.length) {
+      const from = stack.pop();
+      for (const j of at[from]) {
+        types.forEach((_, m) => { if (!seen.has(m) && fits[j][m]) { seen.add(m); stack.push(m); } });
+      }
+    }
+    return Math.min(...[...seen].map((m) => worst[m]));
+  });
+
+  const slot = new Array(raw.length).fill(null);
+  at.forEach((list, k) => list.forEach((j) => { slot[j] = types[k]; }));
+  const repl = new Array(raw.length);
+  const valuedAt = new Array(raw.length).fill(null);
+  for (let i = 0; i < raw.length; i++) {
+    let best = Infinity;
+    types.forEach((t, k) => { if (fits[i][k] && level[k] < best) { best = level[k]; valuedAt[i] = t; } });
+    repl[i] = best === Infinity ? NaN : best;
+  }
+  return { repl, slot, valuedAt, levels: types.map((t, k) => ({ slot: t, slots: caps[t], level: level[k], worst: worst[k] })) };
+}
+
 /** Last entry wins for a category listed twice, as the script's dict does */
 const dedupePoints = (rows) => [...new Map(rows.filter(([c]) => c)).entries()];
 
 /**
  * Price every player. s holds the settings:
+ *   positions ("slots" | "catchers"), slots ({ slotType: per team }, for "slots"),
  *   hitters, pitchers, catchers, bench, minimizeBench, style ("Categories" | "Points"),
  *   teams, minBid, budget, hitterSplit (0-1),
  *   hitterCats, pitcherCats (Categories), hitterPoints, pitcherPoints ([[cat, pts]], Points)
- * Returns { players, hitterCols, pitcherCols }, players sorted by value.
+ * In "slots" mode, hitters is the sum of the slots and catchers is ignored.
+ * Returns { players, hitterCols, pitcherCols, positions }, players sorted by value;
+ * positions holds each slot type's replacement level and its price in dollars ("slots").
  */
 export function auctionValues(H, P, s) {
   const bench = s.minimizeBench ? 0 : s.bench;
@@ -271,14 +363,33 @@ export function auctionValues(H, P, s) {
   const hSample = nlargestIdx(H.data.PA, hittersAboveRepl);
   const hRaw = points ? pointsValue(H, hPoints)
     : zValue(H, hitterCats, RATE_H, INVERT_H, hSample, s.hitters, "PA");
-  const isC = H.data["Y! Pos"].map((p) => p.replaceAll("CF", "").includes("C"));
-  // Without position info (or catcher slots) every hitter is priced against one pool
-  const catcherSlots = isC.some(Boolean) ? s.catchers : 0;
-  const split = catcherSlots > 0;
-  const cAdj = nlargestMin(hRaw.filter((_, i) => isC[i]), s.teams * catcherSlots);
-  const otherAdj = nlargestMin(hRaw.filter((_, i) => !split || !isC[i]),
-    Math.trunc(s.teams * (s.hitters - catcherSlots + bench / 2)));
-  const hAdj = hRaw.map((v, i) => v - (split && isC[i] ? cAdj : otherAdj));
+  const posStrings = H.data["Y! Pos"];
+  let hAdj, byPosition = null;
+  if (s.positions === "slots") {
+    // Without position info every slot takes anyone: one pool, as the script does
+    const known = posStrings.some((p) => p.split(/[,/ ]+/).some((x) => x && x.toUpperCase() !== "UT"));
+    const caps = {};
+    for (const [t, n] of Object.entries(s.slots)) {
+      const type = known ? t : "UT";
+      caps[type] = (caps[type] || 0) + s.teams * n;
+    }
+    // Half the bench counts toward replacement when it isn't minimized, as the script's pool does
+    const benchSlots = Math.trunc(s.teams * (s.hitters + bench / 2)) - s.teams * s.hitters;
+    caps.UT = (caps.UT || 0) + benchSlots;
+    byPosition = positionReplacement(hRaw, posStrings, caps);
+    const deepest = Math.max(...byPosition.levels.map((l) => l.level));
+    // A hitter no slot takes (a DH with no UT) is worth a bench spot at most
+    hAdj = hRaw.map((v, i) => (Number.isNaN(byPosition.repl[i]) ? Math.min(0, v - deepest) : v - byPosition.repl[i]));
+  } else {
+    const isC = posStrings.map((p) => p.replaceAll("CF", "").includes("C"));
+    // Without position info (or catcher slots) every hitter is priced against one pool
+    const catcherSlots = isC.some(Boolean) ? s.catchers : 0;
+    const split = catcherSlots > 0;
+    const cAdj = nlargestMin(hRaw.filter((_, i) => isC[i]), s.teams * catcherSlots);
+    const otherAdj = nlargestMin(hRaw.filter((_, i) => !split || !isC[i]),
+      Math.trunc(s.teams * (s.hitters - catcherSlots + bench / 2)));
+    hAdj = hRaw.map((v, i) => v - (split && isC[i] ? cAdj : otherAdj));
+  }
   const hitterPerValue = hitterDollars / hAdj.reduce((a, v) => (v > 0 ? a + v : a), 0);
 
   // Pitchers
@@ -295,7 +406,7 @@ export function auctionValues(H, P, s) {
   const hitterCols = ["PA", ...hitterCats.filter((c) => c !== "PA")];
   const pitcherCols = ["IP", ...pitcherCats.filter((c) => c !== "IP")];
   const players = [];
-  const add = (T, raw, adj, perValue, type, cols) => {
+  const add = (T, raw, adj, perValue, type, cols, byPos) => {
     for (let i = 0; i < T.n; i++) {
       const stats = {};
       for (const c of cols) stats[c] = T.data[c][i];
@@ -303,11 +414,12 @@ export function auctionValues(H, P, s) {
         type, name: T.data.Name[i] ?? "", mlbamid: T.data.MLBAMID[i], team: T.data.Team[i] ?? "",
         pos: T.data["Y! Pos"] ? (T.data["Y! Pos"][i] ?? (type === "p" ? "P" : "UT")) : "P",
         points: raw[i], value: s.minBid + adj[i] * perValue, stats,
+        slot: byPos ? byPos.slot[i] : null, valuedAt: byPos ? byPos.valuedAt[i] : null,
       });
     }
   };
-  add(H, hRaw, hAdj, hitterPerValue, "h", hitterCols);
-  add(P, pRaw, pAdj, pitcherPerValue, "p", pitcherCols);
+  add(H, hRaw, hAdj, hitterPerValue, "h", hitterCols, byPosition);
+  add(P, pRaw, pAdj, pitcherPerValue, "p", pitcherCols, null);
 
   // Level the dollars so the positive values spend exactly the league's budget
   const projected = players.reduce((a, p) => (p.value > 0 ? a + p.value : a), 0);
@@ -316,7 +428,17 @@ export function auctionValues(H, P, s) {
 
   players.sort((a, b) => (Number.isNaN(a.value) ? 1 : Number.isNaN(b.value) ? -1 : b.value - a.value));
   rankDescending(players);
-  return { players, hitterCols, pitcherCols };
+
+  // Each slot type's scarcity in dollars: how much more a hitter there is worth than the
+  // same hitter at the deepest position
+  let positions = null;
+  if (byPosition) {
+    const deepest = Math.max(...byPosition.levels.map((l) => l.level));
+    positions = byPosition.levels
+      .map((l) => ({ ...l, premium: (deepest - l.level) * hitterPerValue * fudge }))
+      .sort((a, b) => b.premium - a.premium);
+  }
+  return { players, hitterCols, pitcherCols, positions };
 }
 
 // pandas' rank(ascending=False): ties share the average of their places

@@ -68,6 +68,16 @@ button.link{background:none; border:0; padding:0; color:var(--accent); font-size
 .points input,.points select{padding:5px 7px}
 .points button{padding:2px 7px; color:var(--muted); background:none; border-color:transparent}
 .points button:hover{color:var(--bad)}
+label.block{margin-bottom:12px}
+.slots{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin-bottom:12px}
+.slots label{gap:2px; align-items:stretch}
+.slots label b{text-align:center; font-size:12px; color:var(--muted)}
+.slots input{padding:5px 4px; text-align:center}
+#slots_ui legend .hint{font-weight:400; margin-left:6px}
+.scarcity{display:flex; flex-wrap:wrap; gap:6px 8px; align-items:baseline; margin:-2px 0 12px; font-size:13px; color:var(--muted)}
+.scarcity .prem{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:12.5px; background:var(--raise); border:1px solid var(--rule); border-radius:999px; padding:1px 9px; color:var(--faint)}
+.scarcity .prem b{font-family:"DM Sans",system-ui,sans-serif; color:var(--ink); font-weight:600; margin-right:5px}
+.scarcity .prem.up{color:var(--good); border-color:#2c4a36}
 .addrow{font-size:13px; padding:4px 10px; margin-bottom:12px}
 .src{font-size:12.5px; color:var(--muted); margin:-2px 0 10px}
 .src b{color:var(--ink); font-weight:500}
@@ -119,10 +129,26 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
   <div class="layout">
     <form id="settings" class="card" autocomplete="off" onsubmit="return false">
       <h3>Team settings</h3>
+      <label class="block"><b>Position adjustment</b><select id="pos_mode">
+        <option value="slots">By lineup slot</option><option value="catchers">Catchers only (the original script)</option></select>
+        <small id="pos_mode_hint"></small></label>
+      <fieldset id="slots_ui"><legend>Hitter slots <span id="slot_total" class="hint"></span></legend>
+        <div class="slots">
+          <label><b>C</b><input id="slot_C" type="number" min="0" max="5" step="1" value="1" required></label>
+          <label><b>1B</b><input id="slot_1B" type="number" min="0" max="5" step="1" value="1" required></label>
+          <label><b>2B</b><input id="slot_2B" type="number" min="0" max="5" step="1" value="1" required></label>
+          <label><b>3B</b><input id="slot_3B" type="number" min="0" max="5" step="1" value="1" required></label>
+          <label><b>SS</b><input id="slot_SS" type="number" min="0" max="5" step="1" value="1" required></label>
+          <label title="1B or 3B"><b>CI</b><input id="slot_CI" type="number" min="0" max="5" step="1" value="0" required></label>
+          <label title="2B or SS"><b>MI</b><input id="slot_MI" type="number" min="0" max="5" step="1" value="0" required></label>
+          <label><b>OF</b><input id="slot_OF" type="number" min="0" max="10" step="1" value="3" required></label>
+          <label title="Any hitter"><b>UT</b><input id="slot_UT" type="number" min="0" max="10" step="1" value="2" required></label>
+        </div>
+      </fieldset>
       <div class="pair">
-        <label><b>Hitters</b><input id="hitters" type="number" min="4" max="20" step="1" value="10" required><small>Including catchers</small></label>
+        <label id="hitters_field" hidden><b>Hitters</b><input id="hitters" type="number" min="4" max="20" step="1" value="10" required><small>Including catchers</small></label>
         <label><b>Pitchers</b><input id="pitchers" type="number" min="4" max="20" step="1" value="8" required></label>
-        <label><b>Catchers</b><input id="catchers" type="number" min="0" max="3" step="1" value="1" required></label>
+        <label id="catchers_field" hidden><b>Catchers</b><input id="catchers" type="number" min="0" max="3" step="1" value="1" required></label>
         <label><b>Bench spots</b><input id="bench" type="number" min="0" max="20" step="1" value="5" required></label>
       </div>
       <label class="check"><input id="min_bench" type="checkbox" checked><span>Minimize bench value<small>Leaves bench players out when setting replacement level</small></span></label>
@@ -175,11 +201,12 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
       </div>
       <p id="status" class="status">Loading projections…</p>
       <p id="summary" class="summary" hidden></p>
+      <div id="scarcity" class="scarcity" hidden></div>
       <div class="tbl" id="tbl" hidden><table class="values" id="table"></table></div>
-      <p class="note">Each player is scored against the pool (z-scores per category, with rate stats weighted by playing time, or points), less replacement level: the last starter at their position, with catchers against catchers. The dollars above the min bids are split between hitters and pitchers by that value. A port of <a href="https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py">auction_calc.py</a>.</p>
+      <p class="note">Each player is scored against the pool (z-scores per category, with rate stats weighted by playing time, or points), less replacement level. By lineup slot, the league's hitter slots are filled with the most total value; a position's replacement level is what the league would lose with one fewer slot there, so its scarcity comes from the projections, not a fixed order, and a hitter is priced at the scarcest position he plays. Pitchers are one pool. The dollars above the min bids are split between hitters and pitchers by that value. A port of <a href="https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py">auction_calc.py</a>.</p>
     </section>
   </div>
 </main>
-<script type="module" src="app.js?v=1"></script>
+<script type="module" src="app.js?v=2"></script>
 </body>
 </html>

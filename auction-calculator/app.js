@@ -1,7 +1,7 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=1";
+import * as C from "./calc.js?v=2";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -11,7 +11,11 @@ const params = new URLSearchParams(location.search);
 const DATA = new URL(params.get("data") || "https://data.blandalytics.com/projections/", location.href).href;
 const FILES = { h: "hitters_auction_ev.csv", p: "pitchers_auction_ev.csv" };
 const STORE = "auction-calculator:v1";
-const NUM_INPUTS = ["hitters", "pitchers", "catchers", "bench", "teams", "min_bid", "budget", "split"];
+const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
+const NUM_INPUTS = ["hitters", "pitchers", "catchers", "bench", "teams", "min_bid", "budget", "split", ...SLOT_IDS];
+const bySlots = () => $("pos_mode").value === "slots";
+// The inputs the position adjustment in use reads
+const activeInputs = () => NUM_INPUTS.filter((id) => (bySlots() ? id !== "hitters" && id !== "catchers" : !id.startsWith("slot_")));
 
 const defaults = { h: null, p: null };   // the bucket's projections, parsed
 const uploads = { h: null, p: null };    // { name, table } from the file inputs
@@ -201,14 +205,18 @@ document.querySelectorAll('input[name="style"]').forEach((r) => r.addEventListen
 // ---- settings ----------------------------------------------------------------------
 
 function readSettings() {
-  const bad = NUM_INPUTS.filter((id) => !$(id).checkValidity() || $(id).value === "");
+  const bad = activeInputs().filter((id) => !$(id).checkValidity() || $(id).value === "");
   if (bad.length) {
-    const names = bad.map((id) => $(id).closest("label").querySelector("b").textContent);
+    const names = bad.map((id) => (id.startsWith("slot_") ? "the " : "") + $(id).closest("label").querySelector("b").textContent + (id.startsWith("slot_") ? " slots" : ""));
     return { error: `Check ${names.join(", ")}: ${bad.map((id) => $(id).validationMessage).filter(Boolean)[0] || "a number is needed"}` };
   }
   const n = (id) => Number($(id).value);
+  const slots = Object.fromEntries(Object.keys(C.SLOT_TYPES).map((t) => [t, n("slot_" + t)]));
+  const slotTotal = Object.values(slots).reduce((a, b) => a + b, 0);
+  if (bySlots() && (slotTotal < 4 || slotTotal > 30)) return { error: `A lineup needs 4 to 30 hitter slots; this one has ${slotTotal}.` };
   const s = {
-    hitters: n("hitters"), pitchers: n("pitchers"), catchers: n("catchers"), bench: n("bench"),
+    positions: $("pos_mode").value, slots,
+    hitters: bySlots() ? slotTotal : n("hitters"), pitchers: n("pitchers"), catchers: bySlots() ? slots.C : n("catchers"), bench: n("bench"),
     minimizeBench: $("min_bench").checked, style: style(), teams: n("teams"), minBid: n("min_bid"),
     budget: n("budget"), hitterSplit: n("split") / 100, pool: $("pool").value, includeFa: $("include_fa").checked,
     hitterCats: cats.h, pitcherCats: cats.p, hitterPoints: points.h, pitcherPoints: points.p,
@@ -219,7 +227,7 @@ function readSettings() {
 }
 
 function save() {
-  const form = { style: style(), pool: $("pool").value, min_bench: $("min_bench").checked, include_fa: $("include_fa").checked, cats, points };
+  const form = { style: style(), pos_mode: $("pos_mode").value, pool: $("pool").value, min_bench: $("min_bench").checked, include_fa: $("include_fa").checked, cats, points };
   for (const id of NUM_INPUTS) form[id] = $(id).value;
   try { localStorage.setItem(STORE, JSON.stringify(form)); } catch { /* private mode */ }
 }
@@ -230,6 +238,7 @@ function restore() {
   if (!form) return;
   for (const id of NUM_INPUTS) if (form[id] !== undefined) $(id).value = form[id];
   if (form.pool) $("pool").value = form.pool;
+  if (form.pos_mode === "slots" || form.pos_mode === "catchers") $("pos_mode").value = form.pos_mode;
   if (typeof form.min_bench === "boolean") $("min_bench").checked = form.min_bench;
   if (typeof form.include_fa === "boolean") $("include_fa").checked = form.include_fa;
   const r = document.querySelector(`input[name="style"][value="${form.style}"]`);
@@ -239,6 +248,21 @@ function restore() {
   if (form.cats?.h && form.cats?.p) cats = form.cats;
   if (Array.isArray(form.points?.h) && Array.isArray(form.points?.p)) points = form.points;
 }
+
+// ---- position adjustment ---------------------------------------------------------------
+
+function showPositionMode() {
+  $("slots_ui").hidden = !bySlots();
+  $("hitters_field").hidden = bySlots();
+  $("catchers_field").hidden = bySlots();
+  $("pos_mode_hint").textContent = bySlots()
+    ? "Each position's replacement level comes from the league's best lineups"
+    : "Catchers against catchers, every other hitter in one pool";
+  const total = SLOT_IDS.reduce((a, id) => a + (Number($(id).value) || 0), 0);
+  $("slot_total").textContent = `${total} per team`;
+}
+$("pos_mode").addEventListener("change", showPositionMode);
+$("slots_ui").addEventListener("input", showPositionMode);
 
 $("reset").onclick = () => {
   try { localStorage.removeItem(STORE); } catch { /* private mode */ }
@@ -260,6 +284,7 @@ function fail(msg) {
   status(msg, "err");
   $("tbl").hidden = true;
   $("summary").hidden = true;
+  $("scarcity").hidden = true;
   $("download").disabled = true;
 }
 
@@ -301,12 +326,15 @@ const INFO = [
   { key: "team", label: "Team", get: (p) => p.team, cell: (p) => esc(p.team), cls: "l muted", text: true },
   { key: "pos", label: "Pos", get: (p) => p.pos, cell: (p) => esc(p.pos), cls: "l muted", text: true },
 ];
+// The slot a hitter fills in the league's best lineups (blank: not a starter)
+const SLOT_COL = { key: "slot", label: "Slot", get: (p) => p.slot ?? "", cell: (p) => esc(p.slot ?? ""), cls: "l muted", text: true };
 const POINTS_COL = { key: "points", label: "Points", get: (p) => p.points, cell: (p) => fmt("", p.points) };
 const VALUE_COL = { key: "value", label: "Auction $", get: (p) => p.value, cell: (p) => money(p.value), cls: (p) => "val" + (p.value < result.settings.minBid ? " neg" : "") };
 
 function columns() {
   // The dollars sit by the name, so they're on screen on a phone too
-  const info = [INFO[0], INFO[1], VALUE_COL, INFO[2], INFO[3], ...(result.settings.style === "Points" ? [POINTS_COL] : [])];
+  const info = [INFO[0], INFO[1], VALUE_COL, INFO[2], INFO[3], ...(result.positions ? [SLOT_COL] : []),
+    ...(result.settings.style === "Points" ? [POINTS_COL] : [])];
   const stat = (type, cat, first) => ({
     key: `${type}:${cat}`, label: cat, group: type, first,
     get: (p) => (p.type === type ? p.stats[cat] : NaN), cell: (p) => (p.type === type ? fmt(cat, p.stats[cat]) : ""),
@@ -318,7 +346,7 @@ function columns() {
   ];
 }
 
-const fold = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const fold = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 function matchesPos(p, pos) {
   if (!pos) return true;
   if (pos === "h" || pos === "p") return p.type === pos;
@@ -346,6 +374,7 @@ function render() {
   $("summary").innerHTML = `<b>${int(result.players.length)}</b> players priced · <b>${int(priced)}</b> at or above the $${s.minBid} min bid · `
     + `${s.teams} teams × $${int(s.budget)}${rows.length !== result.players.length ? ` · showing <b>${int(rows.length)}</b>` : ""}`;
   $("summary").hidden = false;
+  renderScarcity();
 
   const nInfo = cols.filter((c) => !c.group).length;
   const nH = result.hitterCols.length, nP = result.pitcherCols.length;
@@ -358,11 +387,21 @@ function render() {
   const body = rows.length
     ? rows.map((p) => `<tr class="${p.type}">` + cols.map((c) => {
       const cls = [typeof c.cls === "function" ? c.cls(p) : c.cls, c.first ? "gp" : ""].filter(Boolean).join(" ");
-      return `<td${cls ? ` class="${cls}"` : ""}${c.key === "name" ? ` title="${esc(p.name)}"` : ""}>${c.cell(p)}</td>`;
+      const title = c.key === "name" ? p.name : c.key === "pos" && p.valuedAt ? `Priced at ${p.valuedAt}` : "";
+      return `<td${cls ? ` class="${cls}"` : ""}${title ? ` title="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
     }).join("") + `</tr>`).join("")
     : `<tr><td class="empty l" colspan="${cols.length}">No players match.</td></tr>`;
   $("table").innerHTML = head + `<tbody>${body}</tbody>`;
   $("tbl").hidden = false;
+}
+
+// Each position's premium over the deepest one, scarcest first, as the data has it
+function renderScarcity() {
+  const el = $("scarcity");
+  if (!result.positions) { el.hidden = true; return; }
+  el.innerHTML = `<span title="What a hitter is worth over the same hitter at the deepest position, from this league's best lineups">Position premium</span>`
+    + result.positions.map((p) => `<span class="prem${p.premium >= 0.005 ? " up" : ""}" title="${p.slots} slots · replacement ${p.level.toFixed(2)} · last starter ${p.worst.toFixed(2)}"><b>${esc(p.slot)}</b>${p.premium >= 0.005 ? "+" + money(p.premium) : "$0"}</span>`).join("");
+  el.hidden = false;
 }
 
 $("table").addEventListener("click", (e) => {
@@ -385,13 +424,14 @@ $("download").onclick = () => {
   if (!result) return;
   const { hitterCols, pitcherCols, players, settings } = result;
   const both = new Set(hitterCols.filter((c) => pitcherCols.includes(c)));
-  const head = ["Rank", "Name", "Team", "Y! Pos", ...(settings.style === "Points" ? ["Points"] : []), "Value",
+  const slots = !!result.positions;
+  const head = ["Rank", "Name", "Team", "Y! Pos", ...(slots ? ["Slot"] : []), ...(settings.style === "Points" ? ["Points"] : []), "Value",
     ...hitterCols.map((c) => (both.has(c) ? c + "_h" : c)), ...pitcherCols.map((c) => (both.has(c) ? c + "_p" : c))];
   const num = (v, d) => (v === undefined || Number.isNaN(v) ? "" : d === undefined ? String(v) : v.toFixed(d));
   const cell = (v) => (/[",\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v);
   const lines = [head.map(cell).join(",")];
   for (const p of players) {
-    lines.push([num(p.rank), p.name, p.team, p.pos, ...(settings.style === "Points" ? [num(p.points, 2)] : []), num(p.value, 2),
+    lines.push([num(p.rank), p.name, p.team, p.pos, ...(slots ? [p.slot ?? ""] : []), ...(settings.style === "Points" ? [num(p.points, 2)] : []), num(p.value, 2),
       ...hitterCols.map((c) => (p.type === "h" ? num(p.stats[c]) : "")),
       ...pitcherCols.map((c) => (p.type === "p" ? num(p.stats[c]) : ""))].map((v) => cell(String(v))).join(","));
   }
@@ -403,5 +443,6 @@ $("download").onclick = () => {
 };
 
 restore();
+showPositionMode();
 renderSources();
 loadDefaults();

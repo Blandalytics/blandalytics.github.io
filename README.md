@@ -776,12 +776,16 @@ In `model-drilldown/`, run `npm install`, then `npm run check` (lint plus a form
 
 [blandalytics.com/auction-calculator/](https://blandalytics.com/auction-calculator/) — auction
 dollar values for every projected hitter and pitcher, priced for a league's settings. The sidebar
-holds the app's settings: **Hitters**, **Pitchers**, **Catchers** and **Bench spots**, **Minimize
+holds the app's settings, plus a **Position adjustment**: by lineup slot (the default, with hitter
+slots per team for C, 1B, 2B, 3B, SS, CI, MI, OF and UT) or the script's catchers-only split (with
+its **Hitters** and **Catchers**); **Pitchers** and **Bench spots**, **Minimize
 bench value**; **League type** (Categories or Points), **Teams**, **Min bid**, **Team budget**,
 **Player pool** (All, NL-Only, AL-Only), **Hitter split (%)** and **Include free agents**; optional
 hitter and pitcher projection CSVs; and the scoring, as category toggles (5x5 roto by default) or
 editable points tables. Any change reprices at once. The table beside it is every player by
-auction dollars, with the scored stats grouped under Hitting and Pitching; any header sorts it, a
+auction dollars, with the scored stats grouped under Hitting and Pitching (by lineup slot, a **Slot**
+column says where each starter plays, and a row of **Position premiums** over it says what each
+position is worth over the deepest one); any header sorts it, a
 search box and position filter narrow it, and **Download CSV** saves the whole table in the
 script's layout (a stat both sides score is suffixed `_h` / `_p`). Settings are kept in the
 browser between visits; **Reset all settings** clears them.
@@ -789,7 +793,13 @@ browser between visits; **Reset all settings** clears them.
 It is [plv_viz `auction_calc.py`](https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py)
 (the PL Auction Calculator Streamlit app) ported to the browser, and it prices to the cent of the
 script: `tools/auction_calculator/` runs the script itself on the same CSVs and compares every
-player. It departs from the script in a few places:
+player (in its catchers-only mode). It departs from the script in a few places:
+
+- **Replacement by lineup slot.** The script prices catchers against catchers and every other
+  hitter in one pool. By default the page sets a replacement level for every position from the
+  league's best lineups instead (below), so how much a SS is worth over a 1B comes from the
+  projections and the roster, not a fixed order. With UT slots that ends up where the script
+  does on these projections (only C is scarce); without them, positions separate.
 
 - **Default projections from the bucket.** `https://data.blandalytics.com/projections/hitters_auction_ev.csv`
   and `pitchers_auction_ev.csv`, not the app's Google Sheet; `?data=<base>` reads them from elsewhere.
@@ -808,15 +818,31 @@ everyone with at least `min(50, IP of the last starter)` IP. In categories each 
 over that sample (fewer is better for K, CS, ERA, WHIP, BB and the like), with rate stats regressed
 toward the league by `hitters − 1` (or `pitchers − 1`) players' worth of average playing time
 before scoring, so a rate over few PA or IP moves less; in points, value is the points. Replacement
-level is the value of the last starter: catchers against the top `teams × catchers` catchers, other
-hitters against the rest, pitchers against the top `teams × (pitchers + bench/2)` (bench is 0 when
-**Minimize bench value** is on). The dollars above every roster spot's min bid are split by **Hitter
-split**, handed out in proportion to value above replacement, and scaled so the positive values
-spend exactly `teams × budget`.
+level is the value of the last starter: pitchers against the top `teams × (pitchers + bench/2)`
+(bench is 0 when **Minimize bench value** is on), hitters by position as below. The dollars above
+every roster spot's min bid are split by **Hitter split**, handed out in proportion to value above
+replacement, and scaled so the positive values spend exactly `teams × budget`.
+
+**By lineup slot**, the league's hitter slots (`teams ×` each slot, plus `teams × bench/2` more UT
+when the bench isn't minimized) are filled for the most total value: hitters in order of value,
+each one placed if a slot it fits is open or can be opened by shifting starters already placed
+(a 2B,SS moving from SS to MI, say). The sets of hitters that fit the slots form a transversal
+matroid, so this greedy fill is optimal. A slot type's replacement level is then what the league
+loses with one fewer of those slots: the worst starter at any slot type it can shift a starter
+into, through starters eligible elsewhere. It's the price of a slot in the linear program the
+fill solves, at its top (the last starter, as the script prices the last starter). A hitter is
+priced against the lowest replacement level among the slots he fits; one no slot takes (a DH when
+there's no UT) is worth a bench spot at most. Consequences, all from the data: a position whose
+starters spill into UT or a flex slot is exactly as deep as UT, and a position is scarce only
+when its last starter is worse than everything it could shift to. On the 2027 projections, a
+12-team 5x5 league with two UT slots prices C at +$10 and everything else level; with five OF
+and no UT it goes C +$17, OF +$11, 2B / 3B / SS +$6.70, 1B $0. Without any position info in the
+projections, every slot takes anyone. **Catchers only** is the script's split: catchers against
+the top `teams × catchers` catchers, other hitters against the rest.
 
 | file | role |
 |---|---|
-| `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`), the player pool, z-scores and points, replacement, dollars, rank; no DOM, so Node runs it too |
+| `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`), the player pool, z-scores and points, replacement (`positionReplacement` for lineup slots), dollars, rank; no DOM, so Node runs it too |
 | `auction-calculator/index.html`, `app.js` | the page: settings, uploads (UTF-8 or Windows-1252), the scoring controls, the table, the CSV |
 | `tools/auction_calculator/run_ref.py` | runs `auction_calc.py` headless through a stub `streamlit` (`stub/`), on local CSVs with settings from `ST_OVERRIDES`, and prints its table |
 | `tools/auction_calculator/compare.mjs` | prices the same CSVs and settings with `calc.js` and checks every player's dollars and rank |
