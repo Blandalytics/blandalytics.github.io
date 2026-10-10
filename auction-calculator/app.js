@@ -438,6 +438,7 @@ function columns() {
   const stat = (type, cat, first) => ({
     key: `${type}:${cat}`, label: cat, group: type, first,
     get: (p) => (p.type === type ? p.stats[cat] : NaN), cell: (p) => (p.type === type ? fmt(cat, p.stats[cat]) : ""),
+    ...(result.valueCols[type].includes(cat) ? heatOf(type, cat) : {}),
   });
   if (view() === "value" && result.valueCols) return [...info, ...breakdownColumns()];
   return [
@@ -445,6 +446,41 @@ function columns() {
     ...result.hitterCols.map((c, i) => stat("h", c, i === 0)),
     ...result.pitcherCols.map((c, i) => stat("p", c, i === 0)),
   ];
+}
+
+// ---- stat shading -------------------------------------------------------------------------
+
+// A scored stat's cells are shaded by what it adds to the player's dollars, on the column's own
+// scale: nothing at or below its drafted players' median, the Auction $ green at their top 5%
+// and above. The text keeps 4.5:1 on every shade: the ink while it can, then the page's dark
+// ground, and pure white or black in the band where neither reaches it
+const HEAT = { base: [21, 27, 35], top: [123, 216, 143] };   // --surface, --good
+const INKS = [[227, 233, 241], [13, 17, 23]], EDGES = [[255, 255, 255], [0, 0, 0]];   // --ink, --ground
+const lum = (c) => c.map((v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+  .reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
+const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+function heatStyle(v, lo, hi) {
+  if (!(hi > lo) || !Number.isFinite(v) || v <= lo) return "";
+  const t = Math.min(1, (v - lo) / (hi - lo));
+  const bg = HEAT.base.map((b, i) => Math.round(b + (HEAT.top[i] - b) * t));
+  const ink = INKS.find((c) => ratio(c, bg) >= 4.5) || EDGES.reduce((a, c) => (ratio(c, bg) > ratio(a, bg) ? c : a));
+  return `background:rgb(${bg.join(",")});color:rgb(${ink.join(",")})`;
+}
+function heatOf(type, cat) {
+  const $of = (p) => (p.type === type && p.breakdown ? p.breakdown.stats[cat] : NaN);
+  result.heat ??= {};
+  const key = type + ":" + cat;
+  if (!(key in result.heat)) {
+    const v = result.players.filter((p) => p.type === type && p.drafted).map($of).filter(Number.isFinite).sort((a, b) => a - b);
+    const at = (q) => v[Math.min(v.length - 1, Math.floor(q * v.length))];
+    result.heat[key] = v.length ? [at(0.5), at(0.95)] : [0, 0];
+  }
+  const [lo, hi] = result.heat[key];
+  return {
+    title: `Shaded by what ${cat} adds to a player's dollars: none at the drafted players' median, full at their top 5%`,
+    style: (p) => heatStyle($of(p), lo, hi),
+    tip: (p) => (Number.isFinite($of(p)) ? `${cat}: ${$of(p) < 0 ? "costs" : "adds"} ${money(Math.abs($of(p)))}` : ""),
+  };
 }
 
 const fold = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -488,12 +524,14 @@ function render() {
   const body = rows.length
     ? rows.map((p) => `<tr class="${p.type}">` + cols.map((c) => {
       const cls = [typeof c.cls === "function" ? c.cls(p) : c.cls, c.frozen ? "frz" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
-      const title = c.key === "name" ? p.name : c.key === "pos" && p.valuedAt ? `Priced at ${p.valuedAt}`
+      const title = c.tip ? c.tip(p) : c.key === "name" ? p.name : c.key === "pos" && p.valuedAt ? `Priced at ${p.valuedAt}`
         : c.key === "value" && !p.drafted ? "Not on a drafted roster" : "";
-      return `<td${cls ? ` class="${cls}"` : ""}${title ? ` data-tip="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
+      const style = c.style ? c.style(p) : "";
+      return `<td${cls ? ` class="${cls}"` : ""}${style ? ` style="${style}"` : ""}${title ? ` data-tip="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
     }).join("") + `</tr>`).join("")
     : `<tr><td class="empty l" colspan="${cols.length}">No players match.</td></tr>`;
   $("table").innerHTML = head + `<tbody>${body}</tbody>`;
+  $("heatkey").hidden = view() === "value";
   $("tbl").hidden = false;
   freezeOffset();
 }

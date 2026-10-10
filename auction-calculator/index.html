@@ -122,6 +122,11 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
 .values td.val.neg{color:var(--faint); font-weight:400}
 .values td.up{color:var(--good)} .values td.down{color:var(--bad)} .values td.nil{color:var(--faint)}
 .bar fieldset.view{flex:0 0 auto}
+/* the stat shading's key: the surface (median) to the Auction $ green (top 5%), as app.js mixes it */
+.above{display:flex; flex-wrap:wrap; align-items:baseline; gap:0 16px; margin:-2px 0 12px}
+.above .scarcity{flex:1 1 auto; margin:0}
+.key{display:flex; align-items:center; gap:6px; margin-left:auto; font-size:12px; color:var(--muted); cursor:help}
+.key i{width:64px; height:10px; border-radius:2px; border:1px solid var(--rule); background:linear-gradient(90deg,var(--surface),var(--good))}
 .bar fieldset.view legend{font-size:13px}
 .values .gp{border-left:1px solid var(--rule)}
 .values tbody tr:hover td{background:#1a212b}
@@ -244,13 +249,16 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
         <button type="button" id="download" disabled>Download CSV</button>
       </div>
       <p id="status" class="status">Loading projections…</p>
-      <div id="scarcity" class="scarcity" hidden></div>
+      <div class="above">
+        <div id="scarcity" class="scarcity" hidden></div>
+        <span class="key" id="heatkey" hidden data-tip="Each scored stat is shaded by what it adds to a player's dollars, on its own column's scale: none at the drafted players' median, full green at their top 5%"><span>median</span><i></i><span>top 5%</span></span>
+      </div>
       <div class="tbl" id="tbl" hidden><table class="values" id="table"></table></div>
       <p class="note">Players are valued in standings points (SGP). Each category's weight is the standings points one more unit buys a team, from how far apart team totals land: the spread the draft leaves (tiers of one player per team, in draft order) plus a season's luck. Rate stats count as what a player adds above the drafted pool's rate (hits above it, earned runs saved below it), so they carry his playing time; what he doesn't play is filled with replacement production. The league's lineup slots are filled for the most value; a position's replacement level is the average of the players around its cutoff, so its scarcity comes from the projections, not a fixed order. Exactly the players who fill every team's legal roster are drafted: the last on each side goes for the min bid, and the rest of the budget goes to hitters and pitchers by the hitter split (or, from the values, at one price per SGP across both) and out by SGP over that side's last player. Starts from the z-scores of <a href="https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py">auction_calc.py</a>.</p>
     </section>
   </div>
 </main>
 <div id="tip" role="tooltip" hidden></div>
-<script type="module" src="app.js?v=15"></script>
+<script type="module" src="app.js?v=17"></script>
 </body>
 </html>
