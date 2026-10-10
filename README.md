@@ -790,7 +790,9 @@ column says where each drafted player plays, BN for the bench, and a row of **Po
 over it says what each position is worth over its side's deepest one); a summary line counts the
 drafted players and what they cost; any header sorts it, a
 search box and position filter narrow it, and **Download CSV** saves the whole table in the
-script's layout (a stat both sides score is suffixed `_h` / `_p`). Settings are kept in the
+script's layout (a stat both sides score is suffixed `_h` / `_p`). **View** switches the stat
+columns for a **Value breakdown**: each player's dollars split into the min bid, a baseline, his
+position and each scored stat (below), and the CSV follows it. Settings are kept in the
 browser between visits; **Reset all settings** clears them.
 
 It is [plv_viz `auction_calc.py`](https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py)
@@ -842,6 +844,22 @@ roster has room for (a 13th catcher when nothing else takes him, say) stays unde
 even if his value is a touch higher than the last one in. The position premiums are in the same
 dollars. `tools/auction_calculator/invariants.mjs` checks all of this over 70 leagues.
 
+**Value breakdown.** A player's dollars are the min bid plus `(value above replacement − the last
+drafted player's) × his side's dollars per unit`, and value above replacement is his score less
+his position's level, so they split exactly into:
+
+- **Min bid**, the same for everyone;
+- **Baseline**, the same for everyone on a side: in categories, what a player with average stats
+  (z-scores are against the scoring pool's average) at the side's deepest position is worth over
+  the min bid; in points, the replacement level's points, taken away;
+- **Position**, his position's premium over his side's deepest one (the premium row's dollars);
+- **each stat**, its z-score (or its points) at the side's dollars per unit, so a stat below the
+  average takes dollars away;
+- **No spot**, shown only when it isn't zero: what holds a player no legal roster has room for
+  under the min bid.
+
+They add back up to the dollars to the cent for every player, which `invariants.mjs` checks too.
+
 **By lineup slot**, each side's slots (`teams ×` each slot, plus `teams × bench/2` more UT or P
 when the bench isn't minimized; bench is 0 when **Minimize bench value** is on) are filled for the
 most total value: players in order of value, each one placed if a slot it fits is open or can be
@@ -880,11 +898,11 @@ count assumed.
 
 | file | role |
 |---|---|
-| `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`), the player pool, z-scores and points, replacement (`positionReplacement` for lineup slots, with a span), the drafted players and dollars (`price`), rank; no DOM, so Node runs it too |
+| `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`), the player pool, z-scores and points, replacement (`positionReplacement` for lineup slots, with a span), the drafted players and dollars (`price`), the value breakdown (`breakdown`), rank; no DOM, so Node runs it too |
 | `auction-calculator/index.html`, `app.js` | the page: settings and the league formats (`PRESETS`), uploads (UTF-8 or Windows-1252), the scoring controls, the table, the CSV |
 | `tools/auction_calculator/run_ref.py` | runs `auction_calc.py` headless through a stub `streamlit` (`stub/`), on local CSVs with settings from `ST_OVERRIDES`, and prints its table |
 | `tools/auction_calculator/compare.mjs` | prices the same CSVs and settings with `calc.js` (catchers only, the script's dollars) and checks every player's dollars and rank |
-| `tools/auction_calculator/invariants.mjs` | over 70 leagues (every format, both position adjustments, bench on and off, Points, AL/NL-only, spans), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget |
+| `tools/auction_calculator/invariants.mjs` | over 70 leagues (every format, both position adjustments, bench on and off, Points, AL/NL-only, spans), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget, and that every value breakdown adds up |
 
 To check the port after a change to either side (pandas and Pillow for the script):
 

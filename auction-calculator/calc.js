@@ -220,26 +220,32 @@ function rateZ(rate, pt, sampleIdx, nPlayers) {
   return rate.map((r, i) => (blend(r, pt[i]) - m) / s);
 }
 
+// Both scores return the total and each category's part of it (NaN counted as nothing)
 function zValue(table, cats, rateSet, invertSet, sampleIdx, nPlayers, ptCol) {
   const total = new Array(table.n).fill(0);
+  const parts = new Map();
   for (const cat of cats) {
     const col = table.data[cat];
     const z = rateSet.has(cat)
       ? rateZ(col, table.data[ptCol], sampleIdx, nPlayers)
       : volumeZ(col, sampleIdx.map((i) => col[i]));
     const sign = invertSet.has(cat) ? -1 : 1;
-    for (let i = 0; i < table.n; i++) if (!Number.isNaN(z[i])) total[i] += sign * z[i];
+    const part = z.map((v) => (Number.isNaN(v) ? 0 : sign * v));
+    for (let i = 0; i < table.n; i++) total[i] += part[i];
+    parts.set(cat, part);
   }
-  return total;
+  return { total, parts };
 }
 
 function pointsValue(table, points) {
   const total = new Array(table.n).fill(0);
+  const parts = new Map();
   for (const [cat, pts] of points) {
-    const col = table.data[cat];
-    for (let i = 0; i < table.n; i++) if (!Number.isNaN(col[i])) total[i] += col[i] * pts;
+    const part = table.data[cat].map((v) => (Number.isNaN(v) ? 0 : v * pts));
+    for (let i = 0; i < table.n; i++) total[i] += part[i];
+    parts.set(cat, part);
   }
-  return total;
+  return { total, parts };
 }
 
 // ---- position replacement -----------------------------------------------------
@@ -406,7 +412,28 @@ function price(adj, posStrings, caps, types, benchSlots, dollars, minBid) {
     const dollarsFor = minBid + (v - base) * rate;
     return drafted[i] ? dollarsFor + flat : Math.min(dollarsFor, minBid - 0.01);
   });
-  return { value, rate, drafted, slot };
+  return { value, rate, drafted, slot, base, flat };
+}
+
+/**
+ * Each player's dollars, part by part: the min bid; what each stat adds (its part of the
+ * score at the side's dollars per unit); what his position adds over the side's deepest one;
+ * and the side's replacement baseline, the same for everyone on the side (the deepest
+ * position's level and the last drafted player). other is what's left, nonzero only for a
+ * player no legal roster has room for, held under the min bid.
+ */
+function breakdown(raw, adj, parts, pr, deepest, minBid) {
+  return raw.map((r, i) => {
+    if (Number.isNaN(pr.value[i])) return null;
+    const stats = {};
+    let sum = minBid;
+    for (const [cat, part] of parts) { stats[cat] = part[i] * pr.rate; sum += stats[cat]; }
+    const position = (deepest - (r - adj[i])) * pr.rate;
+    const replacement = -(deepest + pr.base) * pr.rate + (pr.drafted[i] ? pr.flat : 0);
+    sum += position + replacement;
+    const other = pr.value[i] - sum;
+    return { minBid, stats, position, replacement, other: Math.abs(other) < 1e-9 ? 0 : other };
+  });
 }
 
 /** Last entry wins for a category listed twice, as the script's dict does */
@@ -424,8 +451,10 @@ const dedupePoints = (rows) => [...new Map(rows.filter(([c]) => c)).entries()];
  * positive value scaled to the budget), for the parity check; otherwise exactly the players
  * on legal rosters (lineups, plus the bench unless it's minimized) are worth the min bid or
  * more, and they add up to the league's budget.
- * Returns { players, hitterCols, pitcherCols, positions }, players sorted by value;
- * positions holds each slot type's replacement level and its price in dollars ("slots").
+ * Returns { players, hitterCols, pitcherCols, positions, valueCols }, players sorted by value;
+ * positions holds each slot type's replacement level and its price in dollars ("slots"); each
+ * player's breakdown splits his dollars into the min bid, his stats (valueCols), his position
+ * and the replacement baseline (not with the script's dollars).
  */
 export function auctionValues(H, P, s) {
   const bench = s.minimizeBench ? 0 : s.bench;
@@ -446,8 +475,9 @@ export function auctionValues(H, P, s) {
 
   // Hitters
   const hSample = nlargestIdx(H.data.PA, hittersAboveRepl);
-  const hRaw = points ? pointsValue(H, hPoints)
+  const hScore = points ? pointsValue(H, hPoints)
     : zValue(H, hitterCats, RATE_H, INVERT_H, hSample, s.hitters, "PA");
+  const hRaw = hScore.total;
   const posStrings = H.data["Y! Pos"];
   let hAdj, hByPos = null, hDeepest = 0, hCaps;
   if (s.positions === "slots") {
@@ -471,8 +501,9 @@ export function auctionValues(H, P, s) {
   const ipThresh = Math.min(50, nlargestMin(ip, s.teams * s.pitchers));
   const pSample = [];
   for (let i = 0; i < P.n; i++) if (ip[i] >= ipThresh) pSample.push(i);
-  const pRaw = points ? pointsValue(P, pPoints)
+  const pScore = points ? pointsValue(P, pPoints)
     : zValue(P, pitcherCats, RATE_P, INVERT_P, pSample, s.pitchers, "IP");
+  const pRaw = pScore.total;
   let pAdj, pByPos = null, pDeepest = 0, pCaps;
   const pPos = P.data["Y! Pos"] ? P.data["Y! Pos"].map((p) => p ?? "P") : new Array(P.n).fill("P");
   if (s.positions === "slots") {
@@ -486,6 +517,7 @@ export function auctionValues(H, P, s) {
   }
 
   let hValue, pValue, hitterPerValue, pitcherPerValue, hDrafted = null, pDrafted = null, hSlot = null, pSlot = null;
+  let hParts = null, pParts = null;
   if (s.dollars === "script") {
     hitterPerValue = hitterDollars / hAdj.reduce((a, v) => (v > 0 ? a + v : a), 0);
     pitcherPerValue = pitcherDollars / pAdj.reduce((a, v) => (v > 0 ? a + v : a), 0);
@@ -498,13 +530,18 @@ export function auctionValues(H, P, s) {
     const pp = price(pAdj, pPos, pCaps, PITCHER_SLOT_TYPES, s.teams * bench - benchH, pitcherDollars, s.minBid);
     ({ value: hValue, rate: hitterPerValue, drafted: hDrafted, slot: hSlot } = hp);
     ({ value: pValue, rate: pitcherPerValue, drafted: pDrafted, slot: pSlot } = pp);
+    // The deepest level each side's positions are measured from
+    const deepestOf = (byPos, raw, adj) => (byPos ? Math.max(...byPos.levels.map((l) => l.level))
+      : Math.max(...raw.map((r, i) => r - adj[i]).filter(Number.isFinite)));
+    hParts = breakdown(hRaw, hAdj, hScore.parts, hp, deepestOf(hByPos, hRaw, hAdj), s.minBid);
+    pParts = breakdown(pRaw, pAdj, pScore.parts, pp, deepestOf(pByPos, pRaw, pAdj), s.minBid);
   }
 
   const hitterCols = ["PA", ...hitterCats.filter((c) => c !== "PA")];
   const pitcherCols = ["IP", ...pitcherCats.filter((c) => c !== "IP")];
   const players = [];
   // slot: where each drafted player plays on the priced rosters (BN for the bench)
-  const add = (T, raw, value, drafted, type, cols, byPos, slot) => {
+  const add = (T, raw, value, drafted, type, cols, byPos, slot, parts) => {
     for (let i = 0; i < T.n; i++) {
       const stats = {};
       for (const c of cols) stats[c] = T.data[c][i];
@@ -512,12 +549,13 @@ export function auctionValues(H, P, s) {
         type, name: T.data.Name[i] ?? "", mlbamid: T.data.MLBAMID[i], team: T.data.Team[i] ?? "",
         pos: T.data["Y! Pos"] ? (T.data["Y! Pos"][i] ?? (type === "p" ? "P" : "UT")) : "P",
         points: raw[i], value: value[i], drafted: drafted ? drafted[i] : value[i] > 0, stats,
+        breakdown: parts ? parts[i] : null,
         slot: byPos ? (slot ? slot[i] : byPos.slot[i]) : null, valuedAt: byPos ? byPos.valuedAt[i] : null,
       });
     }
   };
-  add(H, hRaw, hValue, hDrafted, "h", hitterCols, hByPos, hSlot);
-  add(P, pRaw, pValue, pDrafted, "p", pitcherCols, pByPos, pSlot);
+  add(H, hRaw, hValue, hDrafted, "h", hitterCols, hByPos, hSlot, hParts);
+  add(P, pRaw, pValue, pDrafted, "p", pitcherCols, pByPos, pSlot, pParts);
 
   // The script then scales every positive value so they spend the league's budget
   let fudge = 1;
@@ -538,7 +576,9 @@ export function auctionValues(H, P, s) {
       .sort((a, b) => b.premium - a.premium);
     positions = [...premiums(hByPos, hDeepest, hitterPerValue, "h"), ...premiums(pByPos, pDeepest, pitcherPerValue, "p")];
   }
-  return { players, hitterCols, pitcherCols, positions };
+  // The categories each side's breakdown splits into, in scoring order
+  const valueCols = { h: [...hScore.parts.keys()], p: [...pScore.parts.keys()] };
+  return { players, hitterCols, pitcherCols, positions, valueCols };
 }
 
 // pandas' rank(ascending=False): ties share the average of their places

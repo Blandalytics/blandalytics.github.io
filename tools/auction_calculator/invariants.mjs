@@ -1,6 +1,7 @@
 // Checks that every league prices exactly its roster spots (lineups, plus the bench unless it is
 // minimized) at the min bid or more, costing exactly teams × budget, on rosters that fill every slot
-// legally; and that the Slot column agrees with who is drafted.
+// legally; that the Slot column agrees with who is drafted; and that each player's value breakdown
+// adds back up to his dollars.
 //
 //   node invariants.mjs hitters.csv pitchers.csv
 import { readFileSync } from "node:fs";
@@ -47,9 +48,12 @@ for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (co
     return r.slot.every((x) => x !== null) && ps.length === sum(caps);
   });
   const slotsAgree = s.positions !== "slots" || res.players.every((p) => p.drafted === (p.slot !== null));
-  const ok = atMin.length === spots && Math.abs(total - s.teams * s.budget) < 1e-6 && sameSet && legal && slotsAgree;
+  // the breakdown adds back up to every player's dollars
+  const parts = (b) => b.minBid + Object.values(b.stats).reduce((a, v) => a + v, 0) + b.position + b.replacement + b.other;
+  const adds = res.players.every((p) => (p.breakdown ? Math.abs(parts(p.breakdown) - p.value) < 1e-6 : Number.isNaN(p.value)));
+  const ok = atMin.length === spots && Math.abs(total - s.teams * s.budget) < 1e-6 && sameSet && legal && slotsAgree && adds;
   runs++;
-  if (!ok) { fails++; console.log(`FAIL ${name} ${JSON.stringify(v)}: ${atMin.length} at min bid+ (spots ${spots}), total $${total.toFixed(4)} (budget ${s.teams * s.budget}), same set ${sameSet}, legal ${legal}, slots agree ${slotsAgree}`); }
+  if (!ok) { fails++; console.log(`FAIL ${name} ${JSON.stringify(v)}: ${atMin.length} at min bid+ (spots ${spots}), total $${total.toFixed(4)} (budget ${s.teams * s.budget}), same set ${sameSet}, legal ${legal}, slots agree ${slotsAgree}, breakdown adds up ${adds}`); }
 }
 console.log(`${fails ? "FAIL" : "OK"}: ${runs} leagues, ${fails} failing`);
 process.exit(fails ? 1 : 0);

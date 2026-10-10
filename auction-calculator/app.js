@@ -1,7 +1,7 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=6";
+import * as C from "./calc.js?v=7";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -11,6 +11,7 @@ const params = new URLSearchParams(location.search);
 const DATA = new URL(params.get("data") || "https://data.blandalytics.com/projections/", location.href).href;
 const FILES = { h: "hitters_auction_ev.csv", p: "pitchers_auction_ev.csv" };
 const STORE = "auction-calculator:v1";
+const VIEW_STORE = "auction-calculator:view";
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
 const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
 const NUM_INPUTS = ["hitters", "pitchers", "catchers", "bench", "teams", "min_bid", "budget", "split", "span", ...SLOT_IDS, ...PSLOT_IDS];
@@ -378,6 +379,34 @@ const SLOT_COL = { key: "slot", label: "Slot", get: (p) => p.slot ?? "", cell: (
 const POINTS_COL = { key: "points", label: "Points", get: (p) => p.points, cell: (p) => fmt("", p.points) };
 const VALUE_COL = { key: "value", label: "Auction $", get: (p) => p.value, cell: (p) => money(p.value), cls: (p) => "val" + (p.value < result.settings.minBid ? " neg" : "") };
 
+// ---- the value breakdown -------------------------------------------------------------------
+
+const view = () => document.querySelector('input[name="view"]:checked').value;
+const signed = (v) => (Number.isNaN(v) ? "" : Math.abs(v) < 0.005 ? "$0.00" : (v > 0 ? "+" : "") + money(v));
+const signCls = (v) => (Number.isNaN(v) ? "" : Math.abs(v) < 0.005 ? "nil" : v > 0 ? "up" : "down");
+const part = (key, label, title, get, extra = {}) => ({ key, label, title, get, cell: (p) => signed(get(p)), cls: (p) => signCls(get(p)), ...extra });
+
+// Min bid + baseline + position + each stat (+ the no-roster-spot hold-down) = the player's dollars
+function breakdownColumns() {
+  const b = (p) => p.breakdown;
+  const base = [
+    part("b:min", "Min bid", "Every drafted player's floor", (p) => (b(p) ? b(p).minBid : NaN)),
+    part("b:base", "Baseline", result.settings.style === "Points"
+      ? "Less the points of his side's replacement level, at its dollars per point"
+      : "What a player with average stats at his side's deepest position is worth over the min bid", (p) => (b(p) ? b(p).replacement : NaN)),
+    part("b:pos", "Position", "His position's premium over his side's deepest position", (p) => (b(p) ? b(p).position : NaN)),
+  ];
+  if (result.players.some((p) => b(p) && b(p).other)) {
+    base.push(part("b:other", "No spot", "Held under the min bid: no legal roster has room for him", (p) => (b(p) ? b(p).other : NaN)));
+  }
+  base.forEach((c, i) => Object.assign(c, { group: "v", first: i === 0 }));
+  const stat = (type, cat, i) => part(`$${type}:${cat}`, cat,
+    `What his ${cat} adds to his dollars${result.settings.style === "Points" ? " (points × his dollars per point)" : ", against the average"}`,
+    (p) => (p.type === type && b(p) ? b(p).stats[cat] : NaN), { group: type + "$", first: i === 0 });
+  return [...base, ...result.valueCols.h.map((c, i) => stat("h", c, i)), ...result.valueCols.p.map((c, i) => stat("p", c, i))];
+}
+const GROUPS = { h: "Hitting", p: "Pitching", v: "Value", h$: "Hitting $", p$: "Pitching $" };
+
 function columns() {
   // The dollars sit by the name, so they're on screen on a phone too
   const info = [INFO[0], INFO[1], VALUE_COL, INFO[2], INFO[3], ...(result.positions ? [SLOT_COL] : []),
@@ -386,6 +415,7 @@ function columns() {
     key: `${type}:${cat}`, label: cat, group: type, first,
     get: (p) => (p.type === type ? p.stats[cat] : NaN), cell: (p) => (p.type === type ? fmt(cat, p.stats[cat]) : ""),
   });
+  if (view() === "value" && result.valueCols) return [...info, ...breakdownColumns()];
   return [
     ...info,
     ...result.hitterCols.map((c, i) => stat("h", c, i === 0)),
@@ -426,13 +456,18 @@ function render() {
   $("summary").hidden = false;
   renderScarcity();
 
-  const nInfo = cols.filter((c) => !c.group).length;
-  const nH = result.hitterCols.length, nP = result.pitcherCols.length;
-  const head = `<thead><tr><th colspan="${nInfo}"></th><th colspan="${nH}" class="gp">Hitting</th><th colspan="${nP}" class="gp">Pitching</th></tr><tr>`
+  // The group row: a cell spanning each run of columns in one group
+  const runs = [];
+  for (const c of cols) {
+    const last = runs[runs.length - 1];
+    if (last && last.group === c.group) last.n++;
+    else runs.push({ group: c.group, n: 1 });
+  }
+  const head = `<thead><tr>${runs.map((r) => (r.group ? `<th colspan="${r.n}" class="gp">${GROUPS[r.group]}</th>` : `<th colspan="${r.n}"></th>`)).join("")}</tr><tr>`
     + cols.map((c) => {
       const cls = [c.text ? "l" : "", c.key === "name" ? "name" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
       const aria = c.key === sort.key ? ` aria-sort="${sort.dir < 0 ? "descending" : "ascending"}"` : "";
-      return `<th data-key="${esc(c.key)}"${cls ? ` class="${cls}"` : ""}${aria} scope="col">${esc(c.label)}</th>`;
+      return `<th data-key="${esc(c.key)}"${cls ? ` class="${cls}"` : ""}${aria}${c.title ? ` title="${esc(c.title)}"` : ""} scope="col">${esc(c.label)}</th>`;
     }).join("") + `</tr></thead>`;
   const body = rows.length
     ? rows.map((p) => `<tr class="${p.type}">` + cols.map((c) => {
@@ -469,24 +504,41 @@ $("table").addEventListener("click", (e) => {
 let searchTimer = 0;
 $("search").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => result && render(), 100); });
 $("pos").addEventListener("change", () => result && render());
+document.querySelectorAll('input[name="view"]').forEach((r) => r.addEventListener("change", () => {
+  try { localStorage.setItem(VIEW_STORE, view()); } catch { /* private mode */ }
+  if (result) render();
+}));
+try {
+  const saved = localStorage.getItem(VIEW_STORE);
+  const r = saved && document.querySelector(`input[name="view"][value="${saved}"]`);
+  if (r) r.checked = true;
+} catch { /* private mode */ }
 
 // ---- download ------------------------------------------------------------------------------
 
-// The script's CSV: every player by value, a stat both sides score suffixed _h / _p
+// The script's CSV: every player by value, a stat both sides score suffixed _h / _p. In the value
+// breakdown it carries the breakdown instead of the stats, each stat as "<stat> $"
 $("download").onclick = () => {
   if (!result) return;
-  const { hitterCols, pitcherCols, players, settings } = result;
+  const { players, settings } = result;
+  const byValue = view() === "value" && result.valueCols;
+  const hitterCols = byValue ? result.valueCols.h : result.hitterCols;
+  const pitcherCols = byValue ? result.valueCols.p : result.pitcherCols;
   const both = new Set(hitterCols.filter((c) => pitcherCols.includes(c)));
   const slots = !!result.positions;
+  const name = (c, side) => (byValue ? c + " $" : c) + (both.has(c) ? "_" + side : "");
+  const extra = byValue ? breakdownColumns().filter((c) => c.group === "v") : [];
   const head = ["Rank", "Name", "Team", "Y! Pos", ...(slots ? ["Slot"] : []), ...(settings.style === "Points" ? ["Points"] : []), "Value",
-    ...hitterCols.map((c) => (both.has(c) ? c + "_h" : c)), ...pitcherCols.map((c) => (both.has(c) ? c + "_p" : c))];
+    ...extra.map((c) => c.label), ...hitterCols.map((c) => name(c, "h")), ...pitcherCols.map((c) => name(c, "p"))];
   const num = (v, d) => (v === undefined || Number.isNaN(v) ? "" : d === undefined ? String(v) : v.toFixed(d));
   const cell = (v) => (/[",\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v);
+  const sideValue = (p, side, c) => (p.type !== side ? "" : byValue ? num(p.breakdown ? p.breakdown.stats[c] : NaN, 2) : num(p.stats[c]));
   const lines = [head.map(cell).join(",")];
   for (const p of players) {
     lines.push([num(p.rank), p.name, p.team, p.pos, ...(slots ? [p.slot ?? ""] : []), ...(settings.style === "Points" ? [num(p.points, 2)] : []), num(p.value, 2),
-      ...hitterCols.map((c) => (p.type === "h" ? num(p.stats[c]) : "")),
-      ...pitcherCols.map((c) => (p.type === "p" ? num(p.stats[c]) : ""))].map((v) => cell(String(v))).join(","));
+      ...extra.map((c) => num(c.get(p), 2)),
+      ...hitterCols.map((c) => sideValue(p, "h", c)),
+      ...pitcherCols.map((c) => sideValue(p, "p", c))].map((v) => cell(String(v))).join(","));
   }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));

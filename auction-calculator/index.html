@@ -106,6 +106,9 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
 .values td.muted{color:var(--muted)}
 .values td.val{font-weight:600; color:var(--good)}
 .values td.val.neg{color:var(--faint); font-weight:400}
+.values td.up{color:var(--good)} .values td.down{color:var(--bad)} .values td.nil{color:var(--faint)}
+.bar fieldset.view{flex:0 0 auto}
+.bar fieldset.view legend{font-size:13px}
 .values .gp{border-left:1px solid var(--rule)}
 .values tbody tr:hover td{background:#1a212b}
 .values tbody tr.p td.name{color:#cfe3ff}
@@ -211,6 +214,12 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
           <option value="">All players</option><option value="h">Hitters</option><option value="p">Pitchers</option>
           <option>C</option><option>1B</option><option>2B</option><option>3B</option><option>SS</option><option>OF</option><option>UT</option>
           <option>SP</option><option>RP</option></select></label>
+        <fieldset class="view"><legend>View</legend>
+          <div class="seg">
+            <label title="The projected stats"><input type="radio" name="view" value="stats" checked>Stats</label>
+            <label title="Each player's dollars split into the min bid, the baseline, his position and each stat"><input type="radio" name="view" value="value">Value breakdown</label>
+          </div>
+        </fieldset>
         <button type="button" id="download" disabled>Download CSV</button>
       </div>
       <p id="status" class="status">Loading projections…</p>
@@ -221,6 +230,6 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
     </section>
   </div>
 </main>
-<script type="module" src="app.js?v=7"></script>
+<script type="module" src="app.js?v=8"></script>
 </body>
 </html>
