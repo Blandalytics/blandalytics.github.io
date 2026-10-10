@@ -827,20 +827,20 @@ SP, RP and P; **Bench spots**, **Minimize bench value**; **League type** (Catego
 **Teams**, **Min bid**, **Team budget**, **Categories format** (Roto, Head-to-head or H2H all-play,
 with **Weeks** for the H2H formats), **Player pool** (All, NL-Only, AL-Only), the **Hitter split
 (%)** (65 in categories and 50 in points, as the script has it, or **From the values**, which shows
-the split the values make in the box) and **Include free agents**; optional hitter and pitcher projection CSVs; the
-scoring, as category toggles (5x5 roto by default) or editable points tables; and, under
-**Valuation details**, the **Replacement span**, **Fill missing playing time**, **Specialist
-correction** and the noise placeholders (**Count noise φ**, **Playing-time CV**). Any change
+the split the values make in the box) and **Include free agents**; the scoring, as category
+toggles (5x5 roto by default) or editable points tables; and two collapsed sections:
+**Projections**, optional hitter and pitcher projection CSVs (it opens itself if the defaults don't
+load), and **Valuation details**, the **Replacement span**, **Fill missing playing time**,
+**Specialist correction** and the noise placeholders (**Count noise φ**, **Playing-time CV**). A
+setting's small print is in the tooltip on its ⓘ (on hover, keyboard focus or a tap). Any change
 reprices at once. The table beside it is every player by auction dollars, with the scored stats
-grouped under Hitting and Pitching; a **Slot** column
-says where each drafted player plays, BN for the bench. Over it, a summary line counts the drafted
-players, what they cost, the hitter/pitcher split (and the values' own) and the dollars per SGP; a row of
-**SGP denominators** says how much of each category buys one standings point (or category win); a
-row of **Position premiums** says what each position is worth over its side's deepest one. Any
-header sorts the table, a search box and position filter narrow it, and **Download CSV** saves the
-whole table in the script's layout (a stat both sides score is suffixed `_h` / `_p`). **View**
-switches the stat columns for a **Value breakdown** of each player's dollars (below), and the CSV
-follows it. Settings are kept in the browser between visits; **Reset all settings** clears them.
+grouped under Hitting and Pitching; a **Slot** column says where each drafted player plays, BN for
+the bench. Over it, a row of **Position premiums** says what each position is worth over its
+side's deepest one. Any header sorts the table, a search box and position filter narrow it, and
+**Download CSV** saves the whole table in the script's layout (a stat both sides score is suffixed
+`_h` / `_p`). **View** switches the stat columns for a **Value breakdown** of each player's dollars
+(below), and the CSV follows it. Settings are kept in the browser between visits; **Reset all
+settings** clears them.
 
 It began as [plv_viz `auction_calc.py`](https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py)
 (the PL Auction Calculator Streamlit app) ported to the browser, and it still reads projections as

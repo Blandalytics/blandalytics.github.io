@@ -65,6 +65,7 @@ async function loadDefaults() {
     defaults.h = h; defaults.p = p;
   } catch (e) {
     loadError = e.message || String(e);
+    $("proj").open = true;   // the uploads are the way on from here
   }
   renderSources();
   update();
@@ -141,7 +142,7 @@ function renderPoints(k) {
   $("pts_" + k).innerHTML = points[k].map(([cat, pts], i) => `<tr>
     <td><select data-i="${i}" aria-label="Category">${options[k].map((c) => `<option${c === cat ? " selected" : ""}>${esc(c)}</option>`).join("")}</select></td>
     <td><input type="number" data-i="${i}" step="0.05" min="-1000" max="1000" value="${pts}" aria-label="Points for ${esc(cat)}" required></td>
-    <td><button type="button" data-i="${i}" title="Remove" aria-label="Remove ${esc(cat)}">×</button></td></tr>`).join("");
+    <td><button type="button" data-i="${i}" data-tip="Remove" aria-label="Remove ${esc(cat)}">×</button></td></tr>`).join("");
 }
 for (const k of ["h", "p"]) {
   const body = $("pts_" + k);
@@ -348,7 +349,6 @@ function fail(msg) {
   result = null;
   status(msg, "err");
   $("tbl").hidden = true;
-  $("summary").hidden = true;
   $("scarcity").hidden = true;
   $("download").disabled = true;
 }
@@ -470,19 +470,6 @@ function render() {
     return sort.dir * (x - y) || a.rank - b.rank;
   });
 
-  const s = result.settings;
-  const drafted = result.players.filter((p) => p.drafted);
-  const spent = drafted.reduce((a, p) => a + p.value, 0);
-  const spots = s.hitters + s.pitchers + (s.minimizeBench ? 0 : s.bench);
-  $("summary").innerHTML = `<b>${int(result.players.length)}</b> players priced · <b>${int(drafted.length)}</b> drafted at $${s.minBid}+ `
-    + `(${s.teams} teams × ${spots} ${s.minimizeBench ? "lineup" : "roster"} spots) for <b>$${int(Math.round(spent))}</b> (${s.teams} × $${int(s.budget)}`
-    + (s.minimizeBench && s.bench ? `, less ${s.teams} × ${s.bench} bench spots at $${s.minBid})` : ")")
-    + ` · split <b>${pct(result.hitterShare)}/${pct(1 - result.hitterShare)}</b> hitters/pitchers`
-    + (s.hitterShare === null ? ", the values' own" : ` (the values make ${pct(result.split.hitters)}/${pct(result.split.pitchers)})`)
-    + ` · ${perSGP(result.perSGP, s.style === "Points" ? "point" : "SGP")}`
-    + `${rows.length !== result.players.length ? ` · showing <b>${int(rows.length)}</b>` : ""}`;
-  $("summary").hidden = false;
-  renderWeights();
   renderScarcity();
 
   // The group row: a cell spanning each run of columns in one group
@@ -496,14 +483,14 @@ function render() {
     + cols.map((c) => {
       const cls = [c.text ? "l" : "", c.key === "name" ? "name" : "", c.frozen ? "frz" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
       const aria = c.key === sort.key ? ` aria-sort="${sort.dir < 0 ? "descending" : "ascending"}"` : "";
-      return `<th data-key="${esc(c.key)}"${cls ? ` class="${cls}"` : ""}${aria}${c.title ? ` title="${esc(c.title)}"` : ""} scope="col">${esc(c.label)}</th>`;
+      return `<th data-key="${esc(c.key)}"${cls ? ` class="${cls}"` : ""}${aria}${c.title ? ` data-tip="${esc(c.title)}"` : ""} scope="col">${esc(c.label)}</th>`;
     }).join("") + `</tr></thead>`;
   const body = rows.length
     ? rows.map((p) => `<tr class="${p.type}">` + cols.map((c) => {
       const cls = [typeof c.cls === "function" ? c.cls(p) : c.cls, c.frozen ? "frz" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
       const title = c.key === "name" ? p.name : c.key === "pos" && p.valuedAt ? `Priced at ${p.valuedAt}`
         : c.key === "value" && !p.drafted ? "Not on a drafted roster" : "";
-      return `<td${cls ? ` class="${cls}"` : ""}${title ? ` title="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
+      return `<td${cls ? ` class="${cls}"` : ""}${title ? ` data-tip="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
     }).join("") + `</tr>`).join("")
     : `<tr><td class="empty l" colspan="${cols.length}">No players match.</td></tr>`;
   $("table").innerHTML = head + `<tbody>${body}</tbody>`;
@@ -511,32 +498,12 @@ function render() {
   freezeOffset();
 }
 
-// A share as a percent, to a tenth when it isn't whole (62.5/37.5, not 63/38)
-const pct = (x) => (Math.abs(100 * x - Math.round(100 * x)) < 0.05 ? String(Math.round(100 * x)) : (100 * x).toFixed(1));
-// Dollars per SGP (or point): one rate, or each side's when the split sets them apart
-function perSGP({ h, p }, unit) {
-  return Math.abs(h - p) < 0.005 ? `$${h.toFixed(2)} per ${unit}` : `$${h.toFixed(2)} per ${unit} hitting, $${p.toFixed(2)} pitching`;
-}
-
-// The SGP denominators: how many of each category buy one standings point (or category win)
-function renderWeights() {
-  const el = $("weights");
-  if (result.settings.style === "Points") { el.hidden = true; return; }
-  const per = result.settings.format === "roto" ? "standings point" : "category win";
-  const chip = (w) => `<span class="prem" title="${w.cat}: ${w.D.toFixed(2)} ${esc(w.unit)} per ${per}`
-    + `${w.rate ? `, counted against the drafted pool's ${fmt(w.cat, w.rate)}` : ""} · draft spread ${w.sigmaDraft.toFixed(1)}, season luck ${w.noise.toFixed(1)} (team SDs)">`
-    + `<b>${esc(w.cat)}</b>${w.D.toFixed(w.D < 10 ? 2 : 1)}${w.unit !== w.cat ? `<span class="unit">${esc(w.unit)}</span>` : ""}</span>`;
-  el.innerHTML = `<span title="How much of each category buys one ${per} in this league, from the spread of team totals">SGP denominators</span>`
-    + `<span class="side">Hitters</span>${result.weights.h.map(chip).join("")}<span class="side">Pitchers</span>${result.weights.p.map(chip).join("")}`;
-  el.hidden = false;
-}
-
 // Each position's premium over its side's deepest one, scarcest first, as the data has it
 function renderScarcity() {
   const el = $("scarcity");
   const chips = (side) => result.positions.filter((p) => p.side === side).map((p) =>
-    `<span class="prem${p.premium >= 0.005 ? " up" : ""}" title="${p.slots} slots · replacement ${p.level.toFixed(2)} · last starter ${p.worst.toFixed(2)}"><b>${esc(p.slot)}</b>${p.premium >= 0.005 ? "+" + money(p.premium) : "$0"}</span>`).join("");
-  el.innerHTML = `<span title="What a player is worth over the same player at his side's deepest position, from this league's best lineups">Position premium</span>`
+    `<span class="prem${p.premium >= 0.005 ? " up" : ""}" data-tip="${p.slots} slots · replacement ${p.level.toFixed(2)} · last starter ${p.worst.toFixed(2)}"><b>${esc(p.slot)}</b>${p.premium >= 0.005 ? "+" + money(p.premium) : "$0"}</span>`).join("");
+  el.innerHTML = `<span data-tip="What a player is worth over the same player at his side's deepest position, from this league's best lineups">Position premium</span>`
     + `<span class="side">Hitters</span>${chips("h")}<span class="side">Pitchers</span>${chips("p")}`;
   el.hidden = false;
 }
@@ -603,6 +570,51 @@ $("download").onclick = () => {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
+
+// ---- tooltips ------------------------------------------------------------------------------
+
+// One floating box for everything with data-tip: on hover (after a beat, except the ⓘ
+// buttons, which are there to be read), on keyboard focus, or on a tap of an ⓘ. One opened by
+// a tap or the keyboard stays until a tap elsewhere, Esc or a scroll
+const tipBox = $("tip");
+let tipFor = null, tipTimer = 0, tipPinned = false, pointer = "mouse";
+function showTip(el, pinned = false) {
+  clearTimeout(tipTimer);
+  tipFor = el;
+  tipPinned = pinned;
+  tipBox.textContent = el.dataset.tip;
+  tipBox.hidden = false;
+  const r = el.getBoundingClientRect(), w = tipBox.offsetWidth, h = tipBox.offsetHeight;
+  const x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - 8 - w);
+  const y = r.bottom + 6 + h > innerHeight - 8 ? r.top - 6 - h : r.bottom + 6;
+  tipBox.style.left = `${x}px`;
+  tipBox.style.top = `${Math.max(8, y)}px`;
+}
+function hideTip() {
+  clearTimeout(tipTimer);
+  tipFor = null;
+  tipPinned = false;
+  tipBox.hidden = true;
+}
+document.addEventListener("mouseover", (e) => {
+  const el = e.target.closest("[data-tip]");
+  if (el === tipFor || (tipPinned && !el)) return;
+  hideTip();
+  if (!el || (el.matches("td.name") && el.scrollWidth <= el.clientWidth)) return;   // a name only when it's cut off
+  tipTimer = setTimeout(() => showTip(el), el.matches("button.tip") ? 0 : 400);
+});
+document.addEventListener("pointerdown", (e) => { pointer = e.pointerType; });
+document.addEventListener("focusin", (e) => { if (e.target.matches("button.tip")) showTip(e.target, true); });
+document.addEventListener("focusout", (e) => { if (e.target === tipFor) hideTip(); });
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("button.tip");
+  if (el) showTip(el, pointer !== "mouse");   // a mouse's tip goes when the mouse does
+  else hideTip();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(); });
+addEventListener("scroll", hideTip, true);
+// a screen reader reads the small print as the button's name
+document.querySelectorAll("button.tip").forEach((b) => b.setAttribute("aria-label", b.dataset.tip));
 
 restore();
 showSplit();
