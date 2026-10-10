@@ -244,12 +244,12 @@ function pointsValue(table, points) {
 
 // ---- position replacement -----------------------------------------------------
 
-// A hitter slot takes anyone eligible at one of its positions; UT (and the bench) takes anyone
+// A slot takes anyone eligible at one of its positions; UT and P (and the bench) take anyone
 export const SLOT_TYPES = {
   C: ["C"], "1B": ["1B"], "2B": ["2B"], "3B": ["3B"], SS: ["SS"],
   CI: ["1B", "3B"], MI: ["2B", "SS"], OF: ["OF", "LF", "CF", "RF"], UT: null,
 };
-export const DEFAULT_SLOTS = { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 0, MI: 0, OF: 3, UT: 2 };
+export const PITCHER_SLOT_TYPES = { SP: ["SP"], RP: ["RP"], P: null };
 
 /**
  * Replacement level by position, from the league's best lineups rather than a fixed
@@ -262,13 +262,16 @@ export const DEFAULT_SLOTS = { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 0, MI
  * deep as UT, and one whose starters can't move anywhere sits on its own last starter.
  * A hitter is priced against the cheapest replacement among the slots he fits.
  *
- * caps: { slotType: number of slots in the league }. Returns per-hitter replacement
- * (NaN for a hitter no slot takes), the slot each starter fills, and the levels.
+ * Pitchers work the same way over SP, RP and P slots.
+ *
+ * caps: { slotType: number of slots in the league }; types: SLOT_TYPES or
+ * PITCHER_SLOT_TYPES. Returns per-player replacement (NaN for one no slot takes), the
+ * slot each starter fills, and the levels.
  */
-export function positionReplacement(raw, posStrings, caps) {
+export function positionReplacement(raw, posStrings, caps, types_ = SLOT_TYPES) {
   const types = Object.keys(caps).filter((t) => caps[t] > 0);
   const tokens = posStrings.map((p) => p.split(/[,/ ]+/).map((x) => x.trim().toUpperCase()));
-  const fits = tokens.map((tok) => types.map((t) => SLOT_TYPES[t] === null || SLOT_TYPES[t].some((x) => tok.includes(x))));
+  const fits = tokens.map((tok) => types.map((t) => types_[t] === null || types_[t].some((x) => tok.includes(x))));
   const at = types.map(() => []);
   const total = types.reduce((a, t) => a + caps[t], 0);
   let filled = 0;
@@ -331,16 +334,38 @@ export function positionReplacement(raw, posStrings, caps) {
   return { repl, slot, valuedAt, levels: types.map((t, k) => ({ slot: t, slots: caps[t], level: level[k], worst: worst[k] })) };
 }
 
+/**
+ * One side's value above replacement by lineup slot. perTeam: { slotType: slots per team };
+ * anyType is the slot that takes anyone (UT, P), which also holds half the bench when it
+ * counts. Without position info in the projections every slot takes anyone, as the script's
+ * one pool does.
+ */
+function slotAdjust(raw, posStrings, perTeam, types, anyType, teams, starters, bench) {
+  const named = new Set(Object.values(types).flatMap((x) => x || []));
+  const known = posStrings.some((p) => p.split(/[,/ ]+/).some((x) => named.has(x.trim().toUpperCase())));
+  const caps = {};
+  for (const [t, n] of Object.entries(perTeam)) {
+    const type = known ? t : anyType;
+    caps[type] = (caps[type] || 0) + teams * n;
+  }
+  caps[anyType] = (caps[anyType] || 0) + Math.trunc(teams * (starters + bench / 2)) - teams * starters;
+  const byPos = positionReplacement(raw, posStrings, caps, types);
+  const deepest = Math.max(...byPos.levels.map((l) => l.level));
+  // A player no slot takes (a DH with no UT) is worth a bench spot at most
+  const adj = raw.map((v, i) => (Number.isNaN(byPos.repl[i]) ? Math.min(0, v - deepest) : v - byPos.repl[i]));
+  return { adj, byPos, deepest };
+}
+
 /** Last entry wins for a category listed twice, as the script's dict does */
 const dedupePoints = (rows) => [...new Map(rows.filter(([c]) => c)).entries()];
 
 /**
  * Price every player. s holds the settings:
- *   positions ("slots" | "catchers"), slots ({ slotType: per team }, for "slots"),
+ *   positions ("slots" | "catchers"), slots and pitcherSlots ({ slotType: per team }, for "slots"),
  *   hitters, pitchers, catchers, bench, minimizeBench, style ("Categories" | "Points"),
  *   teams, minBid, budget, hitterSplit (0-1),
  *   hitterCats, pitcherCats (Categories), hitterPoints, pitcherPoints ([[cat, pts]], Points)
- * In "slots" mode, hitters is the sum of the slots and catchers is ignored.
+ * In "slots" mode, hitters and pitchers are the sums of their slots and catchers is ignored.
  * Returns { players, hitterCols, pitcherCols, positions }, players sorted by value;
  * positions holds each slot type's replacement level and its price in dollars ("slots").
  */
@@ -364,22 +389,10 @@ export function auctionValues(H, P, s) {
   const hRaw = points ? pointsValue(H, hPoints)
     : zValue(H, hitterCats, RATE_H, INVERT_H, hSample, s.hitters, "PA");
   const posStrings = H.data["Y! Pos"];
-  let hAdj, byPosition = null;
+  let hAdj, hByPos = null, hDeepest = 0;
   if (s.positions === "slots") {
-    // Without position info every slot takes anyone: one pool, as the script does
-    const known = posStrings.some((p) => p.split(/[,/ ]+/).some((x) => x && x.toUpperCase() !== "UT"));
-    const caps = {};
-    for (const [t, n] of Object.entries(s.slots)) {
-      const type = known ? t : "UT";
-      caps[type] = (caps[type] || 0) + s.teams * n;
-    }
-    // Half the bench counts toward replacement when it isn't minimized, as the script's pool does
-    const benchSlots = Math.trunc(s.teams * (s.hitters + bench / 2)) - s.teams * s.hitters;
-    caps.UT = (caps.UT || 0) + benchSlots;
-    byPosition = positionReplacement(hRaw, posStrings, caps);
-    const deepest = Math.max(...byPosition.levels.map((l) => l.level));
-    // A hitter no slot takes (a DH with no UT) is worth a bench spot at most
-    hAdj = hRaw.map((v, i) => (Number.isNaN(byPosition.repl[i]) ? Math.min(0, v - deepest) : v - byPosition.repl[i]));
+    ({ adj: hAdj, byPos: hByPos, deepest: hDeepest } = slotAdjust(hRaw, posStrings, s.slots, SLOT_TYPES, "UT",
+      s.teams, s.hitters, bench));
   } else {
     const isC = posStrings.map((p) => p.replaceAll("CF", "").includes("C"));
     // Without position info (or catcher slots) every hitter is priced against one pool
@@ -399,8 +412,15 @@ export function auctionValues(H, P, s) {
   for (let i = 0; i < P.n; i++) if (ip[i] >= ipThresh) pSample.push(i);
   const pRaw = points ? pointsValue(P, pPoints)
     : zValue(P, pitcherCats, RATE_P, INVERT_P, pSample, s.pitchers, "IP");
-  const pRepl = nlargestMin(pRaw, Math.trunc(s.teams * (s.pitchers + bench / 2)));
-  const pAdj = pRaw.map((v) => v - pRepl);
+  let pAdj, pByPos = null, pDeepest = 0;
+  if (s.positions === "slots") {
+    const pPos = P.data["Y! Pos"] ? P.data["Y! Pos"].map((p) => p ?? "P") : new Array(P.n).fill("P");
+    ({ adj: pAdj, byPos: pByPos, deepest: pDeepest } = slotAdjust(pRaw, pPos, s.pitcherSlots, PITCHER_SLOT_TYPES, "P",
+      s.teams, s.pitchers, bench));
+  } else {
+    const pRepl = nlargestMin(pRaw, Math.trunc(s.teams * (s.pitchers + bench / 2)));
+    pAdj = pRaw.map((v) => v - pRepl);
+  }
   const pitcherPerValue = pitcherDollars / pAdj.reduce((a, v) => (v > 0 ? a + v : a), 0);
 
   const hitterCols = ["PA", ...hitterCats.filter((c) => c !== "PA")];
@@ -418,8 +438,8 @@ export function auctionValues(H, P, s) {
       });
     }
   };
-  add(H, hRaw, hAdj, hitterPerValue, "h", hitterCols, byPosition);
-  add(P, pRaw, pAdj, pitcherPerValue, "p", pitcherCols, null);
+  add(H, hRaw, hAdj, hitterPerValue, "h", hitterCols, hByPos);
+  add(P, pRaw, pAdj, pitcherPerValue, "p", pitcherCols, pByPos);
 
   // Level the dollars so the positive values spend exactly the league's budget
   const projected = players.reduce((a, p) => (p.value > 0 ? a + p.value : a), 0);
@@ -429,14 +449,14 @@ export function auctionValues(H, P, s) {
   players.sort((a, b) => (Number.isNaN(a.value) ? 1 : Number.isNaN(b.value) ? -1 : b.value - a.value));
   rankDescending(players);
 
-  // Each slot type's scarcity in dollars: how much more a hitter there is worth than the
-  // same hitter at the deepest position
+  // Each slot type's scarcity in dollars: how much more a player there is worth than the
+  // same player at his side's deepest position
   let positions = null;
-  if (byPosition) {
-    const deepest = Math.max(...byPosition.levels.map((l) => l.level));
-    positions = byPosition.levels
-      .map((l) => ({ ...l, premium: (deepest - l.level) * hitterPerValue * fudge }))
+  if (hByPos) {
+    const premiums = (byPos, deepest, perValue, side) => byPos.levels
+      .map((l) => ({ ...l, side, premium: (deepest - l.level) * perValue * fudge }))
       .sort((a, b) => b.premium - a.premium);
+    positions = [...premiums(hByPos, hDeepest, hitterPerValue, "h"), ...premiums(pByPos, pDeepest, pitcherPerValue, "p")];
   }
   return { players, hitterCols, pitcherCols, positions };
 }

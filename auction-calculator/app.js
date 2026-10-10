@@ -1,7 +1,7 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=2";
+import * as C from "./calc.js?v=3";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -12,10 +12,14 @@ const DATA = new URL(params.get("data") || "https://data.blandalytics.com/projec
 const FILES = { h: "hitters_auction_ev.csv", p: "pitchers_auction_ev.csv" };
 const STORE = "auction-calculator:v1";
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
-const NUM_INPUTS = ["hitters", "pitchers", "catchers", "bench", "teams", "min_bid", "budget", "split", ...SLOT_IDS];
+const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
+const NUM_INPUTS = ["hitters", "pitchers", "catchers", "bench", "teams", "min_bid", "budget", "split", ...SLOT_IDS, ...PSLOT_IDS];
+const SCRIPT_ONLY = new Set(["hitters", "pitchers", "catchers"]);
 const bySlots = () => $("pos_mode").value === "slots";
 // The inputs the position adjustment in use reads
-const activeInputs = () => NUM_INPUTS.filter((id) => (bySlots() ? id !== "hitters" && id !== "catchers" : !id.startsWith("slot_")));
+const activeInputs = () => NUM_INPUTS.filter((id) => (bySlots() ? !SCRIPT_ONLY.has(id) : !id.includes("slot_")));
+const slotsOf = (types, prefix) => Object.fromEntries(Object.keys(types).map((t) => [t, Number($(prefix + t).value)]));
+const total = (slots) => Object.values(slots).reduce((a, b) => a + b, 0);
 
 const defaults = { h: null, p: null };   // the bucket's projections, parsed
 const uploads = { h: null, p: null };    // { name, table } from the file inputs
@@ -207,16 +211,17 @@ document.querySelectorAll('input[name="style"]').forEach((r) => r.addEventListen
 function readSettings() {
   const bad = activeInputs().filter((id) => !$(id).checkValidity() || $(id).value === "");
   if (bad.length) {
-    const names = bad.map((id) => (id.startsWith("slot_") ? "the " : "") + $(id).closest("label").querySelector("b").textContent + (id.startsWith("slot_") ? " slots" : ""));
+    const names = bad.map((id) => (id.includes("slot_") ? "the " : "") + $(id).closest("label").querySelector("b").textContent + (id.includes("slot_") ? " slots" : ""));
     return { error: `Check ${names.join(", ")}: ${bad.map((id) => $(id).validationMessage).filter(Boolean)[0] || "a number is needed"}` };
   }
   const n = (id) => Number($(id).value);
-  const slots = Object.fromEntries(Object.keys(C.SLOT_TYPES).map((t) => [t, n("slot_" + t)]));
-  const slotTotal = Object.values(slots).reduce((a, b) => a + b, 0);
-  if (bySlots() && (slotTotal < 4 || slotTotal > 30)) return { error: `A lineup needs 4 to 30 hitter slots; this one has ${slotTotal}.` };
+  const slots = slotsOf(C.SLOT_TYPES, "slot_"), pitcherSlots = slotsOf(C.PITCHER_SLOT_TYPES, "pslot_");
+  if (bySlots() && (total(slots) < 4 || total(slots) > 30)) return { error: `A lineup needs 4 to 30 hitter slots; this one has ${total(slots)}.` };
+  if (bySlots() && (total(pitcherSlots) < 4 || total(pitcherSlots) > 20)) return { error: `A staff needs 4 to 20 pitcher slots; this one has ${total(pitcherSlots)}.` };
   const s = {
-    positions: $("pos_mode").value, slots,
-    hitters: bySlots() ? slotTotal : n("hitters"), pitchers: n("pitchers"), catchers: bySlots() ? slots.C : n("catchers"), bench: n("bench"),
+    positions: $("pos_mode").value, slots, pitcherSlots,
+    hitters: bySlots() ? total(slots) : n("hitters"), pitchers: bySlots() ? total(pitcherSlots) : n("pitchers"),
+    catchers: bySlots() ? slots.C : n("catchers"), bench: n("bench"),
     minimizeBench: $("min_bench").checked, style: style(), teams: n("teams"), minBid: n("min_bid"),
     budget: n("budget"), hitterSplit: n("split") / 100, pool: $("pool").value, includeFa: $("include_fa").checked,
     hitterCats: cats.h, pitcherCats: cats.p, hitterPoints: points.h, pitcherPoints: points.p,
@@ -252,17 +257,55 @@ function restore() {
 // ---- position adjustment ---------------------------------------------------------------
 
 function showPositionMode() {
-  $("slots_ui").hidden = !bySlots();
-  $("hitters_field").hidden = bySlots();
-  $("catchers_field").hidden = bySlots();
+  for (const id of ["slots_ui", "pslots_ui"]) $(id).hidden = !bySlots();
+  for (const id of ["hitters_field", "pitchers_field", "catchers_field"]) $(id).hidden = bySlots();
   $("pos_mode_hint").textContent = bySlots()
     ? "Each position's replacement level comes from the league's best lineups"
     : "Catchers against catchers, every other hitter in one pool";
-  const total = SLOT_IDS.reduce((a, id) => a + (Number($(id).value) || 0), 0);
-  $("slot_total").textContent = `${total} per team`;
+  const count = (ids) => ids.reduce((a, id) => a + (Number($(id).value) || 0), 0);
+  $("slot_total").textContent = `${count(SLOT_IDS)} per team`;
+  $("pslot_total").textContent = `${count(PSLOT_IDS)} per team`;
 }
 $("pos_mode").addEventListener("change", showPositionMode);
 $("slots_ui").addEventListener("input", showPositionMode);
+$("pslots_ui").addEventListener("input", showPositionMode);
+
+// ---- league formats ------------------------------------------------------------------------
+
+// Each site's default league: teams, hitter slots and pitcher slots.
+// Yahoo and ESPN are from their own help pages; CBS and Fantrax from third-party write-ups.
+const PRESETS = {
+  yahoo: { teams: 12, slots: { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UT: 2 }, pslots: { SP: 2, RP: 2, P: 4 } },
+  espn: { teams: 10, slots: { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 1, MI: 1, OF: 5, UT: 1 }, pslots: { P: 9 } },
+  cbs: { teams: 12, slots: { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UT: 1 }, pslots: { SP: 5, RP: 2 } },
+  fantrax: { teams: 12, slots: { C: 2, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 1, MI: 1, OF: 5, UT: 1 }, pslots: { P: 9 } },
+  nfbc: { teams: 15, slots: { C: 2, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 1, MI: 1, OF: 5, UT: 1 }, pslots: { P: 9 } },
+};
+// Every slot input and the value a format gives it
+const presetInputs = (preset) => [
+  ...Object.keys(C.SLOT_TYPES).map((t) => ["slot_" + t, preset.slots[t] ?? 0]),
+  ...Object.keys(C.PITCHER_SLOT_TYPES).map((t) => ["pslot_" + t, preset.pslots[t] ?? 0]),
+];
+
+$("preset").addEventListener("change", () => {
+  const preset = PRESETS[$("preset").value];
+  if (!preset) return;   // Custom: keep what's there
+  $("teams").value = preset.teams;
+  for (const [id, v] of presetInputs(preset)) $(id).value = v;
+  $("pos_mode").value = "slots";
+  showPositionMode();
+  changed();
+});
+
+// The select follows the settings: a format whose teams and slots they match, or Custom
+function showPreset() {
+  const n = (id) => Number($(id).value);
+  const match = bySlots() && Object.keys(PRESETS).find((k) => {
+    const p = PRESETS[k];
+    return n("teams") === p.teams && presetInputs(p).every(([id, v]) => n(id) === v);
+  });
+  $("preset").value = match || "custom";
+}
 
 $("reset").onclick = () => {
   try { localStorage.removeItem(STORE); } catch { /* private mode */ }
@@ -274,8 +317,11 @@ function changed() {
   clearTimeout(timer);
   timer = setTimeout(() => { save(); update(); }, 120);
 }
-// The points table, the file inputs and the league type have their own handlers
-$("settings").addEventListener("input", (e) => { if (!e.target.closest(".points") && e.target.type !== "file" && e.target.name !== "style") changed(); });
+// The points table, the file inputs, the league type and the format have their own handlers
+$("settings").addEventListener("input", (e) => {
+  if (e.target.id !== "preset") showPreset();
+  if (!e.target.closest(".points") && e.target.type !== "file" && e.target.name !== "style" && e.target.id !== "preset") changed();
+});
 
 // ---- pricing ---------------------------------------------------------------------------
 
@@ -395,12 +441,14 @@ function render() {
   $("tbl").hidden = false;
 }
 
-// Each position's premium over the deepest one, scarcest first, as the data has it
+// Each position's premium over its side's deepest one, scarcest first, as the data has it
 function renderScarcity() {
   const el = $("scarcity");
   if (!result.positions) { el.hidden = true; return; }
-  el.innerHTML = `<span title="What a hitter is worth over the same hitter at the deepest position, from this league's best lineups">Position premium</span>`
-    + result.positions.map((p) => `<span class="prem${p.premium >= 0.005 ? " up" : ""}" title="${p.slots} slots · replacement ${p.level.toFixed(2)} · last starter ${p.worst.toFixed(2)}"><b>${esc(p.slot)}</b>${p.premium >= 0.005 ? "+" + money(p.premium) : "$0"}</span>`).join("");
+  const chips = (side) => result.positions.filter((p) => p.side === side).map((p) =>
+    `<span class="prem${p.premium >= 0.005 ? " up" : ""}" title="${p.slots} slots · replacement ${p.level.toFixed(2)} · last starter ${p.worst.toFixed(2)}"><b>${esc(p.slot)}</b>${p.premium >= 0.005 ? "+" + money(p.premium) : "$0"}</span>`).join("");
+  el.innerHTML = `<span title="What a player is worth over the same player at his side's deepest position, from this league's best lineups">Position premium</span>`
+    + `<span class="side">Hitters</span>${chips("h")}<span class="side">Pitchers</span>${chips("p")}`;
   el.hidden = false;
 }
 
@@ -444,5 +492,6 @@ $("download").onclick = () => {
 
 restore();
 showPositionMode();
+showPreset();
 renderSources();
 loadDefaults();

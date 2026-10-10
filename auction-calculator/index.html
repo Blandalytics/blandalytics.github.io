@@ -75,6 +75,7 @@ label.block{margin-bottom:12px}
 .slots input{padding:5px 4px; text-align:center}
 #slots_ui legend .hint{font-weight:400; margin-left:6px}
 .scarcity{display:flex; flex-wrap:wrap; gap:6px 8px; align-items:baseline; margin:-2px 0 12px; font-size:13px; color:var(--muted)}
+.scarcity .side{color:var(--faint); font-size:12px; margin-left:6px}
 .scarcity .prem{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:12.5px; background:var(--raise); border:1px solid var(--rule); border-radius:999px; padding:1px 9px; color:var(--faint)}
 .scarcity .prem b{font-family:"DM Sans",system-ui,sans-serif; color:var(--ink); font-weight:600; margin-right:5px}
 .scarcity .prem.up{color:var(--good); border-color:#2c4a36}
@@ -129,6 +130,10 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
   <div class="layout">
     <form id="settings" class="card" autocomplete="off" onsubmit="return false">
       <h3>Team settings</h3>
+      <label class="block"><b>League format</b><select id="preset">
+        <option value="yahoo">Yahoo</option><option value="espn">ESPN</option><option value="cbs">CBS</option>
+        <option value="fantrax">Fantrax</option><option value="nfbc">NFBC</option><option value="custom">Custom</option></select>
+        <small>Each site's default teams and lineup slots; change any of them for Custom</small></label>
       <label class="block"><b>Position adjustment</b><select id="pos_mode">
         <option value="slots">By lineup slot</option><option value="catchers">Catchers only (the original script)</option></select>
         <small id="pos_mode_hint"></small></label>
@@ -145,9 +150,16 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
           <label title="Any hitter"><b>UT</b><input id="slot_UT" type="number" min="0" max="10" step="1" value="2" required></label>
         </div>
       </fieldset>
+      <fieldset id="pslots_ui"><legend>Pitcher slots <span id="pslot_total" class="hint"></span></legend>
+        <div class="slots">
+          <label><b>SP</b><input id="pslot_SP" type="number" min="0" max="15" step="1" value="2" required></label>
+          <label><b>RP</b><input id="pslot_RP" type="number" min="0" max="15" step="1" value="2" required></label>
+          <label title="Any pitcher"><b>P</b><input id="pslot_P" type="number" min="0" max="15" step="1" value="4" required></label>
+        </div>
+      </fieldset>
       <div class="pair">
         <label id="hitters_field" hidden><b>Hitters</b><input id="hitters" type="number" min="4" max="20" step="1" value="10" required><small>Including catchers</small></label>
-        <label><b>Pitchers</b><input id="pitchers" type="number" min="4" max="20" step="1" value="8" required></label>
+        <label id="pitchers_field" hidden><b>Pitchers</b><input id="pitchers" type="number" min="4" max="20" step="1" value="8" required></label>
         <label id="catchers_field" hidden><b>Catchers</b><input id="catchers" type="number" min="0" max="3" step="1" value="1" required></label>
         <label><b>Bench spots</b><input id="bench" type="number" min="0" max="20" step="1" value="5" required></label>
       </div>
@@ -203,10 +215,10 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
       <p id="summary" class="summary" hidden></p>
       <div id="scarcity" class="scarcity" hidden></div>
       <div class="tbl" id="tbl" hidden><table class="values" id="table"></table></div>
-      <p class="note">Each player is scored against the pool (z-scores per category, with rate stats weighted by playing time, or points), less replacement level. By lineup slot, the league's hitter slots are filled with the most total value; a position's replacement level is what the league would lose with one fewer slot there, so its scarcity comes from the projections, not a fixed order, and a hitter is priced at the scarcest position he plays. Pitchers are one pool. The dollars above the min bids are split between hitters and pitchers by that value. A port of <a href="https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py">auction_calc.py</a>.</p>
+      <p class="note">Each player is scored against the pool (z-scores per category, with rate stats weighted by playing time, or points), less replacement level. By lineup slot, the league's hitter and pitcher slots are filled with the most total value; a position's replacement level is what the league would lose with one fewer slot there, so its scarcity comes from the projections, not a fixed order, and a player is priced at the scarcest position he plays. The dollars above the min bids are split between hitters and pitchers by that value. A port of <a href="https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py">auction_calc.py</a>.</p>
     </section>
   </div>
 </main>
-<script type="module" src="app.js?v=2"></script>
+<script type="module" src="app.js?v=4"></script>
 </body>
 </html>
