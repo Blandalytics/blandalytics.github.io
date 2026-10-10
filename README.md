@@ -325,9 +325,14 @@ boxed numbers are the hitter's share of batted balls in each pull / centre / opp
 / line drive / fly ball / pop up cell, with the row and column shares along the axes (as changes
 from the prior season in the self comparison). From 2024, the first season Statcast tracked bat
 speed from opening day, **xwOBA** swaps the density for the [3D xwOBA model](#3d-xwoba)'s surface
-at the hitter's (or team's) average bat speed on balls in play, with their batted balls drawn on
-it as dots, and the boxes and axis figures become the model's xwOBA of the balls hit into each
-zone; the colour scale applies, the comparison doesn't. Isaac Paredes' current season loads on
+at the hitter's (or team's) average bat speed on balls in play, and the boxes and axis figures
+become the model's xwOBA of the balls hit into each zone. Its colours run through each
+outcome's wOBA value — white for an out (0), `#FE6100` for a single (.900), `#785EF0` for a
+double (1.250), `#FFB000` for a triple (1.600), `#DC267F` for a home run (2.000) — in ten levels
+of .200 (*Discrete*, spread end to end as matplotlib's `contourf` spreads a colormap) or blended
+per cell (*Continuous*), with Tanaka (illuminated) contour lines at the levels' edges either way:
+each segment lit or shaded by which way its downhill side faces a light in the upper left, and
+wider the more squarely it faces or turns from it. The comparison doesn't apply. Isaac Paredes' current season loads on
 arrival; a chart is linkable as `batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, with
 `-continuous`, `-self` and `-xwoba` suffixes. **Download PNG** saves the figure at 2x.
 
@@ -372,7 +377,7 @@ app's own files, and is reduced to small JSON files there that the page reads:
 | file | role |
 |---|---|
 | `tools/batted_balls/build_data.py` | reads a season's files from the bucket, keeps regular-season balls in play with a launch angle and a landing spot, joins Savant's bat speeds and scores the 3D xwOBA from 2024, writes the season file, the surface file and the index |
-| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) or the heatmap, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed, the dots and the zones' xwOBA on the same layout |
+| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) or the heatmap, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed, its Tanaka lines and the zones' xwOBA on the same layout |
 | `batted-balls/index.html`, `app.js` | the page: season, hitter / team, view, colour scale and comparison controls, the link hash, the download |
 
 In the team-wide chart a traded hitter's batted balls count for the team each was hit for

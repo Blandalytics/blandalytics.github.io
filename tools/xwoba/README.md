@@ -7,7 +7,8 @@ how fast they swing and where they hit the ball, but not for how squarely they h
 part, with the luck, is what is left over in wOBA − xwOBA.
 
 The [Batted Ball Charts](https://blandalytics.com/batted-balls/) page draws it: its **xwOBA**
-view (2024 on) shows this surface at a hitter's average bat speed, with their batted balls on it.
+view (2024 on) shows this surface at a hitter's average bat speed, with the model's xwOBA of
+their batted balls by zone.
 
 ![xwOBA over spray and launch angle at a slow, typical and fast swing](surface.png)
 

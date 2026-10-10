@@ -7,7 +7,8 @@
 //
 // The xwOBA view draws, on the same grid and layout, the 3D xwOBA model's surface
 // (tools/xwoba: spray, launch angle, bat speed) at the hitter's average bat speed,
-// with their batted balls as dots and the model's xwOBA of those balls by zone.
+// with Tanaka's illuminated contour lines, and the model's xwOBA of the hitter's
+// balls by zone.
 
 (() => {
   "use strict";
@@ -135,8 +136,7 @@
   }
 
   // What the xwOBA view needs: the surface at the average bat speed of the balls the
-  // model covers (swung at, tracked, not bunted), and their xwOBA by zone. Every
-  // ball is drawn.
+  // model covers (swung at, tracked, not bunted), and their xwOBA by zone.
   function computeXwoba({ balls, surface }) {
     const tracked = balls.filter((b) => b[2] != null && b[3] != null);
     if (!tracked.length) return null;
@@ -144,7 +144,6 @@
     return {
       surface: surfaceAt(surface, batSpeed),
       zones: zoneXwoba(tracked),
-      points: balls,
       batSpeed,
       xwoba: tracked.reduce((s, b) => s + b[3], 0) / tracked.length,
       tracked: tracked.length,
@@ -176,22 +175,30 @@
     return from.map((c, i) => Math.round(c + (to[i] - c) * u));
   }
 
-  // The xwOBA surface: one blue, light to dark, in steps of .200 up to 1.400 and past
-  // it (the README figure's ramp). The batted balls are dots in a warm orange that
-  // stands apart from every step, ringed in white.
-  const BLUES = ["#f3f8fe", "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"];
-  const XW_STEP = 0.2;
-  const XW_LEVELS = BLUES.slice(1).map((_, i) => (i + 1) * XW_STEP);  // .2 .. 1.4
-  const XW_TOP = XW_STEP * (BLUES.length - 1);
-  const DOT = "#eb6834";
+  // The xwOBA surface: a continuous spectrum pinned to the wOBA value of each outcome
+  // -- white for an out, the single's orange, the double's violet, the triple's gold,
+  // the home run's magenta -- in ten levels of .200 (Discrete) or blended cell by cell
+  // (Continuous), with Tanaka lines at the levels' boundaries either way. The bands
+  // take the spectrum evenly from end to end, as matplotlib's contourf spreads a
+  // colormap: the lowest an out's white, the .800-1.000 band a single's orange (.889),
+  // the highest a home run's magenta.
+  const XW_STOPS = [[0, "#ffffff", "Out"], [0.9, "#FE6100", "1B"], [1.25, "#785EF0", "2B"],
+    [1.6, "#FFB000", "3B"], [2, "#DC267F", "HR"]];
+  const XW_MAX = 2, XW_N = 10, XW_STEP = XW_MAX / XW_N;
+  const XW_LEVELS = Array.from({ length: XW_N - 1 }, (_, i) => (i + 1) * XW_STEP);  // .2 .. 1.8
   const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-  const BLUES_RGB = BLUES.map(rgb);
+  const toHex = (c) => "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+  const STOPS_RGB = XW_STOPS.map(([v, hex]) => [v, rgb(hex)]);
 
   function xwColour(v) {
-    const t = Math.max(0, Math.min(1, v / XW_TOP)) * (BLUES.length - 1);
-    const i = Math.min(Math.floor(t), BLUES.length - 2), u = t - i;
-    return BLUES_RGB[i].map((c, k) => Math.round(c + (BLUES_RGB[i + 1][k] - c) * u));
+    const x = Math.max(0, Math.min(XW_MAX, v));
+    let k = 0;
+    while (k < STOPS_RGB.length - 2 && x > STOPS_RGB[k + 1][0]) k++;
+    const [v0, c0] = STOPS_RGB[k], [v1, c1] = STOPS_RGB[k + 1];
+    const u = (x - v0) / (v1 - v0);
+    return c0.map((c, i) => Math.round(c + (c1[i] - c) * u));
   }
+  const XW_BANDS = Array.from({ length: XW_N }, (_, i) => toHex(xwColour((i / (XW_N - 1)) * XW_MAX)));
 
   // xwOBA as baseball writes it: .412, 1.023; a dash for a zone without balls
   const fmtXw = (v) => (v == null ? "–" : v < 1 ? v.toFixed(3).slice(1) : v.toFixed(3));
@@ -216,11 +223,16 @@
   // Paint a 91 x 91 grid into the axes: filled contour bands (d3-contour) for the
   // discrete scale, a cell per grid point for the continuous one.
   //   style: { discrete, scale (grid -> contour units), levels, bands, colour }
+  // a grid's values y-major, as d3-contour reads them
+  function yMajor(grid, scale = 1) {
+    const values = new Float64Array(N * N);
+    for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) values[iy * N + ix] = grid[ix * N + iy] * scale;
+    return values;
+  }
+
   function paintGrid(ctx, grid, style, px, py, flip) {
     if (style.discrete) {
-      // values on the grid, y-major for d3
-      const values = new Float64Array(N * N);
-      for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) values[iy * N + ix] = grid[ix * N + iy] * style.scale;
+      const values = yMajor(grid, style.scale);
       ctx.fillStyle = style.bands[0];
       ctx.fillRect(AX.left, AX.top, AX.size, AX.size);
       const rings = d3.contours().size([N, N]).thresholds(style.levels)(values);
@@ -259,26 +271,56 @@
     ctx.imageSmoothingEnabled = true;
   }
 
-  // Every batted ball inside the axes as a dot; smaller and fainter for a team's
-  // thousands than for one hitter's hundreds. Launch angle is recorded in whole
-  // degrees, so each dot is spread across its own degree (a fixed offset per ball,
-  // so the picture doesn't change between draws) rather than lining up in rows.
-  function paintDots(ctx, points, px, py) {
-    const inside = points.filter(inRange);
-    const team = inside.length > 1500;
-    const r = team ? 1.7 : inside.length > 600 ? 3 : 3.8;
+  // Tanaka's illuminated contours: every level's line, segment by segment, light where
+  // the slope below it faces a light in the upper left and dark where it faces away,
+  // and wider the more squarely it faces toward or away from the light. Which side of a
+  // segment is downhill is read off the grid on either side of it, so the lines stay
+  // right when the chart is mirrored for a left-handed hitter. Segments are batched by
+  // brightness, so a chart is a handful of strokes.
+  const LIGHT = [-Math.SQRT1_2, -Math.SQRT1_2];  // toward the upper left, on screen
+  const TANAKA_BINS = 6;
+  function paintTanaka(ctx, grid, levels, px, py, flip) {
+    const values = yMajor(grid);
+    // the grid between its samples, in d3's coordinates (sample i sits at i + 0.5)
+    const at = (x, y) => {
+      const gx = Math.min(Math.max(x - 0.5, 0), N - 1), gy = Math.min(Math.max(y - 0.5, 0), N - 1);
+      const i = Math.min(Math.floor(gx), N - 2), j = Math.min(Math.floor(gy), N - 2), u = gx - i, w = gy - j;
+      const v = (a, b) => values[b * N + a];
+      return (1 - u) * (1 - w) * v(i, j) + u * (1 - w) * v(i + 1, j) + (1 - u) * w * v(i, j + 1) + u * w * v(i + 1, j + 1);
+    };
+    const cx = (c) => px(c - 0.5), cy = (c) => py(c - 0.5 + LAUNCH[0]);
+    const onEdge = (c) => c <= 0.01 || c >= N - 0.01;
+    const paths = { light: [], dark: [] };
+    for (let k = 0; k < TANAKA_BINS; k++) { paths.light.push(new Path2D()); paths.dark.push(new Path2D()); }
+    for (const multi of d3.contours().size([N, N]).thresholds(levels)(values)) {
+      for (const polygon of multi.coordinates) for (const ring of polygon) {
+        for (let s = 1; s < ring.length; s++) {
+          const [x0, y0] = ring[s - 1], [x1, y1] = ring[s];
+          if ((onEdge(x0) && onEdge(x1)) || (onEdge(y0) && onEdge(y1))) continue;  // the grid's own border
+          const len = Math.hypot(x1 - x0, y1 - y0);
+          if (!len) continue;
+          let nx = (y1 - y0) / len, ny = -(x1 - x0) / len;  // a normal, in grid units
+          const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, e = 0.25;
+          if (at(mx + e * nx, my + e * ny) > at(mx - e * nx, my - e * ny)) { nx = -nx; ny = -ny; }  // point it downhill
+          // on screen x runs the other way for a left-handed hitter and y always runs down
+          const sx = flip ? -nx : nx, sy = -ny;
+          const lit = sx * LIGHT[0] + sy * LIGHT[1];
+          const bin = Math.min(TANAKA_BINS - 1, Math.floor(Math.abs(lit) * TANAKA_BINS));
+          const path = (lit >= 0 ? paths.light : paths.dark)[bin];
+          path.moveTo(cx(x0), cy(y0));
+          path.lineTo(cx(x1), cy(y1));
+        }
+      }
+    }
     ctx.save();
-    ctx.globalAlpha = team ? 0.55 : 0.9;
-    ctx.fillStyle = DOT;
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = r > 3 ? 1.2 : 0.8;
-    inside.forEach(([x, y], i) => {
-      const jitter = ((i * 0.618034) % 1) - 0.5;  // golden-ratio steps: even, never random
-      ctx.beginPath();
-      ctx.arc(px(x), py(Math.min(Math.max(y + jitter, LAUNCH[0]), LAUNCH[1])), r, 0, 2 * Math.PI);
-      ctx.fill();
-      if (!team) ctx.stroke();
-    });
+    ctx.lineCap = "round";
+    for (let k = 0; k < TANAKA_BINS; k++) {
+      ctx.lineWidth = 0.6 + 2.4 * (k + 0.5) / TANAKA_BINS;
+      ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.stroke(paths.light[k]);
+      ctx.strokeStyle = "rgba(20,20,30,0.6)";
+      ctx.stroke(paths.dark[k]);
+    }
     ctx.restore();
   }
 
@@ -334,8 +376,12 @@
     ctx.beginPath();
     ctx.rect(AX.left, AX.top, AX.size, AX.size);
     ctx.clip();
-    if (xw) paintGrid(ctx, result.surface, { discrete, scale: 1, levels: XW_LEVELS, bands: BLUES, colour: xwColour }, px, py, flip);
-    else paintGrid(ctx, result.diff, { discrete, scale: 1000, levels: LEVELS, bands: BANDS, colour: heatColour }, px, py, flip);
+    if (xw) {
+      paintGrid(ctx, result.surface, { discrete, scale: 1, levels: XW_LEVELS, bands: XW_BANDS, colour: xwColour }, px, py, flip);
+      paintTanaka(ctx, result.surface, XW_LEVELS, px, py, flip);
+    } else {
+      paintGrid(ctx, result.diff, { discrete, scale: 1000, levels: LEVELS, bands: BANDS, colour: heatColour }, px, py, flip);
+    }
     ctx.restore();
 
     // --- the bucket lines: black at a quarter, 1 pt ----------------------------
@@ -345,8 +391,6 @@
     for (const la of [10, 25, 50]) { ctx.moveTo(AX.left, py(la)); ctx.lineTo(AX.left + AX.size, py(la)); }
     for (const sp of [30, 60]) { ctx.moveTo(px(sp), AX.top); ctx.lineTo(px(sp), AX.top + AX.size); }
     ctx.stroke();
-
-    if (xw) paintDots(ctx, result.points, px, py);
 
     // --- the shares (or the zones' xwOBA) in each cell, boxed --------------------
     const fmtShare = (v) => (opts.signed ? (v >= 0 ? "+" : "-") + Math.abs(v * 100).toFixed(1) : (v * 100).toFixed(1)) + "%";
@@ -417,28 +461,36 @@
     if (opts.logo) ctx.drawImage(opts.logo, 61.6, 995.8, 209.8, 87.5);
   }
 
-  // The xwOBA colourbar: narrower than the density's, so its ticks fit to its left.
-  // Discrete, a band per .200 with the last for 1.400 and up; continuous, the same
-  // ramp blended, flat past 1.400.
-  const XW_BAR = { left: 1268, top: CB.top, width: 60, height: CB.height };
+  // The xwOBA colourbar: narrower than the density's, the outcomes named on its left at
+  // their wOBA values and the values on its right. Discrete, the ten bands; continuous,
+  // the spectrum itself.
+  const XW_BAR = { left: 1252, top: CB.top, width: 40, height: CB.height };
   function xwColourbar(ctx, discrete, text) {
     const { left, top, width, height } = XW_BAR;
-    const h = height / BLUES.length, bottom = top + height;
+    const bottom = top + height, y = (v) => bottom - (v / XW_MAX) * height;
     if (discrete) {
-      BLUES.forEach((c, i) => {
+      XW_BANDS.forEach((c, i) => {
         ctx.fillStyle = c;
-        ctx.fillRect(left, bottom - (i + 1) * h, width, h + 0.5);
+        ctx.fillRect(left, y((i + 1) * XW_STEP), width, height / XW_N + 0.5);
       });
     } else {
       const grad = ctx.createLinearGradient(0, bottom, 0, top);
-      const end = (BLUES.length - 1) / BLUES.length;  // where 1.400 sits on the bar
-      BLUES.forEach((c, i) => grad.addColorStop((i / (BLUES.length - 1)) * end, c));
-      grad.addColorStop(1, BLUES[BLUES.length - 1]);
+      XW_STOPS.forEach(([v, c]) => grad.addColorStop(v / XW_MAX, c));
       ctx.fillStyle = grad;
       ctx.fillRect(left, top, width, height);
     }
-    XW_LEVELS.concat(0).forEach((v) => text(fmtXw(v).replace(/^\.000$/, "0"), left - 10, bottom - (v / XW_STEP) * h, { size: 10, ha: "right" }));
-    text("xwOBA", left + width / 2, top - 32, { size: 15, weight: 500 });
+    ctx.strokeStyle = "rgba(255,255,255,0.6)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(left, top, width, height);
+    for (const [v, , name] of XW_STOPS) {
+      ctx.beginPath();
+      ctx.moveTo(left - 5, y(v)); ctx.lineTo(left, y(v));
+      ctx.moveTo(left + width, y(v)); ctx.lineTo(left + width + 5, y(v));
+      ctx.stroke();
+      text(name, left - 10, y(v), { size: 10, ha: "right" });
+      text(v ? fmtXw(v) : "0", left + width + 10, y(v), { size: 10, ha: "left" });
+    }
+    text("xwOBA", left + width / 2, top - 48, { size: 15, weight: 500 });
   }
 
   async function render(canvas, result, opts) {
