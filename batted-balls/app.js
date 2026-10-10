@@ -165,6 +165,21 @@
     };
   }
 
+  // Every ball hit for a team: a hitter's stints say which of their balls (in date
+  // order) were hit for which team, so a traded hitter's count for each club only while
+  // they were on it. A file built before stints counts a hitter for their last team.
+  function teamBalls(data, team) {
+    const out = [];
+    for (const p of data.players) {
+      let i = 0;
+      for (const [t, n] of p.stints || [[p.team, p.bbe.length]]) {
+        if (t === team) out.push(...p.bbe.slice(i, i + n));
+        i += n;
+      }
+    }
+    return out;
+  }
+
   let drawing = 0;
   async function show() {
     const sel = selection();
@@ -175,7 +190,7 @@
       const data = await loadSeason(sel.season);
       let hitter, name, hand;
       if (sel.team) {
-        hitter = data.players.flatMap((p) => p.team === sel.team ? p.bbe : []);
+        hitter = teamBalls(data, sel.team);
         name = sel.team; hand = "R";
       } else {
         const p = data.players.find((x) => x.id === sel.id);

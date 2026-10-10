@@ -228,6 +228,16 @@ def ball_rows(g: pd.DataFrame) -> list[list]:
             for a, b, c, d in zip(g["spray_deg"], g["launch_angle"], g["bat_speed"], g["xwoba"], strict=True)]
 
 
+def stints(teams: pd.Series) -> list[list]:
+    """[team, balls] for each run of consecutive balls hit for one team, in the balls'
+    order, so the page can count each ball for the team it was hit for: one run for
+    most hitters, two or more for a traded one."""
+    t = teams.astype(str).to_numpy()
+    starts = np.flatnonzero(np.r_[True, t[1:] != t[:-1]])
+    ends = np.r_[starts[1:], len(t)]
+    return [[str(t[a]), int(b - a)] for a, b in zip(starts, ends, strict=True)]
+
+
 def player_rows(df: pd.DataFrame) -> list[dict]:
     rows = []
     for pid, g in df.groupby("batter", sort=False):
@@ -237,6 +247,7 @@ def player_rows(df: pd.DataFrame) -> list[dict]:
             "name": str(last["batter_name"]),
             "team": str(last["bat_team"]),
             "stand": str(g["stand"].mode().iloc[0]),
+            "stints": stints(g["bat_team"]),
             "bbe": ball_rows(g),
         })
     rows.sort(key=lambda r: (r["name"], r["id"]))

@@ -349,8 +349,10 @@ app's own files, and is reduced to small JSON files there that the page reads:
   covers.
 - `https://data.blandalytics.com/batted-balls/<season>.json` — every hitter's regular-season
   batted balls (spray angle in the app's convention — 0° at the pull-side line, 45° dead centre,
-  90° at the opposite line, for either hand — and launch angle), their team and bat side, the
-  team list, and the league density on the grid. From 2024 each ball also carries its bat speed
+  90° at the opposite line, for either hand — and launch angle) in date order, their team and
+  bat side, their stints (`[team, balls]` for each run of balls hit for one team, so a traded
+  hitter's balls count for the team they were hit for), the team list, and the league density
+  on the grid. From 2024 each ball also carries its bat speed
   and its 3D xwOBA (null for a bunt or an untracked swing), and the file the league's average of
   both. About 1.5 MB before 2024, 3 MB after (450 / 930 KB compressed).
 - `https://data.blandalytics.com/batted-balls/xwoba.json` — the 3D xwOBA model's surface on the
@@ -373,8 +375,9 @@ app's own files, and is reduced to small JSON files there that the page reads:
 | `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) or the heatmap, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed, the dots and the zones' xwOBA on the same layout |
 | `batted-balls/index.html`, `app.js` | the page: season, hitter / team, view, colour scale and comparison controls, the link hash, the download |
 
-A traded hitter's batted balls count for each of his teams in the team-wide chart, and his
-listed team is the last he hit for. A hitter needs three batted balls (not all in a line) for a
+In the team-wide chart a traded hitter's batted balls count for the team each was hit for
+(a file built before the stints counts every ball for the hitter's last team), and his listed
+team is the last he hit for. A hitter needs three batted balls (not all in a line) for a
 density; the self comparison needs the prior season built, and reports when the hitter has no
 batted balls in it. Locally, `python tools/batted_balls/build_data.py --out batted-balls/data
 --seasons 2026` writes the same files under `batted-balls/data/batted-balls/`, and the page reads
