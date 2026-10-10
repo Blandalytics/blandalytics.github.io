@@ -37,8 +37,6 @@ sys.path.insert(0, os.path.join(ROOT, "tools", "data"))
 from backfill import LocalStore, R2Store  # noqa: E402
 
 PREFIX = "cards"
-# the pages live in the bucket, so the mark cannot be a relative path
-LOGO = "https://blandalytics.com/pitcher-cards/PitcherList_Stats_watermark_with_logo.webp"
 # a card is only rewritten by --force; the manifests move every night
 CARD_CACHE = "public, max-age=3600"
 INDEX_CACHE = "public, max-age=120"
@@ -126,7 +124,7 @@ def build_day(site: Site, date: str, session, data, force: bool) -> tuple[int, i
         skipped.append(seen)
         return seen
 
-    cards = cards_for_date(date, session, data, strict=False, skip=skip, logo=LOGO)
+    cards = cards_for_date(date, session, data, strict=False, skip=skip)
     for pk, pid, html, card in cards:
         site.add(day, pk, pid, html, card)
         built += 1

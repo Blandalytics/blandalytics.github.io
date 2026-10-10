@@ -37,8 +37,6 @@ ET = ZoneInfo("America/New_York")
 INDEX = "live/cards/index.json"
 CARD_CACHE = "public, max-age=60"
 INDEX_CACHE = "public, max-age=30"
-# the pages live in the bucket, so the mark cannot be a relative path
-LOGO = "https://blandalytics.com/pitcher-cards/PitcherList_Stats_watermark_with_logo.webp"
 
 
 def today_games(s) -> list[dict]:
@@ -106,7 +104,7 @@ def build_game(g: dict, s, data, store, index: dict, force: bool = False) -> int
         return not force and not final and have.get(pid) == counts.get(pid)
 
     n = 0
-    cards = cards_for_game(pk, feed, df, s, data, strict=False, skip=skip, logo=LOGO)
+    cards = cards_for_game(pk, feed, df, s, data, strict=False, skip=skip)
     for pid, html, card in cards:
         key = f"live/cards/{pk}-{pid}.html"
         store.put(key, html.encode("utf-8"), "text/html; charset=utf-8", CARD_CACHE)
