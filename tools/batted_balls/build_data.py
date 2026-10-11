@@ -8,7 +8,8 @@ completed-games Parquet in the bucket (see tools/data) and are written back to t
 same bucket, so the page reads nothing but small JSON files:
 
     batted-balls/index.json        the seasons built, with what each covers
-    batted-balls/<season>.json     one season: every hitter's batted balls, the league grid
+    batted-balls/<season>.json     one season: every hitter's batted balls (and, for a
+                                   switch hitter, the side each was hit from), the league grid
     batted-balls/xwoba.json        the 3D xwOBA model's surface on the chart's grid
 
 A hitter's own density is cheap (a few hundred points on a 91x91 grid) and is
@@ -238,18 +239,37 @@ def stints(teams: pd.Series) -> list[list]:
     return [[str(t[a]), int(b - a)] for a, b in zip(starts, ends, strict=True)]
 
 
+# A switch hitter, for the page's side option: the less-used side has at least this many
+# balls and this share of them (a hitter with a stray ball from the other side is not one)
+SWITCH_MIN, SWITCH_SHARE = 3, 0.05
+
+
+def sides(stand: pd.Series) -> str | None:
+    """The side each ball was hit from, a letter a ball in the balls' order ("LRRL..."),
+    for a switch hitter; None for anyone else, whose balls are all from their usual side.
+    Spray is already measured from the pull side of the side batted from."""
+    s = stand.astype(str)
+    minor = min(int((s == "L").sum()), int((s == "R").sum()))
+    if minor < SWITCH_MIN or minor < SWITCH_SHARE * len(s):
+        return None
+    return "".join(s)
+
+
 def player_rows(df: pd.DataFrame) -> list[dict]:
     rows = []
     for pid, g in df.groupby("batter", sort=False):
         last = g.iloc[-1]  # the frame is in date order: the name and team as of the last game
-        rows.append({
+        row = {
             "id": int(pid),
             "name": str(last["batter_name"]),
             "team": str(last["bat_team"]),
             "stand": str(g["stand"].mode().iloc[0]),
             "stints": stints(g["bat_team"]),
             "bbe": ball_rows(g),
-        })
+        }
+        if (side := sides(g["stand"])) is not None:
+            row["sides"] = side
+        rows.append(row)
     rows.sort(key=lambda r: (r["name"], r["id"]))
     return rows
 

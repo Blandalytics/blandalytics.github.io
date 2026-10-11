@@ -446,6 +446,13 @@ boxed numbers are the hitter's share of batted balls in each pull / centre / opp
 / line drive / fly ball / pop up cell, with the row and column shares along the axes (as changes
 from the prior season in the self comparison).
 
+A switch hitter's chart is for one side at a time: *Bats* (Left / Right) appears for them, set
+to the side they bat from most, and every view and comparison (the prior season included) uses
+only the balls hit from the side picked, drawn the way that side faces. Spray is measured from
+the pull side of the side batted from, so either side's balls sit against the same league grid.
+A hitter counts as a switch hitter when their less-used side has at least 3 batted balls and 5%
+of them (a stray ball from the other side doesn't make one).
+
 From 2024, the first season Statcast tracked bat speed from opening day, two more views sit
 beside it (neither takes the comparison; the seasons before 2024 don't offer them):
 
@@ -476,8 +483,9 @@ beside it (neither takes the comparison; the seasons before 2024 don't offer the
   to the subtitle's: the hitter's xwOBA on contact less MLB's at the same bat speeds.
 
 Isaac Paredes' current season loads on arrival; a chart is linkable as
-`batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, with `-self`, `-xwoba` and `-value`
-suffixes (an old link's `-continuous` is ignored). **Download PNG** saves the figure at 2x.
+`batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, with `-left` / `-right` (a switch
+hitter's side), `-self`, `-xwoba` and `-value` suffixes (an old link's `-continuous` is
+ignored). **Download PNG** saves the figure at 2x.
 
 It is the chart [batted-ball-charts.streamlit.app](https://batted-ball-charts.streamlit.app/)
 draws ([PLV_viz `batted_ball_charts.py`](https://github.com/Blandalytics/PLV_viz/blob/main/hitter_app/pages/batted_ball_charts.py)),
@@ -503,7 +511,8 @@ app's own files, and is reduced to small JSON files there that the page reads:
 - `https://data.blandalytics.com/batted-balls/<season>.json` — every hitter's regular-season
   batted balls (spray angle in the app's convention — 0° at the pull-side line, 45° dead centre,
   90° at the opposite line, for either hand — and launch angle) in date order, their team and
-  bat side, their stints (`[team, balls]` for each run of balls hit for one team, so a traded
+  usual bat side, a switch hitter's `sides` (the side each ball was hit from, a letter a ball:
+  `"LRRL…"`), their stints (`[team, balls]` for each run of balls hit for one team, so a traded
   hitter's balls count for the team they were hit for), the team list, and the league density
   on the grid. From 2024 each ball also carries its bat speed
   and its 3D xwOBA (null for a bunt or an untracked swing), and the file the league's average of
@@ -528,7 +537,7 @@ app's own files, and is reduced to small JSON files there that the page reads:
 |---|---|
 | `tools/batted_balls/build_data.py` | reads a season's files from the bucket, keeps regular-season balls in play with a launch angle and a landing spot, joins Savant's bat speeds and scores the 3D xwOBA from 2024, writes the season file, the surface file and the index |
 | `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) with their edges lit as Tanaka contours, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed and the zones' xwOBA on the same layout; for xwOBA vs MLB the hitter's and MLB's xwOBA-weighted maps at the hitter's bat speeds and the zones' parts of the gap |
-| `batted-balls/index.html`, `app.js` | the page: season, hitter / team, view and comparison controls, the link hash, the download |
+| `batted-balls/index.html`, `app.js` | the page: season, hitter / team, a switch hitter's side, view and comparison controls, the link hash, the download |
 
 In the team-wide chart a traded hitter's batted balls count for the team each was hit for
 (a file built before the stints counts every ball for the hitter's last team), and his listed

@@ -1,5 +1,5 @@
-// The Batted Ball Charts page: season, hitter (or team), view and comparison
-// controls over the chart in chart.js. The data is two JSON files per visit from
+// The Batted Ball Charts page: season, hitter (or team), a switch hitter's side, view
+// and comparison controls over the chart in chart.js. The data is two JSON files per visit from
 // the bucket -- the seasons built and one season's batted balls with its league
 // grid -- produced by tools/batted_balls/build_data.py, and a third, the 3D xwOBA
 // model's surface, the first time the xwOBA view is shown.
@@ -12,10 +12,11 @@
     form: $("form"), season: $("season"), teamWide: $("team_wide"), player: $("player"),
     playerLabel: $("player_label"), suggest: $("suggest"), team: $("team"), teamLabel: $("team_label"),
     status: $("status"), out: $("out"), fig: $("fig"), note: $("note"), dlPng: $("dl_png"),
-    through: $("through"), views: $("views"),
+    through: $("through"), views: $("views"), bats: $("bats"),
   };
   const vsInputs = () => [...document.querySelectorAll('input[name="vs"]')];
   const viewInputs = () => [...document.querySelectorAll('input[name="view"]')];
+  const sideInputs = () => [...document.querySelectorAll('input[name="side"]')];
   const radio = (name) => document.querySelector(`input[name="${name}"]:checked`)?.value;
   const setRadio = (name, value) => { const r = document.querySelector(`input[name="${name}"][value="${value}"]`); if (r) r.checked = true; };
 
@@ -116,6 +117,7 @@
     chosen = h;
     el.player.value = h.name;
     hideSuggestions();
+    syncControls();
     show();
   }
   // Clicking into the field clears it so the list opens on everyone; leaving it
@@ -140,17 +142,19 @@
       id: teamWide ? null : chosen?.id ?? null,
       view,
       vs: teamWide || view !== "balls" || !hasPrior(year) ? "league" : radio("vs"),
+      side: !teamWide && isSwitch(chosen) ? radio("side") || chosen.stand : null,
     };
   }
 
   function hash(sel) {
     const who = sel.team || sel.id;
-    return `#${sel.season}-${who}` + (sel.vs === "self" ? "-self" : "") + (sel.view !== "balls" ? `-${sel.view}` : "");
+    return `#${sel.season}-${who}` + (sel.side ? `-${SIDE_NAME[sel.side].toLowerCase()}` : "")
+      + (sel.vs === "self" ? "-self" : "") + (sel.view !== "balls" ? `-${sel.view}` : "");
   }
 
   function parseHash() {
     // (-continuous / -discrete are accepted from older links and ignored)
-    const m = /^#(\d{4})-([A-Za-z0-9]+)((?:-(?:continuous|discrete|self|league|xwoba|value))*)$/.exec(location.hash);
+    const m = /^#(\d{4})-([A-Za-z0-9]+)((?:-(?:continuous|discrete|self|league|xwoba|value|left|right))*)$/.exec(location.hash);
     if (!m) return null;
     const flags = m[3].split("-");
     return {
@@ -158,8 +162,27 @@
       who: m[2],
       vs: flags.includes("self") ? "self" : "league",
       view: flags.includes("xwoba") ? "xwoba" : flags.includes("value") ? "value" : "balls",
+      side: flags.includes("left") ? "L" : flags.includes("right") ? "R" : null,
     };
   }
+
+  // A switch hitter's file carries the side each ball was hit from (`sides`, a letter a
+  // ball), and their chart is drawn for one side at a time; anyone else's balls are all
+  // from their usual side, `stand`. Spray is measured from the pull side of the side
+  // batted from, so either side's balls sit against the same league grid.
+  const SIDE_NAME = { L: "Left", R: "Right" };
+  const isSwitch = (p) => Boolean(p?.sides);
+  function sideBalls(p, side) {
+    if (!side) return p.bbe;
+    if (p.sides) return p.bbe.filter((_, i) => p.sides[i] === side);
+    return p.stand === side ? p.bbe : [];
+  }
+  // " (Batting Left)" after the chart's name in the subtitle, and "batting left" after
+  // the count in the note
+  const battingTitle = (sel) => (sel.side ? ` (Batting ${SIDE_NAME[sel.side]})` : "");
+  const ballsNote = (n, sel) => `${n} batted balls`
+    + (sel.team ? ` by ${sel.team} hitters` : sel.side ? ` batting ${SIDE_NAME[sel.side].toLowerCase()}` : "");
+  const drawKey = (sel, season = sel.season) => `${season}:${sel.team || sel.id}${sel.side || ""}`;
 
   // Every ball hit for a team: a hitter's stints say which of their balls (in date
   // order) were hit for which team, so a traded hitter's count for each club only while
@@ -199,7 +222,7 @@
       } else {
         const p = data.players.find((x) => x.id === sel.id);
         if (!p) { status("that hitter has no batted balls this season", "warn"); return; }
-        hitter = p.bbe; name = p.name; hand = p.stand;
+        hitter = sideBalls(p, sel.side); name = p.name; hand = sel.side || p.stand;
       }
       if (sel.view === "xwoba") return await showXwoba(sel, data, hitter, name, hand, ticket);
       if (sel.view === "value") return await showValue(sel, data, hitter, name, hand, ticket);
@@ -207,13 +230,16 @@
       if (sel.vs === "self") {
         const before = await loadSeason(sel.season - 1);
         const p = before.players.find((x) => x.id === sel.id);
-        if (!p) { status(`No data on ${name} for ${sel.season - 1}`, "warn"); el.out.hidden = true; return; }
-        prior = p.bbe;
+        prior = p ? sideBalls(p, sel.side) : [];
+        if (!prior.length) {
+          status(`No data on ${name}${sel.side ? ` batting ${SIDE_NAME[sel.side].toLowerCase()}` : ""} for ${sel.season - 1}`, "warn");
+          el.out.hidden = true; return;
+        }
       }
       if (ticket !== drawing) return;
       const result = BattedBalls.compute({
         hitter, league: data.league, prior,
-        key: `${sel.season}:${sel.team || sel.id}`, priorKey: prior ? `${sel.season - 1}:${sel.id}` : null,
+        key: drawKey(sel), priorKey: prior ? drawKey(sel, sel.season - 1) : null,
       });
       if (!result) { status(`not enough batted balls to draw a density (${hitter.length})`, "warn"); el.out.hidden = true; return; }
       // the hitter is the title; what the chart shows goes in the subtitle, as on
@@ -222,14 +248,14 @@
         hand, view: "balls", signed: Boolean(prior),
         title: name,
         subtitle: prior
-          ? `Batted Ball Difference, ${sel.season} compared to ${sel.season - 1}`
-          : `${sel.season} Batted Ball Profile, compared to the rest of MLB`,
+          ? `Batted Ball Difference${battingTitle(sel)}, ${sel.season} compared to ${sel.season - 1}`
+          : `${sel.season} Batted Ball Profile${battingTitle(sel)}, compared to the rest of MLB`,
       };
       if (!(await drawn(result, opts, sel, name, ticket))) return;
       const n = hitter.length, m = prior ? prior.length : null;
       el.note.textContent = prior
-        ? `${n} batted balls in ${sel.season}, ${m} in ${sel.season - 1}. Percentages are ${sel.season} minus ${sel.season - 1}.`
-        : `${n} batted balls${sel.team ? ` by ${sel.team} hitters` : ""}, regular season, through ${data.through}. The league grid is every MLB batted ball in ${sel.season}.`;
+        ? `${ballsNote(n, sel)} in ${sel.season}, ${m} in ${sel.season - 1}. Percentages are ${sel.season} minus ${sel.season - 1}.`
+        : `${ballsNote(n, sel)}, regular season, through ${data.through}. The league grid is every MLB batted ball in ${sel.season}.`;
       history.replaceState(null, "", hash(sel));
       status("");
     } catch (e) {
@@ -259,11 +285,11 @@
     const opts = {
       hand, view: "xwoba",
       title: name,
-      subtitle: `${sel.season} xwOBA Surface, at ${mph} (${fmtXw(result.xwoba)} xwOBA on contact)`,
+      subtitle: `${sel.season} xwOBA Surface${battingTitle(sel)}, at ${mph} (${fmtXw(result.xwoba)} xwOBA on contact)`,
     };
     if (!(await drawn(result, opts, sel, name, ticket))) return;
     const lg = data.xwoba;
-    el.note.textContent = `${hitter.length} batted balls${sel.team ? ` by ${sel.team} hitters` : ""}, regular season, through ${data.through}; `
+    el.note.textContent = `${ballsNote(hitter.length, sel)}, regular season, through ${data.through}; `
       + `${result.tracked} with a tracked swing (bunts and untracked swings have no xwOBA). `
       + `The surface is the model's xwOBA at a ${mph} swing, the average on these balls; `
       + `the boxes and the figures along the axes are the model's xwOBA of the balls hit into each zone, each at its own bat speed. `
@@ -282,16 +308,16 @@
   }
 
   async function showValue(sel, data, hitter, name, hand, ticket) {
-    const result = BattedBalls.computeValue({ balls: hitter, league: trackedBalls(data), key: `${sel.season}:${sel.team || sel.id}` });
+    const result = BattedBalls.computeValue({ balls: hitter, league: trackedBalls(data), key: drawKey(sel) });
     if (!result) { status(`not enough tracked swings to draw a density (${hitter.length} batted balls)`, "warn"); el.out.hidden = true; return; }
     const mph = `${result.batSpeed.toFixed(1)} mph`;
     const opts = {
       hand, view: "value",
       title: name,
-      subtitle: `${sel.season} Batted Ball Directional Value\n${fmtMargin(result.total)} xwOBA vs Comparable Swing Speeds`,
+      subtitle: `${sel.season} Batted Ball Directional Value${battingTitle(sel)}\n${fmtMargin(result.total)} xwOBA vs Comparable Swing Speeds`,
     };
     if (!(await drawn(result, opts, sel, name, ticket))) return;
-    el.note.textContent = `${hitter.length} batted balls${sel.team ? ` by ${sel.team} hitters` : ""}, regular season, through ${data.through}; `
+    el.note.textContent = `${ballsNote(hitter.length, sel)}, regular season, through ${data.through}; `
       + `${result.tracked} with a tracked swing (bunts and untracked swings have no xwOBA), averaging ${mph}. `
       + `Each is weighted by its xwOBA and set against MLB's batted balls off swings as fast as its own, weighted the same way and spread with the same kernels: `
       + `red is where these balls get more xwOBA than MLB's hitters get swinging that hard, blue where MLB's get more. `
@@ -317,6 +343,11 @@
     const prior = hasPrior(year);
     vsInputs().forEach((r) => { r.disabled = teamWide || xw || (!prior && r.value === "self"); });
     if (teamWide || xw || !prior) setRadio("vs", "league");
+    // a switch hitter's chart is for one side, the one they bat from most until another
+    // is picked; the pick holds from one switch hitter to the next
+    el.bats.hidden = teamWide || !isSwitch(chosen);
+    if (el.bats.hidden) sideInputs().forEach((r) => { r.checked = false; });
+    else if (!radio("side")) setRadio("side", chosen.stand);
   }
 
   async function switchSeason(year, keep = true) {
@@ -353,6 +384,7 @@
         el.teamWide.checked = true; el.team.value = link.who;
       }
       setRadio("vs", link.vs); setRadio("view", link.view);
+      sideInputs().forEach((r) => { r.checked = r.value === link.side; });
       syncControls();
     }
     show();
@@ -362,6 +394,7 @@
   el.teamWide.addEventListener("change", () => { syncControls(); show(); });
   el.team.addEventListener("change", show);
   vsInputs().forEach((r) => r.addEventListener("change", show));
+  sideInputs().forEach((r) => r.addEventListener("change", show));
   viewInputs().forEach((r) => r.addEventListener("change", () => { syncControls(); show(); }));
   el.form.addEventListener("submit", (e) => { e.preventDefault(); if (shown.length) pick(shown[Math.max(active, 0)]); });
 
@@ -398,7 +431,8 @@
     if (!current) return;
     const who = (current.name || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
     const what = { xwoba: "xwoba_surface", value: "batted_ball_value" }[current.view] || "batted_balls";
-    const name = `${who}_${current.season}_${what}${current.vs === "self" ? `_vs_${current.season - 1}` : ""}.png`;
+    const side = current.side ? `_batting_${SIDE_NAME[current.side].toLowerCase()}` : "";
+    const name = `${who}_${current.season}_${what}${side}${current.vs === "self" ? `_vs_${current.season - 1}` : ""}.png`;
     const png = document.createElement("canvas");
     await BattedBalls.render(png, current.result, current.opts, 2);
     png.toBlob((b) => {
