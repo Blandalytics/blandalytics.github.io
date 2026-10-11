@@ -227,13 +227,42 @@
 
   // ---- the value view -------------------------------------------------------------
   // The hitter's batted balls against MLB's off swings as fast as theirs, both weighted
-  // by xwOBA. MLB's are the season's tracked balls, each weighted by how near its bat
-  // speed is to the hitter's average (a Gaussian BAT_SPEED_WIDTH mph wide), and spread
-  // with the hitter's own kernels, so the two maps differ only in where the balls go
-  // and what they are worth, not in how finely they are drawn. A ball is [spray, launch
-  // angle, bat speed, xwOBA].
+  // by xwOBA. MLB's are the season's tracked balls, weighted to the hitter's bat speeds
+  // (batSpeedWeights), and spread with the hitter's own kernels, so the two maps differ
+  // only in where the balls go and what they are worth, not in how finely they are
+  // drawn. A ball is [spray, launch angle, bat speed, xwOBA].
   const BAT_SPEED_WIDTH = 1.5;
   const tracked = (b) => b[2] != null && b[3] != null;
+
+  // A weight for each of MLB's balls that gives them the hitter's bat speeds: each of
+  // the hitter's balls hands a weight of 1 to MLB's balls off swings near its own (a
+  // Gaussian BAT_SPEED_WIDTH mph wide, shared in proportion to it), so each ball is set
+  // against MLB at its own bat speed. Setting them all against MLB at the hitter's
+  // average would favour every hitter, and teams the most: through most swings xwOBA
+  // climbs faster the harder the swing, so the average over a spread of swings is above
+  // the xwOBA at the average swing -- by .009 for MLB as a whole, against itself. Speeds
+  // are binned to a tenth of a mph.
+  function batSpeedWeights(mine, league) {
+    const LO = 20, STEP = 0.1, BINS = 1000;
+    const bin = (v) => Math.min(BINS - 1, Math.max(0, Math.round((v - LO) / STEP)));
+    const reach = Math.ceil((5 * BAT_SPEED_WIDTH) / STEP);
+    const kernel = Array.from({ length: 2 * reach + 1 }, (_, k) => Math.exp(-0.5 * (((k - reach) * STEP) / BAT_SPEED_WIDTH) ** 2));
+    const smooth = (counts) => {
+      const out = new Float64Array(BINS);
+      counts.forEach((c, i) => {
+        if (!c) return;
+        for (let j = Math.max(0, i - reach); j <= Math.min(BINS - 1, i + reach); j++) out[j] += c * kernel[j - i + reach];
+      });
+      return out;
+    };
+    const theirs = new Float64Array(BINS), ours = new Float64Array(BINS);
+    for (const b of league) theirs[bin(b[2])]++;
+    for (const b of mine) ours[bin(b[2])]++;
+    // MLB's balls near each speed; never none near one of the hitter's, who are in MLB
+    const near = smooth(theirs);
+    const per = smooth(ours.map((c, i) => (c ? c / near[i] : 0)));
+    return Float64Array.from(league, (b) => per[bin(b[2])]);
+  }
 
   // MLB's weighted balls on the grid with a given kernel, scaled as kdeGrid scales: the
   // balls are binned to the grid's nodes (shared linearly between the nearest along
@@ -295,15 +324,15 @@
   }
 
   // What the value view needs: the hitter's xwOBA-weighted density less MLB's at the
-  // hitter's average bat speed -- the grid sums to 100 times the gap in xwOBA on contact
-  // (over the in-range balls) -- and each zone's part of that gap: the hitter's xwOBA
-  // from the zone over all their tracked balls, less MLB's over its weighted balls.
+  // hitter's bat speeds -- the grid sums to 100 times the gap in xwOBA on contact (over
+  // the in-range balls) -- and each zone's part of that gap: the hitter's xwOBA from the
+  // zone over all their tracked balls, less MLB's over its weighted balls.
   function computeValue({ balls, league, key }) {
     const mine = balls.filter(tracked), inside = mine.filter(inRange);
     const kernel = scottKernel(inside);
     if (!kernel) return null;
     const batSpeed = mine.reduce((t, b) => t + b[2], 0) / mine.length;
-    const weights = Float64Array.from(league, (b) => Math.exp(-0.5 * ((b[2] - batSpeed) / BAT_SPEED_WIDTH) ** 2));
+    const weights = batSpeedWeights(mine, league);
     const theirs = spreadLeague(league, weights, kernel);
     const diff = kdeFor(key && key + ":xw", inside, inside.map((b) => b[3])).map((v, k) => v - theirs[k]);
     const hitter = zoneSums(mine, () => 1, 1 / mine.length);
