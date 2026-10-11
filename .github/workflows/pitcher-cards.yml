@@ -25,6 +25,11 @@ on:
         description: "Rebuild every pitcher's pack of comparison seasons, not just the recent ones"
         type: boolean
         default: false
+      prune_pages:
+        description: "Old per-card pages (from before the cards were data): report what becomes of them, or apply it"
+        type: choice
+        options: ["no", "report", "apply"]
+        default: "no"
 
 concurrency:
   group: pitcher-cards
@@ -132,6 +137,11 @@ jobs:
 
       - name: Reindex
         run: python tools/pitcher_card/build_site.py --reindex
+
+      # a page whose card is listed becomes a redirect to the card's view; the rest go
+      - name: Retire the old per-card pages
+        if: ${{ inputs.prune_pages == 'report' || inputs.prune_pages == 'apply' }}
+        run: python tools/pitcher_card/build_site.py --prune-pages ${{ inputs.prune_pages == 'apply' && '--apply' || '' }}
 
   # what the live Worker builds its cards from: each pitcher's pack of comparison seasons,
   # the season's arm angles, and the scorer bundle (the pitch models, which the Worker

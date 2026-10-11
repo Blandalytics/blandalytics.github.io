@@ -4,6 +4,7 @@
     python build_site.py --start 2026-08-01 --end 2026-08-31
     python build_site.py --start 2026-08-28 --force   # rebuild cards already built
     python build_site.py --reindex                    # only rebuild the index
+    python build_site.py --prune-pages [--apply]      # retire the old per-card pages
     python build_site.py --out ./pitcher-cards ...    # a folder instead of the bucket
 
 Writes, under the bucket's ``cards/`` prefix (served from https://data.blandalytics.com):
@@ -19,9 +20,13 @@ day's pitches come from the data files in the same bucket once the day has settl
 from the scraper. Cards already in a day's manifest are skipped unless --force is given,
 so the nightly run only pays for new games, and an interrupted backfill resumes where it
 stopped. The index is rebuilt from the day manifests at the end of every run, which is
-what lets parallel runs share the bucket. Days built before the cards were data still
-have a page per card (cards/<gamePk>-<pitcherId>.html, named by the manifest's ``file``),
-which the picker frames until --force rebuilds the day."""
+what lets parallel runs share the bucket.
+
+Before the cards were data, each had a page of its own (cards/<gamePk>-<pitcherId>.html,
+named by its manifest entry's ``file``), and the live build wrote live/cards/*.html.
+--prune-pages retires them once their days are rebuilt: a page whose card is still listed
+becomes a small redirect to the card's view, so links to it keep working, and any other
+is deleted. It reports what it would do; --apply does it."""
 
 from __future__ import annotations
 
@@ -29,9 +34,11 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 
 from card import DEFAULT_CACHE, ROOT, cards_for_date  # first: it puts the scraper on sys.path
 
@@ -44,6 +51,10 @@ PREFIX = "cards"
 # a day's data is rewritten when the day is rebuilt; the manifests move every night
 DATA_CACHE = "public, max-age=300"
 INDEX_CACHE = "public, max-age=120"
+# the old per-card pages, and where a card is viewed now
+OLD_PAGE = re.compile(rf"^(?:live/)?{PREFIX}/(\d+-\d+)\.html$")
+CARD_VIEW = "https://blandalytics.com/pitcher-cards/card.html"
+REDIRECT_CACHE = "public, max-age=86400"
 
 
 def entry(pk: int, pid: int, card: dict) -> dict:
@@ -128,6 +139,73 @@ class Site:
         self.store.put(f"{PREFIX}/index.json", _dump(index), "application/json", INDEX_CACHE)
         return index
 
+    def listed(self) -> tuple[set[str], set[str]]:
+        """("<gamePk>-<pitcherId>" of every card the manifests list, the pages any of
+        them still names as its ``file``), the live index's entries included."""
+        cards, pages = set(), set()
+        days = [json.loads(self.store.get(k) or b"{}") for k in self.store.keys(f"{PREFIX}/days/")]
+        live = json.loads(self.store.get("live/cards/index.json") or b"{}").get("games", {})
+        for games in (*days, live):
+            for pk, game in games.items():
+                for p in game.get("pitchers", []):
+                    cards.add(f"{pk}-{p['id']}")
+                    if p.get("file"):
+                        pages.add(os.path.basename(p["file"]))
+        return cards, pages
+
+
+def redirect_page(card: str) -> bytes:
+    """What an old card page's address serves once the page is retired: the card's view."""
+    url = f"{CARD_VIEW}#{card}"
+    return (
+        '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
+        f'<meta name="robots" content="noindex"><link rel="canonical" href="{url}">'
+        f'<meta http-equiv="refresh" content="0; url={url}">'
+        f"<script>location.replace({json.dumps(url)})</script>"
+        "<title>PLV Pitcher Game Card</title></head>"
+        f'<body><a href="{url}">This card has moved.</a></body></html>\n'
+    ).encode()
+
+
+def _fate(key: str, cards: set[str], pages: set[str]) -> str:
+    if key.startswith("live/"):
+        return "delete"  # the live build's: a game's live cards are card dicts now
+    if os.path.basename(key) in pages:
+        return "keep"
+    return "redirect" if OLD_PAGE.match(key).group(1) in cards else "delete"
+
+
+def prune_plan(site: Site) -> dict[str, list[str]]:
+    """Every old page, by what becomes of it: "redirect" (its card is still listed),
+    "delete" (it is not, or the page is the live build's) or "keep" (a manifest still
+    frames it, its day not yet rebuilt)."""
+    cards, pages = site.listed()
+    plan = {"redirect": [], "delete": [], "keep": []}
+    for key in [*site.store.keys(f"{PREFIX}/"), *site.store.keys(f"live/{PREFIX}/")]:
+        if OLD_PAGE.match(key):
+            plan[_fate(key, cards, pages)].append(key)
+    return plan
+
+
+def prune_pages(site: Site, apply: bool, workers: int = 16) -> dict[str, list[str]]:
+    """Retire the old per-card pages (see prune_plan); a report unless ``apply``."""
+    plan = prune_plan(site)
+    for action, keys in plan.items():
+        print(f"{action:8} {len(keys):6} pages  {' '.join(keys[:3])}")
+    if not apply:
+        print("(a report: --apply to redirect and delete)")
+        return plan
+
+    def redirect(key):
+        card = OLD_PAGE.match(key).group(1)
+        site.store.put(key, redirect_page(card), "text/html; charset=utf-8", REDIRECT_CACHE)
+
+    with ThreadPoolExecutor(workers) as pool:
+        list(pool.map(redirect, plan["redirect"]))
+        list(pool.map(site.store.delete, plan["delete"]))
+    print(f"redirected {len(plan['redirect'])}, deleted {len(plan['delete'])}")
+    return plan
+
 
 def build_day(site: Site, date: str, session, data, force: bool) -> tuple[int, int]:
     """Build one date's cards; returns (built, skipped)."""
@@ -177,6 +255,9 @@ def main(argv=None) -> int:
     ap.add_argument("--end", default=today.isoformat(), help="last date (default: today)")
     ap.add_argument("--force", action="store_true", help="rebuild cards already in the manifest")
     ap.add_argument("--reindex", action="store_true", help="only rebuild the index")
+    ap.add_argument("--prune-pages", action="store_true",
+                    help="report what becomes of the old per-card pages")  # fmt: skip
+    ap.add_argument("--apply", action="store_true", help="with --prune-pages: do it")
     ap.add_argument("--out", help="write to this folder instead of the bucket")
     ap.add_argument("--cache", default=DEFAULT_CACHE, help="the data-file / comparison cache")
     ap.add_argument("--first-season", type=int, default=fetch.FIRST_SEASON,
@@ -186,6 +267,9 @@ def main(argv=None) -> int:
     if a.reindex:
         index = site.reindex()
         print(f"{sum(index['days'].values())} cards across {len(index['days'])} dates")
+        return 0
+    if a.prune_pages:
+        prune_pages(site, a.apply)
         return 0
     build(site, a.start, a.end, a.force, a.cache, a.first_season)
     return 0
