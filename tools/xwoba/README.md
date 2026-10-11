@@ -24,12 +24,25 @@ bat speed).
 | `launch_angle` | degrees | Statcast's. |
 | `bat_speed` | mph | Statcast bat tracking: the speed of the sweet spot at contact. |
 
-**Output.** The probability of each of the five wOBA values a ball in play can have — an out
-(sac flies included), a single (Savant gives an error and a fielder's choice the batter reaches
-on the same 0.90), a double, a triple, a home run — and xwOBA, their weighted sum with Savant's
-weights, which are the same every season:
+**Output.** The probability of each of the five outcomes a ball in play can have — an out (sac
+flies, errors and fielder's choices included), a single, a double, a triple, a home run — and
+xwOBA, their weighted sum with Savant's weights, which are the same every season:
 
     xwOBA = 0.90 p(1B) + 1.25 p(2B) + 1.60 p(3B) + 2.00 p(HR)
+
+The outcome is read from the play, not from Savant's `woba_value`, which gives a batter who
+reaches on an error or a fielder's choice a single's 0.90 (about 1.2% of balls in play); as
+an out, xwOBA on contact is measured against wOBA on contact counting hits only.
+
+**A season's calibration.** The model has no term for the season, so a season whose balls
+went further or less far than their inputs suggest (the ball, the weather) reads high or low
+against its own results: fit on 2023–2026 pooled, 2026 read .008 high and the half season of
+2023 .016 low. `model.calibration` rescales each outcome's probability so a season's mean
+predicted mix of outcomes is its actual one — its xwOBA on contact then its wOBA on contact —
+moved toward no change by `n / (n + 4000)` balls, so the first weeks of a season aren't
+overcorrected (a full season keeps 97% of it). The Batted Ball Charts build reads every ball,
+and each season's surface, with that season's calibration
+(`Grid.xwoba(..., calibration=m)`); the multipliers are in the season file.
 
 **How it is fit.** Every node of a fine grid (1° of spray × 1° of launch angle × 1 mph of bat
 speed) gets the outcome mix of the batted balls around it, weighted by a Gaussian kernel 3°

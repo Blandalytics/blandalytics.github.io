@@ -31,7 +31,7 @@ import requests
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
-from model import WEIGHTS  # noqa: E402
+from model import CLASSES, WEIGHTS  # noqa: E402
 
 SEARCH = "https://baseballsavant.mlb.com/statcast_search/csv"
 CACHE = HERE / "cache" / "savant"
@@ -157,15 +157,11 @@ def spray_angle(df: pd.DataFrame) -> pd.Series:
     return raw.where(df["stand"] != "L", -raw) + 45.0
 
 
-def outcome_class(woba_value: pd.Series) -> pd.Series:
-    """The index into model.CLASSES of the wOBA value Savant gave the ball."""
-    cls = pd.Series(
-        np.abs(woba_value.to_numpy()[:, None] - WEIGHTS).argmin(axis=1), index=woba_value.index
-    )
-    off = (WEIGHTS[cls.to_numpy()] - woba_value).abs() > 1e-6
-    if off.any():
-        raise ValueError(f"unexpected wOBA values: {sorted(woba_value[off].unique())}")
-    return cls
+def outcome_class(events: pd.Series) -> pd.Series:
+    """The index into model.CLASSES of the ball's outcome: its hit, or an out for any other
+    event -- reaching on an error or a fielder's choice included. Savant's own woba_value
+    gives those a single's .900 (about 1.2% of balls in play), so it isn't used."""
+    return events.map({c: i for i, c in enumerate(CLASSES)}).fillna(0).astype(int)
 
 
 def batted_balls(raw: pd.DataFrame) -> pd.DataFrame:
@@ -180,5 +176,7 @@ def batted_balls(raw: pd.DataFrame) -> pd.DataFrame:
     df["spray"] = spray_angle(df)
     df["launch_angle"] = df["launch_angle"].astype(float)
     df["bat_speed"] = df["bat_speed"].astype(float)
-    df["outcome"] = outcome_class(df["woba_value"].astype(float))
+    df["outcome"] = outcome_class(df["events"])
+    # the wOBA value of the hit (0 for anything else), in place of Savant's
+    df["woba_value"] = WEIGHTS[df["outcome"].to_numpy()]
     return df.sort_values(["game_date", "game_pk", "at_bat_number"], ignore_index=True)

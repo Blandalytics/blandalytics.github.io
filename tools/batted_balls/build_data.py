@@ -10,7 +10,8 @@ same bucket, so the page reads nothing but small JSON files:
     batted-balls/index.json        the seasons built, with what each covers
     batted-balls/<season>.json     one season: every hitter's batted balls (and, for a
                                    switch hitter, the side each was hit from), the league grid
-    batted-balls/xwoba.json        the 3D xwOBA model's surface on the chart's grid
+    batted-balls/xwoba-<season>.json   the 3D xwOBA model's surface on the chart's grid, read
+                                   with the season's calibration (xwoba.json: without)
 
 A hitter's own density is cheap (a few hundred points on a 91x91 grid) and is
 computed in the page, exactly as scipy's gaussian_kde would; the league's is
@@ -153,21 +154,32 @@ def load_season(s: requests.Session, manifest: dict, season: int, verbose: bool)
 # ---- bat speed and xwOBA ----------------------------------------------------------------
 @functools.cache
 def xwoba_tools():
-    """tools/xwoba's Savant pull, its fitted model and the model file's own fields."""
+    """tools/xwoba's Savant pull, its model module, the fitted model and the model file's
+    own fields."""
     if str(XWOBA_DIR) not in sys.path:
         sys.path.insert(0, str(XWOBA_DIR))
     import model
     import savant
     meta = json.loads((XWOBA_DIR / "model.json").read_text())
-    return savant, model.Grid.from_json(meta), meta
+    return savant, model, model.Grid.from_json(meta), meta
 
 
-def with_xwoba(df: pd.DataFrame, season: int, verbose: bool) -> pd.DataFrame:
+def with_xwoba(df: pd.DataFrame, season: int,
+               verbose: bool) -> tuple[pd.DataFrame, np.ndarray, dict]:
     """df with each ball's bat speed and 3D xwOBA where the model covers it -- a swung-at
     ball in play with bat tracking, not bunted (savant.batted_balls' rule) -- and NaN
-    for the rest. Savant numbers a plate appearance from 1, the Stats API from 0."""
-    savant, grid, _ = xwoba_tools()
+    for the rest; the season's calibration, which every xwOBA is read with; and what to
+    record of it. The calibration (model.calibration) rescales the model's outcome mix to
+    the season's own over its tracked balls, so the league's xwOBA on contact is its wOBA
+    on contact (hits only: an error or fielder's choice is an out). Savant numbers a plate
+    appearance from 1, the Stats API from 0."""
+    savant, model, grid, _ = xwoba_tools()
     swings = savant.batted_balls(savant.load_seasons([season], verbose=verbose))
+    probs = grid.predict(swings["spray"], swings["launch_angle"], swings["bat_speed"])
+    calib = model.calibration(probs, swings["outcome"].to_numpy())
+    info = {"woba": round(float(swings["woba_value"].mean()), 4),
+            "calibration": {c: round(float(m), 4)
+                            for c, m in zip(model.CLASSES, calib, strict=True)}}
     keys = ["game_pk", "at_bat_number", "pitch_number"]
     speeds = swings[keys + ["bat_speed"]].astype({k: "int64" for k in keys})
     out = df.assign(at_bat_number=df["at_bat_index"].astype("int64") + 1,
@@ -177,21 +189,25 @@ def with_xwoba(df: pd.DataFrame, season: int, verbose: bool) -> pd.DataFrame:
     has = out["bat_speed"].notna().to_numpy()
     out["xwoba"] = np.nan
     out.loc[has, "xwoba"] = grid.xwoba(out.loc[has, "spray_deg"], out.loc[has, "launch_angle"],
-                                       out.loc[has, "bat_speed"])
-    return out
+                                       out.loc[has, "bat_speed"], calibration=calib)
+    return out, calib, info
 
 
-def surface_file(built: str) -> dict:
+def surface_file(built: str, season: int | None = None, calib: np.ndarray | None = None) -> dict:
     """The model's xwOBA on the chart's grid at each of its bat-speed nodes, in thousandths,
-    row-major by spray then launch angle as the league grid is. Reading between two slices
-    at a hitter's bat speed is exactly how the model reads between its own nodes."""
-    _, grid, meta = xwoba_tools()
+    row-major by spray then launch angle as the league grid is -- read with a season's
+    calibration for that season's file (xwoba-<season>.json), without for xwoba.json.
+    Reading between two slices at a hitter's bat speed is exactly how the model reads
+    between its own nodes."""
+    _, _, grid, meta = xwoba_tools()
     speed = grid.axes[-1]
     X, Y = np.mgrid[SPRAY[0]:SPRAY[1]:complex(GRID_N), LAUNCH[0]:LAUNCH[1]:complex(GRID_N)]
-    slices = [np.rint(1000 * grid.xwoba(X.ravel(), Y.ravel(), np.full(X.size, b))).astype(int).tolist()
+    slices = [np.rint(1000 * grid.xwoba(X.ravel(), Y.ravel(), np.full(X.size, b),
+                                        calibration=calib)).astype(int).tolist()
               for b in speed.nodes()]
     return {
         "built": built,
+        "season": season,
         "model": {k: meta[k] for k in ("built", "from", "through", "n", "cv")},
         "grid": {"spray": [*SPRAY, GRID_N], "launch": [*LAUNCH, GRID_N]},
         "bat_speed": {"lo": speed.lo, "step": speed.step, "n": speed.n},
@@ -274,16 +290,17 @@ def player_rows(df: pd.DataFrame) -> list[dict]:
     return rows
 
 
-def xwoba_summary(df: pd.DataFrame) -> dict | None:
-    """The league's average bat speed and xwOBA over the balls the model covers."""
+def xwoba_summary(df: pd.DataFrame, info: dict | None) -> dict | None:
+    """The league's average bat speed and xwOBA over the balls the model covers, its wOBA on
+    contact over Savant's tracked balls, and the season's calibration."""
     if "xwoba" not in df:
         return None
     has = df["xwoba"].notna()
     return {"n": int(has.sum()), "bat_speed": round(float(df.loc[has, "bat_speed"].mean()), 2),
-            "xwoba": round(float(df.loc[has, "xwoba"].mean()), 4)}
+            "xwoba": round(float(df.loc[has, "xwoba"].mean()), 4), **(info or {})}
 
 
-def season_file(season: int, df: pd.DataFrame, built: str) -> dict:
+def season_file(season: int, df: pd.DataFrame, built: str, info: dict | None = None) -> dict:
     return {
         "season": season,
         "built": built,
@@ -292,7 +309,7 @@ def season_file(season: int, df: pd.DataFrame, built: str) -> dict:
         "grid": {"spray": [*SPRAY, GRID_N], "launch": [*LAUNCH, GRID_N]},
         "league": [round(float(v), 7) for v in league_grid(df)],
         "teams": sorted(df["bat_team"].astype(str).unique()),
-        "xwoba": xwoba_summary(df),
+        "xwoba": xwoba_summary(df, info),
         "players": player_rows(df),
     }
 
@@ -313,13 +330,19 @@ def build(store, s: requests.Session, manifest: dict, seasons: list[int], verbos
             print(f"{season}:", file=sys.stderr)
         built = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
         df = load_season(s, manifest, season, verbose)
+        calib = info = None
         if season >= XWOBA_SEASON:
-            df = with_xwoba(df, season, verbose)
-        data = season_file(season, df, built)
-        # the surface goes up before the first index entry that offers the xwOBA views
-        if data["xwoba"] is not None and not surface:
-            store.put(f"{PREFIX}/xwoba.json", _dump(surface_file(built)), "application/json", SEASON_CACHE)
-            surface = True
+            df, calib, info = with_xwoba(df, season, verbose)
+        data = season_file(season, df, built, info)
+        # the surfaces go up before the index entry that offers the xwOBA views: the season's
+        # own, read with its calibration, and (once a run) the model's uncalibrated one
+        if data["xwoba"] is not None:
+            store.put(f"{PREFIX}/xwoba-{season}.json", _dump(surface_file(built, season, calib)),
+                      "application/json", SEASON_CACHE)
+            if not surface:
+                store.put(f"{PREFIX}/xwoba.json", _dump(surface_file(built)),
+                          "application/json", SEASON_CACHE)
+                surface = True
         store.put(f"{PREFIX}/{season}.json", _dump(data), "application/json", SEASON_CACHE)
         index["seasons"][str(season)] = {
             "built": built, "through": data["through"], "n": data["n"],
@@ -332,7 +355,9 @@ def build(store, s: requests.Session, manifest: dict, seasons: list[int], verbos
             print(f"  {data['n']} batted balls, {len(data['players'])} hitters, through {data['through']}",
                   file=sys.stderr)
             if data["xwoba"]:
-                print(f"  bat speed and xwOBA on {data['xwoba']['n']}", file=sys.stderr)
+                x = data["xwoba"]
+                print(f"  bat speed and xwOBA on {x['n']}: xwOBA {x['xwoba']:.4f},"
+                      f" wOBA {x['woba']:.4f}, calibration {x['calibration']}", file=sys.stderr)
 
 
 def main(argv=None) -> None:

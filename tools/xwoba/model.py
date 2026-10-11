@@ -225,6 +225,39 @@ def fit(df, params: Params | None = None, axes=AXES) -> Grid:
     return Grid(axes, smooth(histogram(df, axes), axes, params), params)
 
 
+# ---- a season's calibration -------------------------------------------------------------------
+# The model is fit on every season pooled, with no term for the season, so a season whose balls
+# went further or less far than its inputs suggest (the ball, the weather, how squarely bat met
+# ball) reads high or low. A calibration rescales each outcome's probability so that a season's
+# mean predicted mix of outcomes is its actual one -- its xwOBA on contact then its wOBA on
+# contact -- moved toward no change by CALIBRATION_DAMP balls, so the first weeks of a season
+# aren't overcorrected (a full season of ~118,000 keeps 97% of it).
+CALIBRATION_DAMP = 4000
+
+
+def recalibrate(p: np.ndarray, m: np.ndarray, axis: int = -1) -> np.ndarray:
+    """Probabilities p with each class's scaled by its multiplier in m, renormalised."""
+    shape = [1] * p.ndim
+    shape[axis] = len(m)
+    q = p * np.asarray(m, dtype=float).reshape(shape)
+    return q / q.sum(axis=axis, keepdims=True)
+
+
+def calibration(p: np.ndarray, outcome: np.ndarray, damp: float = CALIBRATION_DAMP) -> np.ndarray:
+    """The multipliers, one per class (an out's 1), that bring the mean of the (n, classes)
+    probabilities p, rescaled and renormalised, to the classes' shares among the observed
+    outcomes: iterative proportional fitting, then each moved toward 1 by n / (n + damp)."""
+    seen = np.bincount(outcome, minlength=p.shape[1]) / len(outcome)
+    m = np.ones(p.shape[1])
+    for _ in range(200):
+        step = seen / recalibrate(p, m).mean(axis=0)
+        m *= step
+        m /= m[0]
+        if np.abs(step / step[0] - 1).max() < 1e-12:
+            break
+    return 1 + (m - 1) * len(outcome) / (len(outcome) + damp)
+
+
 # ---- the fitted model ------------------------------------------------------------------------
 class Grid:
     """Outcome probabilities on a grid over some of INPUTS (all three for the model;
@@ -245,12 +278,14 @@ class Grid:
     def predict_frame(self, df) -> np.ndarray:
         return self.predict(*(df[a.name] for a in self.axes))
 
-    def xwoba(self, *inputs) -> np.ndarray:
-        return self.predict(*inputs) @ WEIGHTS
+    def xwoba(self, *inputs, calibration: np.ndarray | None = None) -> np.ndarray:
+        p = self.predict(*inputs)
+        return (p if calibration is None else recalibrate(p, calibration)) @ WEIGHTS
 
-    def surface(self) -> np.ndarray:
+    def surface(self, calibration: np.ndarray | None = None) -> np.ndarray:
         """xwOBA at every grid node."""
-        return np.tensordot(WEIGHTS, self.probs, axes=1)
+        probs = self.probs if calibration is None else recalibrate(self.probs, calibration, axis=0)
+        return np.tensordot(WEIGHTS, probs, axes=1)
 
     def coarsen(self, strides: tuple[int, ...]) -> Grid:
         """Every k-th node of each axis, k per axis (the end kept when it falls on a k)."""

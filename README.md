@@ -520,13 +520,16 @@ app's own files, and is reduced to small JSON files there that the page reads:
   `"LRRL…"`), their stints (`[team, balls]` for each run of balls hit for one team, so a traded
   hitter's balls count for the team they were hit for), the team list, and the league density
   on the grid. From 2024 each ball also carries its bat speed
-  and its 3D xwOBA (null for a bunt or an untracked swing), and the file the league's average of
-  both. About 1.5 MB before 2024, 3 MB after (450 / 930 KB compressed).
-- `https://data.blandalytics.com/batted-balls/xwoba.json` — the 3D xwOBA model's surface on the
-  same 91 × 91 grid at each of its bat-speed nodes (every 3 mph), in thousandths; the page reads
-  a hitter's surface by interpolating between the two slices around their bat speed, which is
-  exactly how the model reads between its own nodes. 650 KB, 240 KB compressed, fetched the
-  first time the xwOBA view is shown.
+  and its 3D xwOBA (null for a bunt or an untracked swing), read with the season's calibration
+  (see *3D xwOBA*), and the file the league's average of both, its wOBA on contact (hits only)
+  and the calibration's multipliers. About 1.5 MB before 2024, 3 MB after (450 / 930 KB
+  compressed).
+- `https://data.blandalytics.com/batted-balls/xwoba-<season>.json` — the 3D xwOBA model's surface,
+  read with that season's calibration, on the same 91 × 91 grid at each of its bat-speed nodes
+  (every 3 mph), in thousandths; the page reads a hitter's surface by interpolating between the
+  two slices around their bat speed, which is exactly how the model reads between its own nodes.
+  650 KB, 240 KB compressed, fetched the first time the xwOBA view is shown for a season.
+  `xwoba.json` is the model's own surface, uncalibrated, which the page falls back on.
 - [`.github/workflows/batted-balls.yml`](.github/workflows/batted-balls.yml) rebuilds the current
   season every morning at 11:15 UTC, after the data files roll, and takes a `seasons` input for
   backfills, built in the order given and each on the page as soon as it's done (the index is
