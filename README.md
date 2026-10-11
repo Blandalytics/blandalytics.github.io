@@ -974,8 +974,9 @@ with **Weeks** for the H2H formats), **Player pool** (All, NL-Only, AL-Only), th
 the split the values make in the box) and **Include free agents**; the scoring, as category
 toggles (5x5 roto by default) or editable points tables; and two collapsed sections:
 **Projections**, optional hitter and pitcher projection CSVs (it opens itself if the defaults don't
-load), and **Valuation details**, the **Replacement span**, **Fill missing playing time**,
-**Specialist correction** and the noise placeholders (**Count noise φ**, **Playing-time CV**). A
+load), and **Valuation details**, the **Replacement span**, the **Dollar curve**, **Fill missing
+playing time**, **Specialist correction** and the noise placeholders (**Count noise φ**,
+**Playing-time CV**). A
 setting's small print is in the tooltip on its ⓘ (on hover, keyboard focus or a tap). Any change
 reprices at once. The table beside it is every player by auction dollars, with the stats grouped
 under Hitting and Pitching; a **Slot** column says where each drafted player plays, BN for the
@@ -1064,9 +1065,10 @@ start, then in passes until it settles:
 
 The passes stop when the pool doesn't change and no denominator moves 1%; a pool that only swaps
 marginal players back and forth with weights within 3% has settled on the mean of its states; after
-20 passes, the mean of the last two (the page says so). On the 2027 projections the Yahoo format
-settles in 4 passes a side, in about 0.2 s. Its denominators: R 23.1, HR 10.6, RBI 24.7, SB 10.1,
-AVG 14.0 hits; W 4.2, SV 9.8, K 58, ERA 10.4 earned runs, WHIP 16.2 walks + hits.
+20 passes, the mean of the last two (the page says so). On the 2027 projections (as of October 11)
+the Yahoo format settles in 4 passes for hitters and 5 for pitchers, in about 0.2 s. Its
+denominators: R 24.6, HR 10.3, RBI 26.0, SB 10.2, AVG 13.7 hits; W 3.8, SV 11.4, K 44.4, ERA 12.5
+earned runs, WHIP 19.6 walks + hits.
 
 **Dollars.** The drafted players are the ones that fill every team's legal roster: each side's
 lineup slots, plus half the bench each (as BN slots anyone fits) unless **Minimize bench value** is
@@ -1075,25 +1077,33 @@ players, or `teams × (hitters + pitchers)` with the bench minimized. Every rost
 comes out of the budget first, bench included: a minimized bench is still drafted, at the min bid,
 just not priced. Every drafted player gets the min bid, the last drafted on each side exactly that,
 and the rest of the budget goes to hitters and pitchers by the **Hitter split**, then out on each
-side at one price per SGP above its last player; so exactly the drafted players are at the min bid
-or more, together they cost `teams × budget` (less `teams × bench × min bid` for a minimized bench),
-and the hitters get exactly their share of the dollars above the min bids. **From the values** uses
-one price per SGP across both sides instead, so the split is the values' own. A player no legal
-roster has room for (a 13th catcher when nothing else takes him, say) stays under the min bid. On
-the 2027 projections the Yahoo format (bench minimized) prices its 216 lineup players for $3,060
-(12 × $260, less 60 bench spots at $1); at the default 65/35 that's $13.46 per SGP for hitters and
-$7.34 for pitchers (Pete Crow-Armstrong first at $72.94). The values make it 50/50 at $10.42 per
-SGP (Tarik Skubal first at $73.43); without the playing time fill, 60/40 at $6.30. The fill moves value to part-timers with good
+side along the **Dollar curve**: a player's dollars above the min bid are `k × u^γ`, where `u` is
+his SGP above the side's last drafted player and `k` is set so the side spends exactly its dollars.
+So exactly the drafted players are at the min bid or more, together they cost `teams × budget` (less
+`teams × bench × min bid` for a minimized bench), and the hitters get exactly their share of the
+dollars above the min bids. With γ = 1 the curve is a straight line, one price per SGP; the
+research handoff's mildly convex curve is the default, γ = 1.1, where stars cost more than a
+straight line gives them (the top player about 11% more) and the middle rounds a little less. It
+keeps the player order, and the last drafted player on each side still gets the min bid. **From the
+values** puts both sides on one curve instead, so the split is the values' own. A player no legal
+roster has room for (a 13th catcher when nothing else takes him, say) stays under the min bid; a
+player below the last drafted one is priced at his side's average dollars per SGP, since the curve
+starts at him. On the 2027 projections (as of October 11) the Yahoo format (bench minimized)
+prices its 216 lineup players for $3,060 (12 × $260, less 60 bench spots at $1). At the default
+65/35 and γ = 1.1, Elly De La Cruz is first at $81.30 ($73.41 on a straight line) and Tarik Skubal
+the first pitcher at $51.10, at an average $13.88 per SGP for hitters and $7.19 for pitchers. The
+values make it 49/51 (Skubal first at $74.36); without the playing time fill, 60/40. The fill moves value to part-timers with good
 rates (Byron Buxton, Luis Robert Jr., closers) and away from full-time players near replacement
 rates (Bo Bichette, Luis Arraez, back-end starters).
 
-**Value breakdown.** A player's dollars split exactly into: **Min bid**; **Baseline**, the same for
-everyone on a side (less the last drafted player's SGP above replacement); **Position**, his
+**Value breakdown.** A player's dollars split exactly into: **Min bid**; **Baseline** (less the last
+drafted player's SGP above replacement); **Position**, his
 position's premium over his side's deepest one; **Playing time**, the replacement production filled
 in for the time he doesn't play; **each stat**, what it adds over the deepest position's replacement
 in his own playing time; **Specialist**, the roto curve's correction; and **No spot**, shown only
-when it isn't zero, what holds a player no legal roster has room for under the min bid. They add
-back up to the dollars to the cent for every player.
+when it isn't zero, what holds a player no legal roster has room for under the min bid. Each part
+is at the player's own dollars per SGP along the dollar curve (`k × u^(γ − 1)`), so they add back up
+to the dollars to the cent for every player.
 
 **Replacement by lineup slot.** Each side's slots (`teams ×` each slot, plus `teams × bench/2` more
 UT or P when the bench isn't minimized) are filled for the most total value: players in order of
@@ -1128,8 +1138,9 @@ count assumed.
 | NFBC | 15 | 2 C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT | 9 P |
 
 Not done from the procedure: the draft-state weights (Task 12, re-weighting categories for one
-team during a live draft), risk as an option value, a convex dollar curve, and the history check
-against real standings (Task 13.4). The method is checked by simulation only, not against real
+team during a live draft), risk as an option value, and the history check against real standings
+(Task 13.4). The dollar curve's γ = 1.1 is the handoff's "mildly convex", not fit to auction
+prices. The method is checked by simulation only, not against real
 league standings.
 
 | file | role |
