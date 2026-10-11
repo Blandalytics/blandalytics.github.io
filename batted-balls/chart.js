@@ -643,7 +643,13 @@
       text(name, left - 10, y(v), { size: 10, ha: "right" });
       text(v ? fmtXw(v) : "0", left + width + 10, y(v), { size: 10, ha: "left" });
     }
-    text("xwOBA", left + width / 2, top - 48, { size: 15, weight: 500 });
+    // the title centred over the bar and its labels together: the values on the right
+    // run further out than the outcomes on the left
+    ctx.font = `400 ${10 * PX_PER_PT}px ${FONT}`;
+    const widest = (labels) => Math.max(...labels.map((s) => ctx.measureText(s).width));
+    const from = left - 10 - widest(XW_STOPS.map(([, , name]) => name));
+    const to = left + width + 10 + widest(XW_STOPS.map(([v]) => (v ? fmtXw(v) : "0")));
+    text("xwOBA", (from + to) / 2, top - 48, { size: 15, weight: 500 });
   }
 
   async function render(canvas, result, opts, scale = 2) {
