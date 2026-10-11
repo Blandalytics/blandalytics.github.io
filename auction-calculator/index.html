@@ -24,7 +24,7 @@ main{max-width:1400px; margin:0 auto; display:flex; flex-direction:column; gap:1
 h1{margin:0; font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
 h2{margin:0; font-size:17px; font-weight:600}
 h3{margin:18px 0 10px; font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em}
-h3:first-child{margin-top:0}
+h3:first-child,#setbody > h3:first-child{margin-top:0}
 p{margin:0}
 .tag{margin:6px 0 0; color:var(--muted); font-size:14px; max-width:860px}
 a{color:var(--accent)}
@@ -34,6 +34,26 @@ a.home:hover{color:var(--ink)}
 .layout{display:grid; grid-template-columns:330px minmax(0,1fr); gap:18px; align-items:start}
 @media (max-width:980px){.layout{grid-template-columns:minmax(0,1fr)}}
 @media (min-width:981px){#settings{position:sticky; top:16px; max-height:calc(100vh - 32px); overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--faint) transparent}}
+/* the settings fold away: to a rail beside the table, or to a bar over it on a phone */
+.settoggle{position:absolute; top:11px; right:12px; display:flex; align-items:center; gap:8px; padding:4px; border-color:transparent; background:none; color:var(--muted);
+  font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.04em}
+.settoggle:hover:not(:disabled){color:var(--ink); background:var(--raise); border-color:var(--rule)}
+.settoggle svg{width:16px; height:16px; flex:none; transition:transform .15s}
+.settoggle .lbl{display:none}
+.layout.collapsed #settings{padding:0}
+.layout.collapsed .settoggle{position:static; width:100%; justify-content:space-between; padding:12px 18px; border:0; border-radius:8px}
+.layout.collapsed .settoggle .lbl{display:inline}
+.layout.collapsed .settoggle svg{transform:rotate(180deg)}
+@media (min-width:981px){
+  .layout.collapsed{grid-template-columns:44px minmax(0,1fr)}
+  .layout.collapsed .settoggle{flex-direction:column-reverse; justify-content:flex-end; gap:10px; padding:12px 0 14px}
+  .layout.collapsed .settoggle .lbl{writing-mode:vertical-rl}
+}
+@media (max-width:980px){
+  #settings{position:relative}   /* sticky anchors the toggle on a desktop */
+  .settoggle svg{transform:rotate(90deg)}
+  .layout.collapsed .settoggle svg{transform:rotate(-90deg)}
+}
 .pair{display:grid; grid-template-columns:1fr 1fr; gap:10px 12px; margin-bottom:10px}
 label{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
 label b{color:var(--ink); font-weight:500}
@@ -151,6 +171,8 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
 
   <div class="layout">
     <form id="settings" class="card" autocomplete="off" onsubmit="return false">
+      <button type="button" id="settoggle" class="settoggle" aria-label="Settings" aria-expanded="true" aria-controls="setbody" data-tip="Hide the settings"><span class="lbl">Settings</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div id="setbody">
       <h3>Team settings</h3>
       <label class="block"><span class="lab"><b>League format</b><button type="button" class="tip" data-tip="Each site's default teams and lineup slots; change any of them for Custom">i</button></span><select id="preset">
         <option value="yahoo">Yahoo</option><option value="espn">ESPN</option><option value="cbs">CBS</option>
@@ -231,6 +253,7 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
         </div>
       </details>
       <button type="button" class="link" id="reset">Reset all settings</button>
+      </div>
     </form>
 
     <section class="card" id="results" aria-live="polite">
@@ -259,6 +282,6 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
   </div>
 </main>
 <div id="tip" role="tooltip" hidden></div>
-<script type="module" src="app.js?v=17"></script>
+<script type="module" src="app.js?v=18"></script>
 </body>
 </html>

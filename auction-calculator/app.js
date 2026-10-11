@@ -327,6 +327,25 @@ function showPreset() {
   $("preset").value = match || "custom";
 }
 
+// ---- the settings panel ------------------------------------------------------------------
+
+// Folds to a rail beside the table (a bar over it on a phone), so the table gets the room;
+// remembered between visits
+const PANEL_STORE = "auction-calculator:panel";
+function showPanel(open) {
+  document.querySelector(".layout").classList.toggle("collapsed", !open);
+  $("setbody").hidden = !open;
+  $("settoggle").setAttribute("aria-expanded", String(open));
+  $("settoggle").dataset.tip = open ? "Hide the settings" : "Show the settings";
+  if (result) freezeOffset();   // the name column can change width with the table's
+}
+$("settoggle").addEventListener("click", () => {
+  const open = $("setbody").hidden;
+  showPanel(open);
+  try { localStorage.setItem(PANEL_STORE, open ? "open" : "closed"); } catch { /* private mode */ }
+});
+try { if (localStorage.getItem(PANEL_STORE) === "closed") showPanel(false); } catch { /* private mode */ }
+
 $("reset").onclick = () => {
   try { localStorage.removeItem(STORE); } catch { /* private mode */ }
   location.reload();
