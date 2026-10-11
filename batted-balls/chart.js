@@ -442,7 +442,7 @@
   //   result:   from compute(), computeXwoba() or computeValue()
   //   opts:     { title, subtitle, hand: "L"|"R", view: "balls"|"xwoba"|"value",
   //               signed: bool (print shares as +/- differences), wordmark }
-  //   scale:    backing pixels per layout pixel. The Download PNG is always 2 (a
+  //   scale:    backing pixels per layout pixel. The Copy PNG is always 2 (a
   //             2780 x 2430 image); on screen the app passes what the display needs.
   function draw(canvas, result, opts, scale = 2) {
     canvas.width = Math.round(W * scale); canvas.height = Math.round(H * scale);
@@ -643,7 +643,13 @@
       text(name, left - 10, y(v), { size: 10, ha: "right" });
       text(v ? fmtXw(v) : "0", left + width + 10, y(v), { size: 10, ha: "left" });
     }
-    text("xwOBA", left + width / 2, top - 48, { size: 15, weight: 500 });
+    // the title centred over the bar and its labels together: the values on the right
+    // run further out than the outcomes on the left
+    ctx.font = `400 ${10 * PX_PER_PT}px ${FONT}`;
+    const widest = (labels) => Math.max(...labels.map((s) => ctx.measureText(s).width));
+    const from = left - 10 - widest(XW_STOPS.map(([, , name]) => name));
+    const to = left + width + 10 + widest(XW_STOPS.map(([v]) => (v ? fmtXw(v) : "0")));
+    text("xwOBA", (from + to) / 2, top - 48, { size: 15, weight: 500 });
   }
 
   async function render(canvas, result, opts, scale = 2) {
