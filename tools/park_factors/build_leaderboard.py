@@ -3,7 +3,8 @@
 park_factors_2027.csv holds the current board (level x batter side x venue) with the date the
 factors were generated: each level's most recent year, MLB 2027 (on the 2027 schedule) and the
 minors 2026. park_factors_history.csv (from build_history.py) adds every earlier season, all
-batters. The page inlines both, so it makes no data requests.
+batters. park_factors_seasonal_2027.csv (the park model's seasonal fit) has the MLB 2027 parks
+week by week, for the Seasonal view. The page inlines all three, so it makes no data requests.
 Usage:
   python tools/park_factors/build_leaderboard.py                 # page from the CSV
   python tools/park_factors/build_leaderboard.py --from-md X.md  # rewrite the CSV from the park
@@ -15,12 +16,14 @@ import json
 import re
 import statistics
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).parent
 ROOT = HERE.resolve().parents[1]
 CSV = HERE / "park_factors_2027.csv"
 HIST = HERE / "park_factors_history.csv"
+SEAS = HERE / "park_factors_seasonal_2027.csv"
 OUT = ROOT / "park-factors" / "index.html"
 
 TEXT_COLS = {"Level", "Side", "League", "Team", "Org", "Venue", "As Of"}
@@ -75,6 +78,42 @@ def load_history(cols, path=HIST):
     return [[{**r, "Side": "All"}[c] if c in TEXT_COLS else int(r[c]) for c in cols] for r in recs]
 
 
+def load_seasonal(cols, rows):
+    """The Seasonal view's data from the park model's weekly seasonal table: per batter side,
+    MLB 2027 venue and week, each index column (page order) as an int of 10 x the index, 100 =
+    the league's average park that week; and per side and week the league itself ("MLB average")
+    against its season average, which the page multiplies in for its Season average baseline.
+    Weeks are [first day, last day, label]. Every venue must be on the board's MLB 2027 rows."""
+    with open(SEAS, newline="", encoding="utf-8-sig") as f:
+        recs = list(csv.DictReader(f))
+    year = LATEST["MLB"]
+    page = [SHOW_AS.get(c, c) for c in cols]
+    stats = [c for c in page[page.index("Park Factor"):page.index("PA")]]
+    model = {SHOW_AS.get(c, c): c for c in recs[0]}  # page name -> the CSV's
+    day = lambda d: datetime.strptime(f"{d} {year}", "%b %d %Y").strftime("%m-%d")  # noqa: E731
+    weeks = []
+    for r in recs:
+        a, b = (x.strip() for x in r["Dates"].split(" - "))
+        w = [day(a), day(b), f"{a} – {b}"]
+        if w not in weeks:
+            weeks.append(w)
+    wi = {w[2]: i for i, w in enumerate(weeks)}
+    board = {r[cols.index("Venue")] for r in rows if r[0] == "MLB"}
+    venues, league = defaultdict(dict), defaultdict(lambda: [None] * len(weeks))
+    for r in recs:
+        a, b = (x.strip() for x in r["Dates"].split(" - "))
+        # the league rows have no HR interval: its p10 / p90 scale by the league's HR index
+        i, vals = wi[f"{a} – {b}"], [round(10 * float(r[model[c]] or r["HR"])) for c in stats]
+        if r["Venue"] == "MLB average":
+            league[r["Bat Side"]][i] = vals
+            continue
+        v = NAMES_2027.get(r["Venue"], r["Venue"])
+        if v not in board:
+            raise ValueError(f"seasonal venue {v!r} is not on the board's MLB rows")
+        venues[r["Bat Side"]].setdefault(v, [None] * len(weeks))[i] = vals
+    return {"year": year, "weeks": weeks, "cols": stats, "venues": venues, "league": league}
+
+
 def min_games(cols, rows):
     """The qualifying cutoff by level and year: more than 50 of MLB's 81 home games, pro-rated to
     the level's home schedule. Past seasons take theirs from the median games per venue, so the
@@ -102,13 +141,14 @@ def main():
             w.writerows(recs)
         print(f"{len(recs)} rows -> {CSV}")
     cols, rows, as_of = load()
+    seasonal = load_seasonal(cols, rows)
     cols = ["Level", "Year"] + cols[1:]
     rows = [[r[0], LATEST[r[0]]] + r[1:] for r in rows] + load_history(cols)
     mins = min_games(cols, rows)
     cols = [SHOW_AS.get(c, c) for c in cols]
     renamed = {new: f"{old} through 2026" for old, new in NAMES_2027.items()}
-    data = json.dumps({"cols": cols, "rows": rows, "latest": LATEST, "minGames": mins, "renamed": renamed},
-                      separators=(",", ":"))
+    data = json.dumps({"cols": cols, "rows": rows, "latest": LATEST, "minGames": mins, "renamed": renamed,
+                       "seasonal": seasonal}, separators=(",", ":"))
     html = TEMPLATE.replace("__DATA__", data).replace("__GENERATED__", as_of)
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(html, encoding="utf-8")
@@ -145,13 +185,15 @@ a{color:var(--accent)}
 a.home{color:var(--muted); text-decoration:none; font-size:14px}
 a.home:hover{color:var(--ink)}
 .card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
-.controls{display:grid; grid-template-columns:auto repeat(5,minmax(100px,1fr)) auto; gap:12px 14px; align-items:end}
-@media (max-width:900px){.controls{grid-template-columns:1fr 1fr} .controls .side,.controls .qual{grid-column:1 / -1}}
+.controls{display:grid; grid-template-columns:auto auto repeat(5,minmax(100px,1fr)) auto; gap:12px 14px; align-items:end}
+@media (max-width:1280px){.controls{grid-template-columns:auto auto repeat(3,minmax(100px,1fr))}}
+@media (max-width:900px){.controls{grid-template-columns:1fr 1fr} .controls .view,.controls .side,.controls .qual{grid-column:1 / -1}}
 label,.field{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
 label b,.field b{color:var(--ink); font-weight:500}
 input,select,button{font:inherit; color:var(--ink)}
 select{background:var(--ground); border:1px solid var(--rule); border-radius:6px; padding:7px 9px; width:100%}
 select:focus,button:focus-visible,input:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+select:disabled{opacity:.45; cursor:default}
 .seg{display:inline-flex; align-self:flex-start; border:1px solid var(--rule); border-radius:6px; overflow:hidden; background:var(--ground)}
 .seg button{background:transparent; border:0; padding:7px 14px; cursor:pointer; color:var(--muted)}
 .seg button + button{border-left:1px solid var(--rule)}
@@ -167,6 +209,21 @@ select:focus,button:focus-visible,input:focus-visible{outline:2px solid var(--ac
 .legend .tick{font-family:"JetBrains Mono",monospace; font-size:11px}
 button.reset{background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:5px 10px; cursor:pointer; font-size:13px}
 button.reset:hover{border-color:var(--faint)}
+.seasonbar{display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px 18px; align-items:center;
+  margin-top:14px; padding-top:14px; border-top:1px solid var(--rule)}
+.seasonbar[hidden]{display:none}
+@media (max-width:900px){.seasonbar{grid-template-columns:auto minmax(0,1fr)} .seasonbar .base{grid-column:1 / -1}}
+button.play{width:38px; height:38px; border-radius:50%; border:1px solid var(--rule); background:var(--raise); cursor:pointer;
+  font-size:13px; line-height:1; padding:0}
+button.play:hover{border-color:var(--accent); color:var(--accent)}
+.slider{display:flex; flex-direction:column; gap:2px; min-width:0}
+.slider .now{display:flex; flex-wrap:wrap; justify-content:space-between; gap:2px 14px; font-size:13px; color:var(--muted)}
+.slider .now b{color:var(--ink); font-weight:600; font-size:14px}
+.slider input[type=range]{width:100%; margin:6px 0 2px; accent-color:var(--accent); cursor:pointer}
+.months{position:relative; height:15px; font-size:11px; color:var(--faint); margin:0 8px}
+.months span{position:absolute; transform:translateX(-50%); white-space:nowrap}
+tr.league td{background:var(--raise); color:var(--muted); font-style:italic}
+tr.league td.venue{background:var(--raise)}
 
 .tablewrap{overflow:auto; max-height:calc(100vh - 120px); border:1px solid var(--rule); border-radius:8px; background:var(--surface)}
 table{border-collapse:separate; border-spacing:0; width:100%; font-size:13px}
@@ -206,6 +263,12 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
 
   <section class="card">
     <div class="controls">
+      <div class="field view"><b>View</b>
+        <div class="seg" id="view" role="group" aria-label="View">
+          <button type="button" data-v="season" aria-pressed="true" title="Each park's factor for the whole season">Full season</button>
+          <button type="button" data-v="seasonal" aria-pressed="false" title="MLB 2027 parks week by week">Seasonal</button>
+        </div>
+      </div>
       <div class="field side"><b>Batter side</b>
         <div class="seg" id="side" role="group" aria-label="Batter side">
           <button type="button" data-v="All" aria-pressed="true">All</button>
@@ -220,13 +283,27 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
       <label><b>Org</b><select id="org"></select></label>
       <label class="check qual"><input id="qual" type="checkbox" checked><span id="qual_label">Qualified parks</span></label>
     </div>
+    <div class="seasonbar" id="seasonbar" hidden>
+      <button type="button" id="play" class="play" aria-label="Play through the season" title="Play through the season">▶</button>
+      <div class="slider">
+        <div class="now"><span><b id="wk_label"></b></span><span id="lg_note"></span></div>
+        <input type="range" id="week" min="0" step="1" aria-label="Week of the season">
+        <div class="months" id="months" aria-hidden="true"></div>
+      </div>
+      <div class="field base"><b>Compared to</b>
+        <div class="seg" id="base" role="group" aria-label="Compared to">
+          <button type="button" data-v="season" aria-pressed="true" title="100 = the average park over the whole season: the league's own calendar (cold April, summer heat) is included">Season average</button>
+          <button type="button" data-v="week" aria-pressed="false" title="100 = the average park that week: only the park's own seasonal pattern remains">Same week</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <div class="row">
     <span id="status" class="status"></span>
     <div class="row" style="gap:14px">
       <div class="legend" aria-hidden="true">
-        <span>Worse for hitters</span><span class="tick">90</span><span class="bar" id="legend_bar"></span><span class="tick">110</span><span>Better</span>
+        <span>Pitcher-Friendly</span><span class="bar" id="legend_bar"></span><span>Hitter-Friendly</span>
       </div>
       <button id="copy" class="reset" type="button">Copy link</button>
       <button id="csv" class="reset" type="button">Download CSV</button>
@@ -249,6 +326,7 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
         <p><b>Colors:</b> centered on 100 and saturated at 90 and 110. Red helps hitters and blue hurts them, so for <b>K</b> the scale is flipped: more strikeouts shade blue.</p>
         <p><b>Model:</b> one joint Bayesian fit of every plate appearance (MLB 2015–26; AAA, AA, A+ and A 2021–26) with batter, pitcher, league-season, home-field and platoon terms, a per-venue factor that drifts across seasons (with breaks for known dimension changes) and a per-venue left/right split. If a park is used across multiple leagues (Ex: Sutter Health Park has hosted both AAA and MLB games), the data from all leagues informs that park factor.</p>
         <p><b>Games:</b> MLB 2027 rows use the 2027 schedule (games at the venue that season, neutral sites included); every other year counts the venue's completed regular-season games that season. <b>Qualified parks</b> hides venues with 50 or fewer games, pro-rated to each level's home schedule, so shortened seasons scale down: <span id="thresholds"></span>. <b>PA</b> is the venue's plate appearances at that level in the data: that season's for past years, and every season's for each level's most recent year.</p>
+        <p><b>Seasonal:</b> MLB 2027 parks week by week, from a second fit of the same model with two curves by date added: the league's own calendar (every park together: cold April air, summer heat, September call-ups) and each park's deviation from it (a curve for its roof type plus its own). Drag the slider or press ▶ to move through the 2027 season. <b>Compared to Season average</b> sets 100 at the average park over the whole season, so the factors carry the league's calendar too (home runs run about 8% below average in early April): how the park plays that week. <b>Same week</b> sets 100 at that week's average park, which leaves only the park's own pattern (roofed parks such as American Family Field play relatively better in April, before the summer lift elsewhere). The <b>MLB average</b> row is the league that week against its season average. Most parks move only a point or two over the season, home runs the most, so this view shows one decimal. A park's seasonal factors average out to about its Full season factor (the two fits can differ by a point).</p>
         <p><b>All levels:</b> every row is still indexed to its own level's average, so a 105 in AA and a 105 in MLB are each 5% above their level, not equal environments. Picking an <b>Org</b> switches to All levels to show the whole system; pick a level after that to narrow it.</p>
         <p><b>Years:</b> each level opens on its most recent year: 2027 for MLB, built on the 2027 schedule, and 2026 for the minors. Earlier seasons (MLB from 2015, the minors from 2021) come from the same fit, indexed to that season's average park at that level, for all batters; the LHB/RHB split covers each level's most recent year. Venue names, teams, leagues and orgs are as they were that season, from MLB's StatsAPI, with 2021's interim minor-league names shown as the leagues' current ones (Triple-A East as IL, and so on). <b>All years</b> lists every season at once, one row per park and season; with a Team or Org picked, it follows a park through the years.</p>
         <p>Factors as of __GENERATED__.</p>
@@ -285,7 +363,22 @@ const showCols = () => ["Rk.", ...(state.level ? [] : ["Level"]),
 const TXT = new Set(["Level", "League", "Team", "Org", "Venue"]);
 
 const ci = Object.fromEntries(DATA.cols.map((c, i) => [c, i]));
-const DEFAULTS = {side: "All", level: "MLB", year: "", league: "", team: "", org: "", qual: true, sort: "Park Factor", dir: -1};
+// the Seasonal view: MLB parks week by week (DATA.seasonal: weeks [first "MM-DD", last, label];
+// per side and venue, each week's index columns x 10, 100 = that week's average park; per side,
+// the league each week x 10 against its season average)
+const SEAS = DATA.seasonal, NW = SEAS.weeks.length;
+const sci = Object.fromEntries(SEAS.cols.map((c, i) => [c, i]));
+const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// it opens on this week's date in the season, else opening week
+const WEEK0 = (() => {
+  const d = new Date(), md = `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (md < SEAS.weeks[0][0] || md > SEAS.weeks[NW - 1][1]) return 0;
+  let i = 0; while (i + 1 < NW && SEAS.weeks[i + 1][0] <= md) i++;
+  return i;
+})();
+const isSeasonal = () => state.view === "seasonal";
+const DEFAULTS = {view: "season", week: WEEK0, base: "season",
+  side: "All", level: "MLB", year: "", league: "", team: "", org: "", qual: true, sort: "Park Factor", dir: -1};
 const state = {...DEFAULTS};
 let shown = [];  // the rows on screen, in order, for the CSV download
 
@@ -311,6 +404,9 @@ function fill(sel, values, allLabel, keep) {
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"})[c]); }
 
 $("level").innerHTML = `<option value="">All levels</option>` + LEVELS.map(l => `<option>${l}</option>`).join("");
+$("week").max = NW - 1;
+$("months").innerHTML = SEAS.weeks.map((w, i) => i && w[0].slice(0, 2) !== SEAS.weeks[i - 1][0].slice(0, 2)
+  ? `<span style="left:${(100 * i / (NW - 1)).toFixed(2)}%">${MONTHS[+w[0].slice(0, 2)]}</span>` : "").join("");
 const ORGS = uniq(DATA.rows.map(r => r[ci.Org]));
 fill($("org"), ORGS, "All orgs", "");
 $("thresholds").textContent = LEVELS.map(l => `${l} ${DATA.latest[l]} more than ${minGames(l, DATA.latest[l])}`).join(", ") +
@@ -341,7 +437,22 @@ function head() {
   }).join("");
 }
 
+// the board's MLB rows for the side with that week's index columns: against that week's average
+// park (base week), or times the league's own index that week (base season: against the season's)
+function seasonalRows() {
+  const V = SEAS.venues[state.side], lg = SEAS.league[state.side][state.week];
+  return DATA.rows.filter(r => r[ci.Level] === "MLB" && r[ci.Year] === DATA.latest.MLB && r[ci.Side] === state.side && V[r[ci.Venue]])
+    .map(r => {
+      const w = V[r[ci.Venue]][state.week], out = r.slice();
+      for (const c of COLORED) out[ci[c]] = state.base === "week" ? w[sci[c]] / 10 : Math.round(w[sci[c]] * lg[sci[c]] / 1000) / 10;
+      return out;
+    });
+}
+const fmt = (v, c) => isSeasonal() && COLORED.includes(c) ? v.toFixed(1) : v;
+
 function render() {
+  // the Seasonal view is MLB 2027 only
+  if (isSeasonal()) { state.level = "MLB"; state.year = ""; }
   // batter-side splits only exist for each level's most recent year, so not on All years
   const splits = state.year !== ALL && DATA.rows.some(r => r[ci.Side] !== "All" && (!state.level || r[ci.Level] === state.level) && yearOk(r));
   if (!splits) state.side = "All";
@@ -353,7 +464,7 @@ function render() {
   $("qual_label").textContent = state.level && state.year !== ALL
     ? `Qualified parks (more than ${minGames(state.level, yearOf(state.level))} games)`
     : `Qualified parks (more than 50 games, pro-rated by ${state.level ? "season" : "level and season"})`;
-  const rows = DATA.rows.filter(r =>
+  const rows = (isSeasonal() ? seasonalRows() : DATA.rows).filter(r =>
     r[ci.Side] === state.side && (!state.level || r[ci.Level] === state.level) && yearOk(r) &&
     (!state.league || r[ci.League] === state.league) &&
     (!state.team || r[ci.Team] === state.team) &&
@@ -367,12 +478,18 @@ function render() {
   });
   shown = rows;
   head();
-  $("body").innerHTML = rows.length ? rows.map((r, i) => "<tr>" + SHOW.map(c => {
+  // Seasonal against the season average: the league's own row that week on top
+  const lg = SEAS.league[state.side][state.week];
+  const league = isSeasonal() && state.base === "season" && rows.length ? "<tr class=\"league\">" + SHOW.map(c =>
+    c === "Venue" ? `<td class="txt venue" title="The league that week against its season average">MLB average</td>`
+    : COLORED.includes(c) ? `<td class="${c === "Park Factor" ? "sep" : ""}">${(lg[sci[c]] / 10).toFixed(1)}</td>`
+    : `<td class="${c === "PA" ? "sep" : ""}${TXT.has(c) ? " txt" : ""}"></td>`).join("") + "</tr>" : "";
+  $("body").innerHTML = rows.length ? league + rows.map((r, i) => "<tr>" + SHOW.map(c => {
     if (c === "Rk.") return `<td class="rk">${i + 1}</td>`;
     const v = r[ci[c]];
     const was = c === "Venue" && DATA.renamed[v];  // a park renamed for 2027
     if (TXT.has(c)) return `<td class="txt${c === "Venue" ? " venue" : ""}"${was ? ` title="${esc(was)}"` : ""}>${esc(v)}</td>`;
-    if (COLORED.includes(c)) return `<td class="stat${c === "Park Factor" ? " pf sep" : ""}" style="background:${shade(v, c)}">${v}</td>`;
+    if (COLORED.includes(c)) return `<td class="stat${c === "Park Factor" ? " pf sep" : ""}" style="background:${shade(v, c)}">${fmt(v, c)}</td>`;
     return `<td class="dim${c === "PA" ? " sep" : ""}">${c === "Year" ? v : v.toLocaleString()}</td>`;
   }).join("") + "</tr>").join("")
     : `<tr class="empty"><td colspan="${SHOW.length}">No parks match these filters${state.qual ? " — try turning off Qualified parks" : ""}.</td></tr>`;
@@ -380,9 +497,22 @@ function render() {
   const years = rows.map(r => r[ci.Year]);
   const when = state.year === ALL ? (n ? `, ${Math.min(...years)}–${Math.max(...years)}` : "")
     : state.level ? ` in ${yearOf(state.level)}` : state.year ? ` in ${state.year}` : " in each level's most recent year";
-  $("status").textContent = state.level
+  const wk = SEAS.weeks[state.week][2];
+  $("status").textContent = isSeasonal()
+    ? `${n} MLB ${unit}, ${wk}, ${SEAS.year}, ${SIDE_LABEL[state.side]}, against ${state.base === "week" ? "that week's" : "the season's"} average park`
+    : state.level
     ? `${n} ${state.level} ${unit}${when}, ${SIDE_LABEL[state.side]}`
     : `${n} ${unit} across all levels${when}, ${SIDE_LABEL[state.side]} (each indexed to its own level)`;
+  $("seasonbar").hidden = !isSeasonal();
+  $("wk_label").textContent = `${wk}, ${SEAS.year}`;
+  $("lg_note").textContent = `League that week vs its season: wOBA ${(lg[sci["Park Factor"]] / 10).toFixed(1)} · HR ${(lg[sci.HR] / 10).toFixed(1)} · K ${(lg[sci.K] / 10).toFixed(1)}`;
+  $("week").value = state.week;
+  for (const id of ["level", "year"]) {
+    $(id).disabled = isSeasonal();
+    $(id).title = isSeasonal() ? "The Seasonal view covers MLB 2027" : "";
+  }
+  document.querySelectorAll("#view button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.view));
+  document.querySelectorAll("#base button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.base));
   document.querySelectorAll("#side button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.side));
   $("level").value = state.level; $("year").value = state.year; $("org").value = state.org; $("qual").checked = state.qual;
   const h = toHash();
@@ -392,10 +522,15 @@ function render() {
 }
 
 // the filters live in the link hash (#org=SEA&side=L&sort=HR…), defaults left out;
-// with an org picked, All levels is the default level
-const levelDefault = () => state.org ? "" : "MLB";
+// with an org picked, All levels is the default level (but not in the Seasonal view, MLB only)
+const levelDefault = () => state.org && !isSeasonal() ? "" : "MLB";
 function toHash() {
   const p = new URLSearchParams();
+  if (isSeasonal()) {
+    p.set("view", "seasonal");
+    p.set("wk", SEAS.weeks[state.week][0]);  // the week's first day, MM-DD
+    if (state.base !== DEFAULTS.base) p.set("base", state.base);
+  }
   if (state.side !== DEFAULTS.side) p.set("side", state.side);
   if (state.level !== levelDefault()) p.set("level", state.level || "all");
   if (state.year) p.set("year", state.year);
@@ -410,6 +545,10 @@ function toHash() {
 function fromHash() {
   const p = new URLSearchParams(location.hash.slice(1));
   Object.assign(state, DEFAULTS);
+  if (p.get("view") === "seasonal") state.view = "seasonal";
+  const wi = SEAS.weeks.findIndex(w => w[0] === p.get("wk"));
+  if (wi >= 0) state.week = wi;
+  if (p.get("base") === "week") state.base = "week";
   if (["L", "R"].includes(p.get("side"))) state.side = p.get("side");
   if (ORGS.includes(p.get("org"))) state.org = p.get("org");
   const lv = p.get("level");
@@ -418,6 +557,7 @@ function fromHash() {
   state.league = p.get("league") || "";  // refreshOptions drops a league or team that isn't there
   state.team = p.get("team") || "";
   if (p.get("qual") === "0") state.qual = false;
+  if (isSeasonal()) { state.level = "MLB"; state.year = ""; }
   if (showCols().includes(p.get("sort"))) {
     state.sort = p.get("sort");
     state.dir = p.get("dir") === "asc" ? 1 : -1;
@@ -425,6 +565,26 @@ function fromHash() {
 }
 
 $("side").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.side = b.dataset.v; render(); } });
+$("view").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  state.view = b.dataset.v;
+  if (isSeasonal()) { state.level = "MLB"; state.year = ""; } else stop();
+  refreshOptions(); render();
+});
+$("base").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.base = b.dataset.v; render(); } });
+$("week").addEventListener("input", e => { stop(); state.week = +e.target.value; render(); });
+// ▶ steps a week at a time to the end of the season (from opening week again once at the end)
+let timer = null;
+function stop() {
+  clearInterval(timer); timer = null;
+  $("play").textContent = "▶"; $("play").setAttribute("aria-label", "Play through the season");
+}
+$("play").addEventListener("click", () => {
+  if (timer) return stop();
+  if (state.week >= NW - 1) { state.week = 0; render(); }
+  $("play").textContent = "❚❚"; $("play").setAttribute("aria-label", "Pause");
+  timer = setInterval(() => { if (state.week >= NW - 1) return stop(); state.week++; render(); }, 650);
+});
 $("level").addEventListener("change", e => { state.level = e.target.value; state.league = state.team = ""; refreshOptions(); render(); });
 $("year").addEventListener("change", e => { state.year = e.target.value; refreshOptions(); render(); });
 $("league").addEventListener("change", e => { state.league = e.target.value; refreshOptions(); render(); });
@@ -432,11 +592,11 @@ $("team").addEventListener("change", e => { state.team = e.target.value; render(
 // picking an org shows its whole system: every level at once
 $("org").addEventListener("change", e => {
   state.org = e.target.value;
-  if (state.org) state.level = "";
+  if (state.org && !isSeasonal()) state.level = "";
   refreshOptions(); render();
 });
 $("qual").addEventListener("change", e => { state.qual = e.target.checked; render(); });
-$("reset").addEventListener("click", () => { Object.assign(state, DEFAULTS); refreshOptions(); render(); });
+$("reset").addEventListener("click", () => { stop(); Object.assign(state, DEFAULTS); refreshOptions(); render(); });
 // the Clipboard API where it's allowed, else the older select-and-copy
 function copyText(text) {
   return navigator.clipboard.writeText(text).catch(() => {
@@ -448,14 +608,19 @@ function copyText(text) {
   });
 }
 // the table as shown (filters and sort), with Level, Year and Side always included so the file says what it is
+// (the Seasonal view adds its week and baseline)
 const CSV_COLS = ["Rk.", "Level", "Year", "Side", "League", "Team", "Org", "Venue", "Games", ...COLORED, "PA"];
 const csvCell = v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
 $("csv").addEventListener("click", () => {
-  const lines = [CSV_COLS, ...shown.map((r, i) => CSV_COLS.map(c => c === "Rk." ? i + 1 : r[ci[c]]))];
+  const cols = isSeasonal() ? [...CSV_COLS.slice(0, 3), "Week", "Compared to", ...CSV_COLS.slice(3)] : CSV_COLS;
+  const extra = {"Week": SEAS.weeks[state.week][2], "Compared to": state.base === "week" ? "Same week" : "Season average"};
+  const lines = [cols, ...shown.map((r, i) => cols.map(c => c === "Rk." ? i + 1 : c in extra ? extra[c] : r[ci[c]]))];
   const text = lines.map(l => l.map(csvCell).join(",")).join("\r\n") + "\r\n";
   const blob = new Blob(["\ufeff" + text], {type: "text/csv;charset=utf-8"});  // BOM so Excel reads UTF-8
   const year = state.year === ALL ? "all-years" : state.level ? yearOf(state.level) : state.year || "most-recent";
-  const name = ["park_factors", year, state.level || "all-levels", state.org, state.league, state.team,
+  const name = ["park_factors", year, state.level || "all-levels",
+    isSeasonal() ? `seasonal_wk${SEAS.weeks[state.week][0]}_vs-${state.base === "week" ? "week" : "season"}` : "",
+    state.org, state.league, state.team,
     state.side === "All" ? "" : state.side + "HB"].filter(Boolean).join("_").replace(/\+/g, "plus");
   const a = Object.assign(document.createElement("a"), {href: URL.createObjectURL(blob), download: name + ".csv"});
   document.body.append(a); a.click(); a.remove();
@@ -467,7 +632,7 @@ $("copy").addEventListener("click", () => {
     setTimeout(() => { $("copy").textContent = "Copy link"; }, 1500);
   });
 });
-window.addEventListener("hashchange", () => { fromHash(); refreshOptions(); render(); });
+window.addEventListener("hashchange", () => { stop(); fromHash(); refreshOptions(); render(); });
 $("head").addEventListener("click", e => {
   const th = e.target.closest("th"); if (!th) return;
   const c = th.dataset.c;

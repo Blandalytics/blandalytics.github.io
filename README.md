@@ -753,7 +753,8 @@ so browsers fetch the new files.
 
 [blandalytics.com/park-factors/](https://blandalytics.com/park-factors/) — a Baseball
 Savant-style leaderboard of park factors for MLB and MiLB (AAA, AA, A+, A) parks, going into 2027
-and for every season the park model covers. Filters for **Batter side** (All / LHB / RHB),
+and for every season the park model covers, plus a week-by-week **Seasonal** view of the 2027 MLB
+parks. Filters for **View** (Full season / Seasonal), **Batter side** (All / LHB / RHB),
 **Level** (one level or All levels), **Year**, **League** (the level and year's leagues),
 **Team** (the level, year, league and org's clubs) and **Org**, plus **Qualified parks**; it opens
 on MLB 2027, all batters, qualified parks, sorted by Park Factor. Picking an org
@@ -770,14 +771,36 @@ that season (Miller Park, Safeco Field, U.S. Cellular Field, …) with that seas
 league and parent org; 2021's interim minor-league names show as the leagues' current ones
 (Triple-A East as IL, High-A West as NWL, and so on).
 
+**Seasonal** shows the MLB 2027 parks week by week (opening week, Mar 25 – Mar 31, through Sep 23
+– Sep 26), from the park model's seasonal fit. That fit adds two curves by date: the league's own
+calendar (every park together: cold April air, summer heat) and each park's deviation from it (a
+roof-type curve plus the venue's own). A slider moves through the weeks, with month ticks, and ▶
+plays through the season a week at a time. **Compared to** sets the baseline:
+- **Season average** (the default): 100 = the average park over the whole season, so the factors
+  also carry the league's calendar, e.g. home runs run about 8% below average in early April. This
+  is how the park plays that week. The page multiplies each park's same-week index by the league's
+  own index that week. An **MLB average** row on top shows that league index (the league that week
+  against its season average).
+- **Same week**: 100 = that week's average park, which leaves only the park's own pattern; for
+  example, American Family Field plays relatively better in April, before the summer lift
+  elsewhere.
+
+Level and Year are fixed to MLB 2027 in this view, and an org shows its MLB park. The other filters,
+the batter side and the sort work as on the board. The indexes show one decimal, because most parks
+move only a point or two over the season. It opens on this week's date when that falls within the
+season, else on opening week.
+
 The filters and sort are linkable: the page keeps them in the hash, leaving defaults out, e.g.
 `park-factors/#org=SEA&side=L` or `#level=AAA&league=PCL&sort=HR&dir=desc` (keys `side` = `L` /
 `R`, `level` = a level or `all`, `year` = a year or `all`, `league`, `team`, `org`, `qual=0`, `sort` = a column header,
-`dir` = `asc` / `desc`). With an org in the link, the level defaults to All levels. Unknown
+`dir` = `asc` / `desc`; the Seasonal view adds `view=seasonal`, `wk` = the week's first day as
+`MM-DD` and `base=week`, e.g. `#view=seasonal&wk=04-08&sort=HR`). With an org in the link, the level
+defaults to All levels (MLB in the Seasonal view). Unknown
 values fall back to the defaults, and **Copy link** copies the current address. **Download CSV**
 saves the table as shown (filters and sort applied, with Level, Year and Side columns always
 included) as `park_factors_<year>_<level>[_<org>_<league>_<team>_<side>HB].csv` (`most-recent` for
-the year on All levels' default, `all-years` for All years).
+the year on All levels' default, `all-years` for All years). In the Seasonal view, the CSV adds
+Week and Compared to columns, and the name adds `_seasonal_wk<MM-DD>_vs-season` (or `_vs-week`).
 
 Every column is an index where 100 is that level's average park: Park Factor (wOBA), R
 (BaseRuns), OBP, AVG, 1B, 2B, 3B, HR, BB, K, HBP, BACON (hits per contact, HR included), wOBACon,
@@ -804,8 +827,9 @@ who batted and pitched there.
 | `park-factors/index.html` | the page, with the leaderboard data inlined; no other requests but the fonts |
 | `tools/park_factors/park_factors_2027.csv` | the data: one row per level, batter side (`All`, `L`, `R`) and venue, with every column on the page and the date the factors were generated (`As Of`) |
 | `tools/park_factors/park_factors_history.csv` | every season before each level's most recent: one row per level, year and venue (all batters), with the season's venue name, League, Team, Org and Games added from StatsAPI |
+| `tools/park_factors/park_factors_seasonal_2027.csv` | the Seasonal view: one row per 2027 MLB venue, batter side and week (`Window` = the week's first day, `Dates` = its span), with every index column against that week's average park (one decimal), plus an `MLB average` row per side and week, which is the league against its season average. It is the park model's `park_factors_seasonal_weekly_2027.csv`; the venue names must match the board's MLB rows |
 | `tools/park_factors/build_history.py` | writes that file from the park model's `park_factors_history.csv` (index columns, PA and StatsAPI venue ids): each row's venue name, home club (most games there that season), league, org and completed-game count come from that season's StatsAPI schedule and teams. Responses are cached in `tools/park_factors/cache/` (not committed); it checks its 2026 minor-league rows against the board's |
-| `tools/park_factors/build_leaderboard.py` | builds the page from both CSVs; `--from-md` first rewrites the board CSV from the park model's handoff markdown (every table in its section 10) |
+| `tools/park_factors/build_leaderboard.py` | builds the page from the three CSVs; `--from-md` first rewrites the board CSV from the park model's handoff markdown (every table in its section 10) |
 | `tools/park_factors/build_tile.py` | the homepage tile, from the CSV: the top and bottom seven qualified MLB parks as a heatmap in the Pitcher List Stats figure style, laid out as HTML, screenshotted at 900 × 900 by headless Edge and saved as `images/tile-park-factors.webp` and `-720.webp` |
 | `tools/park_factors/tile_logo.png` | the Pitcher List Stats wordmark for the tile, cropped from the Series Win tile |
 
@@ -817,6 +841,10 @@ python tools/park_factors/build_leaderboard.py --from-md path/to/park_factors_20
 python tools/park_factors/build_history.py path/to/park_factors_history.csv   # then rebuild the page
 python tools/park_factors/build_tile.py                              # homepage tile from the CSV
 ```
+
+For new seasonal factors, copy the park model's `data/projections/2027/park_factors_seasonal_weekly_2027.csv`
+(from `python -m src.model.parks --seasonal-table 2026` in the projection system) over
+`tools/park_factors/park_factors_seasonal_2027.csv`, then rebuild the page.
 
 The handoff markdown and the model's history file stay with the park model; only the CSVs
 built from them are committed. After
