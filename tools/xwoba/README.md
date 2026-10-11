@@ -113,7 +113,7 @@ Fit on 2023–2025 and scored on all 118,189 balls in play from 2026, which the 
 **Hitters.** Per hitter-season (100+ batted balls), 3D xwOBA on contact is much steadier year
 to year than wOBA on contact (r = 0.66 against 0.49; Savant's xwOBA 0.75), but it predicts the
 next season's wOBA on contact no better than wOBA on contact itself does (0.49 against 0.49;
-Savant's 0.60). What it measures is a hitter's swing speed and where they hit the ball, not
+Savant's 0.60). What it measures is a hitter's bat speed and where they hit the ball, not
 how often they square it up, and the second matters to next year's results too.
 
 **Seasons differ.** Mean bat speed on balls in play rose from 71.2 mph in 2024 to 71.7 in 2026

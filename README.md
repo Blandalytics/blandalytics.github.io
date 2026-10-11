@@ -440,8 +440,10 @@ the new files.
 
 [blandalytics.com/batted-balls/](https://blandalytics.com/batted-balls/) — where a hitter's batted
 balls go, spray angle against launch angle, as a density compared to every MLB batted ball that
-season or to the hitter's own prior season. Pick a season and a hitter (or tick *Team-wide* and
-pick a team); *Self (prior year)* subtracts the hitter's previous season instead of the league. The
+season or to the hitter's own prior season (every xwOBA on the page, as its header says, is
+calculated from bat speed, launch angle and spray angle). Pick a season and a hitter (or tick
+*Team-wide* and pick a team); *Self (prior year)* subtracts the hitter's previous season instead
+of the league. The
 boxed numbers are the hitter's share of batted balls in each pull / centre / oppo by ground ball
 / line drive / fly ball / pop up cell, with the row and column shares along the axes (as changes
 from the prior season in the self comparison).

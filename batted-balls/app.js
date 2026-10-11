@@ -285,7 +285,7 @@
     const opts = {
       hand, view: "xwoba",
       title: name,
-      subtitle: `${sel.season} Swing Speed xwOBA${battingTitle(sel)}\n${mph} ➔ ${fmtXw(result.xwoba)} xwOBAcon`,
+      subtitle: `${sel.season} xwOBA${battingTitle(sel)}\n${mph} ➔ ${fmtXw(result.xwoba)} xwOBAcon`,
     };
     if (!(await drawn(result, opts, sel, name, ticket))) return;
     const lg = data.xwoba;
@@ -314,7 +314,7 @@
     const opts = {
       hand, view: "value",
       title: name,
-      subtitle: `${sel.season} Batted Ball Directional Value${battingTitle(sel)}\n${fmtMargin(result.total)} xwOBA vs Comparable Swing Speeds`,
+      subtitle: `${sel.season} Batted Ball Directional Value${battingTitle(sel)}\n${fmtMargin(result.total)} xwOBA vs Comparable Bat Speeds`,
     };
     if (!(await drawn(result, opts, sel, name, ticket))) return;
     el.note.textContent = `${ballsNote(hitter.length, sel)}, regular season, through ${data.through}; `
@@ -430,7 +430,7 @@
   el.dlPng.addEventListener("click", async () => {
     if (!current) return;
     const who = (current.name || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
-    const what = { xwoba: "swing_speed_xwoba", value: "batted_ball_value" }[current.view] || "batted_balls";
+    const what = { xwoba: "xwoba", value: "batted_ball_value" }[current.view] || "batted_balls";
     const side = current.side ? `_${HITTER[current.side]}` : "";
     const name = `${who}_${current.season}_${what}${side}${current.vs === "self" ? `_vs_${current.season - 1}` : ""}.png`;
     const png = document.createElement("canvas");
