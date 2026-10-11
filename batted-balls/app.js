@@ -285,7 +285,7 @@
     const opts = {
       hand, view: "xwoba",
       title: name,
-      subtitle: `${sel.season} xwOBA Surface${battingTitle(sel)}\n${mph} ➔ ${fmtXw(result.xwoba)} xwOBAcon`,
+      subtitle: `${sel.season} Swing Speed xwOBA${battingTitle(sel)}\n${mph} ➔ ${fmtXw(result.xwoba)} xwOBAcon`,
     };
     if (!(await drawn(result, opts, sel, name, ticket))) return;
     const lg = data.xwoba;
@@ -430,7 +430,7 @@
   el.dlPng.addEventListener("click", async () => {
     if (!current) return;
     const who = (current.name || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
-    const what = { xwoba: "xwoba_surface", value: "batted_ball_value" }[current.view] || "batted_balls";
+    const what = { xwoba: "swing_speed_xwoba", value: "batted_ball_value" }[current.view] || "batted_balls";
     const side = current.side ? `_${HITTER[current.side]}` : "";
     const name = `${who}_${current.season}_${what}${side}${current.vs === "self" ? `_vs_${current.season - 1}` : ""}.png`;
     const png = document.createElement("canvas");
