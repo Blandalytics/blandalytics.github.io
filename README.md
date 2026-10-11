@@ -458,8 +458,8 @@ of them (a stray ball from the other side doesn't make one).
 From 2024, the first season Statcast tracked bat speed from opening day, two more views sit
 beside it (neither takes the comparison; the seasons before 2024 don't offer them):
 
-- **xwOBA** swaps the density for the [3D xwOBA model](#3d-xwoba)'s surface at the hitter's (or
-  team's) average bat speed on balls in play, and the boxes and axis figures become the model's
+- **xwOBA** swaps the density for the [3D xwOBA model](#3d-xwoba)'s surface averaged over the hitter's
+  (or team's) bat speeds on balls in play, and the boxes and axis figures become the model's
   xwOBA of the balls hit into each zone. Its colours run through each outcome's wOBA value —
   white for an out (0), `#2D99C8` for a single (.900), `#54D29B` for a double (1.250), `#FFE066`
   for a triple (1.600), `#F04542` for a home run (2.000) — in ten levels of .200, spread end to
