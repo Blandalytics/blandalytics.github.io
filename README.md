@@ -988,7 +988,8 @@ side's deepest one. Any header sorts the table, a search box and position filter
 **Download CSV** saves the whole table in the script's layout (a stat both sides score is suffixed
 `_h` / `_p`). **View** switches the stat columns for a **Value breakdown** of each player's dollars
 (below), and the CSV follows it. Settings are kept in the browser between visits; **Reset all
-settings** clears them.
+settings** clears them. The chevron at the top of the sidebar folds it away, to a slim rail beside
+the table (a bar over it on a phone), and it stays folded between visits.
 
 It began as [plv_viz `auction_calc.py`](https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py)
 (the PL Auction Calculator Streamlit app) ported to the browser, and it still reads projections as
