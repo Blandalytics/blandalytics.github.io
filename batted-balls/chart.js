@@ -377,12 +377,12 @@
   const TANAKA = { lit: 0.7, shade: 0.45, width: 1.4, base: 0.3 };
   // sns.color_palette("vlag", 25)[0] and [-1]: the Less / More Often labels
   const LABEL_BLUE = "#3b73bc", LABEL_RED = "#af4647";
-  // The xwOBA surface: a spectrum pinned to the wOBA value of each outcome -- white for
-  // an out, the single's blue, the double's green, the triple's yellow, the home run's
-  // red -- in ten levels of .200. The bands take the spectrum evenly from end to end,
-  // as matplotlib's contourf spreads a colormap: the lowest an out's white, the
-  // .800-1.000 band a single's blue (.889), the highest a home run's red.
-  const XW_STOPS = [[0, "#FFFFFF", "Out"], [0.9, "#2D99C8", "1B"], [1.25, "#54D29B", "2B"],
+  // The xwOBA surface: a spectrum pinned to the wOBA value of each outcome -- the
+  // figure's background for an out, the single's blue, the double's green, the triple's
+  // yellow, the home run's red -- in ten levels of .200. The bands take the spectrum
+  // evenly from end to end, as matplotlib's contourf spreads a colormap: the lowest the
+  // background, the .800-1.000 band a single's blue (.889), the highest a home run's red.
+  const XW_STOPS = [[0, BACKGROUND, "Out"], [0.9, "#2D99C8", "1B"], [1.25, "#54D29B", "2B"],
     [1.6, "#FFE066", "3B"], [2, "#F04542", "HR"]];
   const XW_MAX = 2, XW_N = 10, XW_STEP = XW_MAX / XW_N;
   const XW_LEVELS = Array.from({ length: XW_N - 1 }, (_, i) => (i + 1) * XW_STEP);  // .2 .. 1.8
@@ -506,8 +506,9 @@
     tanaka(ctx, rings, values, cx, cy, flip);
     ctx.restore();
 
-    // --- the bucket lines: black at a quarter, 1 pt ----------------------------
-    ctx.strokeStyle = "rgba(0,0,0,0.25)";
+    // --- the bucket lines, 1 pt: black at a quarter, or white at a quarter over the
+    // xwOBA view's dark low end ---------------------------------------------------------
+    ctx.strokeStyle = xw ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.25)";
     ctx.lineWidth = pt(1);
     ctx.beginPath();
     for (const la of [10, 25, 50]) { ctx.moveTo(AX.left, py(la)); ctx.lineTo(AX.left + AX.size, py(la)); }
@@ -527,10 +528,11 @@
       setFont(12);
       const w = ctx.measureText(s).width + 2 * pad, h = box.asc + box.desc + 2 * pad;
       // a grey outline as heavy as the bucket lines, over a white fill that lets
-      // the band show through a little
+      // the band show through a little (solid on the xwOBA view, whose dark bands would
+      // grey it)
       ctx.beginPath();
       ctx.roundRect(x - w / 2, y - h / 2, w, h, pad);
-      ctx.fillStyle = "rgba(255,255,255,0.625)";
+      ctx.fillStyle = xw ? "#FFFFFF" : "rgba(255,255,255,0.625)";
       ctx.fill();
       ctx.strokeStyle = "#808080";
       ctx.lineWidth = pt(1);

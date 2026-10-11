@@ -461,9 +461,10 @@ beside it (neither takes the comparison; the seasons before 2024 don't offer the
 - **xwOBA** swaps the density for the [3D xwOBA model](#3d-xwoba)'s surface at the hitter's (or
   team's) average bat speed on balls in play, and the boxes and axis figures become the model's
   xwOBA of the balls hit into each zone. Its colours run through each outcome's wOBA value —
-  white for an out (0), `#2D99C8` for a single (.900), `#54D29B` for a double (1.250), `#FFE066`
-  for a triple (1.600), `#F04542` for a home run (2.000) — in ten levels of .200, spread end to
-  end as matplotlib's `contourf` spreads a colormap.
+  the figure's background (`#292C42`) for an out (0), `#2D99C8` for a single (.900), `#54D29B`
+  for a double (1.250), `#FFE066` for a triple (1.600), `#F04542` for a home run (2.000) — in ten
+  levels of .200, spread end to end as matplotlib's `contourf` spreads a colormap. Its zone lines
+  are light and its boxes solid white, for the dark low end.
 - **xwOBA vs MLB** compares where the hitter's xwOBA comes from with where MLB's does from
   swings as fast as theirs: the hitter's batted-ball density with each ball weighted by its
   xwOBA, less MLB's batted balls weighted the same way and reweighted to the hitter's bat
