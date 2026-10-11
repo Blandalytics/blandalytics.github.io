@@ -1082,17 +1082,17 @@ his SGP above the side's last drafted player and `k` is set so the side spends e
 So exactly the drafted players are at the min bid or more, together they cost `teams × budget` (less
 `teams × bench × min bid` for a minimized bench), and the hitters get exactly their share of the
 dollars above the min bids. With γ = 1 the curve is a straight line, one price per SGP; the
-research handoff's mildly convex curve is the default, γ = 1.1, where stars cost more than a
-straight line gives them (the top player about 11% more) and the middle rounds a little less. It
+research handoff's mildly convex curve is the default, γ = 1.05, where stars cost more than a
+straight line gives them (the top player about 5% more) and the middle rounds a little less. It
 keeps the player order, and the last drafted player on each side still gets the min bid. **From the
 values** puts both sides on one curve instead, so the split is the values' own. A player no legal
 roster has room for (a 13th catcher when nothing else takes him, say) stays under the min bid; a
 player below the last drafted one is priced at his side's average dollars per SGP, since the curve
 starts at him. On the 2027 projections (as of October 11) the Yahoo format (bench minimized)
 prices its 216 lineup players for $3,060 (12 × $260, less 60 bench spots at $1). At the default
-65/35 and γ = 1.1, Elly De La Cruz is first at $81.30 ($73.41 on a straight line) and Tarik Skubal
-the first pitcher at $51.10, at an average $13.88 per SGP for hitters and $7.19 for pitchers. The
-values make it 49/51 (Skubal first at $74.36); without the playing time fill, 60/40. The fill moves value to part-timers with good
+65/35 and γ = 1.05, Elly De La Cruz is first at $77.31 ($73.41 on a straight line) and Tarik Skubal
+the first pitcher at $48.43, at an average $13.88 per SGP for hitters and $7.19 for pitchers. The
+values make it 49/51 (Skubal first at $70.27); without the playing time fill, 60/40. The fill moves value to part-timers with good
 rates (Byron Buxton, Luis Robert Jr., closers) and away from full-time players near replacement
 rates (Bo Bichette, Luis Arraez, back-end starters).
 
@@ -1139,7 +1139,7 @@ count assumed.
 
 Not done from the procedure: the draft-state weights (Task 12, re-weighting categories for one
 team during a live draft), risk as an option value, and the history check against real standings
-(Task 13.4). The dollar curve's γ = 1.1 is the handoff's "mildly convex", not fit to auction
+(Task 13.4). The dollar curve's γ = 1.05 is the handoff's "mildly convex", not fit to auction
 prices. The method is checked by simulation only, not against real
 league standings.
 
