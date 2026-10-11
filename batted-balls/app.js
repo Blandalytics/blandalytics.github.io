@@ -103,9 +103,12 @@
     return scored.map((x) => x[1]);
   }
 
+  // The field behaves as Model Drilldown's pitcher field does: clicking in after a pick
+  // clears it and lists everyone; Enter takes the highlighted row, or the best match for
+  // what's typed (or says there is none); a season change with the list open refreshes it.
   let active = -1, shown = [];
   function showSuggestions() {
-    shown = suggestions(el.player.value);
+    shown = suggestions(el.player.value).slice(0, 400);
     active = -1;
     el.suggest.replaceChildren(...shown.map((h, i) => {
       const li = document.createElement("li");
@@ -132,6 +135,7 @@
   function pick(h) {
     chosen = h;
     el.player.value = h.name;
+    committed = true;
     hideSuggestions();
     syncControls();
     show();
@@ -377,8 +381,10 @@
     else if (!keep || !el.team.value) el.team.value = data.teams.includes("CLE") ? "CLE" : data.teams[0];
     const same = keep && chosen ? hitters.find((h) => h.id === chosen.id) : null;
     chosen = same || hitters.find((h) => h.name === DEFAULT_PLAYER) || suggestions("")[0] || null;
-    el.player.value = chosen ? chosen.name : "";
-    committed = true;
+    if (el.suggest.hidden) {
+      el.player.value = chosen ? chosen.name : "";
+      committed = true;
+    } else showSuggestions();
     el.through.textContent = `Through ${data.through}`;
     syncControls();
     status("");
@@ -414,11 +420,17 @@
   vsInputs().forEach((r) => r.addEventListener("change", show));
   sideInputs().forEach((r) => r.addEventListener("change", show));
   viewInputs().forEach((r) => r.addEventListener("change", () => { syncControls(); show(); }));
-  el.form.addEventListener("submit", (e) => { e.preventDefault(); if (shown.length) pick(shown[Math.max(active, 0)]); });
+  el.form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    hideSuggestions();
+    const hit = suggestions(el.player.value)[0];
+    if (!hit) { status("no hitter by that name this season", "warn"); return; }
+    pick(hit);
+  });
 
   el.player.addEventListener("input", () => { committed = false; showSuggestions(); });
   el.player.addEventListener("focus", startSearch);
-  el.player.addEventListener("click", () => { if (el.suggest.hidden) startSearch(); });
+  el.player.addEventListener("click", startSearch);
   el.player.addEventListener("blur", () => setTimeout(() => {
     hideSuggestions();
     if (!el.player.value.trim() && chosen) { el.player.value = chosen.name; committed = true; }
@@ -430,7 +442,7 @@
     }
     if (e.key === "ArrowDown") { e.preventDefault(); setActive((active + 1) % shown.length); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((active - 1 + shown.length) % shown.length); }
-    else if (e.key === "Enter") { e.preventDefault(); pick(shown[Math.max(active, 0)]); }
+    else if (e.key === "Enter" && active >= 0) { e.preventDefault(); pick(shown[active]); }
     else if (e.key === "Escape") hideSuggestions();
   });
   el.suggest.addEventListener("pointerdown", (e) => {
