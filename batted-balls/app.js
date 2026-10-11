@@ -170,18 +170,18 @@
   // ball), and their chart is drawn for one side at a time; anyone else's balls are all
   // from their usual side, `stand`. Spray is measured from the pull side of the side
   // batted from, so either side's balls sit against the same league grid.
-  const SIDE_NAME = { L: "Left", R: "Right" };
+  const SIDE_NAME = { L: "Left", R: "Right" }, HITTER = { L: "LHH", R: "RHH" };
   const isSwitch = (p) => Boolean(p?.sides);
   function sideBalls(p, side) {
     if (!side) return p.bbe;
     if (p.sides) return p.bbe.filter((_, i) => p.sides[i] === side);
     return p.stand === side ? p.bbe : [];
   }
-  // " (Batting Left)" after the chart's name in the subtitle, and "batting left" after
-  // the count in the note
-  const battingTitle = (sel) => (sel.side ? ` (Batting ${SIDE_NAME[sel.side]})` : "");
-  const ballsNote = (n, sel) => `${n} batted balls`
-    + (sel.team ? ` by ${sel.team} hitters` : sel.side ? ` batting ${SIDE_NAME[sel.side].toLowerCase()}` : "");
+  // " (LHH)" after the chart's name in the subtitle, and "LHH" before "batted balls" in
+  // the note
+  const battingTitle = (sel) => (sel.side ? ` (${HITTER[sel.side]})` : "");
+  const ballsNote = (n, sel) => (sel.team ? `${n} batted balls by ${sel.team} hitters`
+    : `${n} ${sel.side ? `${HITTER[sel.side]} ` : ""}batted balls`);
   const drawKey = (sel, season = sel.season) => `${season}:${sel.team || sel.id}${sel.side || ""}`;
 
   // Every ball hit for a team: a hitter's stints say which of their balls (in date
@@ -232,7 +232,7 @@
         const p = before.players.find((x) => x.id === sel.id);
         prior = p ? sideBalls(p, sel.side) : [];
         if (!prior.length) {
-          status(`No data on ${name}${sel.side ? ` batting ${SIDE_NAME[sel.side].toLowerCase()}` : ""} for ${sel.season - 1}`, "warn");
+          status(`No data on ${name}${battingTitle(sel)} for ${sel.season - 1}`, "warn");
           el.out.hidden = true; return;
         }
       }
@@ -431,7 +431,7 @@
     if (!current) return;
     const who = (current.name || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
     const what = { xwoba: "xwoba_surface", value: "batted_ball_value" }[current.view] || "batted_balls";
-    const side = current.side ? `_batting_${SIDE_NAME[current.side].toLowerCase()}` : "";
+    const side = current.side ? `_${HITTER[current.side]}` : "";
     const name = `${who}_${current.season}_${what}${side}${current.vs === "self" ? `_vs_${current.season - 1}` : ""}.png`;
     const png = document.createElement("canvas");
     await BattedBalls.render(png, current.result, current.opts, 2);
