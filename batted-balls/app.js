@@ -11,7 +11,7 @@
   const el = {
     form: $("form"), season: $("season"), teamWide: $("team_wide"), player: $("player"),
     playerLabel: $("player_label"), suggest: $("suggest"), team: $("team"), teamLabel: $("team_label"),
-    status: $("status"), out: $("out"), fig: $("fig"), note: $("note"), dlPng: $("dl_png"),
+    status: $("status"), out: $("out"), fig: $("fig"), note: $("note"), copyPng: $("copy_png"),
     through: $("through"), views: $("views"), bats: $("bats"),
   };
   const vsInputs = () => [...document.querySelectorAll('input[name="vs"]')];
@@ -201,7 +201,7 @@
 
   // Backing pixels per chart pixel for the on-screen canvas: its displayed width at the
   // screen's pixel ratio (the figure is at most 820 CSS px wide), never more than the 2 the
-  // Download PNG uses. A 1x laptop draws ~820 px wide instead of 2780.
+  // Copy PNG uses. A 1x laptop draws ~820 px wide instead of 2780.
   function screenScale() {
     const css = Math.min(820, el.fig.clientWidth || document.querySelector("main").clientWidth || 820);
     return Math.min(2, (css * (window.devicePixelRatio || 1)) / BattedBalls.W);
@@ -285,7 +285,7 @@
     const opts = {
       hand, view: "xwoba",
       title: name,
-      subtitle: `${sel.season} xwOBA${battingTitle(sel)}\n${mph} ➔ ${fmtXw(result.xwoba)} xwOBAcon`,
+      subtitle: `${sel.season} xwOBA${battingTitle(sel)}\n${mph} ➔ ${fmtXw(result.xwoba)} xwOBA`,
     };
     if (!(await drawn(result, opts, sel, name, ticket))) return;
     const lg = data.xwoba;
@@ -426,21 +426,37 @@
     if (li) setActive(Number(li.dataset.index));
   });
 
-  // The download is drawn fresh at 2x, whatever the screen needed.
-  el.dlPng.addEventListener("click", async () => {
+  // Copy PNG puts the figure on the clipboard, drawn fresh at 2x whatever the screen
+  // needed. The ClipboardItem is made inside the click with the image still to come, as
+  // Safari requires; a browser that can't copy an image gets the file to save instead.
+  function pngName(shot) {
+    const who = (shot.name || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
+    const what = { xwoba: "xwoba", value: "batted_ball_value" }[shot.view] || "batted_balls";
+    const side = shot.side ? `_${HITTER[shot.side]}` : "";
+    return `${who}_${shot.season}_${what}${side}${shot.vs === "self" ? `_vs_${shot.season - 1}` : ""}.png`;
+  }
+  function savePng(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  let copiedTimer = null;
+  el.copyPng.addEventListener("click", async () => {
     if (!current) return;
-    const who = (current.name || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
-    const what = { xwoba: "xwoba", value: "batted_ball_value" }[current.view] || "batted_balls";
-    const side = current.side ? `_${HITTER[current.side]}` : "";
-    const name = `${who}_${current.season}_${what}${side}${current.vs === "self" ? `_vs_${current.season - 1}` : ""}.png`;
-    const png = document.createElement("canvas");
-    await BattedBalls.render(png, current.result, current.opts, 2);
-    png.toBlob((b) => {
-      const url = URL.createObjectURL(b);
-      const a = document.createElement("a");
-      a.href = url; a.download = name; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }, "image/png");
+    const shot = current, png = document.createElement("canvas");
+    const blob = BattedBalls.render(png, shot.result, shot.opts, 2)
+      .then(() => new Promise((resolve) => png.toBlob(resolve, "image/png")));
+    try {
+      if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") throw new Error("no image clipboard");
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      el.copyPng.textContent = "Copied";
+      clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => { el.copyPng.textContent = "Copy PNG"; }, 1500);
+    } catch (e) {
+      console.warn("copy failed, saving instead:", e);
+      savePng(await blob, pngName(shot));
+    }
   });
 
   // A wider window or a move to a sharper screen: redraw the chart just drawn (no

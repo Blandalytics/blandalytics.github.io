@@ -487,7 +487,8 @@ beside it (neither takes the comparison; the seasons before 2024 don't offer the
 Isaac Paredes' current season loads on arrival; a chart is linkable as
 `batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, with `-left` / `-right` (a switch
 hitter's side), `-self`, `-xwoba` and `-value` suffixes (an old link's `-continuous` is
-ignored). **Download PNG** saves the figure at 2x.
+ignored). **Copy PNG** copies the figure at 2x to the clipboard (a browser that can't copy an
+image downloads it instead).
 
 It is the chart [batted-ball-charts.streamlit.app](https://batted-ball-charts.streamlit.app/)
 draws ([PLV_viz `batted_ball_charts.py`](https://github.com/Blandalytics/PLV_viz/blob/main/hitter_app/pages/batted_ball_charts.py)),

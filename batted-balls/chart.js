@@ -442,7 +442,7 @@
   //   result:   from compute(), computeXwoba() or computeValue()
   //   opts:     { title, subtitle, hand: "L"|"R", view: "balls"|"xwoba"|"value",
   //               signed: bool (print shares as +/- differences), wordmark }
-  //   scale:    backing pixels per layout pixel. The Download PNG is always 2 (a
+  //   scale:    backing pixels per layout pixel. The Copy PNG is always 2 (a
   //             2780 x 2430 image); on screen the app passes what the display needs.
   function draw(canvas, result, opts, scale = 2) {
     canvas.width = Math.round(W * scale); canvas.height = Math.round(H * scale);
