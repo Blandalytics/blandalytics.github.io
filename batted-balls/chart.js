@@ -6,10 +6,10 @@
 // of the 200 dpi image the app serves (1390 x 1135) and rasterised at 2x.
 //
 // From 2024 two more views share the grid and layout. The xwOBA view draws the 3D
-// xwOBA model's surface (tools/xwoba: spray, launch angle, bat speed) at the
-// hitter's average bat speed, with the model's xwOBA of the hitter's balls by zone.
+// xwOBA model's surface (tools/xwoba: spray, launch angle, bat speed) averaged over
+// the hitter's bat speeds, with the model's xwOBA of the hitter's balls by zone.
 // The value view draws the hitter's xwOBA-weighted density less MLB's at the
-// hitter's average bat speed, on the density chart's scale.
+// hitter's bat speeds, on the density chart's scale.
 
 (() => {
   "use strict";
@@ -182,16 +182,28 @@
   }
 
   // ---- the xwOBA view -------------------------------------------------------------
-  // The surface at one bat speed, from xwoba.json's slices (one per model node, in
-  // thousandths, laid out as the league grid): linear between the two slices around
-  // it, which is how the model itself reads between its nodes.
-  function surfaceAt(surface, batSpeed) {
+  // The surface averaged over a set of bat speeds, from xwoba.json's slices (one per
+  // model node, in thousandths, laid out as the league grid). Each speed is read
+  // linear between the two slices around it, which is how the model itself reads
+  // between its nodes, so the average is a weighted sum of the slices. Reading the
+  // surface at the average speed instead would understate a spread of swings: through
+  // most swings xwOBA climbs faster the harder the swing, so the hard ones gain more
+  // than the soft ones lose (MLB's 2026 balls read .378 at its average, .384 averaged).
+  function surfaceOver(surface, speeds) {
     const { lo, step, n } = surface.bat_speed;
-    const t = Math.min(Math.max((batSpeed - lo) / step, 0), n - 1);
-    const i = Math.min(Math.floor(t), n - 2), f = t - i;
-    const a = surface.slices[i], b = surface.slices[i + 1];
+    const w = new Float64Array(n);
+    for (const s of speeds) {
+      const t = Math.min(Math.max((s - lo) / step, 0), n - 1);
+      const i = Math.min(Math.floor(t), n - 2), f = t - i;
+      w[i] += (1 - f) / speeds.length;
+      w[i + 1] += f / speeds.length;
+    }
     const out = new Float64Array(N * N);
-    for (let k = 0; k < out.length; k++) out[k] = ((1 - f) * a[k] + f * b[k]) / surface.scale;
+    w.forEach((wi, i) => {
+      if (!wi) return;
+      const a = surface.slices[i];
+      for (let k = 0; k < out.length; k++) out[k] += (wi * a[k]) / surface.scale;
+    });
     return out;
   }
 
@@ -210,14 +222,14 @@
     };
   }
 
-  // What the xwOBA view needs: the surface at the average bat speed of the balls the
-  // model covers (swung at, tracked, not bunted), and their xwOBA by zone.
+  // What the xwOBA view needs: the surface averaged over the bat speeds of the balls
+  // the model covers (swung at, tracked, not bunted), and their xwOBA by zone.
   function computeXwoba({ balls, surface }) {
     const tracked = balls.filter((b) => b[2] != null && b[3] != null);
     if (!tracked.length) return null;
     const batSpeed = tracked.reduce((s, b) => s + b[2], 0) / tracked.length;
     return {
-      surface: surfaceAt(surface, batSpeed),
+      surface: surfaceOver(surface, tracked.map((b) => b[2])),
       zones: zoneXwoba(tracked),
       batSpeed,
       xwoba: tracked.reduce((s, b) => s + b[3], 0) / tracked.length,
@@ -660,5 +672,5 @@
     draw(canvas, result, { ...opts, wordmark }, scale);
   }
 
-  window.BattedBalls = { N, W, kdeGrid, compute, computeXwoba, computeValue, surfaceAt, shares, render, inRange, tracked };
+  window.BattedBalls = { N, W, kdeGrid, compute, computeXwoba, computeValue, surfaceOver, shares, render, inRange, tracked };
 })();

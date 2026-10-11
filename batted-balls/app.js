@@ -300,7 +300,7 @@
     return true;
   }
 
-  // The xwOBA view: the model's surface at the average bat speed of the balls drawn,
+  // The xwOBA view: the model's surface averaged over the bat speeds of the balls drawn,
   // and the model's xwOBA of those balls by zone.
   async function showXwoba(sel, data, hitter, name, hand, ticket) {
     const surf = await loadSurface(sel.season);
@@ -317,7 +317,7 @@
     const lg = data.xwoba;
     el.note.textContent = `${ballsNote(hitter.length, sel)}, regular season, through ${data.through}; `
       + `${result.tracked} with a tracked swing (bunts and untracked swings have no xwOBA). `
-      + `The surface is the model's xwOBA at a ${mph} swing, the average on these balls; `
+      + `The surface is the model's xwOBA averaged over the bat speeds of these balls (${mph} on average); `
       + `the boxes and the figures along the axes are the model's xwOBA of the balls hit into each zone, each at its own bat speed. `
       + `MLB in ${sel.season}: ${lg.bat_speed.toFixed(1)} mph, ${fmtXw(lg.xwoba)} xwOBA on contact.`;
     history.replaceState(null, "", hash(sel));

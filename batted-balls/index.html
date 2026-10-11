@@ -137,7 +137,7 @@ details[open] summary{margin-bottom:10px}
         <p><b>Self (prior year)</b> subtracts the hitter's own density from the season before, instead of the league's.</p>
         <p><b>Team-wide</b> pools every batted ball hit for a team (a traded hitter only counts batted balls for that team).</p>
         <p><b>Bats</b> appears for a switch hitter: their chart is for one side at a time, starting with the side they bat from most, and every view and comparison uses only the batted balls hit from that side.</p>
-        <p><b>xwOBA</b> (2024 on) shades the same grid by expected wOBA from a model of spray direction, launch angle and bat speed, at the hitter's average bat speed on balls in play. The boxes are the model's xwOBA of the balls hit into each zone, each at its own bat speed.</p>
+        <p><b>xwOBA</b> (2024 on) shades the same grid by expected wOBA from a model of spray direction, launch angle and bat speed, averaged over the hitter's bat speeds on balls in play. The boxes are the model's xwOBA of the balls hit into each zone, each at its own bat speed.</p>
         <p><b>xwOBA vs MLB</b> (2024 on) is the batted-ball chart again, counting value rather than balls: the hitter's density with each ball weighted by its xwOBA, less MLB's batted balls weighted the same way. Red is where the hitter gets more xwOBA than MLB's hitters swinging that hard, blue where they get less; the boxes are each zone's part of the gap, and add up to the figure in the subtitle (the hitter's xwOBA on contact less MLB's off swings as fast as theirs).</p>
         <p>Bat speed is Statcast's bat tracking, via Baseball Savant, which covers full seasons starting in 2024 (tracking started in July 2023); bunts were excluded.</p>
         <p><b>Data:</b> regular-season balls in play with a measured launch angle and stringer-based hit location coordinates, via MLB's Statcast API. Spray angle is calculated from the hit coordinates, not directly measured.</p>
@@ -147,7 +147,7 @@ details[open] summary{margin-bottom:10px}
 </main>
 <script src="https://cdn.jsdelivr.net/npm/d3-array@3.2.4/dist/d3-array.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-contour@4.0.2/dist/d3-contour.min.js"></script>
-<script src="chart.js?v=20"></script>
-<script src="app.js?v=17"></script>
+<script src="chart.js?v=21"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>
