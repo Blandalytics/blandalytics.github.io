@@ -3,7 +3,8 @@
 // bids, which it's drafted at), on rosters that fill every slot
 // legally; that the Slot column agrees with who is drafted; and that each player's value breakdown
 // adds back up to his dollars; that a hitter share gives hitters exactly that share of the dollars
-// above the min bids (with none, the share is the values' own); and that the valuation settled.
+// above the min bids (with none, the share is the values' own), on a straight or a convex dollar
+// curve; and that the valuation settled.
 //
 //   node invariants.mjs hitters.csv pitchers.csv
 import { readFileSync } from "node:fs";
@@ -25,6 +26,8 @@ const variants = [
   { format: "h2h" }, { format: "allplay", weeks: 20 }, { fillPT: false }, { specialists: false },
   { hitterShare: 0.65 }, { hitterShare: 0.7, minimizeBench: false }, { hitterShare: 0.5, style: "Points", hitterPoints: C.DEFAULT_HITTER_POINTS, pitcherPoints: C.DEFAULT_PITCHER_POINTS },
   { hitterShare: 1 }, { hitterShare: 0 },
+  { curve: 1.1 }, { curve: 1.1, hitterShare: 0.65 }, { curve: 1.3, minimizeBench: false }, { curve: 1.5, minBid: 0 },
+  { curve: 1.2, hitterShare: 0.5, style: "Points", hitterPoints: C.DEFAULT_HITTER_POINTS, pitcherPoints: C.DEFAULT_PITCHER_POINTS },
 ];
 let fails = 0, runs = 0;
 for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (const v of variants) {

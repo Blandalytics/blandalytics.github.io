@@ -1,7 +1,7 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=11";
+import * as C from "./calc.js?v=12";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -14,7 +14,7 @@ const STORE = "auction-calculator:v1";
 const VIEW_STORE = "auction-calculator:view";
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
 const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
-const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "span", "weeks", "phi", "pt_cv", ...SLOT_IDS, ...PSLOT_IDS];
+const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "span", "curve", "weeks", "phi", "pt_cv", ...SLOT_IDS, ...PSLOT_IDS];
 // The checkboxes and selects saved with the settings
 const CHECKS = ["min_bench", "include_fa", "fill_pt", "specialists", "split_auto"];
 const SELECTS = ["pool", "format"];
@@ -248,7 +248,7 @@ function readSettings() {
     minimizeBench: $("min_bench").checked, style: style(), teams: n("teams"), minBid: n("min_bid"),
     budget: n("budget"), pool: $("pool").value, includeFa: $("include_fa").checked,
     format: $("format").value, weeks: n("weeks"), phi: n("phi"), ptCV: n("pt_cv"),
-    fillPT: $("fill_pt").checked, specialists: $("specialists").checked,
+    fillPT: $("fill_pt").checked, specialists: $("specialists").checked, curve: n("curve"),
     hitterShare: autoSplit() ? null : n("split") / 100,
     hitterCats: cats.h, pitcherCats: cats.p, hitterPoints: points.h, pitcherPoints: points.p,
   };
@@ -433,7 +433,7 @@ function breakdownColumns() {
   const any = (key) => result.players.some((p) => b(p) && Math.abs(b(p)[key]) >= 0.005);
   const base = [
     part("b:min", "Min bid", "Every drafted player's floor", (p) => (b(p) ? b(p).minBid : NaN)),
-    part("b:base", "Baseline", "The same for everyone on a side: less the last drafted player's value over replacement",
+    part("b:base", "Baseline", "Less the last drafted player's value over replacement. On a dollar curve above 1, each part is at the player's own dollars per SGP, so stars' parts are larger",
       (p) => (b(p) ? b(p).baseline : NaN)),
     part("b:pos", "Position", "His position's premium over his side's deepest position", (p) => (b(p) ? b(p).position : NaN)),
   ];
