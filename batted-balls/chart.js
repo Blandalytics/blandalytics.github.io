@@ -2,7 +2,7 @@
 // minus the league's (or their own prior season's), drawn on a canvas. A port of
 // the figure in PLV_viz/hitter_app/pages/batted_ball_charts.py -- the same grid,
 // the same scipy density, the same vlag contour bands (at 11 levels rather than
-// 13, and lit as Tanaka contours), the same layout. Laid out in the pixels
+// 13, symmetric about 0, and lit as Tanaka contours), the same layout. Laid out in the pixels
 // of the 200 dpi image the app serves (1390 x 1135) and rasterised at 2x.
 //
 // From 2024 two more views share the grid and layout. The xwOBA view draws the 3D
@@ -361,9 +361,10 @@
   // the header, as the Swing Profiles figure draws it
   const HEADER = "#00D4FF";
   const SUBHEADER = "#8D96B3";
-  // contourf(levels -10..8 by 2, cmap vlag, extend both) -- the app's figure with
-  // levels=11 rather than 13: the under colour, the nine bands, the over colour
-  const LEVELS = [-10, -8, -6, -4, -2, 0, 2, 4, 6, 8];
+  // contourf(levels -9..9 by 2, cmap vlag, extend both): the under colour, the nine
+  // bands, the over colour -- the app's figure at 11 levels rather than 13, its edges
+  // made symmetric about 0 so the middle band, "Same", is centred on no difference
+  const LEVELS = [-9, -7, -5, -3, -1, 1, 3, 5, 7, 9];
   const BANDS = ["#2369bd", "#4678bc", "#7896c1", "#a7b6ce", "#d4d8e2", "#faf5f4",
     "#eacfcd", "#d8a3a0", "#c67875", "#b34d4e", "#a9373b"];
   // the discrete colourbar: BoundaryNorm over 11 steps of vlag
@@ -570,8 +571,10 @@
     // where the row labels do, so the header lines up with the widest of them.
     setFont(LABEL_SIZE);
     const textLeft = LABEL_X - ctx.measureText("Line Drive").width / 2;
-    text(opts.title, textLeft, 46, { size: 22, weight: 700, colour: HEADER, ha: "left", va: "top" });
-    text(opts.subtitle, textLeft, 116, { size: 13, colour: SUBHEADER, ha: "left", va: "top" });
+    // a two-line subtitle lifts the pair, so its second line clears the plot
+    const lift = opts.subtitle.includes("\n") ? 18 : 0;
+    text(opts.title, textLeft, 46 - lift, { size: 22, weight: 700, colour: HEADER, ha: "left", va: "top" });
+    text(opts.subtitle, textLeft, 116 - lift, { size: 13, colour: SUBHEADER, ha: "left", va: "top" });
     // the credit sits under the row labels, centred on them, at the size and in the
     // colour the Swing Profiles figure gives its footer note
     text("Data: MLB Statcast", LABEL_X, 1085 + HEADER_H, { size: 10, colour: SUBHEADER });
