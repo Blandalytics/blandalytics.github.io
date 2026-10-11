@@ -42,11 +42,10 @@ from concurrent.futures import ProcessPoolExecutor
 from functools import lru_cache
 
 import numpy as np
-import pandas as pd
 
 from boards import AdpBoard, VorBoard
 from draft_sim import snake_order
-from league import CATS, STATS
+from league import CATS, STATS, rank_min
 from valuation import position_values
 
 N_SIMS = 500
@@ -124,16 +123,16 @@ class Engine:
         self.n = len(players)
         self.n_teams = league.n_teams
         self.roster_size, self.n_start, self.n_bench = league.roster_size, league.starters, league.bench
-        self.stats = players[STATS].to_numpy(float)
-        self.value = (players[STATS] @ coef.reindex(STATS)).to_numpy(float)
+        self.stats = players.matrix(STATS)
+        self.value = self.stats @ np.asarray(coef, float)          # coef is in STATS order
         self.repl, self.assigned = repl, assigned
-        self.pos = assigned.reindex(players.index).to_numpy()
-        self.vorp = position_values(players, pd.Series(self.value, index=players.index), repl, assigned)["VORP"].to_numpy(float)
+        self.pos = np.asarray(assigned)
+        self.vorp = position_values(players, self.value, repl, assigned)["VORP"]
         self.slot_cost = sum(league.slots[s] * repl[s] for s in league.slots)     # a full lineup's replacement value
         self.bench_cost = np.where(self.pos == "G", repl["G"], repl["UTIL"])
 
         # eligibility types: legality and board pointers work per type, not per player
-        types = players["slots"].tolist()
+        types = list(players["slots"])
         self.etypes = sorted(set(types), key=lambda t: (len(t), t))
         self.n_types = len(self.etypes)
         code = {t: k for k, t in enumerate(self.etypes)}
@@ -154,8 +153,8 @@ class Engine:
         # the unsampled board the drafter reads: one VORP rank, one ADP rank, drawn from nothing
         self.rank_vor = np.empty(self.n)
         self.rank_vor[np.argsort(-self.vorp, kind="stable")] = np.arange(1, self.n + 1)
-        self.rank_adp = players["ADP_fill"].rank(method="min").to_numpy(float)
-        self.adp = players["ADP"].to_numpy(float)
+        self.rank_adp = rank_min(players["ADP_fill"])
+        self.adp = np.asarray(players["ADP"], float)
         self.adp_board = AdpBoard(players)
         self.vor_board = VorBoard(players, coef, league, assigned)
         self.w_lo, self.w_hi = w_lo, w_hi

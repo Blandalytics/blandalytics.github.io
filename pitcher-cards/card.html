@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>PLV Pitcher Game Card</title>
+<link rel="icon" href="https://res.cloudinary.com/dduabusaf/image/upload/v1772839606/teal_letter_logo_owufaj.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@600;700&display=swap">
+<style>
+html,body{margin:0;background:#292C42;color:#8D96B3;font:15px "DM Sans",system-ui,sans-serif}
+body{display:flex;justify-content:center;min-height:100vh}
+#card{width:100%;max-width:1500px}
+#card svg{display:block;width:100%;height:auto}
+#msg{align-self:center;padding:0 20px;text-align:center}
+#msg[hidden],#card[hidden]{display:none}
+#png{position:fixed;right:14px;bottom:14px;font:600 13px "DM Sans",system-ui,sans-serif;
+  color:#fff;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.35);border-radius:6px;
+  padding:7px 11px;cursor:pointer}
+#png:hover{background:rgba(0,0,0,.7)}
+#png[hidden]{display:none}
+</style>
+</head>
+<body>
+<div id="card" hidden></div>
+<p id="msg">Loading the card…</p>
+<button id="png" type="button" hidden>Copy PNG</button>
+<script src="card.js"></script>
+<script>
+// One card, full size: card.html#<gamePk>-<pitcherId>, optionally &cmp=<year> (0 for no
+// comparison). The card comes from the day's data file, found through the index, or from
+// the live cards while its game is on; ?index= and ?live= point elsewhere, as on the picker.
+(function () {
+  var params = new URLSearchParams(location.search);
+  var INDEX = new URL(params.get('index') || 'https://data.blandalytics.com/cards/index.json', location.href).href;
+  var LIVE = new URL(params.get('live') || 'https://data.blandalytics.com/live/cards/index.json', location.href).href;
+  var el = document.getElementById('card'), msg = document.getElementById('msg');
+  var btn = document.getElementById('png');
+  var svg = null, card = null;
+
+  function getJson(url) {
+    return fetch(url, {cache: 'no-cache'}).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  }
+  function parse() {
+    var m = /^#(\d+)-(\d+)(?:&cmp=(-?\d+))?$/.exec(location.hash);
+    return m ? {pk: m[1], pid: m[2], cmp: m[3]} : null;
+  }
+  // a game the nightly build has written is in its day's data; one in progress, in the
+  // live index with a file of its own
+  function find(want) {
+    var key = want.pk + '-' + want.pid;
+    return getJson(INDEX).then(function (index) {
+      var date = (index.games || {})[want.pk];
+      if (date) return getJson(new URL('data/' + date + '.json', INDEX).href).then(function (d) { return d[key]; });
+      return getJson(LIVE).then(function (live) {
+        var g = (live.games || {})[want.pk];
+        var p = g && g.pitchers.filter(function (x) { return String(x.id) === want.pid; })[0];
+        return p && getJson(new URL(p.file, LIVE).href + '?v=' + p.pitches);
+      });
+    });
+  }
+  function show() {
+    var want = parse();
+    if (!want) { msg.textContent = 'No card named: link to card.html#<gamePk>-<pitcherId>.'; return; }
+    find(want).then(function (c) {
+      if (!c) throw new Error('missing');
+      card = c;
+      svg = PitcherCard.draw(el, card, {logo: 'PitcherList_Stats_watermark_with_logo.webp'});
+      PitcherCard.show(svg, PitcherCard.comparisonYear(card, want.cmp === undefined ? null : +want.cmp));
+      document.title = card.name + ' — ' + card.date + ' ' + (card.home ? 'vs' : '@') + ' ' + card.opp
+        + ' — PLV Pitcher Game Card';
+      el.hidden = false; msg.hidden = true; btn.hidden = false;
+    }).catch(function () { msg.textContent = 'Could not find that card.'; });
+  }
+  btn.addEventListener('click', function () {
+    if (!svg) return;
+    var label = btn.textContent;
+    btn.disabled = true;
+    var done = function (text) {
+      btn.textContent = text;
+      setTimeout(function () { btn.textContent = label; btn.disabled = false; }, 1500);
+    };
+    PitcherCard.copyPng(svg, PitcherCard.filename(card)).then(done, function () { done('Copy failed'); });
+  });
+  window.addEventListener('hashchange', show);
+  show();
+})();
+</script>
+</body>
+</html>

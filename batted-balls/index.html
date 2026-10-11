@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://data.blandalytics.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Alexandria:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
 <style>
 :root{
   --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
@@ -69,7 +69,6 @@ button:disabled{opacity:.45; cursor:default}
 .views label + label{border-left:1px solid var(--rule)}
 .views input{position:absolute; opacity:0; pointer-events:none}
 .views label:has(input:checked){background:var(--raise); color:var(--ink); box-shadow:inset 0 -2px 0 var(--accent)}
-.views label:has(input:disabled){color:var(--faint); cursor:default}
 .views label:has(input:focus-visible){outline:2px solid var(--accent); outline-offset:-2px}
 details summary{cursor:pointer; font-size:17px; font-weight:600; list-style:none}
 details summary::-webkit-details-marker{display:none}
@@ -103,12 +102,11 @@ details[open] summary{margin-bottom:10px}
       </fieldset>
     </form>
     <div class="row" style="margin-top:12px">
-      <div class="views" role="radiogroup" aria-label="Show">
+      <div id="views" class="views" role="radiogroup" aria-label="Show">
         <label><input type="radio" name="view" value="balls" checked> Batted balls</label>
         <label><input type="radio" name="view" value="xwoba"> xwOBA</label>
         <label><input type="radio" name="view" value="value"> xwOBA vs MLB</label>
       </div>
-      <span id="view_note" class="status"></span>
       <label class="check"><input id="team_wide" type="checkbox"> Team-wide comparison</label>
       <span id="through" class="status"></span>
       <span id="status" class="status"></span>
@@ -116,7 +114,7 @@ details[open] summary{margin-bottom:10px}
   </section>
 
   <section id="out" class="card" hidden>
-    <div class="figure"><canvas id="fig" width="2780" height="2270"></canvas></div>
+    <div class="figure"><canvas id="fig" width="1390" height="1215"></canvas></div>
     <p id="note" class="note"></p>
     <div class="row actions">
       <button id="dl_png">Download PNG</button>
@@ -127,19 +125,20 @@ details[open] summary{margin-bottom:10px}
     <details>
       <summary>How it works</summary>
       <div class="method">
-        <p><b>The grid:</b> every batted ball is a point at its spray angle (0° at the pull-side foul line, 45° dead centre, 90° at the opposite line, for either hand) and launch angle. A Gaussian kernel density of the hitter's points is evaluated on a 91 × 91 grid over 0–90° by −30–60°, scaled to sum to 100, and the league's density over every MLB batted ball that season is subtracted. Red is where this hitter's batted balls land more often than the league's, blue less. The lines mark pull / centre / oppo (30° and 60°) and ground ball / line drive / fly ball / pop up (10°, 25° and 50° of launch angle); the boxed numbers are the hitter's share of batted balls in each cell, and the shares along the axes are for each column and row.</p>
-        <p>The difference is drawn as filled contours in steps of 0.2% of the density, with Tanaka lines along every contour: each stretch lit where its downhill side faces a light in the upper left and shaded where it faces away, so where the hitter goes more often reads as high ground and less often as hollows. Every chart on the page draws its contours this way.</p>
-        <p><b>Self (prior year)</b> subtracts the hitter's own density from the season before instead of the league's, and the percentages become the change from that season. <b>Team-wide</b> pools every batted ball hit for a team (a traded hitter's batted balls count for the team each was hit for).</p>
-        <p><b>xwOBA</b> (2024 on) shades the same grid by expected wOBA from a <a href="https://github.com/Blandalytics/blandalytics.github.io/tree/main/tools/xwoba" target="_blank" rel="noopener">3D model</a> of spray direction, launch angle and bat speed — no exit velocity, so it values where and how hard a hitter swings, not how squarely they connect — at the hitter's average bat speed on balls in play. Its colours run through the wOBA value of each outcome: white for an out (0), blue for a single (.900), green for a double (1.250), yellow for a triple (1.600), red for a home run (2.000). It is drawn in ten levels of .200, with Tanaka lines along their edges. The boxes and the figures along the axes are the model's xwOBA of the balls hit into each zone, each at its own bat speed. The comparison options belong to the batted-ball view.</p>
-        <p><b>xwOBA vs MLB</b> (2024 on) compares where the hitter's xwOBA comes from with where MLB's does from swings as fast as theirs: the hitter's batted-ball density with each ball weighted by its xwOBA, less MLB's batted balls off swings near the hitter's average bat speed weighted the same way and spread with the same kernels — the batted-ball chart again, but counting value rather than balls. Red is where the hitter gets more xwOBA than MLB's hitters swinging that hard, blue where MLB's get more, on the batted-ball chart's scale; the boxes and the figures along the axes are each zone's part of the gap, and add up to the figure in the subtitle (the hitter's xwOBA on contact less MLB's at that bat speed). Bat speed is Statcast's bat tracking, from Baseball Savant, and covers every ball from 2024 (it starts in July 2023); bunts and swings it missed have no xwOBA.</p>
-        <p><b>Data:</b> regular-season balls in play with a measured launch angle and landing spot, from the completed-games data files this site keeps; a season is updated each morning for the games two days before. The chart is the one <a href="https://batted-ball-charts.streamlit.app/" target="_blank" rel="noopener">batted-ball-charts.streamlit.app</a> draws, rebuilt for the browser; the hitter's density is computed as scipy's <code>gaussian_kde</code> would.</p>
+        <p>Every batted ball is a point at its spray angle (-45° at the pull-side foul line, 0° dead centre, 45° at the opposite line, for either hand) and launch angle. A Gaussian kernel density of the hitter's points is created for the player, and the league's density over every MLB batted ball that season is subtracted. Red is where this hitter's batted balls land more often than the league's, blue less. The lines split into Pull / Center / Oppo (-15 & 15° spray angle) and Ground Ball / Line Drive / Fly Ball / Pop Up (10°, 25° & 50° launch angle, <a href="https://www.mlb.com/glossary/statcast/launch-angle">per MLB guidelines</a>).</p>
+        <p><b>Self (prior year)</b> subtracts the hitter's own density from the season before, instead of the league's.</p>
+        <p><b>Team-wide</b> pools every batted ball hit for a team (a traded hitter only counts batted balls for that team).</p>
+        <p><b>xwOBA</b> (2024 on) shades the same grid by expected wOBA from a <a href="https://github.com/Blandalytics/blandalytics.github.io/tree/main/tools/xwoba" target="_blank" rel="noopener">3D model</a> of spray direction, launch angle and bat speed (no exit velocity, so it values where and how hard a hitter swings, not how squarely they connect), at the hitter's average bat speed on balls in play. The colours run through the wOBA value of each outcome: white for an out (0), blue for a single (.900), green for a double (1.250), yellow for a triple (1.600), red for a home run (2.000). The boxes are the model's xwOBA of the balls hit into each zone, each at its own bat speed.</p>
+        <p><b>xwOBA vs MLB</b> (2024 on) is the batted-ball chart again, counting value rather than balls: the hitter's density with each ball weighted by its xwOBA, less MLB's batted balls off swings near the hitter's average bat speed, weighted the same way. Red is where the hitter gets more xwOBA than MLB's hitters swinging that hard, blue where they get less; the boxes are each zone's part of the gap, and add up to the figure in the subtitle (the hitter's xwOBA on contact less MLB's at that bat speed).</p>
+        <p>Bat speed is Statcast's bat tracking, via Baseball Savant, which covers every swing from 2024 (it starts in July 2023, so the xwOBA charts aren't offered before 2024); bunts and swings it missed have no xwOBA.</p>
+        <p><b>Data:</b> regular-season balls in play with a measured launch angle and stringer-based hit location coordinates, via MLB's Statcast API. Spray angle is calculated from the hit coordinates, not directly measured.</p>
       </div>
     </details>
   </section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/d3-array@3.2.4/dist/d3-array.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-contour@4.0.2/dist/d3-contour.min.js"></script>
-<script src="chart.js?v=7"></script>
-<script src="app.js?v=6"></script>
+<script src="chart.js?v=13"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

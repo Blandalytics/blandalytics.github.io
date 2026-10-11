@@ -2,6 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- Everything the page needs downloads in parallel from the start: the app's modules (which
+     would otherwise arrive in three rounds, each found by the last) and Plotly, which app.js
+     only runs once its data requests are out. -->
+<link rel="modulepreload" href="app.js?v=23">
+<link rel="modulepreload" href="data.js?v=5">
+<link rel="modulepreload" href="sankey.js?v=17">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/hyparquet@1.31.1/+esm">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/hyparquet-compressors@1.1.2/+esm">
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.3/plotly.min.js">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Sequencing Flow</title>
@@ -55,6 +64,7 @@ select:hover,input:hover{border-color:var(--faint)}
 select:focus-visible,input:focus-visible{outline:2px solid var(--ink); outline-offset:1px}
 select:disabled,input:disabled{opacity:.45; cursor:default}
 #q{min-width:240px}
+#hand{min-width:120px}
 #game{min-width:300px}
 .hits{
   position:absolute; top:100%; left:0; right:0; z-index:30; margin-top:4px;
@@ -86,6 +96,7 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
 .matchup{color:var(--muted); font-size:14px}
 .matchup b{color:var(--ink); font-weight:600}
 .matchup .live{color:#65FF9C; font-weight:600}
+.matchup .hand{color:var(--ink)}
 .line{display:flex; gap:20px; flex-wrap:wrap}
 .stat{display:flex; flex-direction:column; align-items:flex-start; min-width:32px}
 .stat .v{font-size:24px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums}
@@ -186,6 +197,10 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
     <label for="game" id="gameLabel">Game</label>
     <select id="game" disabled></select>
   </div>
+  <div class="field">
+    <label for="hand">Batters</label>
+    <select id="hand" disabled></select>
+  </div>
   <button class="btn" id="png" type="button" hidden>Save PNG</button>
   <button class="btn" id="reset" type="button">Clear</button>
 </header>
@@ -217,13 +232,6 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
   <div id="tip" hidden role="tooltip"></div>
 </main>
 
-<footer class="note">
-  Hover a link to trace a plate appearance, a band to trace every one through it. Pitch types are subject to change.
-  Feedback: <a href="https://bsky.app/profile/blandalytics.pitcherlist.com" target="_blank" rel="noopener">Bluesky</a> ·
-  <a href="https://x.com/blandalytics" target="_blank" rel="noopener">Twitter</a>
-</footer>
-
-<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.3/plotly.min.js"></script>
-<script type="module" src="app.js?v=15"></script>
+<script type="module" src="app.js?v=23"></script>
 </body>
 </html>

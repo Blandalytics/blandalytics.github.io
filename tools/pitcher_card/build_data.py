@@ -1,5 +1,9 @@
 """Assemble one card: the pitcher's game from the live feed and the scraper, scored by
-the models and compared to earlier seasons, as a JSON-serialisable dict for render.py."""
+the models and compared to earlier seasons, as a JSON-serialisable dict.
+
+The dict carries numbers, not display text: pitcher-cards/card.js formats, colours and
+draws it, on render.py's page or wherever else a card is shown. ``version`` moves when
+the dict's shape does."""
 
 from __future__ import annotations
 
@@ -11,26 +15,18 @@ import pandas as pd
 
 import prep
 import shapes
-from grades import (
-    GAME_TYPE_LABEL,
-    PITCH_NAMES,
-    TEAM_ABBR,
-    VELO_DIFF,
-    WHITE,
-    bin_index,
-    game_grade,
-    letter_grade,
-    run_diff_bucket,
-    stat_color,
-)
-from models import GRADE_COLUMNS, Models
+from grades import GAME_TYPE_LABEL, TEAM_ABBR, game_grade, run_diff_bucket
+from models import Models
+from pitch_model import GRADE_COLUMNS
 
+VERSION = 3  # the card dict's shape
 MIN_GAMES = 3  # a season needs this many appearances to be offered as a comparison
-FASTBALL_PANEL = ("Velo", "Ext", "IVB", "HB", "HAVAA")
 TABLE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
-SUFFIX = {"Ext": "'", "IVB": '"', "HB": '"', "HAVAA": "°", "Str%": "%", "SwStr%": "%", "CSW%": "%"}
-COLOURED = {"Velo", "SwStr%", "CSW%", "xSLGcon", "PLV+", "plvStuff+"}
-_VELO_DIFF_CUTS = (-2, -1, -0.5, 0.5, 1, 2)
+# the primary fastball panel: its shape, plus its break as acceleration (unrounded), which
+# is what the break is coloured by. Velo, Ext, IVB, IVB_acc and HAVAA are float32 columns
+# and go out as that float32 (95.6 as 95.5999984741211); card.js colours the panel's in
+# float32, as numpy compared them
+FASTBALL_STATS = ("Velo", "Ext", "IVB", "HB", "HAVAA", "IVB_acc", "HB_acc")
 
 
 def _num(v) -> float | None:
@@ -80,7 +76,7 @@ def _count(n: int, one: str, many: str) -> str:
 
 
 def game_line(box: dict, p: pd.DataFrame) -> str:
-    """'6.0 IP, 1 ER, 4 Hits (1 HR), 1 BB, 9 Ks - 17 Whiffs, 34.1% CSW, 96 Pitches'"""
+    """'6.0 IP, 1 ER, 4 Hits (1 HR), 1 BB, 9 Ks - 17 Whiffs, 34% CSW, 96 Pitches'"""
     hr = f" ({box['homeRuns']} HR)" if box["homeRuns"] else ""
     return (
         f"{box['inningsPitched']} IP, {box['earnedRuns']} ER, "
@@ -88,7 +84,7 @@ def game_line(box: dict, p: pd.DataFrame) -> str:
         f"{_count(box['baseOnBalls'], 'BB', 'BBs')}, "
         f"{_count(box['strikeOuts'], 'K', 'Ks')} - "
         f"{_count(int(p['sw_str'].sum()), 'Whiff', 'Whiffs')}, "
-        f"{p['csw'].mean() * 100:.1f}% CSW, {box['numberOfPitches']} Pitches"
+        f"{p['csw'].mean() * 100:.0f}% CSW, {box['numberOfPitches']} Pitches"
     )
 
 
@@ -100,11 +96,13 @@ def outing_grade(box: dict, p: pd.DataFrame) -> str:
 
 
 # ---- scoring ------------------------------------------------------------------------
-def scored_pitches(df: pd.DataFrame, info: dict, arm: dict[str, float], models: Models):
-    """The prepared pitch frame with model grades, blanked where the tracking data the
-    models need is missing."""
+def scored_pitches(df, info: dict, arm: dict[str, float], models: Models, values: pd.DataFrame):
+    """The prepared pitch frame with its model columns, blanked where the tracking data
+    the models need is missing. ``values`` is this pitcher's per-pitch run values, keyed
+    as pitch_model.KEYS; a pitch the scorer skipped is simply absent and stays blank."""
     p = prep.pitches(df, info["height"], arm)
-    p[list(GRADE_COLUMNS)] = models.score(p)
+    keys = pd.MultiIndex.from_arrays([p["game_pk"], p["abi"], p["pitch_no"]])
+    p[list(GRADE_COLUMNS)] = values[list(GRADE_COLUMNS)].reindex(keys).to_numpy()
     p["xSLGcon"] = models.xslg_con(p)
     missing = p[list(prep.TRACKING)].isna().any(axis=1)
     p.loc[missing, ["plvStuff+", "PLV+", "stuffGrade_game", "plvGrade_game"]] = np.nan
@@ -112,71 +110,48 @@ def scored_pitches(df: pd.DataFrame, info: dict, arm: dict[str, float], models: 
     return p
 
 
-def grade_summary(p: pd.DataFrame) -> dict[str, str]:
+def skills(p: pd.DataFrame) -> dict[str, float | None]:
+    """The outing's mean Stuff, Location and PLV on the 100 +/- 15 scale, and Location
+    against each side; card.js turns them into the card's letters."""
     left, right = p["stand"] == "L", p["stand"] == "R"
     return {
-        "stuff": letter_grade(p["stuffGrade_game"].mean()),
-        "loc": letter_grade(p["locGrade_game"].mean()),
-        "plv": letter_grade(p["plvGrade_game"].mean()),
-        "loc_vl": letter_grade(p.loc[left, "locGrade_game"].mean()),
-        "loc_vr": letter_grade(p.loc[right, "locGrade_game"].mean()),
+        "stuff": _num(p["stuffGrade_game"].mean()),
+        "loc": _num(p["locGrade_game"].mean()),
+        "plv": _num(p["plvGrade_game"].mean()),
+        "loc_vl": _num(p.loc[left, "locGrade_game"].mean()),
+        "loc_vr": _num(p.loc[right, "locGrade_game"].mean()),
     }
 
 
 # ---- the tables ---------------------------------------------------------------------
-def _cell(code: str, stat: str, value: float) -> dict:
-    """Display text and colour for one stat of one pitch type."""
-    if value != value:
-        return {"text": "-", "color": WHITE}
-    colour = stat_color(code, stat, value) if stat in COLOURED else WHITE
-    if stat == "xSLGcon":
-        return {"text": f"{value:.3f}".lstrip("0"), "color": colour}
-    if stat in ("Str%", "SwStr%", "CSW%", "PLV+", "plvStuff+"):
-        return {"text": f"{round(value):d}{SUFFIX.get(stat, '')}", "color": colour}
-    return {"text": f"{value:.1f}{SUFFIX.get(stat, '')}", "color": colour}
-
-
 def type_rows(table: pd.DataFrame) -> list[dict]:
-    """One entry per pitch type for the usage panel and the metrics table."""
+    """One entry per pitch type for the usage panel and the metrics table, with the game
+    table's numbers (already rounded to what the card shows)."""
     rows = []
     for r in table.to_dict("records"):
-        code = r["pitchType"]
         rows.append(
             {
-                "code": code,
-                "name": PITCH_NAMES.get(code, code),
+                "code": r["pitchType"],
                 "n": int(r["n"]),
                 "usage": _num(r["Usage%"]),
                 "vsR": _num(r["vsR"]),
                 "vsL": _num(r["vsL"]),
-                "cells": {s: _cell(code, s, r[s]) for s in TABLE_STATS},
+                "values": {s: _num(r[s]) for s in TABLE_STATS},
             }
         )
     return rows
 
 
 def fastball_panel(table: pd.DataFrame) -> dict | None:
-    """The primary fastball's shape, coloured against its pitch type's benchmarks."""
+    """The primary fastball's shape, or None when the pitcher threw no fastball."""
     fb = table[table["pitchType"].isin(["FF", "SI", "FC"])]
     if fb.empty:
         return None
     r = fb.iloc[0]
-    code = r["pitchType"]
-    stats = []
-    for stat in FASTBALL_PANEL:
-        key = f"{stat}_acc" if stat in ("IVB", "HB") else stat
-        colour = stat_color(code, stat, r[key], key=key)
-        text = "-" if r[stat] != r[stat] else f"{r[stat]:.1f}{SUFFIX.get(stat, '')}"
-        stats.append({"label": stat, "text": text, "color": colour})
-    return {"code": code, "name": PITCH_NAMES[code], "stats": stats}
+    return {"code": r["pitchType"], "values": {s: _num(r[s]) for s in FASTBALL_STATS}}
 
 
 # ---- comparison seasons -------------------------------------------------------------
-def _velo_diff(diff: float) -> dict:
-    colour = VELO_DIFF[2 * bin_index(diff, _VELO_DIFF_CUTS)]
-    return {"text": f" ({diff:+.1f})", "color": colour}
-
-
 def comparison(p: pd.DataFrame, table: pd.DataFrame, season_df: pd.DataFrame, year: int):
     """Usage arrows, velocity changes and movement regions against one season."""
     plate_times = p.groupby("pitchType")["plate_time"].mean().to_dict()
@@ -192,7 +167,7 @@ def comparison(p: pd.DataFrame, table: pd.DataFrame, season_df: pd.DataFrame, ye
             r.pitchType: {
                 "vsR_arrow": r.vsR_arrow,
                 "vsL_arrow": r.vsL_arrow,
-                "velo": _velo_diff(r.Velo_diff),
+                "velo_diff": _num(r.Velo_diff),
             }
             for r in cmp.itertuples(index=False)
         },
@@ -246,17 +221,19 @@ def build(
     seasons: dict[int, pd.DataFrame],
     arm_angles: dict[str, float],
     models: Models,
+    values: pd.DataFrame,
 ) -> dict:
     """The card dict for one pitcher's game. ``df`` is that pitcher's pitches from
-    statfast; ``seasons`` maps year -> the same pitcher's regular-season pitches from
-    before this game."""
+    statfast, ``values`` their Stuff / Locations / Pitching columns from pitch_model, and
+    ``seasons`` maps year -> the same pitcher's regular-season pitches from before this
+    game."""
     info = game_info(feed, pitcher_id)
-    p = scored_pitches(df, info, arm_angles, models)
+    p = scored_pitches(df, info, arm_angles, models, values)
     table = prep.game_table(p)
     date = dt.date.fromisoformat(info["date"])
-    grades = {"game": outing_grade(info["box"], p), **grade_summary(p)}
     at = "vs" if info["home"] else "@"
     return {
+        "version": VERSION,
         "game_pk": game_pk,
         "pitcher_id": pitcher_id,
         **{k: info[k] for k in ("name", "hand", "age", "team", "opp", "home", "date", "label")},
@@ -264,7 +241,8 @@ def build(
         "title": f"Pitcher Performance: {date.month}/{date.day}/{date.year} {at} {info['opp']}",
         "bio": f"{info['hand']}HP | {info['team']} | Age: {info['age']}",
         "line": game_line(info["box"], p),
-        "grades": grades,
+        "grades": {"game": outing_grade(info["box"], p)},
+        "skills": skills(p),
         "n_vl": int(p["vLHH"].sum()),
         "n_vr": int(p["vRHH"].sum()),
         "arm_angle": _num(p["armAngle"].mean()),

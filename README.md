@@ -2,6 +2,39 @@
 
 Source for [blandalytics.com](https://blandalytics.com).
 
+## Homepage
+
+[blandalytics.com](https://blandalytics.com) — a tile for each tool, built on the
+[Phantom](https://html5up.net/phantom) template by HTML5 UP (CCA 3.0; the footer carries the
+credit) with the site's dark palette. Each tile's picture is real output from its tool.
+Model Drilldown leads the Baseball tiles, the menu and the footer's tool list. PLV Pitcher Game
+Cards is hidden from all three for now: its tile and links are commented out in `index.html`, and
+`/pitcher-cards/` itself is still live.
+
+| file | role |
+|---|---|
+| `index.html` | the page: the definition, a section of tiles per sport (Baseball, then Hockey), the menu grouped the same way, and the footer |
+| `assets/css/main.css`, `assets/js/` | the Phantom template, unchanged |
+| `assets/css/blandalytics.css` | the site's palette and font over the template, the tile scrim, the footer wordmark |
+| `images/tile-*.webp` | the tile pictures, one per tool: `tile-NAME.webp` at 900 px and `tile-NAME-720.webp`, offered through `srcset` |
+| `tools/homepage/grab_app_pngs.py` | runs each tool in headless Chrome and saves the PNG from its own export button (the NHL Draft Tool and the Auction Calculator have none, so it screenshots the options table of a mock draft and the top of the values table) |
+| `tools/homepage/make_tiles.py` | crops those exports into square tiles (a figure whose edges carry text, like Batted Ball Charts and Swing Profiles, is padded out with its background instead); `blandalytics.css` holds every tile at 1:1 |
+
+### Updating the tiles
+
+`grab_app_pngs.py` pins the game each tile shows in its `APPS` list (a tool's link hash);
+the rest take whatever the tool opens on. It needs Chrome and `websocket-client`:
+
+```
+python tools/homepage/grab_app_pngs.py            # every tool, or name some: pitcher-cards sequencing-flow
+python tools/homepage/make_tiles.py               # same: name the tiles you re-pulled, so the rest aren't redone from older exports
+```
+
+The full-size exports land in `tools/homepage/cache/` (not committed). Cloudflare holds images
+and stylesheets for four hours under their exact URL, so each tile's `<img>` carries a `?v=`
+query: `make_tiles.py` bumps it whenever a tile comes out different, so commit `index.html` with
+the image. After changing `blandalytics.css`, bump its `?v=` in `index.html` by hand.
+
 ## MLB Scorecards
 
 [blandalytics.com/scorecards/](https://blandalytics.com/scorecards/) — a pitch-by-pitch
@@ -72,6 +105,8 @@ tracking (all of MLB and Triple-A have it, plus the odd lower-level park):
   score, inning, sport, venue and a `tracked` flag
 - `live/games/<gamePk>.json` — plays and pitches (type, velocity, location, spin, EV/LA)
   for tracked games
+- `live/cards/` — the PLV pitcher cards for the MLB games in progress, rebuilt from the same
+  feed as each pitcher's count moves (see *PLV Pitcher Game Cards*)
 
 Nothing is committed to the repo; the objects expire after a week and the nightly
 scorecard build remains the record for finished games.
@@ -99,38 +134,71 @@ is the same one the Streamlit app in
 (`pitcher_game_card.py`), rebuilt as a page: the box-score line and game grade, the Stuff /
 Locations / PLV grades, the primary fastball's shape, usage against each side of the plate,
 movement with the arm angle and the comparison season's shaded regions, locations against
-each side, and the per-pitch-type metrics table. **Save PNG** rasterises the card at 2x with
-the font and logo embedded.
+each side, and the per-pitch-type metrics table. **Copy PNG** rasterises the card at 2x with
+the font and logo embedded and puts it on the clipboard (or saves it where the browser won't).
 
 ### How it works
 
-The pages are pre-built by a scheduled workflow, into the same R2 bucket as the data
-files rather than the repo — a season is ~22,000 cards, more than a GitHub Pages site may
-hold — and the picker in [`pitcher-cards/index.html`](pitcher-cards/index.html) reads them
-from there:
+The cards are data, drawn in the browser. The pipeline writes each pitcher's card as a dict
+of numbers into the same R2 bucket as the data files (a season is ~22,000 cards, more than a
+GitHub Pages site may hold), and [`pitcher-cards/card.js`](pitcher-cards/card.js) draws it:
+one SVG in the original figure's 1500 × 2000 coordinate system, so every panel keeps the
+matplotlib layout, with every format and colour decided there. So a change to how the card
+looks is a commit to `card.js` and needs no rebuild; only a change to the data does.
+The picker in [`pitcher-cards/index.html`](pitcher-cards/index.html) draws the card in the
+page, and [`pitcher-cards/card.html`](pitcher-cards/card.html)`#<gamePk>-<pitcherId>` shows
+one full size (`&cmp=<year>` picks the comparison season, `&cmp=0` none). A card can be
+linked in the picker as `pitcher-cards/#<gamePk>-<pitcherId>`.
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones
   [Blandalytics/statcast_scraper](https://github.com/Blandalytics/statcast_scraper) (the
   pitches) and [Blandalytics/player_cards](https://github.com/Blandalytics/player_cards) (the
-  PLV model files) and builds a card for every pitcher who threw a tracked pitch the day
-  before. A backfill splits its range into months and builds them as parallel jobs; the index
-  is rebuilt from the day manifests once they have all finished.
-- [`.github/workflows/pitcher-cards-live.yml`](.github/workflows/pitcher-cards-live.yml) runs
-  every 15 minutes through game hours and builds cards for the pitchers in the games in
-  progress — the same card, from the pitches thrown so far — into `live/cards/`. A card is
-  rebuilt only when its pitcher's pitch count has moved; a game gets one last build after it
-  ends, and the nightly run then writes the permanent card. The picker shows these under a
-  **Live** entry while games are on.
-- `https://data.blandalytics.com/cards/<gamePk>-<pitcherId>.html` — one standalone page per
-  pitcher per game. The card is a single SVG drawn in the original figure's 1500 × 2000
-  coordinate system, so every panel keeps the matplotlib layout. Every comparison season's
-  layer is in the page, tagged `data-cmp="<year>"`; `#cmp=<year>` in the URL picks one and
-  `#cmp=0` hides them. The picker frames the page from the other origin and asks it, by
-  `postMessage`, to switch layers or hand back a PNG.
+  xSLG model) and fetches the pitch-modeling chain from the bucket, then builds a card for
+  every pitcher who threw a tracked pitch the day before. A backfill splits its range into
+  months and builds them as parallel jobs; the index is rebuilt from the day manifests once
+  they have all finished. A last job writes what the live cards need (below).
+- `https://data.blandalytics.com/cards/data/<date>.json` — that day's card dicts, keyed
+  `<gamePk>-<pitcherId>` (about 1.8 MB for a full slate, 320 KB compressed).
 - `https://data.blandalytics.com/cards/days/<date>.json` — that day's games and pitchers,
-  which the picker reads; `.../cards/index.json` lists the dates built and which date each
-  game is on. A card can be linked directly as `pitcher-cards/#<gamePk>-<pitcherId>`.
+  which the picker lists; `.../cards/index.json` lists the dates built and which date each
+  game is on.
+- Days built before the cards were data still have one page per card
+  (`.../cards/<gamePk>-<pitcherId>.html`, the manifest's `file`), which the picker frames as it
+  used to until a `force` run rebuilds the day.
+
+### Live cards
+
+While MLB games are on, the live Worker ([`tools/live/`](tools/live/)) builds the cards itself,
+from the same feed it polls every 30 seconds: a pitcher's card is rebuilt whenever his pitch
+count moves, so the picker's **Live** entry is within a minute of the last pitch (it re-reads
+the live index every 20 seconds and redraws the card in place). A game gets one last pass when
+it ends and leaves the live index once the nightly run has written its permanent cards.
+
+The Worker can't run the Python, so [`tools/live/src/cards/`](tools/live/src/cards/) is a
+JavaScript port of the card's pipeline: `feed.js` reads the feed into the scraper's rows,
+`scorer.js` (with `groups.js` and `abs.js`) is pitch-modeling's `score_pitches.py`,
+`pitch_groups.py`, `pitch_l1.py` and `abs_2026.py`, `trees.js` evaluates the LightGBM and
+XGBoost models, and `build.js` is `build_data.py`, down to its float32 arithmetic. The nightly
+job feeds it from the bucket:
+
+- `cards/models/scorer.pack` — the pitch-modeling models and constants, the Level 1
+  classifier and the xSLG model in one 17 MB pack (`export_scorer.py`, `model_pack.py`). A
+  retrained model goes straight through; changed pitch-modeling code doesn't, because the port
+  has to follow it: `export_scorer.py` pins the sources the port matches and refuses to
+  publish while they differ.
+- `cards/pitchers/<pitcherId>.json` — each pitcher's comparison seasons through the day
+  before (`packs.py`): appearances, pitch counts by batter side, velocity and flight time per
+  type, and the movement regions. `cards/arms/<season>.json` — Savant's arm angles.
+
+Before publishing the bundle the job checks the port against this pipeline on the previous
+day's games (`parity.py`, then `node tools/live/test/card_parity.mjs`): every number on the
+card has to match, bar a plus number or grade a hair from a rounding edge (the Python scorer
+averages in float32). So a change on either side stops there, with the Worker still on the
+last good bundle. One part is approximate by design: the comparison regions, which Python
+draws from the season's pitches of the types thrown that day at that day's flight times, are
+the season's whole-repertoire regions scaled to the game's (typically within a fifth of an
+inch; the nightly card is exact).
 
 The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 
@@ -138,17 +206,55 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 |---|---|
 | `card.py` | `pitcher_card(game_pk, pitcher_id)` → HTML string, for a finished game or one in progress; `cards_for_date(date)` → every pitcher that day |
 | `fetch.py` | the statsapi live feed (box score, bio, teams), Baseball Savant's arm angles, and `DataStore`: pitches by date from the data files in the bucket, topped up through the scraper for the days the files don't reach yet |
-| `live_cards.py` | the cards for the games in progress, published to the bucket; what `pitcher-cards-live.yml` runs |
 | `prep.py` | per-pitch metrics from the scraper's columns: counts before the pitch, approach angles, break as acceleration, fastball differences, the per-type tables |
-| `models.py` | the stuff / location / PLV model chains and the xSLG model, from the `player_cards` checkout |
+| `pitch_model.py` | Stuff, Locations and PLV: the pitch-modeling chain from the bucket, and the scale that turns its run values into the card's numbers |
+| `models.py` | expected slugging on contact, the one model still read from the `player_cards` checkout |
 | `shapes.py` | the comparison season's movement regions (seaborn's 90%-mass KDE contours) as SVG paths |
-| `grades.py` | palette, pitch-type names and colours, benchmark bins, letter grades and both game-score formulas |
-| `build_data.py` | assembles all of that into one card dict |
-| `render.py` | renders the dict as the page |
+| `grades.py` | pitch-type maps, letter grades and both game-score formulas |
+| `grade_cuts.py` | fits the Stuff / Locations / PLV letter cuts (`card.js`'s `GRADE_CUTS`) to a target grade distribution |
+| `build_data.py` | assembles all of that into one card dict (numbers; `card.js` formats them) |
+| `render.py` | a standalone page around one card dict, drawn by `card.js` |
 | `build_site.py` | builds a date range into the bucket (or a folder with `--out`) and maintains the manifests; `--reindex` rebuilds the index alone |
+| `packs.py` | the live Worker's pitcher packs and arm angles |
+| `export_scorer.py`, `model_pack.py` | the live Worker's scorer bundle, and the pack format it is in |
+| `parity.py` | real games, carded here, for the Worker's port to be checked against |
+| `test/render.mjs` | `card.js` against the SVG the Python renderer drew for three real cards |
+
+### The models
+
+Stuff, Locations and PLV come from the
+[pitch-modeling](https://github.com/Blandalytics/pitch-modeling) repo. It is published to
+the bucket under `pitch-modeling/` (60 MB, downloaded once and cached beside the data files)
+and contains:
+
+* `score_pitches.py`, the scorer, with `pitch_groups.py` and `pitch_l1.py` (the Level 1
+  pitch classifier that assigns each pitch type its Fastball / Breaking / Offspeed group)
+  and `abs_2026.py` (2026's ABS zone and calls);
+* `models/`, the four chained logit models and the classifier (`pitch_l1_v1.npz`);
+* `constants/`, the run-value tables, the plus scale and the 2026 ABS adjustment.
+
+Each file is fetched past the CDN's 4-hour cache, so a new publish reaches the next build.
+
+The scorer gives a run value per pitch from the pitcher's side: count-neutral Stuff, what the
+location added, and the two together as Pitching, which is the card's PLV.
+`constants/plus_scale_constants.json` puts a unit's mean on the card's 100 ± 15 scale, with
+2020–26 constants (weighted by pitches × 0.9^(2026 − season)); 2026 games are scored with
+the ABS adjustment, as the scale was. The card uses whole outings for the three grades, and one pitch type of
+one outing for the plvStuff+ and PLV+ columns. Each grade's letters have their own cut
+points, fitted by `grade_cuts.py` to a target share of each letter: every MLB pitcher-game
+in the data files is scored as its card is, and the cuts are the pitch-weighted quantiles of
+the outings' means (Location's cuts also grade each side of the plate). The card dict
+carries the means and `card.js` gives the letters as it draws (its `GRADE_CUTS`), so new
+cuts reach every card, past days included, as soon as `card.js` is published; only cards
+built before the dict carried the means (version 2) keep the letters they were built with.
+The
+per-pitch-type colour bins are the 10th, 30th, 70th and 90th percentiles of that pitch
+type's 2026 pitcher-games. A pitch the chain does not model — a position player's eephus,
+anything missing tracking — simply has no value, and the card shows a dash. Expected
+slugging on contact is still the xSLG model from `player_cards`.
 
 The comparison seasons, and the pitches of any settled date, come from the completed-games
-Parquet in the bucket (see *Data files*): each file is downloaded once, narrowed to the ~40
+Parquet in the bucket (see *Data files*): each file is downloaded once, narrowed to the
 columns a card reads and cached, so a cold build of a card is under a minute rather than
 four. The days the files don't reach yet — the two most recent — are pulled through the
 scraper, as is a game in progress (one game at a time, so a card can be built mid-game). The
@@ -162,17 +268,19 @@ The code passes `ruff check` and `ruff format` with the config in
 [`tools/pitcher_card/ruff.toml`](tools/pitcher_card/ruff.toml), including a McCabe
 complexity limit of 5 per function.
 
-### Backfilling or re-rendering
+### Backfilling or rebuilding
 
 Run the workflow by hand from the **Actions** tab (*Build pitcher cards → Run workflow*)
-with a `start` and `end` date; tick `force` to re-render cards that already exist, which is
-what you want after changing anything in `render.py`. A day of games is roughly 150 cards
-at about half a second each; a whole season runs as one job per month, four at a time, in
-under an hour. Cards already in a day's manifest are skipped, so an interrupted backfill
-resumes where it stopped. The first run also downloads each comparison season's data file
-once (a few seconds per season), after which they come from the workflow's cache. Writing
-to the bucket needs the `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and
-`CLOUDFLARE_ACCOUNT_ID` secrets the data files use.
+with a `start` and `end` date; tick `force` to rebuild cards that already exist, which is
+what you want after changing the data or the models (a change to `card.js` needs nothing).
+A day of games is roughly 150 cards at about half a second each; a whole season runs as one
+job per month, four at a time, in under an hour. Cards already in a day's manifest are
+skipped, so an interrupted backfill resumes where it stopped. The first run also downloads
+each comparison season's data file once (a few seconds per season), after which they come
+from the workflow's cache. Tick `all_packs` to rebuild every pitcher's pack rather than the
+recent ones (the first run builds every pack it doesn't find). Writing to the bucket needs
+the `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `CLOUDFLARE_ACCOUNT_ID` secrets the data
+files use.
 
 Locally, from the repo root with the scraper and the models cloned alongside:
 
@@ -193,8 +301,14 @@ from tools.pitcher_card.card import pitcher_card
 html = pitcher_card(822845, 543243)
 ```
 
-The live cards can be run by hand too: `python tools/pitcher_card/live_cards.py --game <gamePk>`
-builds every pitcher in that game into the bucket, or into a folder with `--out`.
+The live port can be checked by hand against any games:
+
+```bash
+python tools/pitcher_card/parity.py /tmp/parity --game 822844 --game 823084
+node tools/live/test/card_parity.mjs /tmp/parity    # the scores and the card dicts
+node tools/live/test/live_cards.mjs /tmp/parity     # the Worker's builds and live index
+node tools/pitcher_card/test/render.mjs             # card.js's drawing
+```
 
 ## Sequencing Flow
 
@@ -223,10 +337,14 @@ the first band it appears in.
 
 A flow is linkable as `sequencing-flow/#<pitcherId>-<YYYY-MM-DD>`.
 
+**Batters** filters the diagram to the pitches thrown to right- or left-handed hitters; the
+subheader then reads e.g. *June 12, 2026 @ PHI (vRHH)*, on the page and in the image.
+
 Search a pitcher to open their most recent appearance (falling back to their latest season that
 has one) and list the rest of that season; or pick a game date to list everyone who threw a tracked
-pitch that day, longest outing first. With both set the page goes straight to that game. On arrival
-with nothing asked for, it shows the longest outing of the most recent day with finished games.
+pitch that day, longest outing first. With both set the page goes straight to that game. With nothing
+asked for — on arrival, or after **Clear** — it shows the longest outing of the most recent day
+with finished games.
 
 ### How it works
 
@@ -242,6 +360,10 @@ Nothing is built ahead of time; the page queries the data in the browser:
   draws what has been thrown so far.
 - Pitcher search, game logs and team abbreviations come from the MLB Stats API directly, which
   allows cross-origin requests. The page is MLB only.
+- Innings pitched are the change in the out count while the pitcher was on the mound, not the
+  outs his plate appearances recorded: a runner picked off or caught stealing mid-plate-appearance
+  is an out on the play but not the batter's result, so counting events alone loses it. A split by
+  batter side has no continuous out count to read, so it falls back to counting events.
 
 The chart is Plotly's sankey trace in a *fixed* layout the page computes itself, so that every
 column is exactly one pitch number and the bands stack in usage order: node positions are the
@@ -319,13 +441,13 @@ the new files.
 [blandalytics.com/batted-balls/](https://blandalytics.com/batted-balls/) — where a hitter's batted
 balls go, spray angle against launch angle, as a density compared to every MLB batted ball that
 season or to the hitter's own prior season. Pick a season and a hitter (or tick *Team-wide* and
-pick a team); *Self (prior year)* subtracts the hitter's previous season instead of the league.
-The boxed numbers are the hitter's share of batted balls in each pull / centre / oppo by ground
-ball / line drive / fly ball / pop up cell, with the row and column shares along the axes (as
-changes from the prior season in the self comparison).
+pick a team); *Self (prior year)* subtracts the hitter's previous season instead of the league. The
+boxed numbers are the hitter's share of batted balls in each pull / centre / oppo by ground ball
+/ line drive / fly ball / pop up cell, with the row and column shares along the axes (as changes
+from the prior season in the self comparison).
 
 From 2024, the first season Statcast tracked bat speed from opening day, two more views sit
-beside it (neither takes the comparison):
+beside it (neither takes the comparison; the seasons before 2024 don't offer them):
 
 - **xwOBA** swaps the density for the [3D xwOBA model](#3d-xwoba)'s surface at the hitter's (or
   team's) average bat speed on balls in play, and the boxes and axis figures become the model's
@@ -346,21 +468,22 @@ beside it (neither takes the comparison):
   do shows blue there. The boxes and axis figures are each zone's part of the gap, adding up
   to the subtitle's: the hitter's xwOBA on contact less MLB's at their bat speed.
 
-Every chart is drawn as filled contour bands with Tanaka (illuminated) lines along each contour:
-every segment lit or shaded by which way its downhill side faces a light in the upper left, and
-wider the more squarely it faces or turns from it, so the higher values read as high ground.
 Isaac Paredes' current season loads on arrival; a chart is linkable as
 `batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, with `-self`, `-xwoba` and `-value`
 suffixes (an old link's `-continuous` is ignored). **Download PNG** saves the figure at 2x.
 
 It is the chart [batted-ball-charts.streamlit.app](https://batted-ball-charts.streamlit.app/)
 draws ([PLV_viz `batted_ball_charts.py`](https://github.com/Blandalytics/PLV_viz/blob/main/hitter_app/pages/batted_ball_charts.py)),
-rebuilt for the browser with the same geometry, palette (seaborn's `vlag` bands) and layout, less
-the app's continuous heatmap and plus the Tanaka lines: a Gaussian KDE of the hitter's balls on a 91 × 91 grid over 0–90° of spray by
+in its discrete colour scale, rebuilt for the browser with the same geometry, palette (seaborn's
+`vlag` bands, at 11 levels rather than 13) and layout, under the header the Swing Profiles figure
+carries — the hitter in the header colour, what the chart shows muted beneath it, and the Pitcher
+List Stats wordmark opposite: a Gaussian KDE of the hitter's balls on a 91 × 91 grid over 0–90° of spray by
 −30–60° of launch angle, scaled to sum to 100, minus the league's. The hitter's density is
 computed in the page exactly as `scipy.stats.gaussian_kde` would (Scott's factor on the full
 sample covariance; checked against scipy to floating-point noise); the league's is built ahead of
-time.
+time. Every view's bands are drawn as Tanaka (illuminated) contours: every contour edge is stroked white
+where its downhill side faces a light from the upper left and black where it faces away, thinning
+to nothing as the edge turns parallel to the light, so the peaks read as hills.
 
 ### How it works
 
@@ -394,7 +517,7 @@ app's own files, and is reduced to small JSON files there that the page reads:
 | file | role |
 |---|---|
 | `tools/batted_balls/build_data.py` | reads a season's files from the bucket, keeps regular-season balls in play with a launch angle and a landing spot, joins Savant's bat speeds and scores the 3D xwOBA from 2024, writes the season file, the surface file and the index |
-| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) and their Tanaka lines, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed and the zones' xwOBA on the same layout; for xwOBA vs MLB the hitter's and MLB's xwOBA-weighted maps at the hitter's bat speed and the zones' parts of the gap |
+| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) with their edges lit as Tanaka contours, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed and the zones' xwOBA on the same layout; for xwOBA vs MLB the hitter's and MLB's xwOBA-weighted maps at the hitter's bat speed and the zones' parts of the gap |
 | `batted-balls/index.html`, `app.js` | the page: season, hitter / team, view and comparison controls, the link hash, the download |
 
 In the team-wide chart a traded hitter's batted balls count for the team each was hit for
@@ -434,9 +557,544 @@ wOBA on contact (r = 0.66 against 0.49).
 | `tools/xwoba/savant.py` | the weekly Savant pulls, cached under `tools/xwoba/cache/` |
 | `tools/xwoba/build.py`, `evaluate.py`, `plot.py` | the fit, the held-out evaluation ([`evaluation.md`](tools/xwoba/evaluation.md)), the figure |
 
-The Batted Ball Charts page draws it (the **xwOBA** view, 2024 on). Method, use, results and
+The Batted Ball Charts page draws it (the **xwOBA** and **xwOBA vs MLB** views, 2024 on). Method, use, results and
 limits are in [`tools/xwoba/README.md`](tools/xwoba/README.md); `python tools/xwoba/build.py
 --cv` rebuilds it.
+
+## Release Angles
+
+[blandalytics.com/release-angles/](https://blandalytics.com/release-angles/) — where each of an
+MLB pitcher's pitch types leaves the hand, as horizontal (HRA) against vertical (VRA) release
+angle: one 1-SD covariance ellipse per pitch type, and how much they overlap. Four views of the
+same chart: the outlines alone, **Overlap count** (how many ellipses cover each spot),
+**Usage-weighted** (the share of the pitcher's pitches whose type covers it) and
+**Concentration** (each exact set of overlapping ellipses — a segment — shaded by the pitches
+that landed in it per square degree). **Play loop** cross-fades through the four. **Copy PNG**
+copies the view shown as a 2320 × 2320 still; **Download GIF** saves the loop, sized for X
+(Twitter); **Download All PNGs + GIF** saves the four stills and the loop as one zip. Pick a
+season and a pitcher (regular season only, the script's default); *From* / *Through* cut the
+season to a date segment. *Options* sets the ellipse size, the
+fewest pitches a type needs to be drawn, and the smallest segment the concentration scale
+counts. **Overlap numbers** is the script's printed report: per pitch type area, mean depth and
+mean share, and the most concentrated segments. Nolan McLean's current season loads on arrival; a
+chart is linkable as `release-angles/#<season>-<mlbam id>`, with
+`&from=` / `&to=` (ISO dates), `&sd=`, `&min=`, `&seg=` and `&view=type|count|share|segment`.
+
+It is [baseball_snippets `release_angles.py`](https://github.com/Blandalytics/baseball_snippets/blob/main/release_angles.py)
+(with the ellipse maths of [`ellipse_depth.py`](https://github.com/Blandalytics/baseball_snippets/blob/main/ellipse_depth.py))
+ported to the browser: the same figure geometry, depth / share / segment maps on the same
+1100-point grid, colour ramp (stepped through L\*a\*b\*), leaders, titles and four-state loop,
+and an overlap report whose per-type table and summary agree with the script's to every
+printed digit (checked on Paul Skenes' 2026; segment densities move in the first decimal, since
+the tighter frame puts the grid's cells closer together). It departs from the script in five
+places:
+
+- **Names never collide.** Candidate spots ring each ellipse at a ladder of distances and must
+  clear every ellipse's fill; the names are placed greedily, in 120 seeded orders, under hard
+  rules — no name overlaps another, and no leader crosses a name or another leader — and the
+  arrangement with the smallest frame wins (nearness to its own ellipse, and a leader that stays
+  off other ellipses, break ties). The same chart always comes out the same. Each name's
+  candidates are sorted by the part of their cost that placement can't change, so a pass stops
+  at the first one that can't beat the best so far; the whole layout takes 40–90 ms.
+- **The frame is as tight as the names allow.** Rather than a fixed margin round the ellipses,
+  the frame is the square round the ellipses and the placed names plus a small margin. Text is
+  sized in points while the frame sets the degree scale, so frame, name sizes and placement are
+  iterated until the frame settles — on the first 20 orders, with all 120 run once at the end.
+- **The Swing Profiles header.** The pitcher's name in large teal type, what the chart shows
+  (season, view, date segment) in a muted line under it, and the Pitcher List Stats wordmark top
+  right — Swing Profiles' sizes and offsets, scaled to this figure's width. No rule under it,
+  and the footer note set as Swing Profiles sets its note: 10 pt regular in the
+  sub-header's muted colour, baselines 7.5 pt × 1.6 apart (scaled the same way).
+- **One bottom row.** The footer note and the scale share one centre line, below the chart.
+- **No spines.** The degree grid is the only frame.
+
+The GIF is built for X, which re-encodes GIFs as video: 1080 × 1080 (its GIF limit is
+1280 × 1080) and all 344 frames at a constant 20 fps (its limit is 350 frames), so nothing rests on
+how the re-encode treats long per-frame delays. A frame identical to the one before — the rest of
+every hold — is a 1 × 1 transparent frame left over it, so the file is ~3 MB (X allows 15 MB) and
+encodes in the browser in about three seconds; it is built once per chart and shared by Download
+GIF and Download All.
+
+### How it works
+
+The angles come from the completed-games Parquet in the bucket (see *Data files*): release
+velocity is backed out of the 50 ft trajectory fit to the release point (60.5 ft minus
+extension), and HRA / VRA are the angles it makes with the line to the plate — the script's
+`pitch_angles()`. They are computed once a night and written back to the bucket:
+
+- `https://data.blandalytics.com/release-angles/index.json` — the seasons built, with what each
+  covers.
+- `https://data.blandalytics.com/release-angles/<season>.json` — the pitchers: id, name, team,
+  hand, regular-season pitch count, first and last dates. About 110 KB.
+- `https://data.blandalytics.com/release-angles/<season>.parquet` — every regular-season pitch's
+  pitcher, date, game type, pitch type, HRA and VRA, sorted by pitcher in 8,192-row groups (~8 MB a season). The
+  page reads the row-group statistics on `pitcher` from the footer and range-requests only the
+  one or two groups holding the chosen pitcher, with
+  [hyparquet](https://github.com/hyparam/hyparquet) — a chart costs 150–200 KB. Opening a season
+  is one suffix request (the footer, and the file's length from `Content-Range`, so no HEAD), and
+  a pitcher is one request for the byte span of their row groups, which hyparquet then reads
+  from memory: a new pitcher is on screen in ~100 ms. The file is rebuilt nightly under the
+  same name, so its URL carries the build stamp from `<season>.json` (`?v=<built>`): a browser
+  never splices byte ranges of yesterday's file into today's.
+- [`.github/workflows/release-angles.yml`](.github/workflows/release-angles.yml) rebuilds the
+  current season every morning at 11:30 UTC, after the data files roll, and takes a `seasons`
+  input for backfills; every season from 2020 builds in under half a minute.
+
+| file | role |
+|---|---|
+| `tools/release_angles/build_data.py` | reads a season's files from the bucket, computes HRA and VRA, writes the season's Parquet, pitcher list and the index |
+| `release-angles/angles.js` | the figure: ellipses, the name placement and the frame it sets, the three shaded maps and the segments, drawing at any dpi, the GIF (gifenc), the report |
+| `release-angles/index.html`, `app.js` | the page: season, pitcher, games and date controls, the views and loop, the Parquet read, downloads, the link hash |
+
+Locally, `python tools/release_angles/build_data.py --out release-angles/data --seasons 2026`
+writes the same files under `release-angles/data/release-angles/`, and the page reads them with
+`?data=data/` — from a server that honours `Range` requests, which `python -m http.server` does
+not. After any change to the JavaScript, bump the `?v=` query on the two script tags in
+`index.html` so browsers fetch the new files.
+
+## Series Win
+
+[blandalytics.com/series-win/](https://blandalytics.com/series-win/) — how often one MLB team
+beats another over a series, and how long the series goes. The controls and layout are Swing
+Profiles': a season, the higher and lower seed as type-ahead fields (club name, city or
+abbreviation; an empty field lists every team, best xWin% first, with its record), **Best of**
+(3 to 15) and **Home games** (split, or all in the higher seed's park), then **Simulate**. A
+pick from a list, or a change to a select, draws straight away. One card holds both charts —
+the higher seed's series win% at every length from a best of 1 to a best of 15, and, for the
+chosen length, who wins in how many games — then each team's xWin% (with RS/G, RA/G and
+record) and the series win% with its likeliest outcome, the app's summary sentence, and
+**Download Series Win% PNG** / **Download Outcomes PNG** (2x, 400 dpi) and **Swap seeds**.
+Yankees over Red Sox loads on arrival, best of 7; a matchup is linkable as `series-win/#<season>-<higher>-<lower>&games=<n>`, with `&home=1` for
+all home games (teams by MLB abbreviation, e.g. `#2026-LAD-TB&games=7`).
+
+It is [baseball_snippets `mlb_series_win.py`](https://github.com/Blandalytics/baseball_snippets/blob/main/mlb_series_win.py)
+(the [mlb-series-win.streamlit.app](https://mlb-series-win.streamlit.app/) app) ported to the
+browser: the same model, schedule and two charts. It departs from the script in four places:
+
+- **Swing Profiles figures.** Both charts wear the Swing Profiles figure's template, square: 8 × 8 in at
+  200 dpi with its axes box, the matchup as the large teal title over a muted subtitle, the
+  Pitcher List Stats wordmark top right, regular-weight axis text and a footer note. Neither has
+  gridlines or an x spine. The series win% chart is a teal line with ringed markers and plain
+  value labels, over a y axis (`<higher seed> Series Win%`) trimmed to its first and last
+  labelled ticks, with a dashed 50% line. The outcomes chart has no y axis at all: team-coloured
+  stacked bars (higher seed below) labelled inside, or above the bar in a tag of the team's colour
+  when a slice is too thin, and each side's series win% centred over the bars. When the two
+  teams' colours look alike (under 30 apart in CIELAB, e.g. Dodgers/Yankees, Red Sox/Angels,
+  or a team against itself) the lower seed's slices, tags and key swatch get a faint
+  cross-hatch. The footer notes carry the neutral-site single-game chance and who hosts which
+  games (`LAD hosts games 1, 2, 5 and 7 (2-2-1-1-1)`). `?style=app` draws the Streamlit app's
+  own matplotlib figures instead, laid out in the pixels of its 200 dpi output.
+
+- **Exact, not simulated.** The script plays 100,000 (and 250,000) random series; the page sums
+  every path to a clinch, so its numbers are the ones the simulations scatter around (within
+  ~0.2 points on Dodgers–Rays) and never change between loads.
+- **MLB's standings, any season.** Runs scored, runs allowed and games played come straight from
+  the StatsAPI standings (it allows any origin), one request per season, for 2000 onwards,
+  rather than from the app's Google Sheet. Team colours are the sheet's, keyed by MLB team id.
+- **All home games moves both charts.** In the script the checkbox only changes the outcomes
+  chart; here the series win% line follows it too, and both subtitles say `all @<team>`.
+
+### How it works
+
+Each team's xWin% is its Pythagorean win% with the PythagenPat exponent, from runs per game:
+`total_runs_factor = (RS/G + RA/G) ^ 0.285`, `xWin% = RS/G ^ total_runs_factor / (RS/G ^
+total_runs_factor + RA/G ^ total_runs_factor)`. log5 turns the two into the higher seed's
+chance to win one game at a neutral site, `(h − h·l) / (h + l − 2·h·l)` (0.5 for a team against
+itself). Home field is worth 4 points either way. A best of 3 is home–road–home; longer series
+open 2-2 and then alternate from home (2-2-1, 2-2-1-1-1, …), the script's schedule.
+
+| file | role |
+|---|---|
+| `series-win/chart.js` | the model (xWin%, log5, schedule, the exact series) and the two figures in both styles (Swing Profiles, the default; the app's, `?style=app`), drawn on a canvas at any scale |
+| `series-win/index.html`, `app.js` | the page: season, seed, length and home controls, the StatsAPI fetch, downloads, the link hash |
+
+After any change to the JavaScript, bump the `?v=` query on the two script tags in `index.html`
+so browsers fetch the new files.
+
+## Park Factors
+
+[blandalytics.com/park-factors/](https://blandalytics.com/park-factors/) — a Baseball
+Savant-style leaderboard of park factors for MLB and MiLB (AAA, AA, A+, A) parks, going into 2027
+and for every season the park model covers. Filters for **Batter side** (All / LHB / RHB),
+**Level** (one level or All levels), **Year**, **League** (the level and year's leagues),
+**Team** (the level, year, league and org's clubs) and **Org**, plus **Qualified parks**; it opens
+on MLB 2027, all batters, qualified parks, sorted by Park Factor. Picking an org
+switches Level to All levels, so the whole system shows at once; All levels adds a Level column,
+and every row stays indexed to its own level's average. Any header sorts the table, and
+**Reset filters** goes back to the opening view.
+
+**Year** opens on each level's most recent year: 2027 for MLB (the factors centred on the 2027
+schedule) and 2026 for the minors; any earlier season can be picked (MLB from 2015, the minors
+from 2021), or **All years**, one row per park and season (with a Team or Org, a park's history). On All levels, the most recent year mixes MLB 2027 with the minors' 2026, so a Year
+column appears. Past seasons are all batters only, so LHB / RHB switch off for them. Each past
+season is indexed to that season's average park at its level, and shows the venue under its name
+that season (Miller Park, Safeco Field, U.S. Cellular Field, …) with that season's home club,
+league and parent org; 2021's interim minor-league names show as the leagues' current ones
+(Triple-A East as IL, High-A West as NWL, and so on).
+
+The filters and sort are linkable: the page keeps them in the hash, leaving defaults out, e.g.
+`park-factors/#org=SEA&side=L` or `#level=AAA&league=PCL&sort=HR&dir=desc` (keys `side` = `L` /
+`R`, `level` = a level or `all`, `year` = a year or `all`, `league`, `team`, `org`, `qual=0`, `sort` = a column header,
+`dir` = `asc` / `desc`). With an org in the link, the level defaults to All levels. Unknown
+values fall back to the defaults, and **Copy link** copies the current address. **Download CSV**
+saves the table as shown (filters and sort applied, with Level, Year and Side columns always
+included) as `park_factors_<year>_<level>[_<org>_<league>_<team>_<side>HB].csv` (`most-recent` for
+the year on All levels' default, `all-years` for All years).
+
+Every column is an index where 100 is that level's average park: Park Factor (wOBA), R
+(BaseRuns), OBP, AVG, 1B, 2B, 3B, HR, BB, K, HBP, BACON (hits per contact, HR included), wOBACon,
+and HR p10 / p90 (the HR index's 80% interval), then Games and PA. The index columns are shaded
+on one diverging scale centred on 100 and saturated at 90 and 110: red helps hitters and blue
+hurts them, so K runs the other way (more strikeouts shade blue). The CSVs keep the model's
+names for two of them: AVG is `H` and K is `SO`.
+
+**Qualified parks** keeps venues with more than 50 games, pro-rated to each row's level's home
+schedule: MLB 50 of 81, AAA 46.3 of 75, AA 42.6 of 69, A+ and A 40.7 of 66. A past season
+pro-rates to its own median games per venue, so short seasons scale down (MLB 2020: more than
+18.5; the minors' 2021: 37 to 40.1). MLB 2027 games are the 2027 schedule's at each venue (neutral
+sites included, so Las Vegas Ballpark's 6 and Field of Dreams' 1 drop out); every other year
+counts the venue's completed regular-season games that season.
+
+The factors come from the projection system's park model: one joint Bayesian fit of every plate
+appearance (MLB 2015–26, the full-season minors 2021–26) with batter, pitcher, league-season,
+home-field and platoon terms, a venue factor that drifts across seasons with breaks at known
+dimension changes, and a venue left/right split. Factors are full (not halved) and adjusted for
+who batted and pitched there.
+
+| file | role |
+|---|---|
+| `park-factors/index.html` | the page, with the leaderboard data inlined; no other requests but the fonts |
+| `tools/park_factors/park_factors_2027.csv` | the data: one row per level, batter side (`All`, `L`, `R`) and venue, with every column on the page and the date the factors were generated (`As Of`) |
+| `tools/park_factors/park_factors_history.csv` | every season before each level's most recent: one row per level, year and venue (all batters), with the season's venue name, League, Team, Org and Games added from StatsAPI |
+| `tools/park_factors/build_history.py` | writes that file from the park model's `park_factors_history.csv` (index columns, PA and StatsAPI venue ids): each row's venue name, home club (most games there that season), league, org and completed-game count come from that season's StatsAPI schedule and teams. Responses are cached in `tools/park_factors/cache/` (not committed); it checks its 2026 minor-league rows against the board's |
+| `tools/park_factors/build_leaderboard.py` | builds the page from both CSVs; `--from-md` first rewrites the board CSV from the park model's handoff markdown (every table in its section 10) |
+| `tools/park_factors/build_tile.py` | the homepage tile, from the CSV: the top and bottom seven qualified MLB parks as a heatmap in the Pitcher List Stats figure style, laid out as HTML, screenshotted at 900 × 900 by headless Edge and saved as `images/tile-park-factors.webp` and `-720.webp` |
+| `tools/park_factors/tile_logo.png` | the Pitcher List Stats wordmark for the tile, cropped from the Series Win tile |
+
+### Updating
+
+```
+python tools/park_factors/build_leaderboard.py                       # page from the committed CSV
+python tools/park_factors/build_leaderboard.py --from-md path/to/park_factors_2027.md   # new factors
+python tools/park_factors/build_history.py path/to/park_factors_history.csv   # then rebuild the page
+python tools/park_factors/build_tile.py                              # homepage tile from the CSV
+```
+
+The handoff markdown and the model's history file stay with the park model; only the CSVs
+built from them are committed. After
+rebuilding the tile, bump its `?v=` in `index.html` so Cloudflare serves the new image.
+
+## Model Drilldown
+
+[blandalytics.com/model-drilldown/](https://blandalytics.com/model-drilldown/) — why a pitch grades
+the way it does. Pick a season, a pitcher and a pitch type, then a model (Stuff+, count-neutral; or
+PLV+, which adds location and count) and a target: the plus score split by feature (*Stuff+
+(features)*, the default) or by outcome (*Stuff+ (outcomes)*), the model's pitch type ERA
+(*Stuff ERA* / *PLV ERA*), any of the nine outcome probabilities, or wOBAcon. The controls are Swing Profiles'. Jacob Misiorowski's 2026 four-seamer
+loads on arrival.
+
+*Location+* (the third model) is PLV minus Stuff at the actual count, from
+`units_location_<season>.parquet`. It is split by outcome only, so its one target is *Location+ (outcomes)*:
+the nine `rv_<outcome>` rows are location's change in each outcome's probability × its run value at
+the pitch's count, and sum exactly to Location+ − 100. The sub-labels give that change (`dp_<outcome>`,
+pp, vs the league's), and the league card and beeswarm plot each run value against it. There is no
+Sankey for Location (it has no feature SHAP).
+
+*Stuff ERA* / *PLV ERA* is the tables' `era` target (`model_era.py --by pt`, runs per 9: a season
+constant − 9 × run value per pitch × modelled pitches per inning), split by feature like the other
+targets. Its reference line is the season's league ERA, lower is better (gold), rows under 0.05 runs
+fold into Other, and the `calibration` column goes into Other too, as the card draws it.
+
+*By outcome* is `shap_values_card.py --by outcome`: the plus score as 100 plus the nine
+`rv_<outcome>` rows (each outcome's predicted rate × its average run value, in plus points vs the
+league), plus *Count Leverage* for PLV, which prices outcomes at the pitch's actual count. It is an
+exact split with no proxy, and every outcome is shown (nothing folds into Other). The league panel
+and the beeswarm then plot each outcome's run value against the unit's predicted rate of it. In
+the figures the score is only ever named *Stuff+* / *PLV+*; *(features)* and *(outcomes)* appear
+only in the Target menu.
+
+Three figures, in the Swing Profiles card colours:
+
+- **The drilldown.** The card drawn by `card.js`, 16:9 on a navy ground: the pitcher, pitch type
+  and season over three tiles, with the KPI alone in the top right corner. On the left, **Pitches**:
+  a pill per pitch type, as tall as its share of the pitches; click one to switch pitch types. In
+  the middle, the chosen pitch type's SHAP waterfall, as `shap_values_card.py` draws it (the same
+  rows, folding, gold/teal bars and connectors), from AVG to the final value: at most the eight
+  largest rows (`MAX_ROWS` in `data.js`), the rest in Other, unless *Show every row* is on. On the
+  right, the selected row (click any row) against the league: each dot is another pitcher's version of the
+  pitch, with its mean input on x and that row's value on y, the binned mean as a white line (the
+  dependence plot of `shap_analysis.py`, per unit rather than per pitch); under it, the row's input
+  and its impact on the target, each with its percentile (the best change for the pitcher is the
+  100th). Location and Count plot their two inputs against each other, coloured by the row's
+  value. Hover a dot for the pitcher; click it to open them. Changing any input morphs the card
+  from one draw to the next. The three numbers below carry Swing Profiles' league KDEs: the value,
+  the biggest lift and the biggest drag. On a desktop or laptop the card scales to fit the page's
+  width and the screen's height (less 40 px); **Copy PNG** gives it at 2560 × 1440. On a phone
+  (600 px or narrower) the page shows only the waterfall (in the card's style: its navy ground and titled tile, its bars,
+  lines and row labels), drawn at the screen's width with static
+  rows, and the three numbers with their KDEs: no league card, beeswarm or Sankey (**Copy PNG**
+  still gives the full card).
+The next two are hidden for now (`SHOW_LEAGUE_FIGS` in `app.js`): their cards stay hidden and
+they are not drawn.
+
+- **Against the league.** A beeswarm of every row's SHAP over the comparison group, coloured by
+  each unit's input, with the pitcher marked.
+- **Where the probability goes.** A Sankey of the nine outcome probabilities. They sum to 100%, so
+  each row's SHAP takes probability from some outcomes (left) and gives it to others (right).
+
+Hovering a row anywhere lights it in all three figures and fades the rest, the way Sequencing
+Flow traces a plate appearance. Hovering a dot names the pitcher, and clicking it opens them.
+*Compare with* sets the league group (same pitch type, same pitch group or every pitch type) and
+*Min. pitches* its floor. **Copy PNG** copies each figure to the clipboard at 2x with the font and
+the wordmark embedded (downloading it where the browser refuses the clipboard); the CSV holds the
+unit's rows for every target. A view is linkable as
+`model-drilldown/#<season>-<pitcher id>-<pitch type>&model=plv&target=p_swinging_strike&row=velo`
+(`&vs=group|all` for the comparison group).
+
+**Transitions** follow Sequencing Flow's Plotly sankey (`Plotly.react`: 500 ms, linear). When any
+input changes, whatever persists moves and resizes from its old place to its new one: bars, bands,
+nodes, axis ticks, the league panel and each pitcher's dot in it, and the numbers count across. The
+ribbons are redrawn at their new shape and fade in, new elements fade in, and removed ones fade out
+where they were. `model-drilldown/morph.js` does this for any two SVGs by matching `data-m` keys
+and tweening every number in their geometry attributes.
+
+### How it works
+
+Nothing is built for the page: it reads the tables that stuff_model's `shap_values.py` publishes
+to the bucket's `shap-values/` folder (`publish_shap_values.py`), with
+[hyparquet](https://github.com/hyparam/hyparquet):
+
+- `https://data.blandalytics.com/shap-values/unit_features_<season>.parquet`: the pitcher list,
+  pitch counts and mean inputs (0.6 MB). It is read first, so the controls fill quickly.
+- `.../units_<model>_<season>.parquet`: one row per pitcher × pitch type × target, with
+  `exact = league + baseline + Σ feature SHAP + residual`, and the `rv_<outcome>` rows the outcome split reads (13–17 MB). Each file is a single row
+  group, so a season × model is read whole, once, and every later pick is instant. The other
+  model's file is fetched in the background after the first draw.
+- `.../meta.json` (feature lists, labels) and `.../fidelity.csv` (each proxy's held-out R², shown
+  under the figure).
+
+The URLs carry an hourly `?v=` so a republish reaches browsers within the hour, despite the zone's
+four-hour browser cache.
+
+| file | role |
+|---|---|
+| `model-drilldown/data.js` | reading and indexing the tables; the card's rows, labels, detail formats and folding (`shap_values_card.rows_for`) |
+| `model-drilldown/charts.js` | the three figures as SVG, their hover lookups, and the PNG export |
+| `model-drilldown/morph.js` | the Plotly-style transition between two renders of a figure |
+| `model-drilldown/index.html`, `app.js` | the page: controls, the linked focus, tooltips, downloads, the link hash |
+| `model-drilldown/card.js` | the page's desktop drilldown, a 16:9 card (`cardSvg(ctx)`, from app.js's `view`): pitch type pills, the waterfall, the selected row against the league, the KPI in the corner; morph keys, and the league dots' hover lookup (`nearestCardPoint`) |
+| `model-drilldown/package.json`, `eslint.config.mjs`, `.prettierrc.json` | the lint and format tooling (the page never loads them) |
+| `model-drilldown/card-demo.html` | a demo of the card from the live Stuff+ tables (Brody Hopkins' 2026 four-seamer by default; linked like the drilldown, `#<season>-<pitcher id>-<pitch type>&model=plv&target=wobacon&row=<row>`, any target split by feature), or from made-up numbers at `#synthetic`; click a row or a tab, **Download PNG** gives it at 3x |
+
+Locally, copy the staged tables (`stuff_model/build/shap-values/`) to `model-drilldown/data/shap-values/`
+and open the page with `?data=data/`. After any change to the JavaScript, bump the `?v=` query on the
+module imports in `index.html` and the `.js` files so browsers fetch the new files.
+
+The code is linted with ESLint (its recommended rules, for browser modules) and formatted with
+Prettier (120 columns, single quotes). There is no build step; `package.json` holds only the tooling.
+In `model-drilldown/`, run `npm install`, then `npm run check` (lint plus a format check),
+`npm run lint` or `npm run format`.
+
+## MLB Auction Calculator
+
+[blandalytics.com/auction-calculator/](https://blandalytics.com/auction-calculator/) — auction
+dollar values for every projected hitter and pitcher, priced for a league's settings. The sidebar
+holds a **League format**, which fills in a site's default teams and lineup slots (below; editing
+any of them makes it Custom); lineup slots per team for C, 1B, 2B, 3B, SS, CI, MI, OF and UT, and for
+SP, RP and P; **Bench spots**, **Minimize bench value**; **League type** (Categories or Points),
+**Teams**, **Min bid**, **Team budget**, **Categories format** (Roto, Head-to-head or H2H all-play,
+with **Weeks** for the H2H formats), **Player pool** (All, NL-Only, AL-Only), the **Hitter split
+(%)** (65 in categories and 50 in points, as the script has it, or **From the values**, which shows
+the split the values make in the box) and **Include free agents**; the scoring, as category
+toggles (5x5 roto by default) or editable points tables; and two collapsed sections:
+**Projections**, optional hitter and pitcher projection CSVs (it opens itself if the defaults don't
+load), and **Valuation details**, the **Replacement span**, **Fill missing playing time**,
+**Specialist correction** and the noise placeholders (**Count noise φ**, **Playing-time CV**). A
+setting's small print is in the tooltip on its ⓘ (on hover, keyboard focus or a tap). Any change
+reprices at once. The table beside it is every player by auction dollars, with the stats grouped
+under Hitting and Pitching; a **Slot** column says where each drafted player plays, BN for the
+bench. Each scored stat's cells are shaded by what that stat adds to the player's dollars (the
+same dollars as its column in the value breakdown), on its column's own scale: no shade at or
+below its drafted players' median, rising to the Auction $ green at their top 5% (the text switches
+to dark where it needs to, keeping 4.5:1). Each cell's tooltip gives the dollars, and a key sits
+over the table. Over it, a row of **Position premiums** says what each position is worth over its
+side's deepest one. Any header sorts the table, a search box and position filter narrow it, and
+**Download CSV** saves the whole table in the script's layout (a stat both sides score is suffixed
+`_h` / `_p`). **View** switches the stat columns for a **Value breakdown** of each player's dollars
+(below), and the CSV follows it. Settings are kept in the browser between visits; **Reset all
+settings** clears them.
+
+It began as [plv_viz `auction_calc.py`](https://github.com/blandalytics/plv_viz/blob/main/auction_calc.py)
+(the PL Auction Calculator Streamlit app) ported to the browser, and it still reads projections as
+the script does and starts from its z-scores (`tools/auction_calculator/` runs the script itself
+on the same CSVs and compares every player's start value). From there it values players by
+standings gain, the generalized SGP procedure (no league history needed), and prices them its own
+way:
+
+- **SGP, not z-scores.** A z-score divides by the spread of player stats, which isn't tied to
+  standings. The page weights each category by the standings points one more unit buys a team,
+  from the spread of team totals (below).
+- **Rate stats as counts.** The script regresses each rate toward the league; the page counts what
+  a player adds above the drafted pool's rate (hits above it, earned runs saved below it), so a
+  rate carries its playing time.
+- **Playing time.** What a player doesn't play is filled with replacement production for his role.
+- **The split.** The script splits the dollars 65/35 (50/50 in points) by fiat, and so does the
+  page by default; **From the values** lets the values set it instead, at one price per SGP on
+  both sides.
+- **Drafted players and dollars.** The script prices every player at min bid + value × dollars per
+  value, then scales every positive value to the budget, so neither the number of players at $1+
+  nor what they cost matches the league. The page drafts exactly the players who fill every team's
+  legal roster: exactly `teams × roster spots` come out at $1+, for exactly `teams × budget` (less
+  a minimized bench's min bids).
+- **Replacement by lineup slot.** The script prices catchers against catchers, every other hitter
+  in one pool and every pitcher in another. The page sets a replacement level for every position,
+  SP and RP included, from the league's best lineups, so scarcity comes from the projections and
+  the roster, not a fixed order.
+- **Default projections from the bucket.** `https://data.blandalytics.com/projections/hitters_auction_ev.csv`
+  and `pitchers_auction_ev.csv`, not the app's Google Sheet; `?data=<base>` reads them from elsewhere.
+- **Team abbreviations.** The All pool keeps every player whatever their team (the script drops a
+  team it doesn't know), and AL/NL-Only also knows `TB`, `SD`, `SF`, `KC`, `WSH`, `CWS` and `AZ`.
+  A blank team, `FA` or `- - -` is a free agent.
+- **Pitchers' positions.** The table shows SP / RP from the projections rather than `P`, and the
+  dollar column sits by the name so it stays on screen on a phone.
+
+### How it works
+
+Each side (hitters, pitchers) is valued on its own, from the script's z-scores (or points) as a
+start, then in passes until it settles:
+
+1. **The drafted pool**: the league's lineup slots (plus half the bench each side unless it's
+   minimized) filled for the most value, below.
+2. **Rate stats as counts** against the pool's own rate: `xH = H − r·AB` for AVG,
+   `xER = r·IP/9 − ER` for ERA, `xWHIP = r·IP − (BB+H)` for WHIP, and the same for OBP, SLG, ISO,
+   K%, BB%, K/9, BB/9, HR/9, K-BB% and K/BB, from the components when the file has them
+   (`r·PA × rate` for OPS and wOBA). Never the all-MLB rate, which counts players nobody drafts.
+3. **Playing time**: what each player doesn't play is filled with replacement production for his
+   role (C or other hitter; SP or RP, by starts): the per-PA (per-IP) output of the players a tier
+   (N) either side of the role's cutoff, ranked by their own projections, up to the role's 90th
+   percentile among drafted players. That production is set once, from the side valued without any
+   fill, then held: set from the filled values, the cutoff fills with part-timers whose rates no
+   free agent supplies over a season, and the pool and the fill chase each other.
+4. **The draft's spread** (σ²_draft): the pool in draft order cut into tiers of N (one player per
+   team, as a snake draft deals them), and each tier's variance added up; catchers are a tier list
+   of their own when the league has catcher slots, and a flex slot group (P) is one list.
+5. **A season's luck** (ν): each drafted player's outcome variance, summed and divided by N. From
+   the projections' 10th and 90th percentiles where the file has them (`HR_p10`, `HR_p90`, …: SD =
+   (p90 − p10) / 2.563; for a rate stat, the rate's spread times its denominator, plus the playing
+   time's); elsewhere count noise φ × the count plus (CV × the contribution)², with each player's CV
+   from his PA/IP percentiles when there are some. φ = 1 and CV = 0.15 are placeholders until
+   they're fit to projection errors. No strategy term (τ² = 0), so SB and SV may weigh a little
+   heavy.
+6. **The weights**: `G = C / (2√π · √(σ²_draft + P·ν))` standings points per unit, with C
+   comparisons per category and P scoring periods a season: roto N − 1 and 1, head-to-head W and W,
+   all-play W·(N − 1) and W weeks. The SGP denominator is `D = 1 / G`. Points leagues skip this: a
+   point is the unit.
+7. **SGP** is Σ G × contribution; **SGP above replacement** subtracts the player's position's
+   replacement level (below), category by category. In roto, a category more than half a
+   standings SD over replacement gains on a curve instead of a line (the **Specialist
+   correction**): `(N − 1)(Φ(Δ / (√2 σ)) − ½)`, so 50 SB over replacement at σ = 27 is 4.4 SGP,
+   not 5.7.
+
+The passes stop when the pool doesn't change and no denominator moves 1%; a pool that only swaps
+marginal players back and forth with weights within 3% has settled on the mean of its states; after
+20 passes, the mean of the last two (the page says so). On the 2027 projections the Yahoo format
+settles in 4 passes a side, in about 0.2 s. Its denominators: R 23.1, HR 10.6, RBI 24.7, SB 10.1,
+AVG 14.0 hits; W 4.2, SV 9.8, K 58, ERA 10.4 earned runs, WHIP 16.2 walks + hits.
+
+**Dollars.** The drafted players are the ones that fill every team's legal roster: each side's
+lineup slots, plus half the bench each (as BN slots anyone fits) unless **Minimize bench value** is
+on, filled for the most SGP above replacement. That's `teams × (hitters + pitchers + bench)`
+players, or `teams × (hitters + pitchers)` with the bench minimized. Every roster spot's min bid
+comes out of the budget first, bench included: a minimized bench is still drafted, at the min bid,
+just not priced. Every drafted player gets the min bid, the last drafted on each side exactly that,
+and the rest of the budget goes to hitters and pitchers by the **Hitter split**, then out on each
+side at one price per SGP above its last player; so exactly the drafted players are at the min bid
+or more, together they cost `teams × budget` (less `teams × bench × min bid` for a minimized bench),
+and the hitters get exactly their share of the dollars above the min bids. **From the values** uses
+one price per SGP across both sides instead, so the split is the values' own. A player no legal
+roster has room for (a 13th catcher when nothing else takes him, say) stays under the min bid. On
+the 2027 projections the Yahoo format (bench minimized) prices its 216 lineup players for $3,060
+(12 × $260, less 60 bench spots at $1); at the default 65/35 that's $13.46 per SGP for hitters and
+$7.34 for pitchers (Pete Crow-Armstrong first at $72.94). The values make it 50/50 at $10.42 per
+SGP (Tarik Skubal first at $73.43); without the playing time fill, 60/40 at $6.30. The fill moves value to part-timers with good
+rates (Byron Buxton, Luis Robert Jr., closers) and away from full-time players near replacement
+rates (Bo Bichette, Luis Arraez, back-end starters).
+
+**Value breakdown.** A player's dollars split exactly into: **Min bid**; **Baseline**, the same for
+everyone on a side (less the last drafted player's SGP above replacement); **Position**, his
+position's premium over his side's deepest one; **Playing time**, the replacement production filled
+in for the time he doesn't play; **each stat**, what it adds over the deepest position's replacement
+in his own playing time; **Specialist**, the roto curve's correction; and **No spot**, shown only
+when it isn't zero, what holds a player no legal roster has room for under the min bid. They add
+back up to the dollars to the cent for every player.
+
+**Replacement by lineup slot.** Each side's slots (`teams ×` each slot, plus `teams × bench/2` more
+UT or P when the bench isn't minimized) are filled for the most total value: players in order of
+value, each one placed if a slot it fits is open or can be opened by shifting starters already
+placed (a 2B,SS moving from SS to MI, or an SP,RP from RP to P, say). The sets of players that fit
+the slots form a transversal matroid, so this greedy fill is optimal (it matches scipy's
+`linear_sum_assignment` over player × slot). A slot type's replacement level is then the value of
+the slots around its cutoff: refill the league with **Replacement span** fewer and that many more of
+those slots, and divide the difference in total value (and in each category) by the players it
+moves. Chains and all, that's the average of the last few starters it could lose and the first few
+non-starters it could add, so one player's projection doesn't set a position's price (the default
+span is 3; 0 is the single last starter). A player is priced against the lowest replacement level
+among the slots he fits; one no slot takes (a DH when there's no UT) is worth a bench spot at most.
+A position whose starters spill into UT, P or a flex slot is exactly as deep as it. On the 2027
+projections the Yahoo format prices C at +$8.02 and everything else level; CBS (one UT, 5 SP and 2
+RP, no P) has C +$9.94, SP +$1.43, 2B / 3B +$0.48, SS +$0.27; five OF, no UT, 6 SP and 3 RP goes C
++$8.32, SP +$1.65, 2B / 3B / OF +$0.93, SS +$0.42. Without any position info in the projections,
+every slot takes anyone.
+
+The league formats set teams, hitter slots and pitcher slots only; budget ($260), bench and scoring
+stay as they are. Yahoo, the page's default, and ESPN are from the sites' own help pages; CBS is
+from third-party write-ups that agree with CBS's prize-league roster counts; Fantrax's 14 hitters
+and 9 pitchers are from FantraxHQ, laid out as the classic 23-player roto roster, with the team
+count assumed.
+
+| format | teams | hitter slots | pitchers |
+|---|---|---|---|
+| Yahoo | 12 | C, 1B, 2B, 3B, SS, 3 OF, 2 UT | 2 SP, 2 RP, 4 P |
+| ESPN | 10 | C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT | 9 P |
+| CBS | 12 | C, 1B, 2B, 3B, SS, 3 OF, UT | 5 SP, 2 RP |
+| Fantrax | 12 | 2 C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT | 9 P |
+| NFBC | 15 | 2 C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT | 9 P |
+
+Not done from the procedure: the draft-state weights (Task 12, re-weighting categories for one
+team during a live draft), risk as an option value, a convex dollar curve, and the history check
+against real standings (Task 13.4). The method is checked by simulation only, not against real
+league standings.
+
+| file | role |
+|---|---|
+| `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`), the player pool, the start z-scores and points, the SGP passes (`valueSide`), replacement by lineup slot (`positionReplacement`, with a span and per category), the drafted players, dollars and value breakdown (`auctionValues`), rank; no DOM, so Node runs it too |
+| `auction-calculator/index.html`, `app.js` | the page: settings and the league formats (`PRESETS`), uploads (UTF-8 or Windows-1252), the scoring controls, the table, the CSV |
+| `tools/auction_calculator/run_ref.py` | runs `auction_calc.py` headless through a stub `streamlit` (`stub/`), on local CSVs with settings from `ST_OVERRIDES`, and prints every player's score (its `unadjusted_value`) |
+| `tools/auction_calculator/compare.mjs` | scores the same CSVs and settings with `calc.js` and checks every player's start value against the script's |
+| `tools/auction_calculator/sgp_dump.mjs`, `sgp_check.py` | dumps one league's last pass and recomputes it independently in Python (numpy, scipy): pool rates and rate-stat counts from the raw CSVs, tier variance, noise, G, SGP, the specialist curve with the procedure's reference code, and the drafted pool against `linear_sum_assignment` |
+| `tools/auction_calculator/sgp_checks.mjs` | the procedure's own validation: the 2√π / (N − 1) constant against simulated standings (within 2%), the tier variance against 3000 simulated snake drafts with ADP noise (within 5%), and a report of players who moved more than 20 places against the z-scores, with why |
+| `tools/auction_calculator/invariants.mjs` | over 110 leagues (every format; bench on and off, Points, roto / H2H / all-play, AL/NL-only, min bids, spans, fill and specialists off, hitter splits from 0 to 100% and the values' own, other categories), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget (less a minimized bench's min bids), that the hitters get exactly their split, that every value breakdown adds up, and that the values settled |
+
+To check the model after a change (pandas, Pillow, numpy and scipy for the Python side):
+
+```bash
+curl -sO https://data.blandalytics.com/projections/hitters_auction_ev.csv
+curl -sO https://data.blandalytics.com/projections/pitchers_auction_ev.csv
+curl -sO https://raw.githubusercontent.com/blandalytics/plv_viz/main/auction_calc.py
+export ST_OVERRIDES='{"League Type": "Points", "Number of Teams": 15}'   # or {} for the defaults
+python tools/auction_calculator/run_ref.py auction_calc.py hitters_auction_ev.csv pitchers_auction_ev.csv > ref.json
+node tools/auction_calculator/compare.mjs hitters_auction_ev.csv pitchers_auction_ev.csv ref.json
+node tools/auction_calculator/sgp_dump.mjs hitters_auction_ev.csv pitchers_auction_ev.csv '{"format": "h2h"}' > dump.json
+python tools/auction_calculator/sgp_check.py hitters_auction_ev.csv pitchers_auction_ev.csv dump.json
+node tools/auction_calculator/sgp_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
+node tools/auction_calculator/invariants.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
+```
+
+To update the projections, upload new `hitters_auction_ev.csv` / `pitchers_auction_ev.csv` to the
+bucket's `projections/` folder with the same columns (`Name`, `MLBAMID`, `Team`, `Y! Pos`, then
+the stats, and the `<stat>_p10` / `<stat>_p90` percentiles the season's luck is read from). The zone caches them for four hours; purge their URLs to show them sooner. After
+any change to the JavaScript, bump the `?v=` on the script tag in `index.html` and on `app.js`'s
+import of `calc.js`.
 
 ## NHL Draft Tool
 
@@ -452,7 +1110,7 @@ command-line tool uses, so there is no server and nothing to install.
 | file | role |
 |---|---|
 | `nhl-draft/index.html`, `app.js` | the page: settings for every argument of the CLI tool, a do-not-draft list, the draft console |
-| `nhl-draft/worker.js` | a Web Worker that loads Pyodide, numpy and pandas, then drives `web_api.Session` |
+| `nhl-draft/worker.js` | a Web Worker that loads Pyodide and numpy (kept in Cache Storage across visits), then drives `web_api.Session` |
 | `nhl-draft/py/` | the tool itself — `league.py`, `valuation.py`, `boards.py`, `draft_sim.py`, `pick_engine.py`, `draft_tool.py`, `web_api.py` |
 | `nhl-draft/data/sheet_live.csv` | the projections and eligibility sheet; `merged_players.csv` carries Yahoo ranks |
 

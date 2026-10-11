@@ -6,14 +6,15 @@
 // With both set, the page goes straight to that pitcher's game on that date. A flow is linkable
 // as #<pitcherId>-<YYYY-MM-DD>.
 
-import * as data from './data.js?v=1';
-import * as sankey from './sankey.js?v=14';
+import * as data from './data.js?v=5';
+import * as sankey from './sankey.js?v=17';
 
 const $ = id => document.getElementById(id);
 const q = $('q'), hits = $('hits'), seasonSel = $('season'), dateIn = $('date'), gameSel = $('game'), gameLabel = $('gameLabel');
+const handSel = $('hand');
 const status = $('status'), empty = $('empty'), flow = $('flow'), controls = $('controls'), reset = $('reset'), png = $('png');
 
-const state = { pitcher: null, date: null, log: [], dayList: [], loading: 0, meta: null };
+const state = { pitcher: null, date: null, log: [], dayList: [], loading: 0, meta: null, game: null };
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function niceDate(iso, year) {
   const d = new Date(iso + 'T12:00:00');
@@ -35,7 +36,7 @@ function fill(sel, items, value) {     // items: [[value, label, disabled?], ...
 }
 function showEmpty(text) {
   sankey.clear();
-  state.meta = null; png.hidden = true;
+  state.meta = null; state.game = null; png.hidden = true;
   flow.hidden = true; controls.hidden = true;
   empty.textContent = text; empty.hidden = false;
   document.title = 'Sequencing Flow';
@@ -45,11 +46,18 @@ function showEmpty(text) {
 function header(m) {
   $('name').textContent = m.pitcher;
   const live = m.live ? ` · <span class="live">${m.status && m.status !== 'Final' && m.status !== 'Game Over' ? 'In progress' : 'Live feed'}</span>` : '';
-  $('matchup').innerHTML = `<b>${m.away} @ ${m.home}</b> · ${niceDate(m.date, true)} · vs ${m.opponent}${live}`;
+  $('matchup').innerHTML = `${subhead(m)}${live}`;
   const L = m.line;
   const stats = [['IP', L.ip], ['H', L.h], ['BB', L.bb], ['K', L.k], ['Pitches', L.pitches], ['Strikes', L.strikes]];
   $('line').innerHTML = stats.map(([k, v]) => `<div class="stat"><span class="v">${v}</span><span class="k">${k}</span></div>`).join('');
-  document.title = `${m.pitcher} · ${niceDate(m.date, true)} · Sequencing Flow`;
+  document.title = `${m.pitcher} · ${niceDate(m.date, true)}${m.hand ? ` v${m.hand}HH` : ''} · Sequencing Flow`;
+}
+// "June 12, 2026 @ PHI", plus the batter side when one is filtered for
+function subhead(m) {
+  const d = new Date(m.date + 'T12:00:00');
+  const when = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const vs = m.hand ? ` (v${m.hand}HH)` : '';
+  return `${when} ${m.home_text} ${m.opponent}${vs}`;
 }
 async function draw(date, pitcherId, gamePk) {
   const token = ++state.loading;
@@ -57,7 +65,12 @@ async function draw(date, pitcherId, gamePk) {
   try {
     const rows = await data.rowsFor(date);
     if (token !== state.loading) return;
-    const f = data.flowFor(rows, pitcherId, gamePk);
+    // the sides this pitcher faced, then the flow for the chosen one
+    const hands = data.handsFor(rows, pitcherId, gamePk);
+    const want = hands.includes(handSel.value) ? handSel.value : '';
+    fill(handSel, [['', 'All']].concat(hands.map(hd => [hd, `vs ${hd}HH`])), want);
+    handSel.disabled = hands.length < 2;
+    const f = data.flowFor(rows, pitcherId, gamePk, want || null);
     if (!f) {
       const who = state.pitcher ? state.pitcher.name : (state.dayList.find(x => x.id === pitcherId) || {}).name || 'that pitcher';
       showEmpty(data.isSettled(date)
@@ -66,7 +79,7 @@ async function draw(date, pitcherId, gamePk) {
       return;
     }
     header(f.meta);
-    state.meta = f.meta;
+    state.meta = f.meta; state.game = { date, pitcherId, gamePk };
     flow.hidden = false; controls.hidden = false; empty.hidden = true;
     await sankey.show(f);
     png.hidden = false;
@@ -219,19 +232,27 @@ dateIn.addEventListener('change', () => {
   }
   if (state.pitcher) loadLog(); else loadDay();
 });
-gameSel.addEventListener('change', onGame);
+gameSel.addEventListener('change', () => { handSel.value = ''; onGame(); });
+handSel.addEventListener('change', () => {
+  const g = state.game;
+  if (g) draw(g.date, g.pitcherId, g.gamePk);
+});
 png.addEventListener('click', async () => {
   if (!state.meta) return;
   png.disabled = true;
   try { await sankey.savePng(state.meta); } catch (e) { console.error(e); }
   png.disabled = false;
 });
-reset.addEventListener('click', () => {
+// Clear drops every choice and lands back where the page opens with nothing asked for: the
+// longest outing of the most recent day with finished games.
+reset.addEventListener('click', async () => {
   state.pitcher = null; state.date = null; state.log = []; state.dayList = [];
   q.value = ''; dateIn.value = ''; fill(gameSel, []); gameLabel.textContent = 'Game';
+  fill(handSel, []); handSel.value = '';
   renderHits([]);
   history.replaceState(null, '', location.pathname);
-  showEmpty('Search a pitcher, or pick a game date.');
+  showEmpty('Loading…');
+  if (!(await defaultGame())) showEmpty('Search a pitcher, or pick a game date.');
 });
 
 function setStatus() {
@@ -239,9 +260,9 @@ function setStatus() {
   status.textContent = 'MLB · data files through ' + (last ? niceDate(last, true) : '?') + ' · live feed after';
 }
 
-// With nothing asked for, land on the most recent day that has finished games and show its
-// longest outing: today's or yesterday's finished games from the live feed if there are any,
-// else the last settled day in the data files.
+// With nothing asked for — on arrival, or after Clear — land on the most recent day that has
+// finished games and show its longest outing: today's or yesterday's finished games from the
+// live feed if there are any, else the last settled day in the data files.
 function prevDay(iso) {
   const d = new Date(iso + 'T12:00:00');
   d.setDate(d.getDate() - 1);
@@ -253,7 +274,8 @@ async function defaultGame() {
   for (let d = today(), tries = 0; d >= last && tries < 10; d = prevDay(d), tries++) {
     status.textContent = 'Loading ' + niceDate(d, true) + '…';
     let rows = [];
-    try { rows = await data.rowsFor(d); } catch (e) { rows = []; }
+    // today's live feed was asked for alongside the manifest (see boot); today is never settled
+    try { rows = await (d === today() && todayEarly ? todayEarly : data.rowsFor(d)); } catch (e) { rows = []; }
     if (state.pitcher || state.date) return true;      // the user got there first
     const finished = rows.filter(r => !r.live || r.status === 'Final' || r.status === 'Game Over');
     const list = data.pitchersOn(finished);              // sorted by pitch count, most first
@@ -286,9 +308,17 @@ async function fromHash() {
 window.addEventListener('hashchange', fromHash);
 
 // ---- boot ---------------------------------------------------------------------------
+// The requests go out first: the manifest, and (with no game in the link) today's live feed,
+// which the default game starts from and which never waits on the manifest. Plotly is added
+// only then, so its ~400 ms of script runs while they are in flight rather than before them.
+const manifestEarly = data.loadManifest();
+const todayEarly = location.hash ? null : data.readLiveDay(today());
+todayEarly?.catch(() => {});
+sankey.loadPlotly().catch(() => {});
+
 (async function boot() {
   try {
-    await data.loadManifest();
+    await manifestEarly;
   } catch (e) {
     status.textContent = 'Could not load the data manifest';
     showEmpty('The data files at data.blandalytics.com are not reachable right now.');

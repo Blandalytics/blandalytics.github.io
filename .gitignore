@@ -17,5 +17,15 @@ tools/live/node_modules/
 tools/live/.wrangler/
 # a local build of the batted-ball data (it lives in the bucket)
 batted-balls/data/
+# the homepage tiles' full-size app exports (make_tiles.py crops them into images/)
+tools/homepage/cache/
+# a local build of the release-angle data (it lives in the bucket)
+release-angles/data/
+
+# a local copy of the SHAP tables (they live in the bucket)
+model-drilldown/data/
+# the Model Drilldown's lint and format toolchain
+model-drilldown/node_modules
+tools/park_factors/cache/
 # the Savant pulls behind the xwOBA model
 tools/xwoba/cache/

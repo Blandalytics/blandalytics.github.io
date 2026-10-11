@@ -24,9 +24,8 @@ import time
 from dataclasses import dataclass
 
 import numpy as np
-import pandas as pd
 
-from league import CATS, League, Roster, STATS, load_players, roto_points, team_totals
+from league import CATS, League, Roster, STATS, columns_of, load_players, roto_points, team_totals
 from valuation import category_values, coefficients, position_values, replacement_levels, sgp_slopes
 
 I_SV, I_GA, I_GS = STATS.index("SV"), STATS.index("GA"), STATS.index("GS")
@@ -45,7 +44,7 @@ class Model:
     elig: dict              # slot -> eligibility mask
     mu: np.ndarray          # opponent team-total mean per category
     sd: np.ndarray          # opponent team-total sd per category
-    assigned: pd.Series     # each player's assigned (scarcest eligible) position
+    assigned: np.ndarray    # each player's assigned (scarcest eligible) position
 
 
 def snake_order(n_teams, rounds):
@@ -86,11 +85,11 @@ def run_draft(players, league, drafters, rng, model=None, adp_col="adp_fantrax",
     times log-normal noise) that fits.  Model teams take the player maximising
     value - cost[slot consumed], the slot consumed being the cheapest free slot reachable by
     re-routing, so positional need is priced in as the roster fills.
-    Returns (picks DataFrame, rosters).
+    Returns (picks: (pick, round, team, pid, slot) tuples, rosters).
     """
     n = league.n_teams
-    slots = players["slots"].to_numpy()
-    adp = players[adp_col].to_numpy(float)
+    slots = players["slots"]
+    adp = np.asarray(players[adp_col], float)
     boards = []
     for d in drafters:
         kind, noise = d[0], d[1]
@@ -141,11 +140,12 @@ def run_draft(players, league, drafters, rng, model=None, adp_col="adp_fantrax",
             R.add(chosen, slots[chosen], cost)
         available[chosen] = False
         picks.append((pick_no, (pick_no - 1) // n + 1, team, chosen, R.slot_of.get(chosen, "BN")))
-    return pd.DataFrame(picks, columns=["Pick", "Round", "Team", "pid", "Slot"]), rosters
+    return picks, rosters
 
 
 def league_totals(rosters, stats):
-    return pd.DataFrame([team_totals(stats, R.slot_of.keys()) for R in rosters])
+    """{category: array over teams} for one league's starters."""
+    return columns_of([team_totals(stats, R.slot_of.keys()) for R in rosters])
 
 
 def simulate_leagues(players, stats, league, drafters, sims, rng, model=None, adp_col="adp_fantrax"):
@@ -154,12 +154,14 @@ def simulate_leagues(players, stats, league, drafters, sims, rng, model=None, ad
 
 
 def build_model(players, stats, league, coef, parts, totals):
-    value = players[STATS] @ coef
+    value = players.matrix(STATS) @ coef
     repl, starter, repl_pid, assigned = replacement_levels(players, value, league)
-    allt = pd.concat(totals, ignore_index=True)[CATS]
-    elig = {s: players["slots"].map(lambda t: s in t).to_numpy() for s in league.slots}
-    return Model(value.to_numpy(float), repl, category_values(players, parts).to_numpy(float), stats,
-                 starter.to_numpy(), repl_pid, elig, allt.mean().to_numpy(), allt.std().to_numpy(), assigned)
+    # each category's totals over every simulated team, reduced one column at a time (as pandas
+    # reduces a column), so the mean and sd round exactly as DataFrame.mean() / .std() did
+    allt = [np.concatenate([t[c] for t in totals]) for c in CATS]
+    elig = {s: np.array([s in t for t in players["slots"]]) for s in league.slots}
+    return Model(value, repl, category_values(players, parts), stats, starter, repl_pid, elig,
+                 np.array([c.mean() for c in allt]), np.array([c.std(ddof=1) for c in allt]), assigned)
 
 
 def calibrate(players, stats, league, args, rng, log=print):
@@ -180,7 +182,7 @@ def calibrate(players, stats, league, args, rng, log=print):
             totals = simulate_leagues(players, stats, league, drafters, args.calib_sims, rng, model, args.adp_col)
             d, d_sd, params = sgp_slopes(totals)
             new_coef, parts = coefficients(d, params)
-            change = float((new_coef / coef - 1).abs().max())
+            change = float(np.abs(new_coef / coef - 1).max())
             coef = args.damping * new_coef + (1 - args.damping) * coef
             model = build_model(players, stats, league, coef, parts, totals)
             log(f"  iteration {it}: max coefficient change {change:.1%}")
@@ -189,12 +191,12 @@ def calibrate(players, stats, league, args, rng, log=print):
         coef, parts = coefficients(d, params)      # report the un-damped fixed point
         model = build_model(players, stats, league, coef, parts, totals)
     return dict(d=d, d_sd=d_sd, params=params, coef=coef, parts=parts, model=model,
-                value=pd.Series(model.value, index=players.index), repl=model.cost,
-                starter=pd.Series(model.starter, index=players.index), assigned=model.assigned)
+                value=model.value, repl=model.cost, starter=model.starter, assigned=model.assigned)
 
 
 def evaluate(players, stats, league, cal, args, rng):
     """Our team (no noise) vs market drafters, rotating through draft slots unless --slot is set."""
+    import pandas as pd      # the command-line report; the browser never evaluates
     n = league.n_teams
     rows = []
     for i in range(args.eval_sims):
@@ -203,7 +205,7 @@ def evaluate(players, stats, league, cal, args, rng):
             drafters = [("adp", args.adp_noise)] * n
             drafters[slot] = (strategy, 0.0)
             _, rosters = run_draft(players, league, drafters, rng, cal["model"], args.adp_col)
-            pts = roto_points(league_totals(rosters, stats))
+            pts = pd.DataFrame(roto_points(league_totals(rosters, stats)))
             finish = pts["Total"].rank(ascending=False, method="min")
             rows.append({"sim": i, "slot": slot + 1, "strategy": strategy, "finish": finish[slot],
                          "win": float(finish[slot] == 1), **pts.loc[slot].to_dict()})
@@ -211,7 +213,13 @@ def evaluate(players, stats, league, cal, args, rng):
 
 
 def write_outputs(players, cal, ev, sample, league, args, out_dir="."):
-    d, d_sd, coef, parts, repl = cal["d"], cal["d_sd"], cal["coef"], cal["parts"], cal["repl"]
+    import pandas as pd      # the command-line report; the browser never writes one
+    # the calibration as the pandas objects this report was written against
+    d, d_sd = pd.Series(cal["d"]), pd.Series(cal["d_sd"])
+    coef, parts, repl = pd.Series(cal["coef"], index=STATS, name="coef"), cal["parts"], cal["repl"]
+    cal = {**cal, "value": pd.Series(cal["value"]), "starter": pd.Series(cal["starter"]),
+           "assigned": pd.Series(cal["assigned"])}
+    players = pd.DataFrame({c: players[c] for c in players.columns})
     lines = []
     say = lines.append
 
@@ -240,8 +248,8 @@ def write_outputs(players, cal, ev, sample, league, args, out_dir="."):
                          "ReplPlayer": pd.Series({s: players.at[p, "Player"] for s, p in cal["model"].repl_pid.items()})})
     say(rtab.round(3).to_string())
 
-    pv = position_values(players, cal["value"], repl, cal["assigned"])
-    cv = category_values(players, parts)
+    pv = pd.DataFrame(position_values(players, cal["value"].to_numpy(), repl, cal["assigned"].to_numpy()))
+    cv = pd.DataFrame(category_values(players, parts), columns=CATS)
     out = pd.concat([players[["Player", "Team", "Pos_Y", "ADP", "FantraxRk", "adp_yahoo"] + STATS],
                      cv.add_prefix("v_"), pv], axis=1)
     out["RawValue"] = cal["value"]
@@ -283,13 +291,14 @@ def write_outputs(players, cal, ev, sample, league, args, out_dir="."):
         say(m.round(2).T.to_string())
 
     picks, rosters = sample
+    picks = pd.DataFrame(picks, columns=["Pick", "Round", "Team", "pid", "Slot"])
     sd = picks.merge(out[["Player", "Pos_Y", "ADP", "VORP", "Rank"]], left_on="pid", right_index=True)
     sd["Team"] = sd["Team"] + 1
     sd.drop(columns="pid").sort_values("Pick").round(2).to_csv(f"{out_dir}/sample_draft.csv", index=False)
     us = sd[sd["Team"] == (args.slot or 1)].sort_values("Pick")
     say(f"\n== Sample draft ({args.strategy}): our picks from slot {args.slot or 1} ==")
     say(us[["Pick", "Round", "Player", "Pos_Y", "Slot", "ADP", "VORP", "Rank"]].round(2).to_string(index=False))
-    pts = roto_points(league_totals(rosters, players[STATS].to_numpy(float)))
+    pts = pd.DataFrame(roto_points(league_totals(rosters, players[STATS].to_numpy(float))))
     pts.index = pts.index + 1
     say("\nSample draft standings (points by category):")
     say(pts.round(1).sort_values("Total", ascending=False).to_string())
@@ -331,7 +340,7 @@ def main(argv=None):
     league = League(n_teams=args.teams, bench=args.bench,
                     slots={k: int(v) for k, v in (kv.split(":") for kv in args.slots.split(","))})
     players = load_players(args.sheet, refresh=args.refresh)
-    stats = players[STATS].to_numpy(float)
+    stats = players.matrix(STATS)
     rng = np.random.default_rng(args.seed)
 
     cal = calibrate(players, stats, league, args, rng)

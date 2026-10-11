@@ -25,7 +25,6 @@ team_boards: score = w * vor_rank + (1 - w) * adp_rank per team, ascending, ties
 import math
 
 import numpy as np
-import pandas as pd
 
 from league import STATS
 
@@ -83,13 +82,12 @@ class AdpBoard:
 
     def __init__(self, players, alpha=ADP_ALPHA):
         self.n = len(players)
-        mu = players["ADP_fill"].to_numpy(float)
-        sd = players["ADP_sd"].to_numpy(float)
+        mu = np.asarray(players["ADP_fill"], float)
+        sd = np.asarray(players["ADP_sd"], float)
         omega, xi, delta, min_pick, self.fitted = [], [], [], [], 0
         cols = {"ADP_Min", "ADP_Max", "ADP_N"} <= set(players.columns)
         for i in range(self.n):
-            r = players.iloc[i]
-            lo, hi, n = (r["ADP_Min"], r["ADP_Max"], r["ADP_N"]) if cols else (np.nan, np.nan, np.nan)
+            lo, hi, n = (players["ADP_Min"][i], players["ADP_Max"][i], players["ADP_N"][i]) if cols else (np.nan, np.nan, np.nan)
             if cols and np.isfinite([lo, hi, n]).all() and hi > lo and n >= 2:
                 _, o, x, d = fit_skewnorm(mu[i], lo, hi, n, (hi - lo) / (0.61 * math.log(n) + 2.235))
                 self.fitted += 1
@@ -114,17 +112,17 @@ class VorBoard:
     """Per-draft VOR ranks from resampled projections, replacement levels recomputed per draw."""
 
     def __init__(self, players, coef, league, assigned, cv_scale=1.0):
-        self.mu = players[STATS].to_numpy(float)
-        self.coef = coef.reindex(STATS).to_numpy(float)
+        self.mu = players.matrix(STATS)
+        self.coef = np.asarray(coef, float)                        # in STATS order
         self.n = len(players)
-        self.goalie = players["Pos_Y"].eq("G").to_numpy()
+        self.goalie = np.array([p == "G" for p in players["Pos_Y"]])
         self.skater = ~self.goalie
         # skater sds: `<stat>_sd` column if the sheet has one, else cv * stat; +/- floor by games
-        gp = players["GP"].to_numpy(float) if "GP" in players else np.full(self.n, 82.0)
+        gp = np.asarray(players["GP"], float) if "GP" in players else np.full(self.n, 82.0)
         self.sd = np.zeros_like(self.mu)
         for j, s in enumerate(STATS):
             if f"{s}_sd" in players:
-                self.sd[:, j] = players[f"{s}_sd"].to_numpy(float)
+                self.sd[:, j] = np.asarray(players[f"{s}_sd"], float)
             elif s == "+/-":
                 self.sd[:, j] = PM_SD_82 * np.sqrt(np.clip(gp, 1, 82) / 82.0)
             elif s in STAT_CV:
@@ -144,7 +142,7 @@ class VorBoard:
         self.positions = [p for p in slots if p != "UTIL"]
         self.n_util = slots.get("UTIL", 0)
         self.cap = {p: slots[p] for p in self.positions}
-        asg = assigned.reindex(players.index).to_numpy()
+        asg = np.asarray(assigned)
         self.pools = {p: np.flatnonzero(asg == p) for p in self.positions}
         self.pos_of = np.array([self.positions.index(p) for p in asg])
 

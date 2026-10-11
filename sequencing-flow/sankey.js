@@ -22,6 +22,24 @@ let currentLinks = [], currentNodes = [];
 let paById = new Map();
 let wired = false;
 
+// Plotly is 1.2 MB and takes ~400 ms to run (~1.7 s on a slow phone), so the page doesn't block
+// on it: index.html preloads it and app.js calls loadPlotly() once its data requests are out.
+// Drawing waits on the same promise.
+const PLOTLY_URL = 'https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.3/plotly.min.js';
+let plotlyReady = null;
+export function loadPlotly() {
+  if (!plotlyReady) {
+    plotlyReady = window.Plotly ? Promise.resolve(window.Plotly) : new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = PLOTLY_URL;
+      s.onload = () => resolve(window.Plotly);
+      s.onerror = () => { plotlyReady = null; reject(new Error('Plotly did not load')); };
+      document.head.appendChild(s);
+    });
+  }
+  return plotlyReady;
+}
+
 const legendEl = $('legend'), showEnds = $('show-ends'), endKey = $('end-key'), chartEl = $('chart'), tip = $('tip');
 // Each .sankey-link path and .node-rect carries its d3 datum on __data__ (Plotly 2 no longer exposes d3).
 const linkPaths = () => [...chartEl.querySelectorAll('path.sankey-link')];
@@ -36,7 +54,7 @@ function fillLegend() {
     const b = document.createElement('button');
     b.className = 'chip' + (focus === t.code ? ' on' : ''); b.type = 'button'; b.dataset.code = t.code;
     b.setAttribute('aria-pressed', String(focus === t.code));
-    b.innerHTML = `<span class="sw" style="background:${t.color}"></span><span class="code">${t.code}</span><span class="nm">${t.name}</span><span class="ct">${t.count}</span>`;
+    b.innerHTML = `<span class="sw" style="background:${t.color}"></span><span class="code">${t.code}</span><span class="nm">${t.name}</span><span class="ct">(${t.count})</span>`;
     b.addEventListener('click', () => {
       focus = focus === t.code ? null : t.code;
       legendEl.classList.toggle('has-focus', !!focus);
@@ -204,21 +222,29 @@ function build(opts = {}) {
 // Ending nodes share one face and are told apart by outline color. Plotly only takes a single
 // node outline, so the per-node outlines are painted onto the rects after each plot.
 function paintOutlines() {
+  const surface = token('--surface');
+  // Plotly reuses these elements across renders, so every one is set on every pass: a rect that
+  // was the feed node (or an ending) must not keep its styling when it becomes something else.
   nodeRects().forEach(el => {
     const d = el.__data__, n = d && currentNodes[d.node.pointNumber];
-    if (n && n.type === 'END') { el.style.stroke = n.outline; el.style.strokeWidth = '2.5px'; el.style.strokeOpacity = n.dimmed ? 0.18 : 1; }
-    // the invisible feed node is drawn last, over the first column: no outline (its 1px surface-colored
-    // edge would cut across the first-column bands), and it must not take the hover
-    if (n && n.feed) { el.style.strokeOpacity = 0; el.parentNode.style.pointerEvents = 'none'; }
+    if (!n) return;
+    if (n.type === 'END') {
+      el.style.stroke = n.outline; el.style.strokeWidth = '2.5px'; el.style.strokeOpacity = n.dimmed ? 0.18 : 1;
+    } else {
+      el.style.stroke = surface; el.style.strokeWidth = '1px';
+      // the invisible feed node sits over the first column: its 1px edge would cut across those bands
+      el.style.strokeOpacity = n.feed ? 0 : 1;
+    }
+    el.parentNode.style.pointerEvents = n.feed ? 'none' : '';   // the feed must not take the hover
   });
   linkPaths().forEach(el => {
     const d = el.__data__, l = d && currentLinks[d.link.pointNumber];
-    if (l && l.feed) el.style.pointerEvents = 'none';
+    el.style.pointerEvents = l && l.feed ? 'none' : '';
   });
 }
 function render() {
   const { trace, layout } = build();
-  return Plotly.react(chartEl, [trace], layout, { displayModeBar: false, responsive: true }).then(paintOutlines);
+  return loadPlotly().then(Plotly => Plotly.react(chartEl, [trace], layout, { displayModeBar: false, responsive: true })).then(paintOutlines);
 }
 
 // Find a spot for the tooltip near the cursor that doesn't touch any link or node of the traced PA.
@@ -400,6 +426,7 @@ function loadWordmark() {
 
 export async function savePng(meta) {
   if (!DATA) return;
+  const Plotly = await loadPlotly();
   const S = 1000, SCALE = 2, PADX = 44;
   const mark = await loadWordmark();
   const ground = token('--ground') || '#0d1117', ink = token('--ink'), muted = token('--muted');
@@ -416,15 +443,23 @@ export async function savePng(meta) {
   let yCur = 70;
   ctx.fillStyle = ink; ctx.font = `700 34px ${family}`;
   ctx.fillText(meta.pitcher, PADX, yCur);
+  // the line, right-aligned, with the separators in the footer's grey
   const L = meta.line || {};
-  const lineTxt = `${L.ip} IP · ${L.h} H · ${L.bb} BB · ${L.k} K · ${L.pitches} pitches`;
-  ctx.font = `600 17px ${family}`; ctx.textAlign = 'right';
-  ctx.fillText(lineTxt, S - PADX, yCur); ctx.textAlign = 'left';
+  ctx.font = `600 17px ${family}`;
+  const parts = [`${L.ip} IP`, `${L.h} H`, `${L.bb} BB`, `${L.k} K`, `${L.pitches} Pitches`];
+  const sep = '  |  ';
+  const wSep = ctx.measureText(sep).width;
+  const total = parts.reduce((w, t) => w + ctx.measureText(t).width, 0) + wSep * (parts.length - 1);
+  let lx = S - PADX - total;
+  parts.forEach((t, i) => {
+    ctx.fillStyle = ink; ctx.fillText(t, lx, yCur); lx += ctx.measureText(t).width;
+    if (i < parts.length - 1) { ctx.fillStyle = muted; ctx.fillText(sep, lx, yCur); lx += wSep; }
+  });
   yCur += 28;
   ctx.fillStyle = muted; ctx.font = `500 17px ${family}`;
   const d = new Date(meta.date + 'T12:00:00');
   const dateStr = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  ctx.fillText(`${meta.away} @ ${meta.home} · ${dateStr} · vs ${meta.opponent}`, PADX, yCur);
+  ctx.fillText(`${dateStr} ${meta.home_text} ${meta.opponent}${meta.hand ? ` (v${meta.hand}HH)` : ''}`, PADX, yCur);
   yCur += 34;
   // key: swatch, code, name, count
   let kx = PADX;
@@ -490,14 +525,14 @@ export async function savePng(meta) {
   // Footer: the reading key on the left, the Pitcher List wordmark on the right.
   ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   ctx.fillStyle = muted; ctx.font = `500 13px ${family}`;
-  ctx.fillText('Columns: pitch number in the plate appearance · bands: pitch type · links: one plate appearance each', PADX, S - 22);
+  ctx.fillText('Columns: pitch number in the plate appearance; Bands: pitch type; Links: one plate appearance each', PADX, S - 22);
   if (mark) {
     const mw = 230, mh = mw * mark.height / mark.width;
     ctx.drawImage(mark, S - PADX - mw, S - 22 - mh, mw, mh);
   }
 
   const a = document.createElement('a');
-  const slug = `${meta.pitcher}_${meta.date}`.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  const slug = `${meta.pitcher}_${meta.date}${meta.hand ? `_v${meta.hand}hh` : ''}`.toLowerCase().replace(/[^a-z0-9]+/g, '_');
   a.download = `${slug}_sequencing_flow.png`;
   a.href = cv.toDataURL('image/png');
   a.click();
@@ -521,7 +556,7 @@ export function clear() {
   legendEl.innerHTML = '';
   endKey.hidden = true;
   tip.hidden = true;
-  if (chartEl.data) Plotly.purge(chartEl);
+  if (chartEl.data) window.Plotly.purge(chartEl);   // chartEl.data exists only once Plotly has drawn
   wired = false;
 }
 

@@ -1,5 +1,8 @@
-"""Constants shared by the card pipeline: the palette, pitch-type names and colours,
-per-pitch-type benchmark bins, the letter-grade scale and the two game-score formulas.
+"""Constants shared by the card pipeline: pitch-type codes, the outcome families, the
+letter-grade scale, the two game-score formulas and the labels the card dict carries.
+The display side (palette, pitch names and colours, benchmark bins, and the cuts that
+letter the Stuff, Location and PLV grades) is in pitcher-cards/card.js, which draws the
+card.
 
 Everything here is a pure function of its inputs; nothing touches the network."""
 
@@ -7,70 +10,11 @@ from __future__ import annotations
 
 import bisect
 
-# ---- palette ------------------------------------------------------------------------
-BACKGROUND = "#292C42"
-WHITE = "#FFFFFF"
-TEXT = "#00D4FF"
-LINE = "#8D96B3"
-HIGHLIGHT = "#F1C647"
-LINE_TEXT = "#bae2ff"  # the box-score line under the title
-NAME_GRADIENT = ("#00D4FF", "#0099CC")
-
-MARKER_COLORS = {
-    "FF": "#FF6683",
-    "SI": "#F2B24B",
-    "FS": "#83D6FF",
-    "FC": "#C59C9C",
-    "SL": "#CE66FF",
-    "ST": "#FFAAF7",
-    "CU": "#339cff",
-    "CH": "#6DE95D",
-    "KN": "#c7c7c7",
-    "UN": "#c7c7c7",
-}
-
-
-def _rgb(h: str) -> tuple[int, int, int]:
-    return tuple(int(h[i : i + 2], 16) for i in (1, 3, 5))
-
-
-def _mix(a: str, b: str, t: float) -> str:
-    return "#" + "".join(
-        f"{round(x + (y - x) * t):02x}" for x, y in zip(_rgb(a), _rgb(b), strict=True)
-    )
-
-
-def blend(stops: tuple[str, ...], n: int) -> list[str]:
-    """seaborn.blend_palette: ``n`` colours linearly interpolated through ``stops``."""
-    steps = len(stops) - 1
-    out = []
-    for i in range(n):
-        pos = i / (n - 1) * steps
-        k = min(int(pos), steps - 1)
-        out.append(_mix(stops[k], stops[k + 1], pos - k))
-    return out
-
-
-_DIVERGE_STOPS = ("#4BBFDF", "#FFFFFF", "#ff5757")
-DIVERGE = blend(_DIVERGE_STOPS, 5)  # stat colours, worst -> best
-VELO_DIFF = blend(_DIVERGE_STOPS, 13)  # velo change vs the comparison season
-_GRADE_PALETTE = blend(_DIVERGE_STOPS, 9)
-
-LETTERS = ("F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+")
-# a letter's colour is its family's (D-, D and D+ share one), A+ gets the highlight
-GRADE_COLORS = {"-": WHITE, "A+": HIGHLIGHT}
-GRADE_COLORS.update({g: _GRADE_PALETTE[2 * i] for i, g in enumerate(("F", "D", "C", "B", "A"))})
-GRADE_COLORS.update({g: GRADE_COLORS[g[0]] for g in LETTERS if g not in GRADE_COLORS})
-
 # ---- pitch types --------------------------------------------------------------------
 PITCH_TYPE_MAP = {
     "FF": "FF", "FA": "FF", "SI": "SI", "FT": "SI", "FC": "FC", "SL": "SL", "ST": "ST",
     "CH": "CH", "SC": "CH", "CU": "CU", "KC": "CU", "CS": "CU", "SV": "CU", "FS": "FS",
     "FO": "FS", "KN": "KN", "UN": "UN", "EP": "UN",
-}  # fmt: skip
-PITCH_NAMES = {
-    "FF": "Four-Seam", "SI": "Sinker", "FC": "Cutter", "SL": "Slider", "ST": "Sweeper",
-    "CU": "Curveball", "CH": "Changeup", "FS": "Splitter", "KN": "Knuckleball", "UN": "Unknown",
 }  # fmt: skip
 FASTBALLS = ("FF", "SI", "FT", "FC")
 
@@ -86,98 +30,14 @@ DESC_MAP = {
     "PSO": "step_off",
 }
 
-# ---- benchmark bins -----------------------------------------------------------------
-# Inner cut points of five bins per stat, by pitch type: the coloured stats on the card
-# take the colour of the bin they fall in. Omitted stats stay white.
-TYPE_BINS: dict[str, dict[str, tuple[float, ...]]] = {
-    "FF": {
-        "Velo": (90.2, 93.2, 95.6, 98.2), "IVB": (10, 14.3, 16.9, 19.2),
-        "IVB_acc": (66.9, 91.7, 107.5, 121.6), "HB": (1.6, 5.9, 9.6, 13.7),
-        "HB_acc": (9.7, 36, 59, 84.7), "HAVAA": (0.13, 0.72, 1.2, 1.74),
-        "SwStr%": (1, 5.9, 13, 22.8), "CSW%": (0, 20, 100 / 3, 50),
-        "xSLGcon": (0.125, 0.390, 0.725, 1.385), "plvStuff+": (80, 88, 105, 114),
-        "PLV+": (79, 94, 106, 117),
-    },
-    "SI": {
-        "Velo": (89.1, 92.4, 95.1, 97.7), "IVB": (0.5, 6.3, 10.5, 15.1),
-        "IVB_acc": (7.3, 37, 61.3, 88), "HB": (9.5, 13.9, 16.4, 18.5),
-        "HB_acc": (62.5, 86, 100.6, 116), "HAVAA": (-0.27, 0.33, 0.83, 1.42),
-        "SwStr%": (1, 2.8, 7.8, 16.6), "CSW%": (0, 100 / 6, 100 / 3, 50),
-        "xSLGcon": (0.15, 0.340, 0.585, 1.095), "plvStuff+": (69, 74, 83, 95),
-        "PLV+": (76, 91, 104, 116),
-    },
-    "FC": {
-        "Velo": (85, 88, 90.7, 93.8), "IVB": (1.95, 6.2, 9.3, 13.2),
-        "IVB_acc": (15.7, 36.5, 54.5, 77.8), "HB": (-6.1, -3.6, -0.8, 2.7),
-        "HB_acc": (-35.8, -20.8, -7.3, 9.9), "HAVAA": (-0.9, -0.216, 0.41, 1.12),
-        "SwStr%": (1, 6.3, 15, 25), "CSW%": (0, 100 / 6, 100 / 3, 50),
-        "xSLGcon": (0.115, 0.320, 0.62, 1.29), "plvStuff+": (90, 107, 115, 125),
-        "PLV+": (85, 99, 111, 122),
-    },
-    "SL": {
-        "Velo": (80.9, 84.6, 87.3, 90), "IVB": (-4.2, -0.2, 3.6, 7.6),
-        "HB": (-11.9, -5.9, -2.8, 0), "SwStr%": (5, 11.1, 20, 32),
-        "CSW%": (0, 20, 100 / 3, 50), "xSLGcon": (0.105, 0.315, 0.6, 1.265),
-        "plvStuff+": (95, 100, 110, 125), "PLV+": (85, 98, 109, 119),
-    },
-    "ST": {
-        "Velo": (77.3, 80.8, 83.4, 86.2), "IVB": (-5.4, -0.9, 3, 7.3),
-        "HB": (-19.1, -15.5, -12.2, -8.4), "SwStr%": (5, 10, 18.9, 31),
-        "CSW%": (0, 20, 100 / 3, 50), "xSLGcon": (0.08, 0.275, 0.575, 1.275),
-        "plvStuff+": (105, 111, 120, 130), "PLV+": (85, 100, 110, 122),
-    },
-    "CU": {
-        "Velo": (73.8, 78.2, 81.7, 85.8), "IVB": (-16.6, -12.6, -7.4, -1.5),
-        "HB": (-16.3, -11.1, -6.2, -1.3), "SwStr%": (4, 9.1, 18.7, 31.2),
-        "CSW%": (0, 100 / 6, 40, 200 / 3), "xSLGcon": (0.105, 0.290, 0.585, 1.25),
-        "plvStuff+": (91, 100, 113, 125), "PLV+": (82, 95, 107, 118),
-    },
-    "CH": {
-        "Velo": (80.3, 84.8, 88.1, 91), "IVB": (-1.5, 3.1, 7.4, 12.1),
-        "HB": (8.8, 13.2, 15.9, 18.3), "SwStr%": (5, 11.5, 21, 33.3),
-        "CSW%": (0, 10, 30, 50), "xSLGcon": (0.115, 0.285, 0.53, 1.085),
-        "plvStuff+": (100, 107, 115, 125), "PLV+": (80, 95, 107, 119),
-    },
-    "FS": {
-        "Velo": (82, 84.9, 88.1, 92.3), "IVB": (-2, 1.5, 5.4, 10.3),
-        "HB": (4.3, 8.8, 12.7, 15.9), "SwStr%": (6, 11.6, 22.2, 35.2),
-        "CSW%": (0, 10, 100 / 3, 50), "xSLGcon": (0.12, 0.290, 0.56, 1.15),
-        "plvStuff+": (100, 107, 115, 125), "PLV+": (80, 94, 105, 116),
-    },
-}  # fmt: skip
-for _bins in TYPE_BINS.values():
-    _bins["Ext"] = (5.75, 6.25, 6.66, 7.13)
-# lower is better for expected slugging, so its colour scale runs the other way
-_INVERTED = {"xSLGcon"}
 
-
+# ---- grades -------------------------------------------------------------------------
 def bin_index(value: float, cuts: tuple[float, ...]) -> int:
     """Which right-closed bin ``value`` falls in: 0 for <= cuts[0] ... len(cuts) for > cuts[-1]."""
     return bisect.bisect_left(cuts, value)
 
 
-def stat_color(pitch_type: str, stat: str, value: float | None, key: str | None = None) -> str:
-    """Colour for a stat value on the benchmark scale of its pitch type, white if unknown.
-    ``key`` picks a different set of cut points than the stat's own (the fastball panel
-    colours movement by its acceleration bins)."""
-    cuts = TYPE_BINS.get(pitch_type, {}).get(key or stat)
-    if cuts is None or value is None or value != value:
-        return WHITE
-    idx = bin_index(value, cuts)
-    return DIVERGE[4 - idx if stat in _INVERTED else idx]
-
-
-# ---- grades -------------------------------------------------------------------------
-_LETTER_CUTS = (60, 63, 67, 70, 73, 77, 80, 83, 87, 90, 93, 97)
-
-
-def letter_grade(value: float | None) -> str:
-    """Letter for a model grade on the 75 +/- 10 scale; '-' when there is no value."""
-    if value is None or value != value:
-        return "-"
-    return LETTERS[bin_index(value, _LETTER_CUTS)]
-
-
+LETTERS = ("F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+")
 _SP_CUTS = (12, 22.3, 30, 36.6, 41, 47.6, 53.6, 60.6, 67, 74, 82.3, 95)
 _RP_CUTS = (27, 37, 42, 46, 48, 50, 51, 52, 53, 56, 61, 67)
 

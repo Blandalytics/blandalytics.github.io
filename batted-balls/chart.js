@@ -1,15 +1,15 @@
 // The batted-ball chart: a hitter's density of spray angle against launch angle
 // minus the league's (or their own prior season's), drawn on a canvas. A port of
 // the figure in PLV_viz/hitter_app/pages/batted_ball_charts.py -- the same grid,
-// the same scipy density, the same vlag bands, the same layout -- with Tanaka's
-// illuminated lines along every contour. Laid out in the pixels of the 200 dpi image
-// the app serves (1390 x 1135) and rasterised at 2x.
+// the same scipy density, the same vlag contour bands (at 11 levels rather than
+// 13, and lit as Tanaka contours), the same layout. Laid out in the pixels
+// of the 200 dpi image the app serves (1390 x 1135) and rasterised at 2x.
 //
-// The xwOBA view draws, on the same grid and layout, the 3D xwOBA model's surface
-// (tools/xwoba: spray, launch angle, bat speed) at the hitter's average bat speed,
-// with Tanaka's illuminated contour lines, and the model's xwOBA of the hitter's
-// balls by zone. The value view draws the hitter's xwOBA-weighted density less
-// MLB's at the hitter's average bat speed, on the density chart's scale.
+// From 2024 two more views share the grid and layout. The xwOBA view draws the 3D
+// xwOBA model's surface (tools/xwoba: spray, launch angle, bat speed) at the
+// hitter's average bat speed, with the model's xwOBA of the hitter's balls by zone.
+// The value view draws the hitter's xwOBA-weighted density less MLB's at the
+// hitter's average bat speed, on the density chart's scale.
 
 (() => {
   "use strict";
@@ -24,42 +24,23 @@
   // shape matters after scaling, so the normalising constant is dropped. Row-major
   // by spray then launch angle, as np.mgrid lays it out.
   //
+  // Summed directly that is one exp per grid point per ball (91 x 91 x n). The
+  // kernel's cross term splits instead: with coordinates centred on the mean,
+  //   exp(-Q/2) = U[ix][i] * V[iy][i] * W[ix][iy]
+  //   U = exp(-a dx^2/2 + b X y_i - b x_i y_i),  V = exp(-c dy^2/2 + b x_i Y),  W = exp(-b X Y)
+  // so the grid is 2 N n exps and an (N x n)(n x N) product: the same sums, ~8x
+  // faster (a team's grid in ~35 ms rather than ~280 ms; the two agree to 1e-14).
+  // The product runs over the balls in blocks of BLOCK with reused scratch rows.
+  //
   // With weights, the same kernels (the bandwidth still from the points alone) summed
   // with each ball's weight, on the same scale: so with every weight 1 it is the
   // density, and the grid sums to 100 times the mean weight.
-  function kdeGrid(points, weights = null) {
-    const kernel = scottKernel(points);
-    if (!kernel) return null;
-    const n = points.length, { a, b, c } = kernel;
-    const xs = new Float64Array(n), ys = new Float64Array(n);
-    points.forEach(([x, y], i) => { xs[i] = x; ys[i] = y; });
-    const out = new Float64Array(N * N);
-    const weighted = weights && new Float64Array(N * N);
-    let total = 0;
-    for (let ix = 0; ix < N; ix++) {
-      const gx = SPRAY[0] + ix * (SPRAY[1] - SPRAY[0]) / (N - 1);
-      for (let iy = 0; iy < N; iy++) {
-        const gy = LAUNCH[0] + iy * (LAUNCH[1] - LAUNCH[0]) / (N - 1);
-        let s = 0, sw = 0;
-        for (let i = 0; i < n; i++) {
-          const dx = gx - xs[i], dy = gy - ys[i];
-          const e = Math.exp(-0.5 * (a * dx * dx + 2 * b * dx * dy + c * dy * dy));
-          s += e;
-          if (weighted) sw += weights[i] * e;
-        }
-        out[ix * N + iy] = s;
-        if (weighted) weighted[ix * N + iy] = sw;
-        total += s;
-      }
-    }
-    const k = 100 / total, grid = weighted || out;
-    for (let i = 0; i < grid.length; i++) grid[i] *= k;
-    return grid;
-  }
-
+  const BLOCK = 512;
+  const U = new Float64Array(N * BLOCK), V = new Float64Array(N * BLOCK);  // reused scratch
+  const VW = new Float64Array(N * BLOCK);
   // Scott's kernel for a set of points: the inverse of factor^2 times their sample
-  // covariance, as (a, b, c) for a x^2 + 2 b x y + c y^2; null for fewer than three
-  // points or all of them in a line.
+  // covariance, as (a, b, c) for a x^2 + 2 b x y + c y^2, with their mean; null for
+  // fewer than three points or all of them in a line.
   function scottKernel(points) {
     const n = points.length;
     if (n < 3) return null;
@@ -75,7 +56,82 @@
     sxx *= f2 / (n - 1); sxy *= f2 / (n - 1); syy *= f2 / (n - 1);
     const det = sxx * syy - sxy * sxy;
     if (!(det > 1e-12)) return null;  // every ball in a line: no density to draw
-    return { a: syy / det, b: -sxy / det, c: sxx / det };
+    return { a: syy / det, b: -sxy / det, c: sxx / det, mx, my };  // the inverse covariance
+  }
+
+  function kdeGrid(points, weights = null) {
+    const kernel = scottKernel(points);
+    if (!kernel) return null;
+    const n = points.length, { a, b, c, mx, my } = kernel;
+    const xs = new Float64Array(n), ys = new Float64Array(n);
+    points.forEach(([x, y], i) => { xs[i] = x - mx; ys[i] = y - my; });
+    const gx = (ix) => SPRAY[0] + ix * (SPRAY[1] - SPRAY[0]) / (N - 1) - mx;
+    const gy = (iy) => LAUNCH[0] + iy * (LAUNCH[1] - LAUNCH[0]) / (N - 1) - my;
+    // the balls in blocks, so the factors take the same ~0.75 MB for a team as for a hitter
+    const out = new Float64Array(N * N), weighted = weights && new Float64Array(N * N);
+    for (let i0 = 0; i0 < n; i0 += BLOCK) {
+      const m = Math.min(BLOCK, n - i0);
+      for (let ix = 0; ix < N; ix++) {
+        const X = gx(ix), row = ix * BLOCK;
+        for (let j = 0; j < m; j++) {
+          const x = xs[i0 + j], y = ys[i0 + j], dx = X - x;
+          U[row + j] = Math.exp(-0.5 * a * dx * dx + b * X * y - b * x * y);
+        }
+      }
+      for (let iy = 0; iy < N; iy++) {
+        const Y = gy(iy), row = iy * BLOCK;
+        for (let j = 0; j < m; j++) {
+          const dy = Y - ys[i0 + j];
+          V[row + j] = Math.exp(-0.5 * c * dy * dy + b * xs[i0 + j] * Y);
+          if (weighted) VW[row + j] = V[row + j] * weights[i0 + j];
+        }
+      }
+      for (let ix = 0; ix < N; ix++) {
+        const u = ix * BLOCK;
+        for (let iy = 0; iy < N; iy++) {
+          const v = iy * BLOCK;
+          let s = 0;
+          for (let j = 0; j < m; j++) s += U[u + j] * V[v + j];
+          out[ix * N + iy] += s;
+          if (weighted) {
+            let sw = 0;
+            for (let j = 0; j < m; j++) sw += U[u + j] * VW[v + j];
+            weighted[ix * N + iy] += sw;
+          }
+        }
+      }
+    }
+    let total = 0;
+    for (let ix = 0; ix < N; ix++) {
+      const X = gx(ix);
+      for (let iy = 0; iy < N; iy++) {
+        const i = ix * N + iy, w = Math.exp(-b * X * gy(iy));
+        out[i] *= w;
+        if (weighted) weighted[i] *= w;
+        total += out[i];
+      }
+    }
+    const k = 100 / total, grid = weighted || out;
+    for (let i = 0; i < grid.length; i++) grid[i] *= k;
+    return grid;
+  }
+
+  // Grids by key ("2026:592450:in", "2025:592450:clamp", ...), so switching the
+  // comparison back and forth redraws without recomputing. A grid is ~66 KB.
+  const grids = new Map();
+  const GRIDS_KEPT = 40;
+  function kdeFor(key, points, weights = null) {
+    if (key && grids.has(key)) {
+      const g = grids.get(key);
+      grids.delete(key); grids.set(key, g);  // most recently used last
+      return g;
+    }
+    const g = kdeGrid(points, weights);
+    if (key && g) {
+      grids.set(key, g);
+      if (grids.size > GRIDS_KEPT) grids.delete(grids.keys().next().value);
+    }
+    return g;
   }
 
   const inRange = ([x, y]) => x >= SPRAY[0] && x <= SPRAY[1] && y >= LAUNCH[0] && y <= LAUNCH[1];
@@ -99,11 +155,12 @@
   //   hitter:  the batted balls this season (in the app's spray_deg convention)
   //   against: null for the league (whose grid is passed as `league`), or the
   //            prior season's batted balls for the self comparison
-  function compute({ hitter, league, prior }) {
+  //   key, priorKey: optional cache keys naming the hitter's and prior season's balls
+  function compute({ hitter, league, prior, key, priorKey }) {
     if (prior) {
       // Against a prior season the app clips both seasons to the grid rather
       // than dropping the balls outside it.
-      const now = kdeGrid(hitter.map(clamp)), before = kdeGrid(prior.map(clamp));
+      const now = kdeFor(key && key + ":clamp", hitter.map(clamp)), before = kdeFor(priorKey && priorKey + ":clamp", prior.map(clamp));
       if (!now || !before) return null;
       const diff = new Float64Array(N * N);
       for (let i = 0; i < diff.length; i++) diff[i] = now[i] - before[i];
@@ -117,7 +174,7 @@
         },
       };
     }
-    const now = kdeGrid(hitter.filter(inRange));
+    const now = kdeFor(key && key + ":in", hitter.filter(inRange));
     if (!now) return null;
     const diff = new Float64Array(N * N);
     for (let i = 0; i < diff.length; i++) diff[i] = now[i] - league[i];
@@ -241,14 +298,14 @@
   // hitter's average bat speed -- the grid sums to 100 times the gap in xwOBA on contact
   // (over the in-range balls) -- and each zone's part of that gap: the hitter's xwOBA
   // from the zone over all their tracked balls, less MLB's over its weighted balls.
-  function computeValue({ balls, league }) {
+  function computeValue({ balls, league, key }) {
     const mine = balls.filter(tracked), inside = mine.filter(inRange);
     const kernel = scottKernel(inside);
     if (!kernel) return null;
     const batSpeed = mine.reduce((t, b) => t + b[2], 0) / mine.length;
     const weights = Float64Array.from(league, (b) => Math.exp(-0.5 * ((b[2] - batSpeed) / BAT_SPEED_WIDTH) ** 2));
     const theirs = spreadLeague(league, weights, kernel);
-    const diff = kdeGrid(inside, inside.map((b) => b[3])).map((v, k) => v - theirs[k]);
+    const diff = kdeFor(key && key + ":xw", inside, inside.map((b) => b[3])).map((v, k) => v - theirs[k]);
     const hitter = zoneSums(mine, () => 1, 1 / mine.length);
     const mlb = zoneSums(league, (j) => weights[j], 1 / weights.reduce((t, w) => t + w, 0));
     const cells = hitter.map((col, i) => col.map((v, k) => v - mlb[i][k]));
@@ -272,17 +329,24 @@
   // ---- colours ------------------------------------------------------------------
   const BACKGROUND = "#292C42";
   const WHITE = "#FEFEFE";
-  // contourf(levels -12..10 by 2, cmap vlag, extend both): the under colour, the
-  // eleven bands, the over colour
-  const LEVELS = [-12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10];
-  const BANDS = ["#2369bd", "#3f75bc", "#6a8dbf", "#92a7c8", "#b7c2d5", "#dcdee6", "#faf5f4",
-    "#eed7d5", "#deb2b0", "#d08f8d", "#c16c6a", "#b1494a", "#a9373b"];
-  // the colourbar: BoundaryNorm over 13 steps of vlag
-  const STEPS = ["#2369bd", "#5380bc", "#7896c1", "#9aadca", "#bdc6d7", "#dfe1e8", "#faf5f5",
-    "#f0dbda", "#e1b9b6", "#d49896", "#c77977", "#b95a59", "#a9373b"];
+  // the header, as the Swing Profiles figure draws it
+  const HEADER = "#00D4FF";
+  const SUBHEADER = "#8D96B3";
+  // contourf(levels -10..8 by 2, cmap vlag, extend both) -- the app's figure with
+  // levels=11 rather than 13: the under colour, the nine bands, the over colour
+  const LEVELS = [-10, -8, -6, -4, -2, 0, 2, 4, 6, 8];
+  const BANDS = ["#2369bd", "#4678bc", "#7896c1", "#a7b6ce", "#d4d8e2", "#faf5f4",
+    "#eacfcd", "#d8a3a0", "#c67875", "#b34d4e", "#a9373b"];
+  // the discrete colourbar: BoundaryNorm over 11 steps of vlag
+  const STEPS = ["#2369bd", "#5b84bd", "#87a0c4", "#afbcd1", "#d9dce5", "#faf5f5",
+    "#ecd3d2", "#dcacaa", "#cc8582", "#bc605e", "#a9373b"];
+  // Tanaka (illuminated) contours: the light comes from the upper left of the
+  // image; an edge whose downhill side faces it is stroked white, one facing away
+  // black, both fading and thinning as the edge turns parallel to the light
+  const LIGHT = [-Math.SQRT1_2, -Math.SQRT1_2];
+  const TANAKA = { lit: 0.7, shade: 0.45, width: 1.4, base: 0.3 };
   // sns.color_palette("vlag", 25)[0] and [-1]: the Less / More Often labels
   const LABEL_BLUE = "#3b73bc", LABEL_RED = "#af4647";
-
   // The xwOBA surface: a spectrum pinned to the wOBA value of each outcome -- white for
   // an out, the single's blue, the double's green, the triple's yellow, the home run's
   // red -- in ten levels of .200. The bands take the spectrum evenly from end to end,
@@ -311,119 +375,47 @@
   // and a margin of it: +.012, -.004
   const fmtMargin = (v) => (v >= 0 ? "+" : "-") + fmtXw(Math.abs(v));
 
-  // ---- layout, in the pixels of the app's 1390 x 1135 image ---------------------
-  const W = 1390, H = 1135;
-  const AX = { left: 286, top: 108.5, size: 900 };  // 10 px per degree
-  const CB = { left: 1208, top: 233, width: 163, height: 652 };
+  // ---- layout, in the pixels of the app's 1390 x 1135 image, with the header band
+  // the app has no room for added above it ---------------------------------------
+  const HEADER_H = 80;  // what the plot, the colourbar and the footer move down by
+  const W = 1390, H = 1135 + HEADER_H;
+  const AX = { left: 286, top: 108.5 + HEADER_H, size: 900 };  // 10 px per degree
+  const CB = { left: 1208, top: 233 + HEADER_H, width: 163, height: 652 };
+  // the row labels' centre, and the size they are drawn at: the header and the
+  // credit line hang off them rather than off the image's edge
+  const LABEL_X = 286 - 0.14 * 900;
+  const LABEL_SIZE = 15;
   const PX_PER_PT = 200 / 72;
-  const FONT = '"Alexandria", "DM Sans", "Segoe UI", sans-serif';
+  // the Swing Profiles figure's font, rather than the Streamlit app's Alexandria
+  const FONT = '"DM Sans", "Segoe UI", "DejaVu Sans", sans-serif';
   const LINE_SPACING = 1.2;  // matplotlib's multi-line spacing
 
-  let logoPromise = null;
-  function loadLogo() {
-    if (!logoPromise) {
-      logoPromise = fetch("pl-text-wht.png").then((r) => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
+  const WORDMARK_URL = "../pitcher-cards/PitcherList_Stats_watermark_with_logo.webp";
+  let wordmarkPromise = null;
+  function loadWordmark() {
+    if (!wordmarkPromise) {
+      wordmarkPromise = fetch(WORDMARK_URL).then((r) => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
         .then((b) => createImageBitmap(b)).catch(() => null);
     }
-    return logoPromise;
-  }
-
-  // A 91 x 91 grid's contours (d3-contour) at the given levels, in contour units
-  // (grid x scale), with the values they were traced on, y-major as d3 reads them.
-  function contours(grid, scale, levels) {
-    const values = new Float64Array(N * N);
-    for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) values[iy * N + ix] = grid[ix * N + iy] * scale;
-    return { values, rings: d3.contours().size([N, N]).thresholds(levels)(values) };
-  }
-
-  // Fill the axes band by band: the lowest colour under everything, then each level's
-  // region in the next. d3 puts sample i at coordinate i + 0.5.
-  function paintBands(ctx, { rings }, bands, px, py) {
-    ctx.fillStyle = bands[0];
-    ctx.fillRect(AX.left, AX.top, AX.size, AX.size);
-    const cx = (c) => px(c - 0.5), cy = (c) => py(c - 0.5 + LAUNCH[0]);
-    rings.forEach((multi, k) => {
-      ctx.fillStyle = bands[k + 1];
-      ctx.beginPath();
-      for (const polygon of multi.coordinates) {
-        for (const ring of polygon) {
-          ring.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(cx(x), cy(y)); else ctx.lineTo(cx(x), cy(y)); });
-          ctx.closePath();
-        }
-      }
-      ctx.fill("evenodd");
-    });
-  }
-
-  // Tanaka's illuminated contours: every level's line, segment by segment, light where
-  // the slope below it faces a light in the upper left and dark where it faces away,
-  // and wider the more squarely it faces toward or away from the light. Which side of a
-  // segment is downhill is read off the grid on either side of it, so the lines stay
-  // right when the chart is mirrored for a left-handed hitter. Segments are batched by
-  // brightness, so a chart is a handful of strokes. Every chart's contours get them:
-  // on the batted-ball and value charts, where the field runs from blue below zero to
-  // red above it, the red reads as high ground and the blue as hollows.
-  const LIGHT = [-Math.SQRT1_2, -Math.SQRT1_2];  // toward the upper left, on screen
-  const TANAKA_BINS = 6;
-  function paintTanaka(ctx, { values, rings }, px, py, flip) {
-    // the grid between its samples, in d3's coordinates (sample i sits at i + 0.5)
-    const at = (x, y) => {
-      const gx = Math.min(Math.max(x - 0.5, 0), N - 1), gy = Math.min(Math.max(y - 0.5, 0), N - 1);
-      const i = Math.min(Math.floor(gx), N - 2), j = Math.min(Math.floor(gy), N - 2), u = gx - i, w = gy - j;
-      const v = (a, b) => values[b * N + a];
-      return (1 - u) * (1 - w) * v(i, j) + u * (1 - w) * v(i + 1, j) + (1 - u) * w * v(i, j + 1) + u * w * v(i + 1, j + 1);
-    };
-    const cx = (c) => px(c - 0.5), cy = (c) => py(c - 0.5 + LAUNCH[0]);
-    const onEdge = (c) => c <= 0.01 || c >= N - 0.01;
-    const paths = { light: [], dark: [] };
-    for (let k = 0; k < TANAKA_BINS; k++) { paths.light.push(new Path2D()); paths.dark.push(new Path2D()); }
-    for (const multi of rings) {
-      for (const polygon of multi.coordinates) for (const ring of polygon) {
-        for (let s = 1; s < ring.length; s++) {
-          const [x0, y0] = ring[s - 1], [x1, y1] = ring[s];
-          if ((onEdge(x0) && onEdge(x1)) || (onEdge(y0) && onEdge(y1))) continue;  // the grid's own border
-          const len = Math.hypot(x1 - x0, y1 - y0);
-          if (!len) continue;
-          let nx = (y1 - y0) / len, ny = -(x1 - x0) / len;  // a normal, in grid units
-          const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, e = 0.25;
-          if (at(mx + e * nx, my + e * ny) > at(mx - e * nx, my - e * ny)) { nx = -nx; ny = -ny; }  // point it downhill
-          // on screen x runs the other way for a left-handed hitter and y always runs down
-          const sx = flip ? -nx : nx, sy = -ny;
-          const lit = sx * LIGHT[0] + sy * LIGHT[1];
-          const bin = Math.min(TANAKA_BINS - 1, Math.floor(Math.abs(lit) * TANAKA_BINS));
-          const path = (lit >= 0 ? paths.light : paths.dark)[bin];
-          path.moveTo(cx(x0), cy(y0));
-          path.lineTo(cx(x1), cy(y1));
-        }
-      }
-    }
-    ctx.save();
-    ctx.lineCap = "round";
-    for (let k = 0; k < TANAKA_BINS; k++) {
-      ctx.lineWidth = 0.6 + 2.4 * (k + 0.5) / TANAKA_BINS;
-      ctx.strokeStyle = "rgba(255,255,255,0.9)";
-      ctx.stroke(paths.light[k]);
-      ctx.strokeStyle = "rgba(20,20,30,0.6)";
-      ctx.stroke(paths.dark[k]);
-    }
-    ctx.restore();
+    return wordmarkPromise;
   }
 
   async function ensureFonts() {
     if (!document.fonts) return;
     try {
-      await Promise.all([document.fonts.load(`400 40px ${FONT}`), document.fonts.load(`500 40px ${FONT}`)]);
+      await Promise.all([document.fonts.load(`400 40px ${FONT}`), document.fonts.load(`500 40px ${FONT}`),
+                         document.fonts.load(`700 60px ${FONT}`)]);
     } catch { /* the fallback face draws instead */ }
   }
 
   // Draw the chart onto `canvas`.
-  //   result:   from compute(), or computeXwoba() for the xwOBA view
-  //   result:   or computeValue() for the value view
+  //   result:   from compute(), computeXwoba() or computeValue()
   //   opts:     { title, subtitle, hand: "L"|"R", view: "balls"|"xwoba"|"value",
-  //               signed: bool (print shares as +/- differences), logo, footer }
-  function draw(canvas, result, opts) {
-    const scale = 2;
-    canvas.width = W * scale; canvas.height = H * scale;
+  //               signed: bool (print shares as +/- differences), wordmark }
+  //   scale:    backing pixels per layout pixel. The Download PNG is always 2 (a
+  //             2780 x 2430 image); on screen the app passes what the display needs.
+  function draw(canvas, result, opts, scale = 2) {
+    canvas.width = Math.round(W * scale); canvas.height = Math.round(H * scale);
     const ctx = canvas.getContext("2d");
     ctx.scale(scale, scale);
     ctx.fillStyle = BACKGROUND;
@@ -455,14 +447,33 @@
       }
     }
 
-    // --- the density (or the surface, or the value), banded, with its Tanaka lines ----
+    // --- the density (or the xwOBA surface, or the value) -------------------------
     ctx.save();
     ctx.beginPath();
     ctx.rect(AX.left, AX.top, AX.size, AX.size);
     ctx.clip();
-    const field = xw ? contours(result.surface, 1, XW_LEVELS) : contours(result.diff, 1000, LEVELS);
-    paintBands(ctx, field, xw ? XW_BANDS : BANDS, px, py);
-    paintTanaka(ctx, field, px, py, flip);
+    // contourf of diff x 1000 (or of the surface on its own levels): values on the
+    // grid, y-major for d3
+    const [field, unit, levels, bands] = xw ? [result.surface, 1, XW_LEVELS, XW_BANDS] : [result.diff, 1000, LEVELS, BANDS];
+    const values = new Float64Array(N * N);
+    for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) values[iy * N + ix] = field[ix * N + iy] * unit;
+    ctx.fillStyle = bands[0];
+    ctx.fillRect(AX.left, AX.top, AX.size, AX.size);
+    const rings = d3.contours().size([N, N]).thresholds(levels)(values);
+    // d3 puts sample i at coordinate i + 0.5
+    const cx = (c) => px(c - 0.5), cy = (c) => py(c - 0.5 + LAUNCH[0]);
+    rings.forEach((multi, k) => {
+      ctx.fillStyle = bands[k + 1];
+      ctx.beginPath();
+      for (const polygon of multi.coordinates) {
+        for (const ring of polygon) {
+          ring.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(cx(x), cy(y)); else ctx.lineTo(cx(x), cy(y)); });
+          ctx.closePath();
+        }
+      }
+      ctx.fill("evenodd");
+    });
+    tanaka(ctx, rings, values, cx, cy, flip);
     ctx.restore();
 
     // --- the bucket lines: black at a quarter, 1 pt ----------------------------
@@ -473,7 +484,7 @@
     for (const sp of [30, 60]) { ctx.moveTo(px(sp), AX.top); ctx.lineTo(px(sp), AX.top + AX.size); }
     ctx.stroke();
 
-    // --- the shares (or the zones' xwOBA) in each cell, boxed --------------------
+    // --- the shares (or the zones' xwOBA, or their part of the gap) in each cell, boxed
     const fmtShare = (v) => (opts.signed ? (v >= 0 ? "+" : "-") + Math.abs(v * 100).toFixed(1) : (v * 100).toFixed(1)) + "%";
     const fmt = xw ? fmtXw : value ? fmtMargin : fmtShare;
     const zones = xw || value ? result.zones : result.shares;
@@ -485,17 +496,15 @@
       const s = fmt(v), x = px(sprayMid[i]), y = py(launchMid[j]);
       setFont(12);
       const w = ctx.measureText(s).width + 2 * pad, h = box.asc + box.desc + 2 * pad;
-      ctx.save();
-      ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "#000000";
-      ctx.lineWidth = pt(2);
+      // a grey outline as heavy as the bucket lines, over a white fill that lets
+      // the band show through a little
       ctx.beginPath();
       ctx.roundRect(x - w / 2, y - h / 2, w, h, pad);
-      ctx.globalAlpha = xw ? 0.85 : 0.25;  // the surface's darkest blues need a solid box
+      ctx.fillStyle = "rgba(255,255,255,0.625)";
       ctx.fill();
-      ctx.globalAlpha = 0.25;
+      ctx.strokeStyle = "#808080";
+      ctx.lineWidth = pt(1);
       ctx.stroke();
-      ctx.restore();
       text(s, x, y, { size: 12, colour: "#000000" });
     }));
 
@@ -508,9 +517,8 @@
     const yLabels = ["Ground\nBall", "Line Drive", "Fly Ball", "Pop Up"];
     const yMid = [-10, 17.5, 37.5, 55];
     yLabels.forEach((s, j) => {
-      const x = AX.left - 0.14 * AX.size;
-      text(s, x, py(yMid[j] + 1), { size: 15 });
-      text(`(${fmt(zones.launch[j])})`, x, py(yMid[j] - (j === 0 ? 6 : 3.5)), { size: 10 });
+      text(s, LABEL_X, py(yMid[j] + 1), { size: LABEL_SIZE });
+      text(`(${fmt(zones.launch[j])})`, LABEL_X, py(yMid[j] - (j === 0 ? 6 : 3.5)), { size: 10 });
     });
 
     // --- the colourbar ---------------------------------------------------------------
@@ -527,13 +535,59 @@
         .forEach(([s, la, colour]) => text(s, cbx, py(la), { size: 15, weight: 500, colour }));
     }
 
-    // --- title, credits, logo --------------------------------------------------------
-    text(opts.title, 742, 40, { size: 16 });
-    text(opts.subtitle, 742, 85, { size: 12 });
-    text(opts.footer || "blandalytics.com/batted-balls", 27, 1085, { size: 6, ha: "left" });
-    text("Data: MLB Statcast", 27, 1106, { size: 6, ha: "left" });
-    text("@blandalytics", 1272, 1082, { size: 10 });
-    if (opts.logo) ctx.drawImage(opts.logo, 61.6, 995.8, 209.8, 87.5);
+    // --- header, credit, wordmark -----------------------------------------------------
+    // The title in the header colour with the subtitle muted under it and the
+    // wordmark opposite, as the Swing Profiles figure lays them out. Both start
+    // where the row labels do, so the header lines up with the widest of them.
+    setFont(LABEL_SIZE);
+    const textLeft = LABEL_X - ctx.measureText("Line Drive").width / 2;
+    text(opts.title, textLeft, 46, { size: 22, weight: 700, colour: HEADER, ha: "left", va: "top" });
+    text(opts.subtitle, textLeft, 116, { size: 13, colour: SUBHEADER, ha: "left", va: "top" });
+    // the credit sits under the row labels, centred on them, at the size and in the
+    // colour the Swing Profiles figure gives its footer note
+    text("Data: MLB Statcast", LABEL_X, 1085 + HEADER_H, { size: 10, colour: SUBHEADER });
+    if (opts.wordmark) {
+      // a quarter of the figure's width, as the Swing Profiles figure sizes it
+      const w = 0.25 * W, h = w * (opts.wordmark.height / opts.wordmark.width);
+      ctx.drawImage(opts.wordmark, CB.left + CB.width - w, 76 - h / 2, w, h);
+    }
+  }
+
+  // The illuminated edges over the filled bands. Each edge of each ring gets its
+  // normal pointed downhill (the field is sampled either side of it), and the
+  // stroke follows how that normal faces the light.
+  function tanaka(ctx, rings, values, cx, cy, flip) {
+    const sample = (gx, gy) => {  // bilinear, in d3's coordinates (sample i at i + 0.5)
+      const x = Math.min(Math.max(gx - 0.5, 0), N - 1), y = Math.min(Math.max(gy - 0.5, 0), N - 1);
+      const x0 = Math.floor(x), y0 = Math.floor(y), x1 = Math.min(x0 + 1, N - 1), y1 = Math.min(y0 + 1, N - 1);
+      const fx = x - x0, fy = y - y0;
+      return values[y0 * N + x0] * (1 - fx) * (1 - fy) + values[y0 * N + x1] * fx * (1 - fy)
+           + values[y1 * N + x0] * (1 - fx) * fy + values[y1 * N + x1] * fx * fy;
+    };
+    const sx = flip ? -1 : 1;  // grid x runs right unless the axis is flipped; grid y runs up
+    ctx.lineCap = "round";
+    for (const multi of rings) {
+      for (const polygon of multi.coordinates) for (const ring of polygon) {
+        for (let i = 1; i < ring.length; i++) {
+          const [ax, ay] = ring[i - 1], [bx, by] = ring[i];
+          let nx = -(by - ay), ny = bx - ax;
+          const len = Math.hypot(nx, ny);
+          if (len < 1e-9) continue;
+          nx /= len; ny /= len;
+          const mx = (ax + bx) / 2, my = (ay + by) / 2;
+          if (sample(mx + nx * 0.5, my + ny * 0.5) > sample(mx - nx * 0.5, my - ny * 0.5)) { nx = -nx; ny = -ny; }
+          const d = sx * nx * LIGHT[0] - ny * LIGHT[1];
+          const a = Math.abs(d);
+          if (a < 0.05) continue;
+          ctx.strokeStyle = d > 0 ? `rgba(255,255,255,${(TANAKA.lit * a).toFixed(3)})` : `rgba(0,0,0,${(TANAKA.shade * a).toFixed(3)})`;
+          ctx.lineWidth = TANAKA.base + TANAKA.width * a;
+          ctx.beginPath();
+          ctx.moveTo(cx(ax), cy(ay));
+          ctx.lineTo(cx(bx), cy(by));
+          ctx.stroke();
+        }
+      }
+    }
   }
 
   // The xwOBA colourbar: narrower than the density's, its ten bands with the outcomes
@@ -560,11 +614,11 @@
     text("xwOBA", left + width / 2, top - 48, { size: 15, weight: 500 });
   }
 
-  async function render(canvas, result, opts) {
+  async function render(canvas, result, opts, scale = 2) {
     await ensureFonts();
-    const logo = await loadLogo();
-    draw(canvas, result, { ...opts, logo });
+    const wordmark = await loadWordmark();
+    draw(canvas, result, { ...opts, wordmark }, scale);
   }
 
-  window.BattedBalls = { N, kdeGrid, compute, computeXwoba, computeValue, surfaceAt, shares, render, inRange, tracked };
+  window.BattedBalls = { N, W, kdeGrid, compute, computeXwoba, computeValue, surfaceAt, shares, render, inRange, tracked };
 })();

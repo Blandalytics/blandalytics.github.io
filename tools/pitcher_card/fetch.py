@@ -23,7 +23,7 @@ FEED = "https://statsapi.mlb.com/api/v1.1/game/{pk}/feed/live"
 DATA_URL = "https://data.blandalytics.com"
 ARM_ANGLES = (
     "https://baseballsavant.mlb.com/leaderboard/pitcher-arm-angles?batSide=&dateStart={start}"
-    "&dateEnd={end}&gameType=R&groupBy=api_pitch_type_group03&min=1&minGroupPitches=1"
+    "&dateEnd={end}&gameType={gt}&groupBy=api_pitch_type_group03&min=1&minGroupPitches=1"
     "&perspective=back&pitchHand=&pitchType=&season={season}&size=small&sort=ascending"
     "&team=&csv=true"
 )
@@ -35,11 +35,14 @@ SEASON_COLUMNS = (
     "release_extension", "plate_time", "hb", "ivb", "release_spin_rate", "spin_axis", "plate_x",
     "plate_z", "release_pos_x", "release_pos_z", "vy0", "vz0", "ay", "az",
 )  # fmt: skip
-# ...and the few more a game's own card reads; a data file is narrowed to these on the
-# way into the cache, which is what keeps a season under 50 MB there
+# ...the few more a game's own card reads, and the rest of what the pitch-modeling scorer
+# needs (its release physics, the call and event behind each outcome, the names it keys
+# on); a data file is narrowed to these on the way into the cache, which is what keeps a
+# season well under its full size there
 CARD_COLUMNS = (
     *SEASON_COLUMNS, "inning", "launch_speed", "launch_angle", "play_id", "post_bat_score",
-    "post_field_score", "game_type",
+    "post_field_score", "game_type", "release_pos_y", "vx0", "ax", "call_code", "events",
+    "pitcher_name", "batter", "home_team", "event_desc",
 )  # fmt: skip
 SCRAPER_COLUMNS = tuple(c for c in CARD_COLUMNS if c != "game_type")  # what statfast has
 
@@ -55,32 +58,48 @@ def feed(s: requests.Session, game_pk: int) -> dict:
 
 
 # ---- arm angles ---------------------------------------------------------------------
-def _arm_query(game_date: dt.date, today: dt.date) -> dict[str, str]:
-    """Which leaderboard to read. Savant's per-day arm angles land a few days after the
-    game, so a recent game reads the season to date; a game before the season opens
-    reads the previous season."""
+def _arm_queries(game_date: dt.date, today: dt.date, game_type: str) -> list[dict[str, str]]:
+    """The leaderboards to try for a game, best first.
+
+    Savant's per-day arm angles land a few days after the game, so a recent game reads
+    the season to date; a game before the season opens reads the previous season. The
+    season is always named: without it a date window in a past season comes back empty.
+    A postseason date holds no regular-season games, so the round's own code has to be
+    asked for -- and a round Savant has not published yet falls back to the pitcher's
+    regular season, which is the sample the comparisons use anyway."""
     opener = dt.date(game_date.year, 3, 25)
+    year = str(game_date.year - 1 if game_date <= opener else game_date.year)
+    day = game_date.isoformat()
+    out = []
     if (today - game_date).days >= 3 and game_date > opener:
-        return {"start": game_date.isoformat(), "end": game_date.isoformat(), "season": ""}
-    year = game_date.year - 1 if game_date <= opener else game_date.year
-    return {"start": "", "end": "", "season": str(year)}
+        out.append({"start": day, "end": day, "season": year, "gt": game_type})
+    out.append({"start": "", "end": "", "season": year, "gt": game_type})
+    if game_type != "R":
+        out.append({"start": "", "end": "", "season": year, "gt": "R"})
+    return out
 
 
 _arm_cache: dict[str, dict[int, dict[str, float]]] = {}
 
 
 def arm_angles(
-    s: requests.Session, game_date: dt.date, today: dt.date | None = None
+    s: requests.Session,
+    game_date: dt.date,
+    today: dt.date | None = None,
+    game_type: str = "R",
 ) -> dict[int, dict[str, float]]:
     """pitcher id -> {raw pitch-type code: arm angle in degrees} for a game date."""
-    url = ARM_ANGLES.format(**_arm_query(game_date, today or dt.date.today()))
-    if url not in _arm_cache:
-        try:
-            _arm_cache[url] = _read_arm_angles(s, url)
-        except (requests.RequestException, ValueError, KeyError) as exc:
-            print(f"arm angles unavailable for {game_date}: {exc}", file=sys.stderr)
-            _arm_cache[url] = {}
-    return _arm_cache[url]
+    for q in _arm_queries(game_date, today or dt.date.today(), game_type):
+        url = ARM_ANGLES.format(**q)
+        if url not in _arm_cache:
+            try:
+                _arm_cache[url] = _read_arm_angles(s, url)
+            except (requests.RequestException, ValueError, KeyError) as exc:
+                print(f"arm angles unavailable for {game_date}: {exc}", file=sys.stderr)
+                _arm_cache[url] = {}
+        if _arm_cache[url]:
+            return _arm_cache[url]
+    return {}
 
 
 def _read_arm_angles(s: requests.Session, url: str) -> dict[int, dict[str, float]]:
@@ -120,6 +139,7 @@ class DataStore:
         self.data_url = data_url
         self._manifest: dict | None = None
         self._frames: dict[str, pd.DataFrame] = {}
+        self._seasons: dict[int, tuple[dt.date, pd.DataFrame]] = {}
         self._tails: dict[int, tuple[pd.DataFrame, dt.date, dt.date]] = {}
         os.makedirs(os.path.join(cache_dir, "units"), exist_ok=True)
 
@@ -171,7 +191,9 @@ class DataStore:
         if not have:
             return False
         with open(meta_path, encoding="utf-8") as fh:
-            return json.load(fh).get("built") == unit.get("built")
+            meta = json.load(fh)
+        # the columns too: a cache narrowed before one was added has to be pulled again
+        return meta.get("built") == unit.get("built") and meta.get("columns") == list(CARD_COLUMNS)
 
     def _download(self, unit_path: str, unit: dict) -> None:
         r = self.s.get(f"{self.data_url}/{unit_path}", timeout=600)
@@ -179,7 +201,8 @@ class DataStore:
         df = pq.read_table(io.BytesIO(r.content), columns=list(CARD_COLUMNS)).to_pandas()
         df.to_parquet(self._cache_path(unit_path, "parquet"), index=False)
         with open(self._cache_path(unit_path, "json"), "w", encoding="utf-8") as fh:
-            json.dump({"built": unit.get("built"), "pitches": len(df)}, fh)
+            meta = {"built": unit.get("built"), "pitches": len(df), "columns": list(CARD_COLUMNS)}
+            json.dump(meta, fh)
         print(f"  data file {unit_path}: {len(df):,} pitches", file=sys.stderr)
 
     def _frame(self, unit_path: str, unit: dict) -> pd.DataFrame:
@@ -238,7 +261,9 @@ class DataStore:
         return df
 
     def through(self, year: int, date: dt.date) -> pd.DataFrame:
-        """The season's regular-season pitches through ``date`` (inclusive)."""
+        """The season's regular-season pitches through ``date`` (inclusive), in the narrow
+        set: a comparison reads none of the scorer's columns, and every card slices this
+        frame by pitcher, so carrying them costs a copy each time."""
         end = min(_date(date), dt.date(year, 12, 31))
         first = dt.date(year, 1, 1)
         last = self.last_finalized
@@ -250,12 +275,22 @@ class DataStore:
         tail_start = stored_end + dt.timedelta(days=1) if stored_end else first
         if tail_start <= end:
             parts.append(self._tail(year, tail_start, end))
-        return _concat(*parts) if parts else _empty()
+        out = _concat(*parts) if parts else _empty()
+        return out[list(SEASON_COLUMNS)]
+
+    def season(self, year: int, date: dt.date) -> pd.DataFrame:
+        """``through``, kept between calls. Every card built for a date asks for the same
+        four seasons, and stitching a season's files back together is not cheap."""
+        end = min(_date(date), dt.date(year, 12, 31))
+        have = self._seasons.get(year)
+        if have is None or have[0] != end:
+            self._seasons[year] = (end, self.through(year, end))  # one per year at a time
+        return self._seasons[year][1]
 
     def before(self, year: int, date: dt.date) -> pd.DataFrame:
         """The season's regular-season pitches from games strictly before ``date``."""
         date = _date(date)
-        df = self.through(year, date - dt.timedelta(days=1))
+        df = self.season(year, date - dt.timedelta(days=1))
         return df[df["game_date"] < pd.Timestamp(date)]
 
 
@@ -267,7 +302,12 @@ def _empty() -> pd.DataFrame:
 
 
 def _concat(*frames: pd.DataFrame) -> pd.DataFrame:
-    """Append, keeping the string columns categorical across differing category sets."""
+    """Append, keeping the string columns categorical across differing category sets.
+
+    Frames with no rows are dropped first. They add nothing, and a typeless empty one
+    would turn every numeric column object: past the last regular-season day the tail
+    pull covers a span with no games, which is every day of the postseason."""
+    frames = tuple(f for f in frames if not f.empty) or frames[:1]
     if len(frames) == 1:
         return frames[0]
     cats = [c for c in frames[0].columns if isinstance(frames[0][c].dtype, pd.CategoricalDtype)]
