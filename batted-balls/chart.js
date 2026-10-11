@@ -1,9 +1,9 @@
 // The batted-ball chart: a hitter's density of spray angle against launch angle
 // minus the league's (or their own prior season's), drawn on a canvas. A port of
 // the figure in PLV_viz/hitter_app/pages/batted_ball_charts.py -- the same grid,
-// the same scipy density, the same vlag bands and heatmap palette, the same
-// layout -- so the PNG matches what the Streamlit app draws. Laid out in the pixels
-// of the 200 dpi image the app serves (1390 x 1135) and rasterised at 2x.
+// the same scipy density, the same vlag bands, the same layout -- with Tanaka's
+// illuminated lines along every contour. Laid out in the pixels of the 200 dpi image
+// the app serves (1390 x 1135) and rasterised at 2x.
 //
 // The xwOBA view draws, on the same grid and layout, the 3D xwOBA model's surface
 // (tools/xwoba: spray, launch angle, bat speed) at the hitter's average bat speed,
@@ -203,30 +203,17 @@
   const LEVELS = [-12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10];
   const BANDS = ["#2369bd", "#3f75bc", "#6a8dbf", "#92a7c8", "#b7c2d5", "#dcdee6", "#faf5f4",
     "#eed7d5", "#deb2b0", "#d08f8d", "#c16c6a", "#b1494a", "#a9373b"];
-  // the discrete colourbar: BoundaryNorm over 13 steps of vlag
+  // the colourbar: BoundaryNorm over 13 steps of vlag
   const STEPS = ["#2369bd", "#5380bc", "#7896c1", "#9aadca", "#bdc6d7", "#dfe1e8", "#faf5f5",
     "#f0dbda", "#e1b9b6", "#d49896", "#c77977", "#b95a59", "#a9373b"];
-  // seaborn's vlag, for the continuous colourbar
-  const VLAG = ["#2369bd", "#266abd", "#296cbc", "#2c6dbc", "#2f6ebc", "#316fbc", "#3470bc", "#3671bc", "#3972bc", "#3b73bc", "#3d74bc", "#3f75bc", "#4276bc", "#4477bc", "#4678bc", "#4879bc", "#4a7bbc", "#4c7cbc", "#4e7dbc", "#507ebc", "#517fbc", "#5380bc", "#5581bc", "#5782bc", "#5983bd", "#5b84bd", "#5c85bd", "#5e86bd", "#6087bd", "#6288bd", "#6489be", "#658abe", "#678bbe", "#698cbe", "#6a8dbf", "#6c8ebf", "#6e90bf", "#6f91bf", "#7192c0", "#7393c0", "#7594c0", "#7695c1", "#7896c1", "#7997c1", "#7b98c2", "#7d99c2", "#7e9ac2", "#809bc3", "#829cc3", "#839dc4", "#859ec4", "#87a0c4", "#88a1c5", "#8aa2c5", "#8ba3c6", "#8da4c6", "#8fa5c7", "#90a6c7", "#92a7c8", "#93a8c8", "#95a9c8", "#97abc9", "#98acc9", "#9aadca", "#9baecb", "#9dafcb", "#9fb0cc", "#a0b1cc", "#a2b2cd", "#a3b4cd", "#a5b5ce", "#a7b6ce", "#a8b7cf", "#aab8d0", "#abb9d0", "#adbbd1", "#afbcd1", "#b0bdd2", "#b2bed3", "#b3bfd3", "#b5c0d4", "#b7c2d5", "#b8c3d5", "#bac4d6", "#bbc5d7", "#bdc6d7", "#bfc8d8", "#c0c9d9", "#c2cada", "#c3cbda", "#c5cddb", "#c7cedc", "#c8cfdd", "#cad0dd", "#cbd1de", "#cdd3df", "#cfd4e0", "#d0d5e0", "#d2d7e1", "#d4d8e2", "#d5d9e3", "#d7dae4", "#d9dce5", "#dadde5", "#dcdee6", "#dde0e7", "#dfe1e8", "#e1e2e9", "#e2e3ea", "#e4e5eb", "#e6e6ec", "#e7e7ec", "#e9e9ed", "#ebeaee", "#ecebef", "#eeedf0", "#efeef1", "#f1eff2", "#f2f0f2", "#f3f1f3", "#f5f2f4", "#f6f3f4", "#f7f4f4", "#f8f4f5", "#f9f5f5", "#f9f5f5", "#faf5f5", "#faf5f5", "#faf5f4", "#faf5f4", "#faf4f3", "#faf3f3", "#faf3f2", "#faf2f1", "#faf0ef", "#f9efee", "#f9eeed", "#f8edeb", "#f7ebea", "#f7eae8", "#f6e8e7", "#f5e7e5", "#f5e5e4", "#f4e3e2", "#f3e2e0", "#f2e0df", "#f2dfdd", "#f1dddb", "#f0dbda", "#efdad8", "#efd8d6", "#eed7d5", "#edd5d3", "#ecd3d2", "#ecd2d0", "#ebd0ce", "#eacfcd", "#eacdcb", "#e9cbc9", "#e8cac8", "#e7c8c6", "#e7c7c5", "#e6c5c3", "#e5c3c1", "#e5c2c0", "#e4c0be", "#e3bfbd", "#e3bdbb", "#e2bcb9", "#e1bab8", "#e1b9b6", "#e0b7b5", "#dfb5b3", "#dfb4b2", "#deb2b0", "#deb1ae", "#ddafad", "#dcaeab", "#dcacaa", "#dbaba8", "#daa9a7", "#daa8a5", "#d9a6a4", "#d9a5a2", "#d8a3a0", "#d7a29f", "#d7a09d", "#d69f9c", "#d59d9a", "#d59c99", "#d49a97", "#d49896", "#d39794", "#d29593", "#d29491", "#d19290", "#d1918e", "#d08f8d", "#cf8e8b", "#cf8c8a", "#ce8b88", "#cd8987", "#cd8885", "#cc8784", "#cc8582", "#cb8481", "#ca827f", "#ca817e", "#c97f7d", "#c87e7b", "#c87c7a", "#c77b78", "#c77977", "#c67875", "#c57674", "#c57572", "#c47371", "#c3726f", "#c3706e", "#c26f6d", "#c16d6b", "#c16c6a", "#c06a68", "#c06967", "#bf6765", "#be6664", "#be6463", "#bd6361", "#bc6160", "#bc605e", "#bb5e5d", "#ba5d5c", "#b95b5a", "#b95a59", "#b85857", "#b75756", "#b75555", "#b65453", "#b55252", "#b55151", "#b44f4f", "#b34d4e", "#b24c4c", "#b24a4b", "#b1494a", "#b04748", "#af4647", "#af4446", "#ae4244", "#ad4143", "#ac3f42", "#ac3e40", "#ab3c3f", "#aa3a3e", "#a9393c", "#a9373b"];
   // sns.color_palette("vlag", 25)[0] and [-1]: the Less / More Often labels
   const LABEL_BLUE = "#3b73bc", LABEL_RED = "#af4647";
-  // the heatmap palette: blend kde_min -> white -> kde_max, centred on 0 at +/-0.01
-  const KDE_MIN = [0x23, 0x6a, 0xbe], KDE_MAX = [0xa9, 0x37, 0x3b], KDE_MID = [0xfe, 0xfe, 0xfe];
-  const KDE_THRESH = 0.01;
 
-  function heatColour(v) {
-    const t = Math.max(-1, Math.min(1, v / KDE_THRESH));
-    const [from, to, u] = t < 0 ? [KDE_MID, KDE_MIN, -t] : [KDE_MID, KDE_MAX, t];
-    return from.map((c, i) => Math.round(c + (to[i] - c) * u));
-  }
-
-  // The xwOBA surface: a continuous spectrum pinned to the wOBA value of each outcome
-  // -- white for an out, the single's blue, the double's green, the triple's yellow,
-  // the home run's red -- in ten levels of .200 (Discrete) or blended cell by cell
-  // (Continuous), with Tanaka lines at the levels' boundaries either way. The bands
-  // take the spectrum evenly from end to end, as matplotlib's contourf spreads a
-  // colormap: the lowest an out's white, the .800-1.000 band a single's blue (.889),
-  // the highest a home run's red.
+  // The xwOBA surface: a spectrum pinned to the wOBA value of each outcome -- white for
+  // an out, the single's blue, the double's green, the triple's yellow, the home run's
+  // red -- in ten levels of .200. The bands take the spectrum evenly from end to end,
+  // as matplotlib's contourf spreads a colormap: the lowest an out's white, the
+  // .800-1.000 band a single's blue (.889), the highest a home run's red.
   const XW_STOPS = [[0, "#FFFFFF", "Out"], [0.9, "#2D99C8", "1B"], [1.25, "#54D29B", "2B"],
     [1.6, "#FFE066", "3B"], [2, "#F04542", "HR"]];
   const XW_MAX = 2, XW_N = 10, XW_STEP = XW_MAX / XW_N;
@@ -267,55 +254,31 @@
     return logoPromise;
   }
 
-  // Paint a 91 x 91 grid into the axes: filled contour bands (d3-contour) for the
-  // discrete scale, a cell per grid point for the continuous one.
-  //   style: { discrete, scale (grid -> contour units), levels, bands, colour }
-  // a grid's values y-major, as d3-contour reads them
-  function yMajor(grid, scale = 1) {
+  // A 91 x 91 grid's contours (d3-contour) at the given levels, in contour units
+  // (grid x scale), with the values they were traced on, y-major as d3 reads them.
+  function contours(grid, scale, levels) {
     const values = new Float64Array(N * N);
     for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) values[iy * N + ix] = grid[ix * N + iy] * scale;
-    return values;
+    return { values, rings: d3.contours().size([N, N]).thresholds(levels)(values) };
   }
 
-  function paintGrid(ctx, grid, style, px, py, flip) {
-    if (style.discrete) {
-      const values = yMajor(grid, style.scale);
-      ctx.fillStyle = style.bands[0];
-      ctx.fillRect(AX.left, AX.top, AX.size, AX.size);
-      const rings = d3.contours().size([N, N]).thresholds(style.levels)(values);
-      // d3 puts sample i at coordinate i + 0.5
-      const cx = (c) => px(c - 0.5), cy = (c) => py(c - 0.5 + LAUNCH[0]);
-      rings.forEach((multi, k) => {
-        ctx.fillStyle = style.bands[k + 1];
-        ctx.beginPath();
-        for (const polygon of multi.coordinates) {
-          for (const ring of polygon) {
-            ring.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(cx(x), cy(y)); else ctx.lineTo(cx(x), cy(y)); });
-            ctx.closePath();
-          }
+  // Fill the axes band by band: the lowest colour under everything, then each level's
+  // region in the next. d3 puts sample i at coordinate i + 0.5.
+  function paintBands(ctx, { rings }, bands, px, py) {
+    ctx.fillStyle = bands[0];
+    ctx.fillRect(AX.left, AX.top, AX.size, AX.size);
+    const cx = (c) => px(c - 0.5), cy = (c) => py(c - 0.5 + LAUNCH[0]);
+    rings.forEach((multi, k) => {
+      ctx.fillStyle = bands[k + 1];
+      ctx.beginPath();
+      for (const polygon of multi.coordinates) {
+        for (const ring of polygon) {
+          ring.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(cx(x), cy(y)); else ctx.lineTo(cx(x), cy(y)); });
+          ctx.closePath();
         }
-        ctx.fill("evenodd");
-      });
-      return;
-    }
-    // seaborn.heatmap of the transposed grid: cell (ix, iy) spans [ix, ix+1) by
-    // [iy, iy+1) in index units, with the axes cut at 90 so the last row and
-    // column are clipped away
-    const off = document.createElement("canvas");
-    off.width = N; off.height = N;
-    const img = off.getContext("2d").createImageData(N, N);
-    for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) {
-      const [r, g, b] = style.colour(grid[ix * N + iy]);
-      const o = ((N - 1 - iy) * N + ix) * 4;
-      img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
-    }
-    off.getContext("2d").putImageData(img, 0, 0);
-    ctx.imageSmoothingEnabled = false;
-    ctx.save();
-    if (flip) { ctx.translate(AX.left * 2 + AX.size, 0); ctx.scale(-1, 1); }
-    ctx.drawImage(off, 0, 1, N - 1, N - 1, AX.left, AX.top, AX.size, AX.size);
-    ctx.restore();
-    ctx.imageSmoothingEnabled = true;
+      }
+      ctx.fill("evenodd");
+    });
   }
 
   // Tanaka's illuminated contours: every level's line, segment by segment, light where
@@ -323,11 +286,12 @@
   // and wider the more squarely it faces toward or away from the light. Which side of a
   // segment is downhill is read off the grid on either side of it, so the lines stay
   // right when the chart is mirrored for a left-handed hitter. Segments are batched by
-  // brightness, so a chart is a handful of strokes.
+  // brightness, so a chart is a handful of strokes. Every chart's contours get them:
+  // on the batted-ball and value charts, where the field runs from blue below zero to
+  // red above it, the red reads as high ground and the blue as hollows.
   const LIGHT = [-Math.SQRT1_2, -Math.SQRT1_2];  // toward the upper left, on screen
   const TANAKA_BINS = 6;
-  function paintTanaka(ctx, grid, levels, px, py, flip) {
-    const values = yMajor(grid);
+  function paintTanaka(ctx, { values, rings }, px, py, flip) {
     // the grid between its samples, in d3's coordinates (sample i sits at i + 0.5)
     const at = (x, y) => {
       const gx = Math.min(Math.max(x - 0.5, 0), N - 1), gy = Math.min(Math.max(y - 0.5, 0), N - 1);
@@ -339,7 +303,7 @@
     const onEdge = (c) => c <= 0.01 || c >= N - 0.01;
     const paths = { light: [], dark: [] };
     for (let k = 0; k < TANAKA_BINS; k++) { paths.light.push(new Path2D()); paths.dark.push(new Path2D()); }
-    for (const multi of d3.contours().size([N, N]).thresholds(levels)(values)) {
+    for (const multi of rings) {
       for (const polygon of multi.coordinates) for (const ring of polygon) {
         for (let s = 1; s < ring.length; s++) {
           const [x0, y0] = ring[s - 1], [x1, y1] = ring[s];
@@ -380,9 +344,9 @@
 
   // Draw the chart onto `canvas`.
   //   result:   from compute(), or computeXwoba() for the xwOBA view
-  //   opts:     { title, subtitle, hand: "L"|"R", scale: "discrete"|"continuous",
-  //               view: "balls"|"xwoba", signed: bool (print shares as +/- differences),
-  //               logo, footer }
+  //   result:   or computeValue() for the value view
+  //   opts:     { title, subtitle, hand: "L"|"R", view: "balls"|"xwoba"|"value",
+  //               signed: bool (print shares as +/- differences), logo, footer }
   function draw(canvas, result, opts) {
     const scale = 2;
     canvas.width = W * scale; canvas.height = H * scale;
@@ -391,7 +355,6 @@
     ctx.fillStyle = BACKGROUND;
     ctx.fillRect(0, 0, W, H);
 
-    const discrete = opts.scale !== "continuous";
     const xw = opts.view === "xwoba", value = opts.view === "value";
     const flip = opts.hand === "L";  // the pull side stays on the left for right-handers, right for lefties
     const px = (spray) => AX.left + (flip ? 90 - spray : spray) * 10;
@@ -418,17 +381,14 @@
       }
     }
 
-    // --- the density, or the xwOBA surface ----------------------------------------
+    // --- the density (or the surface, or the value), banded, with its Tanaka lines ----
     ctx.save();
     ctx.beginPath();
     ctx.rect(AX.left, AX.top, AX.size, AX.size);
     ctx.clip();
-    if (xw) {
-      paintGrid(ctx, result.surface, { discrete, scale: 1, levels: XW_LEVELS, bands: XW_BANDS, colour: xwColour }, px, py, flip);
-      paintTanaka(ctx, result.surface, XW_LEVELS, px, py, flip);
-    } else {
-      paintGrid(ctx, result.diff, { discrete, scale: 1000, levels: LEVELS, bands: BANDS, colour: heatColour }, px, py, flip);
-    }
+    const field = xw ? contours(result.surface, 1, XW_LEVELS) : contours(result.diff, 1000, LEVELS);
+    paintBands(ctx, field, xw ? XW_BANDS : BANDS, px, py);
+    paintTanaka(ctx, field, px, py, flip);
     ctx.restore();
 
     // --- the bucket lines: black at a quarter, 1 pt ----------------------------
@@ -480,20 +440,13 @@
     });
 
     // --- the colourbar ---------------------------------------------------------------
-    if (xw) xwColourbar(ctx, discrete, text);
+    if (xw) xwColourbar(ctx, text);
     else {
-      if (discrete) {
-        const h = CB.height / STEPS.length;
-        STEPS.forEach((c, i) => {
-          ctx.fillStyle = c;
-          ctx.fillRect(CB.left, CB.top + CB.height - (i + 1) * h, CB.width, h + 0.5);
-        });
-      } else {
-        const grad = ctx.createLinearGradient(0, CB.top + CB.height, 0, CB.top);
-        VLAG.forEach((c, i) => grad.addColorStop(i / (VLAG.length - 1), c));
-        ctx.fillStyle = grad;
-        ctx.fillRect(CB.left, CB.top, CB.width, CB.height);
-      }
+      const h = CB.height / STEPS.length;
+      STEPS.forEach((c, i) => {
+        ctx.fillStyle = c;
+        ctx.fillRect(CB.left, CB.top + CB.height - (i + 1) * h, CB.width, h + 0.5);
+      });
       const cbx = AX.left + 1.115 * AX.size;
       const [less, more] = value ? ["Below\nMLB", "Above\nMLB"] : ["Less\nOften", "More\nOften"];
       [[less, -24, LABEL_BLUE], ["Same", 15, "#000000"], [more, 53.5, LABEL_RED]]
@@ -509,24 +462,16 @@
     if (opts.logo) ctx.drawImage(opts.logo, 61.6, 995.8, 209.8, 87.5);
   }
 
-  // The xwOBA colourbar: narrower than the density's, the outcomes named on its left at
-  // their wOBA values and the values on its right. Discrete, the ten bands; continuous,
-  // the spectrum itself.
+  // The xwOBA colourbar: narrower than the density's, its ten bands with the outcomes
+  // named on its left at their wOBA values and the values on its right.
   const XW_BAR = { left: 1252, top: CB.top, width: 40, height: CB.height };
-  function xwColourbar(ctx, discrete, text) {
+  function xwColourbar(ctx, text) {
     const { left, top, width, height } = XW_BAR;
     const bottom = top + height, y = (v) => bottom - (v / XW_MAX) * height;
-    if (discrete) {
-      XW_BANDS.forEach((c, i) => {
-        ctx.fillStyle = c;
-        ctx.fillRect(left, y((i + 1) * XW_STEP), width, height / XW_N + 0.5);
-      });
-    } else {
-      const grad = ctx.createLinearGradient(0, bottom, 0, top);
-      XW_STOPS.forEach(([v, c]) => grad.addColorStop(v / XW_MAX, c));
-      ctx.fillStyle = grad;
-      ctx.fillRect(left, top, width, height);
-    }
+    XW_BANDS.forEach((c, i) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(left, y((i + 1) * XW_STEP), width, height / XW_N + 0.5);
+    });
     ctx.strokeStyle = "rgba(255,255,255,0.6)";
     ctx.lineWidth = 1;
     ctx.strokeRect(left, top, width, height);

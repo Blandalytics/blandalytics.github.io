@@ -1,5 +1,5 @@
-// The Batted Ball Charts page: season, hitter (or team), colour scale and
-// comparison controls over the chart in chart.js. The data is two JSON files per
+// The Batted Ball Charts page: season, hitter (or team), view and comparison
+// controls over the chart in chart.js. The data is two JSON files per
 // visit from the bucket -- the seasons built and one season's batted balls with
 // its league grid -- produced by tools/batted_balls/build_data.py, and a third,
 // the 3D xwOBA model's surface, the first time the xwOBA view is shown.
@@ -14,7 +14,6 @@
     status: $("status"), out: $("out"), fig: $("fig"), note: $("note"), dlPng: $("dl_png"),
     through: $("through"), viewNote: $("view_note"),
   };
-  const scaleInputs = () => [...document.querySelectorAll('input[name="scale"]')];
   const vsInputs = () => [...document.querySelectorAll('input[name="vs"]')];
   const viewInputs = () => [...document.querySelectorAll('input[name="view"]')];
   const radio = (name) => document.querySelector(`input[name="${name}"]:checked`)?.value;
@@ -29,7 +28,7 @@
   let index = null;             // { seasons: { "2026": {...} } }
   const seasons = new Map();    // season -> its file, once fetched
   let surface = null;           // the xwOBA surface's file, once fetched
-  let current = null;           // { season, id|team, scale, vs } of the chart shown
+  let current = null;           // { season, id|team, view, vs } of the chart shown
   let chosen = null;            // the picked hitter, for the suggestion field
 
   function status(msg, kind = "") {
@@ -129,9 +128,8 @@
   // ---- the chart -----------------------------------------------------------------------
   const possessive = (name) => name + (name.endsWith("s") ? "'" : "'s");
 
-  // The xwOBA and value views keep the colour scale (a team's too) but not the
-  // comparison: one draws the hitter's own surface, the other is already measured
-  // against MLB.
+  // The xwOBA and value views have no comparison: one draws the hitter's own
+  // surface, the other is already measured against MLB.
   function selection() {
     const year = Number(el.season.value);
     const teamWide = el.teamWide.checked;
@@ -142,17 +140,17 @@
       team: teamWide ? el.team.value : null,
       id: teamWide ? null : chosen?.id ?? null,
       view,
-      scale: teamWide && !xw ? "continuous" : radio("scale"),
       vs: teamWide || xw || !hasPrior(year) ? "league" : radio("vs"),
     };
   }
 
   function hash(sel) {
     const who = sel.team || sel.id;
-    return `#${sel.season}-${who}` + (sel.scale === "continuous" ? "-continuous" : "") + (sel.vs === "self" ? "-self" : "")
-      + (sel.view !== "balls" ? `-${sel.view}` : "");
+    return `#${sel.season}-${who}` + (sel.vs === "self" ? "-self" : "") + (sel.view !== "balls" ? `-${sel.view}` : "");
   }
 
+  // Links from when there was a colour scale may carry -continuous or -discrete; they
+  // are read and ignored, so they still open the chart.
   function parseHash() {
     const m = /^#(\d{4})-([A-Za-z0-9]+)((?:-(?:continuous|discrete|self|league|xwoba|value))*)$/.exec(location.hash);
     if (!m) return null;
@@ -160,7 +158,6 @@
     return {
       season: Number(m[1]),
       who: m[2],
-      scale: flags.includes("continuous") ? "continuous" : "discrete",
       vs: flags.includes("self") ? "self" : "league",
       view: flags.includes("xwoba") ? "xwoba" : flags.includes("value") ? "value" : "balls",
     };
@@ -217,7 +214,7 @@
       const result = BattedBalls.compute({ hitter, league: data.league, prior });
       if (!result) { status(`not enough batted balls to draw a density (${hitter.length})`, "warn"); el.out.hidden = true; return; }
       const opts = {
-        hand, scale: sel.scale, view: "balls", signed: Boolean(prior),
+        hand, view: "balls", signed: Boolean(prior),
         title: prior ? `${possessive(name)} Batted Ball Difference` : `${possessive(name)} ${sel.season} Batted Ball Profile`,
         subtitle: prior ? `(${sel.season}, compared to ${sel.season - 1})` : "(Compared to rest of MLB)",
       };
@@ -251,7 +248,7 @@
     const result = BattedBalls.computeXwoba({ balls: hitter, surface: surf });
     if (!result) { status("no tracked swings among these batted balls", "warn"); el.out.hidden = true; return; }
     const opts = {
-      hand, scale: sel.scale, view: "xwoba",
+      hand, view: "xwoba",
       title: `${possessive(name)} ${sel.season} xwOBA Surface`,
       subtitle: `(${result.batSpeed.toFixed(1)} mph average bat speed, ${fmtXw(result.xwoba)} xwOBA on contact)`,
     };
@@ -275,7 +272,7 @@
     const result = BattedBalls.computeValue({ balls: hitter, league });
     if (!result) { status(`not enough tracked swings to draw a density (${hitter.length} batted balls)`, "warn"); el.out.hidden = true; return; }
     const opts = {
-      hand, scale: sel.scale, view: "value",
+      hand, view: "value",
       title: `${possessive(name)} ${sel.season} Batted Ball Value`,
       subtitle: `(${fmtMargin(result.total)} xwOBA on contact vs MLB at the same bat speeds)`,
     };
@@ -303,12 +300,10 @@
       : year >= XWOBA_SEASON ? "xwOBA isn't built for this season yet"
         : `xwOBA needs bat speed, which Statcast tracks from ${XWOBA_SEASON}`;
     const xw = radio("view") !== "balls";
-    // a team's batted-ball chart is always continuous against the league, as in the
-    // app; the xwOBA and value views have no comparison
-    scaleInputs().forEach((r) => { r.disabled = teamWide && !xw; });
+    // a team's chart is against the league, as in the app; the xwOBA and value views
+    // have no comparison
     const prior = hasPrior(year);
     vsInputs().forEach((r) => { r.disabled = teamWide || xw || (!prior && r.value === "self"); });
-    if (teamWide && !xw) setRadio("scale", "continuous");
     if (teamWide || xw || !prior) setRadio("vs", "league");
   }
 
@@ -345,7 +340,7 @@
       } else if (data.teams.includes(link.who)) {
         el.teamWide.checked = true; el.team.value = link.who;
       }
-      setRadio("scale", link.scale); setRadio("vs", link.vs); setRadio("view", link.view);
+      setRadio("vs", link.vs); setRadio("view", link.view);
       syncControls();
     }
     show();
@@ -354,7 +349,6 @@
   el.season.addEventListener("change", async () => { await switchSeason(Number(el.season.value)); show(); });
   el.teamWide.addEventListener("change", () => { syncControls(); show(); });
   el.team.addEventListener("change", show);
-  scaleInputs().forEach((r) => r.addEventListener("change", show));
   vsInputs().forEach((r) => r.addEventListener("change", show));
   viewInputs().forEach((r) => r.addEventListener("change", () => { syncControls(); show(); }));
   el.form.addEventListener("submit", (e) => { e.preventDefault(); if (shown.length) pick(shown[Math.max(active, 0)]); });
