@@ -9,7 +9,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 // The projections live in the bucket; ?data=<base> reads them from somewhere else
 const params = new URLSearchParams(location.search);
 const DATA = new URL(params.get("data") || "https://data.blandalytics.com/projections/", location.href).href;
-const FILES = { h: "hitters_auction_ev.csv", p: "pitchers_auction_ev.csv" };
+const FILES = { h: "hitters_auction_ev.csv", p: "pitchers_auction.csv" };
 const STORE = "auction-calculator:v1";
 const VIEW_STORE = "auction-calculator:view";
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
@@ -59,7 +59,7 @@ async function loadDefaults() {
   try {
     const [h, p] = await Promise.all(["h", "p"].map(async (k) => {
       const r = await fetch(DATA + FILES[k], { cache: "default" });
-      if (!r.ok) throw new Error(`${FILES[k]}: HTTP ${r.status}`);
+      if (!r.ok) throw new Error(`${k === "h" ? "hitters" : "pitchers"}: HTTP ${r.status}`);
       return C.readProjections(await r.text());
     }));
     defaults.h = h; defaults.p = p;
@@ -103,7 +103,7 @@ function renderSources() {
     if (up) {
       el.innerHTML = `<b>${esc(up.name)}</b> · ${int(up.table.n)} players · <button type="button" class="link" data-default="${k}">use the default</button>`;
     } else if (defaults[k]) {
-      el.innerHTML = `Default: <a href="${esc(DATA + FILES[k])}">${FILES[k]}</a> · ${int(defaults[k].n)} players`;
+      el.innerHTML = `Default projections · ${int(defaults[k].n)} players`;
     } else {
       el.textContent = loadError ? "The default projections didn't load." : "Loading the default…";
     }

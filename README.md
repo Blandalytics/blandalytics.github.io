@@ -1018,7 +1018,7 @@ way:
   SP and RP included, from the league's best lineups, so scarcity comes from the projections and
   the roster, not a fixed order.
 - **Default projections from the bucket.** `https://data.blandalytics.com/projections/hitters_auction_ev.csv`
-  and `pitchers_auction_ev.csv`, not the app's Google Sheet; `?data=<base>` reads them from elsewhere.
+  and `pitchers_auction.csv`, not the app's Google Sheet; `?data=<base>` reads them from elsewhere.
 - **Team abbreviations.** The All pool keeps every player whatever their team (the script drops a
   team it doesn't know), and AL/NL-Only also knows `TB`, `SD`, `SF`, `KC`, `WSH`, `CWS` and `AZ`.
   A blank team, `FA` or `- - -` is a free agent.
@@ -1146,20 +1146,23 @@ To check the model after a change (pandas, Pillow, numpy and scipy for the Pytho
 
 ```bash
 curl -sO https://data.blandalytics.com/projections/hitters_auction_ev.csv
-curl -sO https://data.blandalytics.com/projections/pitchers_auction_ev.csv
+curl -sO https://data.blandalytics.com/projections/pitchers_auction.csv
 curl -sO https://raw.githubusercontent.com/blandalytics/plv_viz/main/auction_calc.py
 export ST_OVERRIDES='{"League Type": "Points", "Number of Teams": 15}'   # or {} for the defaults
-python tools/auction_calculator/run_ref.py auction_calc.py hitters_auction_ev.csv pitchers_auction_ev.csv > ref.json
-node tools/auction_calculator/compare.mjs hitters_auction_ev.csv pitchers_auction_ev.csv ref.json
-node tools/auction_calculator/sgp_dump.mjs hitters_auction_ev.csv pitchers_auction_ev.csv '{"format": "h2h"}' > dump.json
-python tools/auction_calculator/sgp_check.py hitters_auction_ev.csv pitchers_auction_ev.csv dump.json
-node tools/auction_calculator/sgp_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
-node tools/auction_calculator/invariants.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
+python tools/auction_calculator/run_ref.py auction_calc.py hitters_auction_ev.csv pitchers_auction.csv > ref.json
+node tools/auction_calculator/compare.mjs hitters_auction_ev.csv pitchers_auction.csv ref.json
+node tools/auction_calculator/sgp_dump.mjs hitters_auction_ev.csv pitchers_auction.csv '{"format": "h2h"}' > dump.json
+python tools/auction_calculator/sgp_check.py hitters_auction_ev.csv pitchers_auction.csv dump.json
+node tools/auction_calculator/sgp_checks.mjs hitters_auction_ev.csv pitchers_auction.csv
+node tools/auction_calculator/invariants.mjs hitters_auction_ev.csv pitchers_auction.csv
 ```
 
-To update the projections, upload new `hitters_auction_ev.csv` / `pitchers_auction_ev.csv` to the
+To update the projections, upload new `hitters_auction_ev.csv` / `pitchers_auction.csv` to the
 bucket's `projections/` folder with the same columns (`Name`, `MLBAMID`, `Team`, `Y! Pos`, then
-the stats, and the `<stat>_p10` / `<stat>_p90` percentiles the season's luck is read from). The zone caches them for four hours; purge their URLs to show them sooner. After
+the stats, and the `<stat>_p10` / `<stat>_p90` percentiles the season's luck is read from). The
+pitcher file's counts are full-health projections; its `IP_ev` (injury-discounted innings) and
+`inj_risk` columns aren't read. The page shows how many players each default file has, not where
+it comes from. The zone caches them for four hours; purge their URLs to show them sooner. After
 any change to the JavaScript, bump the `?v=` on the script tag in `index.html` and on `app.js`'s
 import of `calc.js`.
 
