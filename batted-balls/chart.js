@@ -562,8 +562,10 @@
         ctx.fillRect(CB.left, CB.top + CB.height - (i + 1) * h, CB.width, h + 0.5);
       });
       const cbx = AX.left + 1.115 * AX.size;
-      const [less, more] = value ? ["Below\nMLB", "Above\nMLB"] : ["Less\nOften", "More\nOften"];
-      [[less, -24, LABEL_BLUE], ["Same", 15, "#000000"], [more, 53.5, LABEL_RED]]
+      const [less, more] = value ? ["Worse", "Better"] : ["Less\nOften", "More\nOften"];
+      // a one-line label moves half a line toward the bar, keeping the two-line gap
+      const nudge = value ? 2.25 : 0;
+      [[less, -24 + nudge, LABEL_BLUE], ["Same", 15, "#000000"], [more, 53.5 - nudge, LABEL_RED]]
         .forEach(([s, la, colour]) => text(s, cbx, py(la), { size: 15, weight: 500, colour }));
     }
 
