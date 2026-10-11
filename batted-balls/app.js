@@ -288,7 +288,7 @@
     const opts = {
       hand, view: "value",
       title: name,
-      subtitle: `${sel.season} Batted Ball Value, ${fmtMargin(result.total)} xwOBA on contact vs MLB swinging as hard`,
+      subtitle: `${sel.season} Batted Ball Directional Value\n${fmtMargin(result.total)} xwOBA vs Comparable Swing Speeds`,
     };
     if (!(await drawn(result, opts, sel, name, ticket))) return;
     el.note.textContent = `${hitter.length} batted balls${sel.team ? ` by ${sel.team} hitters` : ""}, regular season, through ${data.through}; `
