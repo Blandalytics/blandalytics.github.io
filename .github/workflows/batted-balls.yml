@@ -52,7 +52,9 @@ jobs:
       - name: Build
         run: python tools/batted_balls/build_data.py ${{ inputs.seasons && format('--seasons {0}', inputs.seasons) || '' }}
 
+      # kept even when the build fails, so a rerun asks Savant only for what's missing
       - name: Save the Savant cache
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: tools/xwoba/cache

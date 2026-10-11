@@ -507,7 +507,9 @@ app's own files, and is reduced to small JSON files there that the page reads:
   first time the xwOBA view is shown.
 - [`.github/workflows/batted-balls.yml`](.github/workflows/batted-balls.yml) rebuilds the current
   season every morning at 11:15 UTC, after the data files roll, and takes a `seasons` input for
-  backfills; a season takes about ten seconds, plus, from 2024, the bat speeds. The Stats API the
+  backfills, built in the order given and each on the page as soon as it's done (the index is
+  rewritten after every season); a season takes about ten seconds, plus, from 2024, the bat
+  speeds. The Stats API the
   bucket is built from has no bat tracking, so those come from Baseball Savant's Statcast search
   through `tools/xwoba/savant.py`, a week per request, joined pitch for pitch (Savant numbers a
   plate appearance from 1, the Stats API from 0; 99.8% of balls match). The settled weeks are

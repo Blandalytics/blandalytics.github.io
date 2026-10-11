@@ -282,8 +282,12 @@ def _dump(obj) -> bytes:
 
 
 def build(store, s: requests.Session, manifest: dict, seasons: list[int], verbose: bool) -> None:
+    """Build the seasons in the order given. The index is written after each one, so a
+    season is on the page as soon as it is built and a failure later in a backfill
+    keeps the seasons already done."""
     raw = store.get(f"{PREFIX}/index.json")
     index = json.loads(raw) if raw else {"seasons": {}}
+    surface = False
     for season in seasons:
         if verbose:
             print(f"{season}:", file=sys.stderr)
@@ -292,22 +296,23 @@ def build(store, s: requests.Session, manifest: dict, seasons: list[int], verbos
         if season >= XWOBA_SEASON:
             df = with_xwoba(df, season, verbose)
         data = season_file(season, df, built)
+        # the surface goes up before the first index entry that offers the xwOBA views
+        if data["xwoba"] is not None and not surface:
+            store.put(f"{PREFIX}/xwoba.json", _dump(surface_file(built)), "application/json", SEASON_CACHE)
+            surface = True
         store.put(f"{PREFIX}/{season}.json", _dump(data), "application/json", SEASON_CACHE)
         index["seasons"][str(season)] = {
             "built": built, "through": data["through"], "n": data["n"],
             "players": len(data["players"]), "xwoba": data["xwoba"] is not None,
         }
+        index["seasons"] = dict(sorted(index["seasons"].items()))
+        index["built"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+        store.put(f"{PREFIX}/index.json", _dump(index), "application/json", INDEX_CACHE)
         if verbose:
             print(f"  {data['n']} batted balls, {len(data['players'])} hitters, through {data['through']}",
                   file=sys.stderr)
             if data["xwoba"]:
                 print(f"  bat speed and xwOBA on {data['xwoba']['n']}", file=sys.stderr)
-    if any(y >= XWOBA_SEASON for y in seasons):
-        built = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
-        store.put(f"{PREFIX}/xwoba.json", _dump(surface_file(built)), "application/json", SEASON_CACHE)
-    index["seasons"] = dict(sorted(index["seasons"].items()))
-    index["built"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
-    store.put(f"{PREFIX}/index.json", _dump(index), "application/json", INDEX_CACHE)
 
 
 def main(argv=None) -> None:
