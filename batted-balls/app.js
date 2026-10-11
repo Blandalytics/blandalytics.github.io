@@ -53,6 +53,22 @@
     return surface;
   }
 
+  // Teams by their full names wherever the page shows one (the files, and links, use the
+  // codes): Cleveland and Oakland as they were called that season
+  const TEAMS = {
+    ATH: "Athletics", ATL: "Atlanta Braves", AZ: "Arizona Diamondbacks", BAL: "Baltimore Orioles",
+    BOS: "Boston Red Sox", CHC: "Chicago Cubs", CIN: "Cincinnati Reds", CLE: "Cleveland Guardians",
+    COL: "Colorado Rockies", CWS: "Chicago White Sox", DET: "Detroit Tigers", HOU: "Houston Astros",
+    KC: "Kansas City Royals", LAA: "Los Angeles Angels", LAD: "Los Angeles Dodgers", MIA: "Miami Marlins",
+    MIL: "Milwaukee Brewers", MIN: "Minnesota Twins", NYM: "New York Mets", NYY: "New York Yankees",
+    OAK: "Oakland Athletics", PHI: "Philadelphia Phillies", PIT: "Pittsburgh Pirates", SD: "San Diego Padres",
+    SEA: "Seattle Mariners", SF: "San Francisco Giants", STL: "St. Louis Cardinals", TB: "Tampa Bay Rays",
+    TEX: "Texas Rangers", TOR: "Toronto Blue Jays", WSH: "Washington Nationals",
+  };
+  const teamName = (code, season) => (code === "CLE" && season < 2022 ? "Cleveland Indians" : TEAMS[code] || code);
+  // the Athletics' code changed with the move (OAK to 2024, ATH from 2025)
+  const SAME_TEAM = { OAK: "ATH", ATH: "OAK" };
+
   const seasonList = () => Object.keys(index.seasons).map(Number).sort((a, b) => b - a);
   const hasPrior = (year) => Boolean(index.seasons[String(year - 1)]);
   // xwOBA needs bat speed on every ball, which the seasons from 2024 have (the index
@@ -96,7 +112,7 @@
       li.setAttribute("role", "option");
       li.dataset.index = String(i);
       const name = document.createElement("span"); name.textContent = h.name;
-      const meta = document.createElement("small"); meta.textContent = `${h.team} · ${h.bbe.length} BBE`;
+      const meta = document.createElement("small"); meta.textContent = `${teamName(h.team, Number(el.season.value))} · ${h.bbe.length} BBE`;
       li.append(name, meta);
       return li;
     }));
@@ -180,7 +196,7 @@
   // " (LHH)" after the chart's name in the subtitle, and "LHH" before "batted balls" in
   // the note
   const battingTitle = (sel) => (sel.side ? ` (${HITTER[sel.side]})` : "");
-  const ballsNote = (n, sel) => (sel.team ? `${n} batted balls by ${sel.team} hitters`
+  const ballsNote = (n, sel) => (sel.team ? `${n} batted balls by ${teamName(sel.team, sel.season)} hitters`
     : `${n} ${sel.side ? `${HITTER[sel.side]} ` : ""}batted balls`);
   const drawKey = (sel, season = sel.season) => `${season}:${sel.team || sel.id}${sel.side || ""}`;
 
@@ -218,7 +234,7 @@
       let hitter, name, hand;
       if (sel.team) {
         hitter = teamBalls(data, sel.team);
-        name = sel.team; hand = "R";
+        name = teamName(sel.team, sel.season); hand = "R";
       } else {
         const p = data.players.find((x) => x.id === sel.id);
         if (!p) { status("that hitter has no batted balls this season", "warn"); return; }
@@ -285,7 +301,7 @@
     const opts = {
       hand, view: "xwoba",
       title: name,
-      subtitle: `${sel.season} xwOBA${battingTitle(sel)}\n${mph} ➔ ${fmtXw(result.xwoba)} xwOBA`,
+      subtitle: `${sel.season} xwOBA${battingTitle(sel)}\n${mph} Bat Speed ➔ ${fmtXw(result.xwoba)} xwOBA`,
     };
     if (!(await drawn(result, opts, sel, name, ticket))) return;
     const lg = data.xwoba;
@@ -354,8 +370,10 @@
     status("loading the season…");
     const data = await loadSeason(year);
     setHitters(data);
-    el.team.replaceChildren(...data.teams.map((t) => new Option(t, t)));
-    if (keep && current?.team && data.teams.includes(current.team)) el.team.value = current.team;
+    el.team.replaceChildren(...data.teams.map((t) => new Option(teamName(t, year), t))
+      .sort((a, b) => a.text.localeCompare(b.text)));
+    const was = keep && current?.team ? [current.team, SAME_TEAM[current.team]].find((t) => data.teams.includes(t)) : null;
+    if (was) el.team.value = was;
     else if (!keep || !el.team.value) el.team.value = data.teams.includes("CLE") ? "CLE" : data.teams[0];
     const same = keep && chosen ? hitters.find((h) => h.id === chosen.id) : null;
     chosen = same || hitters.find((h) => h.name === DEFAULT_PLAYER) || suggestions("")[0] || null;

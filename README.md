@@ -485,8 +485,9 @@ beside it (neither takes the comparison; the seasons before 2024 don't offer the
   to the subtitle's: the hitter's xwOBA on contact less MLB's at the same bat speeds.
 
 Isaac Paredes' current season loads on arrival; a chart is linkable as
-`batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, with `-left` / `-right` (a switch
-hitter's side), `-self`, `-xwoba` and `-value` suffixes (an old link's `-continuous` is
+`batted-balls/#<season>-<mlbam id>` or `#<season>-<team code>` (the page shows teams by their
+full names, Cleveland and Oakland as they were called that season), with `-left` / `-right` (a
+switch hitter's side), `-self`, `-xwoba` and `-value` suffixes (an old link's `-continuous` is
 ignored). **Copy PNG** copies the figure at 2x to the clipboard (a browser that can't copy an
 image downloads it instead).
 
