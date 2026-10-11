@@ -248,8 +248,8 @@
         hand, view: "balls", signed: Boolean(prior),
         title: name,
         subtitle: prior
-          ? `Batted Ball Difference${battingTitle(sel)}, ${sel.season} compared to ${sel.season - 1}`
-          : `${sel.season} Batted Ball Profile${battingTitle(sel)}, compared to the rest of MLB`,
+          ? `Batted Ball Difference${battingTitle(sel)}\n${sel.season} compared to ${sel.season - 1}`
+          : `${sel.season} Batted Ball Profile${battingTitle(sel)}\nCompared to the rest of MLB`,
       };
       if (!(await drawn(result, opts, sel, name, ticket))) return;
       const n = hitter.length, m = prior ? prior.length : null;
@@ -285,7 +285,7 @@
     const opts = {
       hand, view: "xwoba",
       title: name,
-      subtitle: `${sel.season} xwOBA Surface${battingTitle(sel)}, at ${mph} (${fmtXw(result.xwoba)} xwOBA on contact)`,
+      subtitle: `${sel.season} xwOBA Surface${battingTitle(sel)}\n${mph} ➔ ${fmtXw(result.xwoba)} xwOBAcon`,
     };
     if (!(await drawn(result, opts, sel, name, ticket))) return;
     const lg = data.xwoba;
