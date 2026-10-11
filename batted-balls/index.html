@@ -81,7 +81,7 @@ details[open] summary{margin-bottom:10px}
   <header>
     <a class="home" href="/">← Blandalytics</a>
     <h1>Batted Ball Charts</h1>
-    <p class="tag">Where a hitter's batted balls go — spray angle against launch angle — compared to the distribution of all MLB batted balls, or to the hitter's own prior season. Red is more often than the comparison, blue less. Every xwOBA on the page is calculated from bat speed, launch angle, and spray angle.</p>
+    <p class="tag">Where a hitter's batted balls go — spray angle against launch angle. Whenever "xwOBA" is mentioned, it is referencing a model calculated from bat speed, launch angle, and spray angle.</p>
   </header>
 
   <section class="card">
@@ -133,13 +133,13 @@ details[open] summary{margin-bottom:10px}
     <details>
       <summary>How it works</summary>
       <div class="method">
-        <p>Every batted ball is a point at its spray angle (-45° at the pull-side foul line, 0° dead centre, 45° at the opposite line, for either hand) and launch angle. A Gaussian kernel density of the hitter's points is created for the player, and the league's density over every MLB batted ball that season is subtracted. Red is where this hitter's batted balls land more often than the league's, blue less. The lines split into Pull / Center / Oppo (-15 & 15° spray angle) and Ground Ball / Line Drive / Fly Ball / Pop Up (10°, 25° & 50° launch angle, <a href="https://www.mlb.com/glossary/statcast/launch-angle">per MLB guidelines</a>).</p>
+        <p>Every batted ball is a point at its spray angle (-45° at the pull-side foul line, 0° dead center, 45° at the opposite line, for either hand) and launch angle. A Gaussian kernel density of the hitter's points is created for the player, and the league's density over every MLB batted ball that season is subtracted. Red is where this hitter's batted balls land more often than the league's, blue less. The lines split into Pull / Center / Oppo (-15 & 15° spray angle) and Ground Ball / Line Drive / Fly Ball / Pop Up (10°, 25° & 50° launch angle, <a href="https://www.mlb.com/glossary/statcast/launch-angle">per MLB guidelines</a>).</p>
         <p><b>Self (prior year)</b> subtracts the hitter's own density from the season before, instead of the league's.</p>
         <p><b>Team-wide</b> pools every batted ball hit for a team (a traded hitter only counts batted balls for that team).</p>
         <p><b>Bats</b> appears for a switch hitter: their chart is for one side at a time, starting with the side they bat from most, and every view and comparison uses only the batted balls hit from that side.</p>
-        <p><b>xwOBA</b> (2024 on) shades the same grid by expected wOBA from a <a href="https://github.com/Blandalytics/blandalytics.github.io/tree/main/tools/xwoba" target="_blank" rel="noopener">3D model</a> of spray direction, launch angle and bat speed (no exit velocity, so it values where and how hard a hitter swings, not how squarely they connect), at the hitter's average bat speed on balls in play. The colours run through the wOBA value of each outcome: the chart's dark background for an out (0), blue for a single (.900), green for a double (1.250), yellow for a triple (1.600), red for a home run (2.000). The boxes are the model's xwOBA of the balls hit into each zone, each at its own bat speed.</p>
-        <p><b>xwOBA vs MLB</b> (2024 on) is the batted-ball chart again, counting value rather than balls: the hitter's density with each ball weighted by its xwOBA, less MLB's batted balls weighted the same way, each of the hitter's balls set against MLB's off swings as fast as its own. Red is where the hitter gets more xwOBA than MLB's hitters swinging that hard, blue where they get less; the boxes are each zone's part of the gap, and add up to the figure in the subtitle (the hitter's xwOBA on contact less MLB's off swings as fast as theirs).</p>
-        <p>Bat speed is Statcast's bat tracking, via Baseball Savant, which covers every swing from 2024 (it starts in July 2023, so the xwOBA charts aren't offered before 2024); bunts and swings it missed have no xwOBA.</p>
+        <p><b>xwOBA</b> (2024 on) shades the same grid by expected wOBA from a model of spray direction, launch angle and bat speed, at the hitter's average bat speed on balls in play. The boxes are the model's xwOBA of the balls hit into each zone, each at its own bat speed.</p>
+        <p><b>xwOBA vs MLB</b> (2024 on) is the batted-ball chart again, counting value rather than balls: the hitter's density with each ball weighted by its xwOBA, less MLB's batted balls weighted the same way. Red is where the hitter gets more xwOBA than MLB's hitters swinging that hard, blue where they get less; the boxes are each zone's part of the gap, and add up to the figure in the subtitle (the hitter's xwOBA on contact less MLB's off swings as fast as theirs).</p>
+        <p>Bat speed is Statcast's bat tracking, via Baseball Savant, which covers full seasons starting in 2024 (tracking started in July 2023; bunts were excluded.</p>
         <p><b>Data:</b> regular-season balls in play with a measured launch angle and stringer-based hit location coordinates, via MLB's Statcast API. Spray angle is calculated from the hit coordinates, not directly measured.</p>
       </div>
     </details>
