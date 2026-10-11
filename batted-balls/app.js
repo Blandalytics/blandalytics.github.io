@@ -28,7 +28,7 @@
 
   let index = null;             // { seasons: { "2026": {...} } }
   const seasons = new Map();    // season -> its file, once fetched
-  let surface = null;           // the xwOBA surface's file, once fetched
+  const surfaces = new Map();   // season -> its xwOBA surface's file, once fetched
   let current = null;           // { season, id|team, view, vs } of the chart shown
   let chosen = null;            // the picked hitter, for the suggestion field
 
@@ -48,9 +48,15 @@
     return seasons.get(year);
   }
 
-  async function loadSurface() {
-    if (!surface) surface = fetchJson("batted-balls/xwoba.json").catch((e) => { surface = null; throw e; });
-    return surface;
+  // A season's surface is read with that season's calibration (xwoba-<season>.json); a
+  // bucket built before those has only the model's own, xwoba.json.
+  async function loadSurface(year) {
+    if (!surfaces.has(year)) {
+      surfaces.set(year, fetchJson(`batted-balls/xwoba-${year}.json`)
+        .catch(() => fetchJson("batted-balls/xwoba.json"))
+        .catch((e) => { surfaces.delete(year); throw e; }));
+    }
+    return surfaces.get(year);
   }
 
   // Teams by their full names wherever the page shows one (the files, and links, use the
@@ -297,7 +303,7 @@
   // The xwOBA view: the model's surface at the average bat speed of the balls drawn,
   // and the model's xwOBA of those balls by zone.
   async function showXwoba(sel, data, hitter, name, hand, ticket) {
-    const surf = await loadSurface();
+    const surf = await loadSurface(sel.season);
     if (ticket !== drawing) return;
     const result = BattedBalls.computeXwoba({ balls: hitter, surface: surf });
     if (!result) { status("no tracked swings among these batted balls", "warn"); el.out.hidden = true; return; }

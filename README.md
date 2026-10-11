@@ -520,13 +520,16 @@ app's own files, and is reduced to small JSON files there that the page reads:
   `"LRRL…"`), their stints (`[team, balls]` for each run of balls hit for one team, so a traded
   hitter's balls count for the team they were hit for), the team list, and the league density
   on the grid. From 2024 each ball also carries its bat speed
-  and its 3D xwOBA (null for a bunt or an untracked swing), and the file the league's average of
-  both. About 1.5 MB before 2024, 3 MB after (450 / 930 KB compressed).
-- `https://data.blandalytics.com/batted-balls/xwoba.json` — the 3D xwOBA model's surface on the
-  same 91 × 91 grid at each of its bat-speed nodes (every 3 mph), in thousandths; the page reads
-  a hitter's surface by interpolating between the two slices around their bat speed, which is
-  exactly how the model reads between its own nodes. 650 KB, 240 KB compressed, fetched the
-  first time the xwOBA view is shown.
+  and its 3D xwOBA (null for a bunt or an untracked swing), read with the season's calibration
+  (see *3D xwOBA*), and the file the league's average of both, its wOBA on contact (hits only)
+  and the calibration's multipliers. About 1.5 MB before 2024, 3 MB after (450 / 930 KB
+  compressed).
+- `https://data.blandalytics.com/batted-balls/xwoba-<season>.json` — the 3D xwOBA model's surface,
+  read with that season's calibration, on the same 91 × 91 grid at each of its bat-speed nodes
+  (every 3 mph), in thousandths; the page reads a hitter's surface by interpolating between the
+  two slices around their bat speed, which is exactly how the model reads between its own nodes.
+  650 KB, 240 KB compressed, fetched the first time the xwOBA view is shown for a season.
+  `xwoba.json` is the model's own surface, uncalibrated, which the page falls back on.
 - [`.github/workflows/batted-balls.yml`](.github/workflows/batted-balls.yml) rebuilds the current
   season every morning at 11:15 UTC, after the data files roll, and takes a `seasons` input for
   backfills, built in the order given and each on the page as soon as it's done (the index is
@@ -569,10 +572,14 @@ pull line, 45° centre, 90° the opposite line).
 Each grid node fits a kernel-weighted plane through the outcomes of the balls around it, and a
 second pass smooths the first pass's residuals and adds them back, so the sharp parts of the
 surface (the line-drive peak, the pockets where outfielders stand, the edges of the home-run
-band) survive the smoothing. Fit on 2023–2025 and tested on 2026, it explains 35% of the
-variance in a ball's wOBA value (R² 0.351), level with gradient boosting on the same inputs
-and behind Savant's exit-velocity xwOBA (0.439). For hitters it is steadier year to year than
-wOBA on contact (r = 0.66 against 0.49).
+band) survive the smoothing. The outcome is the hit (an error or a fielder's choice is an out,
+where Savant's `woba_value` gives it a single's .900). Fit on 2023–2025 and tested on 2026, it
+explains 36% of the variance in a ball's wOBA value (R² 0.363), level with gradient boosting
+on the same inputs and behind Savant's exit-velocity xwOBA (0.452). For hitters it is steadier
+year to year than wOBA on contact (r = 0.66 against 0.50). With no term for the season, a
+season can read high or low against its own results (2026 by .008 on the full fit), so the
+Batted Ball Charts build calibrates each season's outcome mix to its actual one
+(`model.calibration`), and the league's xwOBA on contact is its wOBA on contact.
 
 | file | role |
 |---|---|
