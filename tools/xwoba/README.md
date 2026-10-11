@@ -9,7 +9,8 @@ part, with the luck, is what is left over in wOBA − xwOBA.
 The [Batted Ball Charts](https://blandalytics.com/batted-balls/) page draws it: its **xwOBA**
 view (2024 on) shows this surface at a hitter's average bat speed, with the model's xwOBA of
 their batted balls by zone, and its **xwOBA vs MLB** view compares the hitter's xwOBA-weighted
-batted-ball map with MLB's from swings as fast as theirs.
+batted-ball map with MLB's from swings as fast as theirs (each ball against MLB's at its own
+bat speed).
 
 ![xwOBA over spray and launch angle at a slow, typical and fast swing](surface.png)
 

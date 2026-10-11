@@ -457,16 +457,23 @@ beside it (neither takes the comparison; the seasons before 2024 don't offer the
   end as matplotlib's `contourf` spreads a colormap.
 - **xwOBA vs MLB** compares where the hitter's xwOBA comes from with where MLB's does from
   swings as fast as theirs: the hitter's batted-ball density with each ball weighted by its
-  xwOBA, less MLB's batted balls off swings near the hitter's average bat speed (each weighted
-  by a Gaussian 1.5 mph wide in bat speed) weighted the same way — the batted-ball chart again,
-  counting value rather than balls, on its levels and palette. Both are spread with the
+  xwOBA, less MLB's batted balls weighted the same way and reweighted to the hitter's bat
+  speeds — the batted-ball chart again, counting value rather than balls, on its levels and
+  palette. Each of the hitter's balls hands a weight of 1 to MLB's balls off swings near its
+  own (a Gaussian 1.5 mph wide), so every ball is measured against MLB at its own bat speed.
+  Measuring them all against MLB at the hitter's *average* bat speed would favour everyone:
+  through most swings xwOBA climbs faster the harder the swing (.307 at 64–68 mph, .345 at
+  68–72, .404 at 72–76, .463 at 76–80 in 2026), so the average over a spread of swings sits
+  above the xwOBA at the average swing — by .009 for MLB against itself, and most for teams,
+  whose spread is widest. Matched swing for swing, MLB against itself and the 30 teams
+  together come to within .0004 of zero in each of 2024–2026. Both maps are spread with the
   hitter's own kernels (Scott's factor on their points), so the two maps differ only in where
   the balls go and what they're worth: MLB's ~100,000 balls are binned to the grid and spread
   by a table of the kernel at every offset, which takes the page about a third of a second.
   Red is where the hitter gets more xwOBA than MLB's hitters swinging that hard, blue where
   MLB's get more — so a hitter who doesn't produce the pulled fly balls hard swingers usually
   do shows blue there. The boxes and axis figures are each zone's part of the gap, adding up
-  to the subtitle's: the hitter's xwOBA on contact less MLB's at their bat speed.
+  to the subtitle's: the hitter's xwOBA on contact less MLB's at the same bat speeds.
 
 Isaac Paredes' current season loads on arrival; a chart is linkable as
 `batted-balls/#<season>-<mlbam id>` or `#<season>-<team>`, with `-self`, `-xwoba` and `-value`
@@ -519,7 +526,7 @@ app's own files, and is reduced to small JSON files there that the page reads:
 | file | role |
 |---|---|
 | `tools/batted_balls/build_data.py` | reads a season's files from the bucket, keeps regular-season balls in play with a launch angle and a landing spot, joins Savant's bat speeds and scores the 3D xwOBA from 2024, writes the season file, the surface file and the index |
-| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) with their edges lit as Tanaka contours, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed and the zones' xwOBA on the same layout; for xwOBA vs MLB the hitter's and MLB's xwOBA-weighted maps at the hitter's bat speed and the zones' parts of the gap |
+| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) with their edges lit as Tanaka contours, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed and the zones' xwOBA on the same layout; for xwOBA vs MLB the hitter's and MLB's xwOBA-weighted maps at the hitter's bat speeds and the zones' parts of the gap |
 | `batted-balls/index.html`, `app.js` | the page: season, hitter / team, view and comparison controls, the link hash, the download |
 
 In the team-wide chart a traded hitter's batted balls count for the team each was hit for

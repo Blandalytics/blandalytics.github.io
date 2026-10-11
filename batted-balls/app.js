@@ -288,15 +288,15 @@
     const opts = {
       hand, view: "value",
       title: name,
-      subtitle: `${sel.season} Batted Ball Value, ${fmtMargin(result.total)} xwOBA on contact vs MLB at ${mph}`,
+      subtitle: `${sel.season} Batted Ball Value, ${fmtMargin(result.total)} xwOBA on contact vs MLB swinging as hard`,
     };
     if (!(await drawn(result, opts, sel, name, ticket))) return;
     el.note.textContent = `${hitter.length} batted balls${sel.team ? ` by ${sel.team} hitters` : ""}, regular season, through ${data.through}; `
       + `${result.tracked} with a tracked swing (bunts and untracked swings have no xwOBA), averaging ${mph}. `
-      + `Each is weighted by its xwOBA, and so are MLB's batted balls off swings near ${mph}, spread with the same kernels: `
+      + `Each is weighted by its xwOBA and set against MLB's batted balls off swings as fast as its own, weighted the same way and spread with the same kernels: `
       + `red is where these balls get more xwOBA than MLB's hitters get swinging that hard, blue where MLB's get more. `
       + `The boxes and the figures along the axes are each zone's part of the ${fmtMargin(result.total)}: `
-      + `${fmtXw(result.hitterXwoba)} xwOBA on contact against MLB's ${fmtXw(result.leagueXwoba)} at ${mph}.`;
+      + `${fmtXw(result.hitterXwoba)} xwOBA on contact against MLB's ${fmtXw(result.leagueXwoba)} at the same bat speeds.`;
     history.replaceState(null, "", hash(sel));
     status("");
   }
