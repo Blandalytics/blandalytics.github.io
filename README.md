@@ -163,9 +163,11 @@ linked in the picker as `pitcher-cards/#<gamePk>-<pitcherId>`.
 - `https://data.blandalytics.com/cards/days/<date>.json` — that day's games and pitchers,
   which the picker lists; `.../cards/index.json` lists the dates built and which date each
   game is on.
-- Days built before the cards were data still have one page per card
-  (`.../cards/<gamePk>-<pitcherId>.html`, the manifest's `file`), which the picker frames as it
-  used to until a `force` run rebuilds the day.
+- Before the cards were data, each had a page of its own
+  (`.../cards/<gamePk>-<pitcherId>.html`, its manifest entry's `file`), which the picker frames
+  until a `force` run rebuilds the day. Once a day is rebuilt its old pages are retired (see
+  *Backfilling or rebuilding*): each becomes a small redirect to the card's view,
+  `pitcher-cards/card.html#<gamePk>-<pitcherId>`, so a link to one still lands on the card.
 
 ### Live cards
 
@@ -214,7 +216,7 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 | `grade_cuts.py` | fits the Stuff / Locations / PLV letter cuts (`card.js`'s `GRADE_CUTS`) to a target grade distribution |
 | `build_data.py` | assembles all of that into one card dict (numbers; `card.js` formats them) |
 | `render.py` | a standalone page around one card dict, drawn by `card.js` |
-| `build_site.py` | builds a date range into the bucket (or a folder with `--out`) and maintains the manifests; `--reindex` rebuilds the index alone |
+| `build_site.py` | builds a date range into the bucket (or a folder with `--out`) and maintains the manifests; `--reindex` rebuilds the index alone; `--prune-pages` retires the old per-card pages |
 | `packs.py` | the live Worker's pitcher packs and arm angles |
 | `export_scorer.py`, `model_pack.py` | the live Worker's scorer bundle, and the pack format it is in |
 | `parity.py` | real games, carded here, for the Worker's port to be checked against |
@@ -281,6 +283,12 @@ from the workflow's cache. Tick `all_packs` to rebuild every pitcher's pack rath
 recent ones (the first run builds every pack it doesn't find). Writing to the bucket needs
 the `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `CLOUDFLARE_ACCOUNT_ID` secrets the data
 files use.
+
+After a `force` rebuild, set `prune_pages` to retire the old per-card pages: `report` lists
+what would happen, `apply` does it. A page whose card is still listed is rewritten as a
+redirect to the card's view; a page whose card is not, and every page the old live build
+left in `live/cards/`, is deleted; a page a manifest still frames (its day not yet rebuilt)
+is left alone. Locally it is `build_site.py --prune-pages [--apply]`.
 
 Locally, from the repo root with the scraper and the models cloned alongside:
 
