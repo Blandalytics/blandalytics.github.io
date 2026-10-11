@@ -333,13 +333,18 @@ beside it (neither takes the comparison):
   white for an out (0), `#2D99C8` for a single (.900), `#54D29B` for a double (1.250), `#FFE066`
   for a triple (1.600), `#F04542` for a home run (2.000) — in ten levels of .200, spread end to
   end as matplotlib's `contourf` spreads a colormap.
-- **xwOBA vs MLB** draws the hitter's batted-ball density with each ball weighted by its xwOBA
-  less MLB's xwOBA on contact at that ball's bat speed that season (.300 at 65 mph, .348 at 70,
-  .420 at 75 in 2026), on the batted-ball chart's levels and palette: red where the hitter's
-  contact is worth more than MLB gets from the same swings, blue where it is worth less. The
-  kernels are the hitter's own (Scott's factor on their points), so the grid sums to 100 times
-  the average margin, and the boxes and axis figures are each zone's part of that margin, adding
-  up to the subtitle's.
+- **xwOBA vs MLB** compares where the hitter's xwOBA comes from with where MLB's does from
+  swings as fast as theirs: the hitter's batted-ball density with each ball weighted by its
+  xwOBA, less MLB's batted balls off swings near the hitter's average bat speed (each weighted
+  by a Gaussian 1.5 mph wide in bat speed) weighted the same way — the batted-ball chart again,
+  counting value rather than balls, on its levels and palette. Both are spread with the
+  hitter's own kernels (Scott's factor on their points), so the two maps differ only in where
+  the balls go and what they're worth: MLB's ~100,000 balls are binned to the grid and spread
+  by a table of the kernel at every offset, which takes the page about a third of a second.
+  Red is where the hitter gets more xwOBA than MLB's hitters swinging that hard, blue where
+  MLB's get more — so a hitter who doesn't produce the pulled fly balls hard swingers usually
+  do shows blue there. The boxes and axis figures are each zone's part of the gap, adding up
+  to the subtitle's: the hitter's xwOBA on contact less MLB's at their bat speed.
 
 Every chart is drawn as filled contour bands with Tanaka (illuminated) lines along each contour:
 every segment lit or shaded by which way its downhill side faces a light in the upper left, and
@@ -371,9 +376,7 @@ app's own files, and is reduced to small JSON files there that the page reads:
   hitter's balls count for the team they were hit for), the team list, and the league density
   on the grid. From 2024 each ball also carries its bat speed
   and its 3D xwOBA (null for a bunt or an untracked swing), and the file the league's average of
-  both and its xwOBA on contact at each whole mph of bat speed (a Gaussian-weighted average of
-  the balls within a mph or two, held level where fewer than 200 balls' weight would make it
-  noise). About 1.5 MB before 2024, 3 MB after (450 / 930 KB compressed).
+  both. About 1.5 MB before 2024, 3 MB after (450 / 930 KB compressed).
 - `https://data.blandalytics.com/batted-balls/xwoba.json` — the 3D xwOBA model's surface on the
   same 91 × 91 grid at each of its bat-speed nodes (every 3 mph), in thousandths; the page reads
   a hitter's surface by interpolating between the two slices around their bat speed, which is
@@ -391,7 +394,7 @@ app's own files, and is reduced to small JSON files there that the page reads:
 | file | role |
 |---|---|
 | `tools/batted_balls/build_data.py` | reads a season's files from the bucket, keeps regular-season balls in play with a launch angle and a landing spot, joins Savant's bat speeds and scores the 3D xwOBA from 2024, writes the season file, the surface file and the index |
-| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) and their Tanaka lines, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed and the zones' xwOBA on the same layout; for xwOBA vs MLB the margin-weighted KDE and the zones' parts of the margin |
+| `batted-balls/chart.js` | the figure: the KDE, the shares, the contour bands (d3-contour) and their Tanaka lines, the colourbar and labels, on a canvas in the app image's 1390 × 1135 pixels at 2x; for the xwOBA view the surface at a bat speed and the zones' xwOBA on the same layout; for xwOBA vs MLB the hitter's and MLB's xwOBA-weighted maps at the hitter's bat speed and the zones' parts of the gap |
 | `batted-balls/index.html`, `app.js` | the page: season, hitter / team, view and comparison controls, the link hash, the download |
 
 In the team-wide chart a traded hitter's batted balls count for the team each was hit for

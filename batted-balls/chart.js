@@ -8,9 +8,8 @@
 // The xwOBA view draws, on the same grid and layout, the 3D xwOBA model's surface
 // (tools/xwoba: spray, launch angle, bat speed) at the hitter's average bat speed,
 // with Tanaka's illuminated contour lines, and the model's xwOBA of the hitter's
-// balls by zone. The value view draws the hitter's own density with each ball
-// weighted by its xwOBA less MLB's xwOBA on contact at its bat speed, on the
-// density chart's scale.
+// balls by zone. The value view draws the hitter's xwOBA-weighted density less
+// MLB's at the hitter's average bat speed, on the density chart's scale.
 
 (() => {
   "use strict";
@@ -29,21 +28,9 @@
   // with each ball's weight, on the same scale: so with every weight 1 it is the
   // density, and the grid sums to 100 times the mean weight.
   function kdeGrid(points, weights = null) {
-    const n = points.length;
-    if (n < 3) return null;
-    let mx = 0, my = 0;
-    for (const [x, y] of points) { mx += x; my += y; }
-    mx /= n; my /= n;
-    let sxx = 0, sxy = 0, syy = 0;
-    for (const [x, y] of points) {
-      const dx = x - mx, dy = y - my;
-      sxx += dx * dx; sxy += dx * dy; syy += dy * dy;
-    }
-    const f2 = n ** (-1 / 3);  // factor squared
-    sxx *= f2 / (n - 1); sxy *= f2 / (n - 1); syy *= f2 / (n - 1);
-    const det = sxx * syy - sxy * sxy;
-    if (!(det > 1e-12)) return null;  // every ball in a line: no density to draw
-    const a = syy / det, b = -sxy / det, c = sxx / det;  // the inverse covariance
+    const kernel = scottKernel(points);
+    if (!kernel) return null;
+    const n = points.length, { a, b, c } = kernel;
     const xs = new Float64Array(n), ys = new Float64Array(n);
     points.forEach(([x, y], i) => { xs[i] = x; ys[i] = y; });
     const out = new Float64Array(N * N);
@@ -68,6 +55,27 @@
     const k = 100 / total, grid = weighted || out;
     for (let i = 0; i < grid.length; i++) grid[i] *= k;
     return grid;
+  }
+
+  // Scott's kernel for a set of points: the inverse of factor^2 times their sample
+  // covariance, as (a, b, c) for a x^2 + 2 b x y + c y^2; null for fewer than three
+  // points or all of them in a line.
+  function scottKernel(points) {
+    const n = points.length;
+    if (n < 3) return null;
+    let mx = 0, my = 0;
+    for (const [x, y] of points) { mx += x; my += y; }
+    mx /= n; my /= n;
+    let sxx = 0, sxy = 0, syy = 0;
+    for (const [x, y] of points) {
+      const dx = x - mx, dy = y - my;
+      sxx += dx * dx; sxy += dx * dy; syy += dy * dy;
+    }
+    const f2 = n ** (-1 / 3);  // factor squared
+    sxx *= f2 / (n - 1); sxy *= f2 / (n - 1); syy *= f2 / (n - 1);
+    const det = sxx * syy - sxy * sxy;
+    if (!(det > 1e-12)) return null;  // every ball in a line: no density to draw
+    return { a: syy / det, b: -sxy / det, c: sxx / det };
   }
 
   const inRange = ([x, y]) => x >= SPRAY[0] && x <= SPRAY[1] && y >= LAUNCH[0] && y <= LAUNCH[1];
@@ -161,37 +169,103 @@
   }
 
   // ---- the value view -------------------------------------------------------------
-  // MLB's xwOBA on contact at a bat speed, from the season file's table (a value per
-  // whole mph), read linearly between its points and held at its ends.
-  function leagueAt(table, batSpeed) {
-    const n = table.values.length;
-    const t = Math.min(Math.max((batSpeed - table.lo) / table.step, 0), n - 1);
-    const i = Math.min(Math.floor(t), n - 2), f = t - i;
-    return (1 - f) * table.values[i] + f * table.values[i + 1];
+  // The hitter's batted balls against MLB's off swings as fast as theirs, both weighted
+  // by xwOBA. MLB's are the season's tracked balls, each weighted by how near its bat
+  // speed is to the hitter's average (a Gaussian BAT_SPEED_WIDTH mph wide), and spread
+  // with the hitter's own kernels, so the two maps differ only in where the balls go
+  // and what they are worth, not in how finely they are drawn. A ball is [spray, launch
+  // angle, bat speed, xwOBA].
+  const BAT_SPEED_WIDTH = 1.5;
+  const tracked = (b) => b[2] != null && b[3] != null;
+
+  // MLB's weighted balls on the grid with a given kernel, scaled as kdeGrid scales: the
+  // balls are binned to the grid's nodes (shared linearly between the nearest along
+  // each axis) and spread by a table of the kernel at every offset between nodes, which
+  // is all it depends on, the grid being regular -- a third of a second where a sum
+  // ball by ball over ~100,000 balls would take several.
+  function spreadLeague(league, weights, { a, b, c }) {
+    const count = new Float64Array(N * N), value = new Float64Array(N * N);
+    const toNode = (v, [lo, hi]) => (v - lo) * (N - 1) / (hi - lo);
+    league.forEach((ball, j) => {
+      const w = weights[j];
+      if (w < 1e-6 || !inRange(ball)) return;
+      const fx = toNode(ball[0], SPRAY), fy = toNode(ball[1], LAUNCH);
+      const i = Math.min(Math.floor(fx), N - 2), k = Math.min(Math.floor(fy), N - 2), u = fx - i, v = fy - k;
+      for (const [di, dk, f] of [[0, 0, (1 - u) * (1 - v)], [1, 0, u * (1 - v)], [0, 1, (1 - u) * v], [1, 1, u * v]]) {
+        count[(i + di) * N + k + dk] += w * f;
+        value[(i + di) * N + k + dk] += w * f * ball[3];
+      }
+    });
+    // the grid steps a degree each way, so an offset in nodes is one in degrees
+    const M = 2 * N - 1, table = new Float64Array(M * M);
+    for (let dx = 1 - N; dx < N; dx++) for (let dy = 1 - N; dy < N; dy++) {
+      table[(dx + N - 1) * M + dy + N - 1] = Math.exp(-0.5 * (a * dx * dx + 2 * b * dx * dy + c * dy * dy));
+    }
+    // bin by bin, each grid row reading a contiguous run of the table, and only as far
+    // out as the kernel is above 1e-9 of its peak: the box around the ellipse
+    // a x^2 + 2 b x y + c y^2 = 2 ln 1e9 reaches sqrt(Q var) along each axis
+    const q = 2 * Math.log(1e9), det = a * c - b * b;
+    const rx = Math.ceil(Math.sqrt((q * c) / det)), ry = Math.ceil(Math.sqrt((q * a) / det));
+    const out = new Float64Array(N * N), mass = new Float64Array(N * N);
+    for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) {
+      const cnt = count[ix * N + iy], val = value[ix * N + iy];
+      if (!(cnt > 0)) continue;
+      const y0 = Math.max(0, iy - ry), y1 = Math.min(N - 1, iy + ry);
+      for (let gx = Math.max(0, ix - rx); gx <= Math.min(N - 1, ix + rx); gx++) {
+        const t0 = (gx - ix + N - 1) * M + N - 1 - iy, o0 = gx * N;
+        for (let gy = y0; gy <= y1; gy++) {
+          const t = table[t0 + gy];
+          mass[o0 + gy] += t * cnt;
+          out[o0 + gy] += t * val;
+        }
+      }
+    }
+    const total = mass.reduce((t, v) => t + v, 0);
+    for (let k = 0; k < out.length; k++) out[k] *= 100 / total;
+    return out;
   }
 
-  // What the value view needs: every tracked ball's xwOBA less MLB's xwOBA on contact
-  // at that ball's bat speed, spread over the grid with the hitter's own kernels (the
-  // in-range balls, as the density is) -- so the grid sums to 100 times the average
-  // margin -- and each zone's share of that margin over all the tracked balls, which
-  // add up to the whole.
+  // Each ball's xwOBA (times a weight) summed into the twelve zones in one pass, the
+  // zones partitioning the field (every ball in exactly one spray bucket and one launch
+  // bucket), and scaled by `per`: [spray][launch].
+  function zoneSums(balls, weight, per) {
+    const cells = SPRAY_BUCKETS.map(() => LAUNCH_BUCKETS.map(() => 0));
+    balls.forEach((b, j) => {
+      const i = SPRAY_BUCKETS.findIndex((f) => f(b[0])), k = LAUNCH_BUCKETS.findIndex((g) => g(b[1]));
+      cells[i][k] += weight(j) * b[3] * per;
+    });
+    return cells;
+  }
+
+  // What the value view needs: the hitter's xwOBA-weighted density less MLB's at the
+  // hitter's average bat speed -- the grid sums to 100 times the gap in xwOBA on contact
+  // (over the in-range balls) -- and each zone's part of that gap: the hitter's xwOBA
+  // from the zone over all their tracked balls, less MLB's over its weighted balls.
   function computeValue({ balls, league }) {
-    const tracked = balls.filter((b) => b[2] != null && b[3] != null);
-    const margin = (b) => b[3] - leagueAt(league, b[2]);
-    const inside = tracked.filter(inRange);
-    const diff = kdeGrid(inside, inside.map(margin));
-    if (!diff) return null;
-    const n = tracked.length;
-    const part = (keep) => tracked.reduce((s, b) => (keep(b) ? s + margin(b) : s), 0) / n;
+    const mine = balls.filter(tracked), inside = mine.filter(inRange);
+    const kernel = scottKernel(inside);
+    if (!kernel) return null;
+    const batSpeed = mine.reduce((t, b) => t + b[2], 0) / mine.length;
+    const weights = Float64Array.from(league, (b) => Math.exp(-0.5 * ((b[2] - batSpeed) / BAT_SPEED_WIDTH) ** 2));
+    const theirs = spreadLeague(league, weights, kernel);
+    const diff = kdeGrid(inside, inside.map((b) => b[3])).map((v, k) => v - theirs[k]);
+    const hitter = zoneSums(mine, () => 1, 1 / mine.length);
+    const mlb = zoneSums(league, (j) => weights[j], 1 / weights.reduce((t, w) => t + w, 0));
+    const cells = hitter.map((col, i) => col.map((v, k) => v - mlb[i][k]));
+    const sum = (a) => a.reduce((t, v) => t + v, 0);
+    const total = (z) => sum(z.map(sum));
     return {
       diff,
       zones: {
-        spray: SPRAY_BUCKETS.map((f) => part(([x]) => f(x))),
-        launch: LAUNCH_BUCKETS.map((g) => part(([, y]) => g(y))),
-        cells: SPRAY_BUCKETS.map((f) => LAUNCH_BUCKETS.map((g) => part(([x, y]) => f(x) && g(y)))),
+        spray: cells.map(sum),
+        launch: LAUNCH_BUCKETS.map((_, k) => sum(cells.map((col) => col[k]))),
+        cells,
       },
-      total: part(() => true),
-      tracked: n,
+      total: total(cells),
+      batSpeed,
+      hitterXwoba: total(hitter),
+      leagueXwoba: total(mlb),
+      tracked: mine.length,
     };
   }
 
@@ -492,5 +566,5 @@
     draw(canvas, result, { ...opts, logo });
   }
 
-  window.BattedBalls = { N, kdeGrid, compute, computeXwoba, computeValue, leagueAt, surfaceAt, shares, render, inRange };
+  window.BattedBalls = { N, kdeGrid, compute, computeXwoba, computeValue, surfaceAt, shares, render, inRange, tracked };
 })();

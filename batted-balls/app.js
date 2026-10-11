@@ -263,26 +263,32 @@
     status("");
   }
 
-  // The value view: the hitter's batted balls, each weighted by its xwOBA less MLB's
-  // xwOBA on contact at that ball's bat speed.
+  // The value view: the hitter's batted balls weighted by xwOBA against MLB's off swings
+  // as fast as theirs, weighted the same way. MLB's balls are every tracked ball in the
+  // season file, gathered once per season.
   const fmtMargin = (v) => (v >= 0 ? "+" : "-") + fmtXw(Math.abs(v));
+  const leagueBalls = new WeakMap();
+  function trackedBalls(data) {
+    if (!leagueBalls.has(data)) leagueBalls.set(data, data.players.flatMap((p) => p.bbe.filter(BattedBalls.tracked)));
+    return leagueBalls.get(data);
+  }
+
   async function showValue(sel, data, hitter, name, hand, ticket) {
-    const league = data.xwoba?.by_bat_speed;
-    if (!league) { status("this season's file predates this view; it needs rebuilding", "warn"); el.out.hidden = true; return; }
-    const result = BattedBalls.computeValue({ balls: hitter, league });
+    const result = BattedBalls.computeValue({ balls: hitter, league: trackedBalls(data) });
     if (!result) { status(`not enough tracked swings to draw a density (${hitter.length} batted balls)`, "warn"); el.out.hidden = true; return; }
+    const mph = `${result.batSpeed.toFixed(1)} mph`;
     const opts = {
       hand, view: "value",
       title: `${possessive(name)} ${sel.season} Batted Ball Value`,
-      subtitle: `(${fmtMargin(result.total)} xwOBA on contact vs MLB at the same bat speeds)`,
+      subtitle: `(${fmtMargin(result.total)} xwOBA on contact vs MLB at ${mph})`,
     };
     if (!(await drawn(result, opts, sel, name, ticket))) return;
-    const at = (mph) => `${fmtXw(BattedBalls.leagueAt(league, mph))} at ${mph}`;
     el.note.textContent = `${hitter.length} batted balls${sel.team ? ` by ${sel.team} hitters` : ""}, regular season, through ${data.through}; `
-      + `${result.tracked} with a tracked swing (bunts and untracked swings have no xwOBA). `
-      + `Each is weighted by its xwOBA less MLB's xwOBA on contact at its bat speed (in ${sel.season}, ${at(65)}, ${at(70)}, ${at(75)} mph): `
-      + `red is where these balls beat what MLB gets from the same swings, blue where they fall short. `
-      + `The boxes and the figures along the axes are each zone's part of the ${fmtMargin(result.total)}.`;
+      + `${result.tracked} with a tracked swing (bunts and untracked swings have no xwOBA), averaging ${mph}. `
+      + `Each is weighted by its xwOBA, and so are MLB's batted balls off swings near ${mph}, spread with the same kernels: `
+      + `red is where these balls get more xwOBA than MLB's hitters get swinging that hard, blue where MLB's get more. `
+      + `The boxes and the figures along the axes are each zone's part of the ${fmtMargin(result.total)}: `
+      + `${fmtXw(result.hitterXwoba)} xwOBA on contact against MLB's ${fmtXw(result.leagueXwoba)} at ${mph}.`;
     history.replaceState(null, "", hash(sel));
     status("");
   }
