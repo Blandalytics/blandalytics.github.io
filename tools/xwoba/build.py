@@ -11,8 +11,9 @@ ball's outcome is mostly noise, so squared error barely moves when the kernel
 flattens a sharp feature, and on its own it prefers a 2-degree launch-angle kernel
 that leaves the 5-degree launch-angle bands around the line-drive peak up to 0.016
 off. The defaults are the point near the best on squared error, log loss and
-calibration together (out of fold on 2023-2025: RMSE 0.46299, log loss 0.6158,
-calibration error 0.0066 -- see evaluation.md for the measure), with every 5-degree
+calibration together (chosen when an error or fielder's choice still counted as a
+single; refit on hits only, out of fold on 2023-2025: RMSE 0.45763, log loss 0.59617,
+calibration error 0.0068 -- see evaluation.md for the measure), with every 5-degree
 launch-angle band within 0.01.
 
     python tools/xwoba/build.py --cv                     # every season with bat tracking

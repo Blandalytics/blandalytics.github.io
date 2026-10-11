@@ -572,10 +572,14 @@ pull line, 45° centre, 90° the opposite line).
 Each grid node fits a kernel-weighted plane through the outcomes of the balls around it, and a
 second pass smooths the first pass's residuals and adds them back, so the sharp parts of the
 surface (the line-drive peak, the pockets where outfielders stand, the edges of the home-run
-band) survive the smoothing. Fit on 2023–2025 and tested on 2026, it explains 35% of the
-variance in a ball's wOBA value (R² 0.351), level with gradient boosting on the same inputs
-and behind Savant's exit-velocity xwOBA (0.439). For hitters it is steadier year to year than
-wOBA on contact (r = 0.66 against 0.49).
+band) survive the smoothing. The outcome is the hit (an error or a fielder's choice is an out,
+where Savant's `woba_value` gives it a single's .900). Fit on 2023–2025 and tested on 2026, it
+explains 36% of the variance in a ball's wOBA value (R² 0.363), level with gradient boosting
+on the same inputs and behind Savant's exit-velocity xwOBA (0.452). For hitters it is steadier
+year to year than wOBA on contact (r = 0.66 against 0.50). With no term for the season, a
+season can read high or low against its own results (2026 by .008 on the full fit), so the
+Batted Ball Charts build calibrates each season's outcome mix to its actual one
+(`model.calibration`), and the league's xwOBA on contact is its wOBA on contact.
 
 | file | role |
 |---|---|
