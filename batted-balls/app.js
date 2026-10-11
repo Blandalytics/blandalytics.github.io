@@ -53,6 +53,22 @@
     return surface;
   }
 
+  // Teams by their full names wherever the page shows one (the files, and links, use the
+  // codes): Cleveland and Oakland as they were called that season
+  const TEAMS = {
+    ATH: "Athletics", ATL: "Atlanta Braves", AZ: "Arizona Diamondbacks", BAL: "Baltimore Orioles",
+    BOS: "Boston Red Sox", CHC: "Chicago Cubs", CIN: "Cincinnati Reds", CLE: "Cleveland Guardians",
+    COL: "Colorado Rockies", CWS: "Chicago White Sox", DET: "Detroit Tigers", HOU: "Houston Astros",
+    KC: "Kansas City Royals", LAA: "Los Angeles Angels", LAD: "Los Angeles Dodgers", MIA: "Miami Marlins",
+    MIL: "Milwaukee Brewers", MIN: "Minnesota Twins", NYM: "New York Mets", NYY: "New York Yankees",
+    OAK: "Oakland Athletics", PHI: "Philadelphia Phillies", PIT: "Pittsburgh Pirates", SD: "San Diego Padres",
+    SEA: "Seattle Mariners", SF: "San Francisco Giants", STL: "St. Louis Cardinals", TB: "Tampa Bay Rays",
+    TEX: "Texas Rangers", TOR: "Toronto Blue Jays", WSH: "Washington Nationals",
+  };
+  const teamName = (code, season) => (code === "CLE" && season < 2022 ? "Cleveland Indians" : TEAMS[code] || code);
+  // the Athletics' code changed with the move (OAK to 2024, ATH from 2025)
+  const SAME_TEAM = { OAK: "ATH", ATH: "OAK" };
+
   const seasonList = () => Object.keys(index.seasons).map(Number).sort((a, b) => b - a);
   const hasPrior = (year) => Boolean(index.seasons[String(year - 1)]);
   // xwOBA needs bat speed on every ball, which the seasons from 2024 have (the index
@@ -87,16 +103,19 @@
     return scored.map((x) => x[1]);
   }
 
+  // The field behaves as Model Drilldown's pitcher field does: clicking in after a pick
+  // clears it and lists everyone; Enter takes the highlighted row, or the best match for
+  // what's typed (or says there is none); a season change with the list open refreshes it.
   let active = -1, shown = [];
   function showSuggestions() {
-    shown = suggestions(el.player.value);
+    shown = suggestions(el.player.value).slice(0, 400);
     active = -1;
     el.suggest.replaceChildren(...shown.map((h, i) => {
       const li = document.createElement("li");
       li.setAttribute("role", "option");
       li.dataset.index = String(i);
       const name = document.createElement("span"); name.textContent = h.name;
-      const meta = document.createElement("small"); meta.textContent = `${h.team} · ${h.bbe.length} BBE`;
+      const meta = document.createElement("small"); meta.textContent = `${teamName(h.team, Number(el.season.value))} · ${h.bbe.length} BBE`;
       li.append(name, meta);
       return li;
     }));
@@ -116,6 +135,7 @@
   function pick(h) {
     chosen = h;
     el.player.value = h.name;
+    committed = true;
     hideSuggestions();
     syncControls();
     show();
@@ -180,7 +200,7 @@
   // " (LHH)" after the chart's name in the subtitle, and "LHH" before "batted balls" in
   // the note
   const battingTitle = (sel) => (sel.side ? ` (${HITTER[sel.side]})` : "");
-  const ballsNote = (n, sel) => (sel.team ? `${n} batted balls by ${sel.team} hitters`
+  const ballsNote = (n, sel) => (sel.team ? `${n} batted balls by ${teamName(sel.team, sel.season)} hitters`
     : `${n} ${sel.side ? `${HITTER[sel.side]} ` : ""}batted balls`);
   const drawKey = (sel, season = sel.season) => `${season}:${sel.team || sel.id}${sel.side || ""}`;
 
@@ -218,7 +238,7 @@
       let hitter, name, hand;
       if (sel.team) {
         hitter = teamBalls(data, sel.team);
-        name = sel.team; hand = "R";
+        name = teamName(sel.team, sel.season); hand = "R";
       } else {
         const p = data.players.find((x) => x.id === sel.id);
         if (!p) { status("that hitter has no batted balls this season", "warn"); return; }
@@ -285,7 +305,7 @@
     const opts = {
       hand, view: "xwoba",
       title: name,
-      subtitle: `${sel.season} xwOBA${battingTitle(sel)}\n${mph} ➔ ${fmtXw(result.xwoba)} xwOBA`,
+      subtitle: `${sel.season} xwOBA${battingTitle(sel)}\n${mph} Bat Speed ➔ ${fmtXw(result.xwoba)} xwOBA`,
     };
     if (!(await drawn(result, opts, sel, name, ticket))) return;
     const lg = data.xwoba;
@@ -354,13 +374,17 @@
     status("loading the season…");
     const data = await loadSeason(year);
     setHitters(data);
-    el.team.replaceChildren(...data.teams.map((t) => new Option(t, t)));
-    if (keep && current?.team && data.teams.includes(current.team)) el.team.value = current.team;
+    el.team.replaceChildren(...data.teams.map((t) => new Option(teamName(t, year), t))
+      .sort((a, b) => a.text.localeCompare(b.text)));
+    const was = keep && current?.team ? [current.team, SAME_TEAM[current.team]].find((t) => data.teams.includes(t)) : null;
+    if (was) el.team.value = was;
     else if (!keep || !el.team.value) el.team.value = data.teams.includes("CLE") ? "CLE" : data.teams[0];
     const same = keep && chosen ? hitters.find((h) => h.id === chosen.id) : null;
     chosen = same || hitters.find((h) => h.name === DEFAULT_PLAYER) || suggestions("")[0] || null;
-    el.player.value = chosen ? chosen.name : "";
-    committed = true;
+    if (el.suggest.hidden) {
+      el.player.value = chosen ? chosen.name : "";
+      committed = true;
+    } else showSuggestions();
     el.through.textContent = `Through ${data.through}`;
     syncControls();
     status("");
@@ -396,11 +420,17 @@
   vsInputs().forEach((r) => r.addEventListener("change", show));
   sideInputs().forEach((r) => r.addEventListener("change", show));
   viewInputs().forEach((r) => r.addEventListener("change", () => { syncControls(); show(); }));
-  el.form.addEventListener("submit", (e) => { e.preventDefault(); if (shown.length) pick(shown[Math.max(active, 0)]); });
+  el.form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    hideSuggestions();
+    const hit = suggestions(el.player.value)[0];
+    if (!hit) { status("no hitter by that name this season", "warn"); return; }
+    pick(hit);
+  });
 
   el.player.addEventListener("input", () => { committed = false; showSuggestions(); });
   el.player.addEventListener("focus", startSearch);
-  el.player.addEventListener("click", () => { if (el.suggest.hidden) startSearch(); });
+  el.player.addEventListener("click", startSearch);
   el.player.addEventListener("blur", () => setTimeout(() => {
     hideSuggestions();
     if (!el.player.value.trim() && chosen) { el.player.value = chosen.name; committed = true; }
@@ -412,7 +442,7 @@
     }
     if (e.key === "ArrowDown") { e.preventDefault(); setActive((active + 1) % shown.length); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((active - 1 + shown.length) % shown.length); }
-    else if (e.key === "Enter") { e.preventDefault(); pick(shown[Math.max(active, 0)]); }
+    else if (e.key === "Enter" && active >= 0) { e.preventDefault(); pick(shown[active]); }
     else if (e.key === "Escape") hideSuggestions();
   });
   el.suggest.addEventListener("pointerdown", (e) => {
