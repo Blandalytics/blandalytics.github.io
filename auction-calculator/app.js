@@ -1,7 +1,7 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=12";
+import * as C from "./calc.js?v=13";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -17,7 +17,7 @@ const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
 const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "span", "curve", "weeks", "phi", "pt_cv", ...SLOT_IDS, ...PSLOT_IDS];
 // The checkboxes and selects saved with the settings
 const CHECKS = ["min_bench", "include_fa", "fill_pt", "specialists", "split_auto"];
-const SELECTS = ["pool", "format"];
+const SELECTS = ["pool", "format", "lock", "twoway"];
 const slotsOf = (types, prefix) => Object.fromEntries(Object.keys(types).map((t) => [t, Number($(prefix + t).value)]));
 const total = (slots) => Object.values(slots).reduce((a, b) => a + b, 0);
 
@@ -247,7 +247,7 @@ function readSettings() {
     slots, pitcherSlots, hitters: total(slots), pitchers: total(pitcherSlots), bench: n("bench"), span: n("span"),
     minimizeBench: $("min_bench").checked, style: style(), teams: n("teams"), minBid: n("min_bid"),
     budget: n("budget"), pool: $("pool").value, includeFa: $("include_fa").checked,
-    format: $("format").value, weeks: n("weeks"), phi: n("phi"), ptCV: n("pt_cv"),
+    format: $("format").value, weeks: n("weeks"), phi: n("phi"), ptCV: n("pt_cv"), lock: $("lock").value, twoWay: $("twoway").value,
     fillPT: $("fill_pt").checked, specialists: $("specialists").checked, curve: n("curve"),
     hitterShare: autoSplit() ? null : n("split") / 100,
     hitterCats: cats.h, pitcherCats: cats.p, hitterPoints: points.h, pitcherPoints: points.p,
@@ -402,8 +402,45 @@ function update() {
   if (!result.converged) warnings.push("The values didn't settle in 20 passes; these use the mean of the last two.");
   status(warnings.join(" "), "warn");
   if (autoSplit()) showSplit();
+  showLock();
   $("download").disabled = false;
   render();
+}
+
+// The lineup lock's tooltip: what it does in this league, after the general note
+const LOCK_TIP = $("lock_tip").dataset.tip;
+function showLock() {
+  const L = result.lock;
+  let tip = LOCK_TIP;
+  if (L) {
+    const spots = `a typical team rosters ${L.nSP} SPs for ${L.S} SP spots`;
+    const bind = `they fill up in ${Math.round(100 * L.pBind)}% of lock windows`;
+    const shares = L.kappa ? L.kappa.filter((k) => k < 1) : [];
+    tip += `. In this league ${spots}; ${bind}, ` + (shares.length
+      ? `so SPs keep ${Math.round(100 * Math.min(...shares))}–${Math.round(100 * Math.max(...shares))}% of their value above replacement`
+      : `${L.depth < 1 ? "with no SPs on the bench" : "under the 5% where it starts to matter"}, so values don't change`);
+  }
+  $("lock_tip").dataset.tip = tip;
+  $("lock_tip").setAttribute("aria-label", tip);
+}
+
+// A row's stats and stat dollars on one side: its own, or a two-way player's pitching
+const statsOf = (p, side) => (p.type === side ? p.stats : side === "p" && p.twoWay ? p.twoWay.stats : null);
+const stat$Of = (p, side) => (!p.breakdown ? null : p.type === side ? p.breakdown.stats : side === "p" ? p.breakdown.pstats || null : null);
+// What a row's position tooltip says: where he's priced, a locked SP's share, a two-way player's use
+const pct = (x) => `${Math.round(100 * x)}%`;
+function posTip(p) {
+  const tips = [];
+  if (p.valuedAt) tips.push(`Priced at ${p.valuedAt}`);
+  if (p.lockShare < 1) tips.push(`${p.lockTier[0].toUpperCase()}${p.lockTier.slice(1)}-tier SP under this lineup lock: keeps ${pct(p.lockShare)} of his value above replacement`);
+  const t = p.twoWay;
+  if (t && t.mode === "simultaneous") tips.push("Two-way, simultaneous: in a hitter and a pitcher spot at once; his hitting and pitching dollars added");
+  if (t && t.mode === "daily") tips.push(t.pitch > 0 ? `Two-way, one slot chosen daily: pitches his ${Math.round(t.starts)} starts and hits the other days (${pct(t.hit)} of his hitting), his pitching at the pitchers' price`
+    : "Two-way, one slot chosen daily: his starts are worth less than a day's hitting, so he only hits");
+  if (t && t.mode === "weekly") tips.push(t.pitch >= 0.005
+    ? `Two-way, one slot chosen weekly: ${pct(t.hit)} of his hitting and ${pct(t.pitch)} of his pitching, taking each week as whichever is worth more, his pitching at the pitchers' price`
+    : "Two-way, one slot chosen weekly: no week's starts are worth more than a week of his hitting (his pitching at the pitchers' price), so he only hits");
+  return tips.join(". ");
 }
 
 // ---- the table ---------------------------------------------------------------------------
@@ -439,13 +476,15 @@ function breakdownColumns() {
   ];
   if (any("fill")) base.push(part("b:fill", "Playing time", "What his team gets from replacement production in the time he doesn't play", (p) => (b(p) ? b(p).fill : NaN)));
   if (any("specialist")) base.push(part("b:spec", "Specialist", "Roto: a category far above replacement buys standings points on a curve, not a line", (p) => (b(p) ? b(p).specialist : NaN)));
+  if (any("lock")) base.push(part("b:lock", "Lineup lock", "What a binding lineup lock takes from an SP: he keeps his tier's share of his value above replacement", (p) => (b(p) ? b(p).lock : NaN)));
+  if (any("twoWay")) base.push(part("b:tw", "Two-way", "A two-way player's pitching in a one-spot league, less the hitting he gives up for it, at the pitchers' price", (p) => (b(p) ? b(p).twoWay : NaN)));
   if (any("other")) base.push(part("b:other", "No spot", "Held under the min bid: no legal roster has room for him", (p) => (b(p) ? b(p).other : NaN)));
   base.forEach((c, i) => Object.assign(c, { group: "v", first: i === 0 }));
   const unit = (side, cat) => (result.weights[side].find((w) => w.cat === cat) || {}).unit;
   const stat = (type, cat, i) => part(`$${type}:${cat}`, cat,
     `What his ${cat} adds over his side's deepest replacement, in his own playing time`
       + (unit(type, cat) && unit(type, cat) !== cat && unit(type, cat) !== "points" ? ` (as ${unit(type, cat)} against the drafted pool's rate)` : ""),
-    (p) => (p.type === type && b(p) ? b(p).stats[cat] : NaN), { group: type + "$", first: i === 0 });
+    (p) => (stat$Of(p, type) ? stat$Of(p, type)[cat] : NaN), { group: type + "$", first: i === 0 });
   return [...base, ...result.valueCols.h.map((c, i) => stat("h", c, i)), ...result.valueCols.p.map((c, i) => stat("p", c, i))];
 }
 const GROUPS = { h: "Hitting", p: "Pitching", v: "Value", h$: "Hitting $", p$: "Pitching $" };
@@ -456,7 +495,7 @@ function columns() {
     ...(result.settings.style === "Points" ? [POINTS_COL] : [])];
   const stat = (type, cat, first) => ({
     key: `${type}:${cat}`, label: cat, group: type, first,
-    get: (p) => (p.type === type ? p.stats[cat] : NaN), cell: (p) => (p.type === type ? fmt(cat, p.stats[cat]) : ""),
+    get: (p) => (statsOf(p, type) ? statsOf(p, type)[cat] : NaN), cell: (p) => (statsOf(p, type) ? fmt(cat, statsOf(p, type)[cat]) : ""),
     ...(result.valueCols[type].includes(cat) ? heatOf(type, cat) : {}),
   });
   if (view() === "value" && result.valueCols) return [...info, ...breakdownColumns()];
@@ -486,11 +525,11 @@ function heatStyle(v, lo, hi) {
   return `background:rgb(${bg.join(",")});color:rgb(${ink.join(",")})`;
 }
 function heatOf(type, cat) {
-  const $of = (p) => (p.type === type && p.breakdown ? p.breakdown.stats[cat] : NaN);
+  const $of = (p) => (stat$Of(p, type) ? stat$Of(p, type)[cat] : NaN);
   result.heat ??= {};
   const key = type + ":" + cat;
   if (!(key in result.heat)) {
-    const v = result.players.filter((p) => p.type === type && p.drafted).map($of).filter(Number.isFinite).sort((a, b) => a - b);
+    const v = result.players.filter((p) => p.drafted).map($of).filter(Number.isFinite).sort((a, b) => a - b);
     const at = (q) => v[Math.min(v.length - 1, Math.floor(q * v.length))];
     result.heat[key] = v.length ? [at(0.5), at(0.95)] : [0, 0];
   }
@@ -505,7 +544,7 @@ function heatOf(type, cat) {
 const fold = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 function matchesPos(p, pos) {
   if (!pos) return true;
-  if (pos === "h" || pos === "p") return p.type === pos;
+  if (pos === "h" || pos === "p") return p.type === pos || (pos === "p" && !!p.twoWay);
   const parts = p.pos.split(/[,/ ]+/);
   if (pos === "OF") return parts.some((x) => ["OF", "LF", "CF", "RF"].includes(x));
   return parts.includes(pos);
@@ -543,7 +582,7 @@ function render() {
   const body = rows.length
     ? rows.map((p) => `<tr class="${p.type}">` + cols.map((c) => {
       const cls = [typeof c.cls === "function" ? c.cls(p) : c.cls, c.frozen ? "frz" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
-      const title = c.tip ? c.tip(p) : c.key === "name" ? p.name : c.key === "pos" && p.valuedAt ? `Priced at ${p.valuedAt}`
+      const title = c.tip ? c.tip(p) : c.key === "name" ? p.name : c.key === "pos" ? posTip(p)
         : c.key === "value" && !p.drafted ? "Not on a drafted roster" : "";
       const style = c.style ? c.style(p) : "";
       return `<td${cls ? ` class="${cls}"` : ""}${style ? ` style="${style}"` : ""}${title ? ` data-tip="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
@@ -611,7 +650,7 @@ $("download").onclick = () => {
     ...extra.map((c) => c.label), ...hitterCols.map((c) => name(c, "h")), ...pitcherCols.map((c) => name(c, "p"))];
   const num = (v, d) => (v === undefined || Number.isNaN(v) ? "" : d === undefined ? String(v) : v.toFixed(d));
   const cell = (v) => (/[",\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v);
-  const sideValue = (p, side, c) => (p.type !== side ? "" : byValue ? num(p.breakdown ? p.breakdown.stats[c] : NaN, 2) : num(p.stats[c]));
+  const sideValue = (p, side, c) => (byValue ? (stat$Of(p, side) ? num(stat$Of(p, side)[c], 2) : "") : statsOf(p, side) ? num(statsOf(p, side)[c]) : "");
   const lines = [head.map(cell).join(",")];
   for (const p of players) {
     lines.push([num(p.rank), p.name, p.team, p.pos, p.slot ?? "", ...(settings.style === "Points" ? [num(p.points, 2)] : []), num(p.value, 2),
