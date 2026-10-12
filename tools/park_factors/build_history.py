@@ -5,7 +5,7 @@ with every index column, the season's PAs and the MLB StatsAPI venue id. This lo
 row up in that season's StatsAPI schedule: Games counts the venue's completed regular-season
 games at that level, and Team is the club that was home in most of them, with its league and
 parent org. Writes tools/park_factors/park_factors_history.csv, which build_leaderboard.py
-reads, so the page builds offline.
+reads, so the page builds offline; it keeps the venue id, which build_seasonal.py joins on.
 
 Abbreviations follow the 2027 leaderboard (FanGraphs-style MLB codes such as KCR and SDP), and
 2021's interim league names map to the names used since 2022 (Triple-A East -> IL, and so on).
@@ -106,7 +106,7 @@ def main(src):
             if venue != r["Venue"]:
                 renamed[(r["Level"], r["Venue"])].add((season, venue))
             rows.append({"Level": r["Level"], "Year": season, "League": league, "Team": team, "Org": org,
-                         "Venue": venue, "Games": sum(homes.values()),
+                         "Venue": venue, "venue_id": r["venue_id"], "Games": sum(homes.values()),
                          **{k: r[k] for k in STATS}, "PA": r["PA"]})
 
     # check: 2026 minor-league rows should name the same club as the 2027 board (which uses 2026 parks)

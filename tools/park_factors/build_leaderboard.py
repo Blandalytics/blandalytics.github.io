@@ -3,8 +3,9 @@
 park_factors_2027.csv holds the current board (level x batter side x venue) with the date the
 factors were generated: each level's most recent year, MLB 2027 (on the 2027 schedule) and the
 minors 2026. park_factors_history.csv (from build_history.py) adds every earlier season, all
-batters. park_factors_seasonal_2027.csv (the park model's seasonal fit) has the MLB 2027 parks
-week by week, for the Seasonal view. The page inlines all three, so it makes no data requests.
+batters. The page inlines both. The Seasonal view's data (park-factors/seasonal/<level>_<year>.json,
+from build_seasonal.py) is fetched when that view opens on a level and year; the page lists which
+years each level has.
 Usage:
   python tools/park_factors/build_leaderboard.py                 # page from the CSV
   python tools/park_factors/build_leaderboard.py --from-md X.md  # rewrite the CSV from the park
@@ -16,14 +17,13 @@ import json
 import re
 import statistics
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).parent
 ROOT = HERE.resolve().parents[1]
 CSV = HERE / "park_factors_2027.csv"
 HIST = HERE / "park_factors_history.csv"
-SEAS = HERE / "park_factors_seasonal_2027.csv"
+SEASONAL = ROOT / "park-factors" / "seasonal"
 OUT = ROOT / "park-factors" / "index.html"
 
 TEXT_COLS = {"Level", "Side", "League", "Team", "Org", "Venue", "As Of"}
@@ -78,40 +78,13 @@ def load_history(cols, path=HIST):
     return [[{**r, "Side": "All"}[c] if c in TEXT_COLS else int(r[c]) for c in cols] for r in recs]
 
 
-def load_seasonal(cols, rows):
-    """The Seasonal view's data from the park model's weekly seasonal table: per batter side,
-    MLB 2027 venue and week, each index column (page order) as an int of 10 x the index, 100 =
-    the league's average park that week; and per side and week the league itself ("MLB average")
-    against its season average, which the page multiplies in for its Season average baseline.
-    Weeks are [first day, last day, label]. Every venue must be on the board's MLB 2027 rows."""
-    with open(SEAS, newline="", encoding="utf-8-sig") as f:
-        recs = list(csv.DictReader(f))
-    year = LATEST["MLB"]
-    page = [SHOW_AS.get(c, c) for c in cols]
-    stats = [c for c in page[page.index("Park Factor"):page.index("PA")]]
-    model = {SHOW_AS.get(c, c): c for c in recs[0]}  # page name -> the CSV's
-    day = lambda d: datetime.strptime(f"{d} {year}", "%b %d %Y").strftime("%m-%d")  # noqa: E731
-    weeks = []
-    for r in recs:
-        a, b = (x.strip() for x in r["Dates"].split(" - "))
-        w = [day(a), day(b), f"{a} – {b}"]
-        if w not in weeks:
-            weeks.append(w)
-    wi = {w[2]: i for i, w in enumerate(weeks)}
-    board = {r[cols.index("Venue")] for r in rows if r[0] == "MLB"}
-    venues, league = defaultdict(dict), defaultdict(lambda: [None] * len(weeks))
-    for r in recs:
-        a, b = (x.strip() for x in r["Dates"].split(" - "))
-        # the league rows have no HR interval: its p10 / p90 scale by the league's HR index
-        i, vals = wi[f"{a} – {b}"], [round(10 * float(r[model[c]] or r["HR"])) for c in stats]
-        if r["Venue"] == "MLB average":
-            league[r["Bat Side"]][i] = vals
-            continue
-        v = NAMES_2027.get(r["Venue"], r["Venue"])
-        if v not in board:
-            raise ValueError(f"seasonal venue {v!r} is not on the board's MLB rows")
-        venues[r["Bat Side"]].setdefault(v, [None] * len(weeks))[i] = vals
-    return {"year": year, "weeks": weeks, "cols": stats, "venues": venues, "league": league}
+def seasonal_years():
+    """level -> the years with a Seasonal view file (build_seasonal.py)."""
+    out = defaultdict(list)
+    for f in sorted(SEASONAL.glob("*.json")):
+        level, year = f.stem.rsplit("_", 1)
+        out[level.replace("plus", "+")].append(int(year))
+    return out
 
 
 def min_games(cols, rows):
@@ -141,14 +114,13 @@ def main():
             w.writerows(recs)
         print(f"{len(recs)} rows -> {CSV}")
     cols, rows, as_of = load()
-    seasonal = load_seasonal(cols, rows)
     cols = ["Level", "Year"] + cols[1:]
     rows = [[r[0], LATEST[r[0]]] + r[1:] for r in rows] + load_history(cols)
     mins = min_games(cols, rows)
     cols = [SHOW_AS.get(c, c) for c in cols]
     renamed = {new: f"{old} through 2026" for old, new in NAMES_2027.items()}
     data = json.dumps({"cols": cols, "rows": rows, "latest": LATEST, "minGames": mins, "renamed": renamed,
-                       "seasonal": seasonal}, separators=(",", ":"))
+                       "seasonal": seasonal_years()}, separators=(",", ":"))
     html = TEMPLATE.replace("__DATA__", data).replace("__GENERATED__", as_of)
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(html, encoding="utf-8")
@@ -266,7 +238,7 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
       <div class="field view"><b>View</b>
         <div class="seg" id="view" role="group" aria-label="View">
           <button type="button" data-v="season" aria-pressed="true" title="Each park's factor for the whole season">Full season</button>
-          <button type="button" data-v="seasonal" aria-pressed="false" title="MLB 2027 parks week by week">Seasonal</button>
+          <button type="button" data-v="seasonal" aria-pressed="false" title="Each level and year's parks week by week">Seasonal</button>
         </div>
       </div>
       <div class="field side"><b>Batter side</b>
@@ -326,7 +298,7 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
         <p><b>Colors:</b> centered on 100 and saturated at 90 and 110. Red helps hitters and blue hurts them, so for <b>K</b> the scale is flipped: more strikeouts shade blue.</p>
         <p><b>Model:</b> one joint Bayesian fit of every plate appearance (MLB 2015–26; AAA, AA, A+ and A 2021–26) with batter, pitcher, league-season, home-field and platoon terms, a per-venue factor that drifts across seasons (with breaks for known dimension changes) and a per-venue left/right split. If a park is used across multiple leagues (Ex: Sutter Health Park has hosted both AAA and MLB games), the data from all leagues informs that park factor.</p>
         <p><b>Games:</b> MLB 2027 rows use the 2027 schedule (games at the venue that season, neutral sites included); every other year counts the venue's completed regular-season games that season. <b>Qualified parks</b> hides venues with 50 or fewer games, pro-rated to each level's home schedule, so shortened seasons scale down: <span id="thresholds"></span>. <b>PA</b> is the venue's plate appearances at that level in the data: that season's for past years, and every season's for each level's most recent year.</p>
-        <p><b>Seasonal:</b> MLB 2027 parks week by week, from a second fit of the same model with two curves by date added: the league's own calendar (every park together: cold April air, summer heat, September call-ups) and each park's deviation from it (a curve for its roof type plus its own). Drag the slider or press ▶ to move through the 2027 season. <b>Compared to Season average</b> sets 100 at the average park over the whole season, so the factors carry the league's calendar too (home runs run about 8% below average in early April): how the park plays that week. <b>Same week</b> sets 100 at that week's average park, which leaves only the park's own pattern (roofed parks such as American Family Field play relatively better in April, before the summer lift elsewhere). The <b>MLB average</b> row is the league that week against its season average. Most parks move only a point or two over the season, home runs the most, so this view shows one decimal. A park's seasonal factors average out to about its Full season factor (the two fits can differ by a point).</p>
+        <p><b>Seasonal:</b> each level and year's parks week by week: MLB 2015–2027 (2027 on its schedule, the earlier seasons from the games played) and AAA, AA, A+ and A 2021–2026. They come from a second fit of the same model with two curves by date added: each level's own calendar (every park together: cold April air, summer heat, September call-ups) and each park's deviation from it (a curve for its roof type plus its own), one shape per park across all its seasons. Drag the slider or press ▶ to move through the season; switching the year keeps the same point in the calendar. <b>Compared to Season average</b> sets 100 at the level's average park over the whole season, so the factors carry the calendar too (MLB home runs run about 8% below average in early April): how the park played or will play that week. <b>Same week</b> sets 100 at that week's average park, which leaves only the park's own pattern (roofed parks such as American Family Field play relatively better in April, before the summer lift elsewhere). The <b>average</b> row is the league that week against its season average. Past seasons are all batters; each level's most recent year has the LHB/RHB split. Most parks move only a point or two over a season, home runs the most, so this view shows one decimal. A park's seasonal factors average out to about its Full season factor (the two fits can differ by a point).</p>
         <p><b>All levels:</b> every row is still indexed to its own level's average, so a 105 in AA and a 105 in MLB are each 5% above their level, not equal environments. Picking an <b>Org</b> switches to All levels to show the whole system; pick a level after that to narrow it.</p>
         <p><b>Years:</b> each level opens on its most recent year: 2027 for MLB, built on the 2027 schedule, and 2026 for the minors. Earlier seasons (MLB from 2015, the minors from 2021) come from the same fit, indexed to that season's average park at that level, for all batters; the LHB/RHB split covers each level's most recent year. Venue names, teams, leagues and orgs are as they were that season, from MLB's StatsAPI, with 2021's interim minor-league names shown as the leagues' current ones (Triple-A East as IL, and so on). <b>All years</b> lists every season at once, one row per park and season; with a Team or Org picked, it follows a park through the years.</p>
         <p>Factors as of __GENERATED__.</p>
@@ -363,21 +335,36 @@ const showCols = () => ["Rk.", ...(state.level ? [] : ["Level"]),
 const TXT = new Set(["Level", "League", "Team", "Org", "Venue"]);
 
 const ci = Object.fromEntries(DATA.cols.map((c, i) => [c, i]));
-// the Seasonal view: MLB parks week by week (DATA.seasonal: weeks [first "MM-DD", last, label];
-// per side and venue, each week's index columns x 10, 100 = that week's average park; per side,
-// the league each week x 10 against its season average)
-const SEAS = DATA.seasonal, NW = SEAS.weeks.length;
-const sci = Object.fromEntries(SEAS.cols.map((c, i) => [c, i]));
+// the Seasonal view: one level and year's parks week by week, fetched the first time it is shown
+// (seasonal/<level>_<year>.json: weeks [first "MM-DD", last, label]; cols; per side, each venue's
+// index columns x 10 by week, 100 = the level's parks in use that week, and the league that week
+// x 10 against its season average). DATA.seasonal lists the years each level has.
 const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-// it opens on this week's date in the season, else opening week
-const WEEK0 = (() => {
-  const d = new Date(), md = `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  if (md < SEAS.weeks[0][0] || md > SEAS.weeks[NW - 1][1]) return 0;
-  let i = 0; while (i + 1 < NW && SEAS.weeks[i + 1][0] <= md) i++;
+const TODAY = (d => `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`)(new Date());
+const seasonalCache = new Map();  // "<level>_<year>" -> the data, "loading" or "failed"
+function seasonalData() {
+  const year = yearOf(state.level), key = `${state.level}_${year}`;
+  if (!(DATA.seasonal[state.level] || []).includes(year)) return "none";
+  if (!seasonalCache.has(key)) {
+    seasonalCache.set(key, "loading");
+    fetch(`seasonal/${key.replace("+", "plus")}.json`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => { seasonalCache.set(key, d); render(); }, () => { seasonalCache.set(key, "failed"); render(); });
+  }
+  return seasonalCache.get(key);
+}
+const ready = d => d !== null && typeof d === "object";
+// the week on screen: the one holding the picked date (state.wk, "MM-DD"; before the season the
+// first week, after it the last); with none picked, this week's if the season is on, else opening week
+function weekIndex(d) {
+  const W = d.weeks, md = state.wk || TODAY;
+  if (!state.wk && (md < W[0][0] || md > W[W.length - 1][1])) return 0;
+  let i = 0;
+  while (i + 1 < W.length && W[i + 1][0] <= md) i++;
   return i;
-})();
+}
 const isSeasonal = () => state.view === "seasonal";
-const DEFAULTS = {view: "season", week: WEEK0, base: "season",
+const DEFAULTS = {view: "season", wk: "", base: "season",
   side: "All", level: "MLB", year: "", league: "", team: "", org: "", qual: true, sort: "Park Factor", dir: -1};
 const state = {...DEFAULTS};
 let shown = [];  // the rows on screen, in order, for the CSV download
@@ -404,9 +391,7 @@ function fill(sel, values, allLabel, keep) {
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"})[c]); }
 
 $("level").innerHTML = `<option value="">All levels</option>` + LEVELS.map(l => `<option>${l}</option>`).join("");
-$("week").max = NW - 1;
-$("months").innerHTML = SEAS.weeks.map((w, i) => i && w[0].slice(0, 2) !== SEAS.weeks[i - 1][0].slice(0, 2)
-  ? `<span style="left:${(100 * i / (NW - 1)).toFixed(2)}%">${MONTHS[+w[0].slice(0, 2)]}</span>` : "").join("");
+
 const ORGS = uniq(DATA.rows.map(r => r[ci.Org]));
 fill($("org"), ORGS, "All orgs", "");
 $("thresholds").textContent = LEVELS.map(l => `${l} ${DATA.latest[l]} more than ${minGames(l, DATA.latest[l])}`).join(", ") +
@@ -437,22 +422,27 @@ function head() {
   }).join("");
 }
 
-// the board's MLB rows for the side with that week's index columns: against that week's average
-// park (base week), or times the league's own index that week (base season: against the season's)
-function seasonalRows() {
-  const V = SEAS.venues[state.side], lg = SEAS.league[state.side][state.week];
-  return DATA.rows.filter(r => r[ci.Level] === "MLB" && r[ci.Year] === DATA.latest.MLB && r[ci.Side] === state.side && V[r[ci.Venue]])
+// the board's rows for the level, year and side with week wi's index columns: against that week's
+// average park (base week), or times the league's own index that week (base season: against the season's)
+function seasonalRows(d, wi) {
+  const S = d.sides[state.side] || d.sides.All, si = Object.fromEntries(d.cols.map((c, i) => [c, i])), lg = S.league[wi];
+  return DATA.rows.filter(r => r[ci.Level] === d.level && r[ci.Year] === d.year && r[ci.Side] === state.side && S.venues[r[ci.Venue]])
     .map(r => {
-      const w = V[r[ci.Venue]][state.week], out = r.slice();
-      for (const c of COLORED) out[ci[c]] = state.base === "week" ? w[sci[c]] / 10 : Math.round(w[sci[c]] * lg[sci[c]] / 1000) / 10;
+      const w = S.venues[r[ci.Venue]][wi], out = r.slice();
+      for (const c of COLORED) out[ci[c]] = state.base === "week" ? w[si[c]] / 10 : Math.round(w[si[c]] * lg[si[c]] / 1000) / 10;
       return out;
     });
+}
+// the Seasonal view shows one level and one year
+function seasonalScope() {
+  if (!isSeasonal()) return;
+  if (!state.level) state.level = "MLB";
+  if (state.year === ALL) state.year = "";
 }
 const fmt = (v, c) => isSeasonal() && COLORED.includes(c) ? v.toFixed(1) : v;
 
 function render() {
-  // the Seasonal view is MLB 2027 only
-  if (isSeasonal()) { state.level = "MLB"; state.year = ""; }
+  seasonalScope();
   // batter-side splits only exist for each level's most recent year, so not on All years
   const splits = state.year !== ALL && DATA.rows.some(r => r[ci.Side] !== "All" && (!state.level || r[ci.Level] === state.level) && yearOk(r));
   if (!splits) state.side = "All";
@@ -464,7 +454,8 @@ function render() {
   $("qual_label").textContent = state.level && state.year !== ALL
     ? `Qualified parks (more than ${minGames(state.level, yearOf(state.level))} games)`
     : `Qualified parks (more than 50 games, pro-rated by ${state.level ? "season" : "level and season"})`;
-  const rows = (isSeasonal() ? seasonalRows() : DATA.rows).filter(r =>
+  const sd = isSeasonal() ? seasonalData() : null, wi = ready(sd) ? weekIndex(sd) : 0;
+  const rows = (isSeasonal() ? (ready(sd) ? seasonalRows(sd, wi) : []) : DATA.rows).filter(r =>
     r[ci.Side] === state.side && (!state.level || r[ci.Level] === state.level) && yearOk(r) &&
     (!state.league || r[ci.League] === state.league) &&
     (!state.team || r[ci.Team] === state.team) &&
@@ -479,11 +470,15 @@ function render() {
   shown = rows;
   head();
   // Seasonal against the season average: the league's own row that week on top
-  const lg = SEAS.league[state.side][state.week];
-  const league = isSeasonal() && state.base === "season" && rows.length ? "<tr class=\"league\">" + SHOW.map(c =>
-    c === "Venue" ? `<td class="txt venue" title="The league that week against its season average">MLB average</td>`
-    : COLORED.includes(c) ? `<td class="${c === "Park Factor" ? "sep" : ""}">${(lg[sci[c]] / 10).toFixed(1)}</td>`
+  const si = ready(sd) ? Object.fromEntries(sd.cols.map((c, i) => [c, i])) : {};
+  const lg = ready(sd) ? (sd.sides[state.side] || sd.sides.All).league[wi] : null;
+  const league = lg && state.base === "season" && rows.length ? "<tr class=\"league\">" + SHOW.map(c =>
+    c === "Venue" ? `<td class="txt venue" title="The league that week against its season average">${esc(sd.level)} average</td>`
+    : COLORED.includes(c) ? `<td class="${c === "Park Factor" ? "sep" : ""}">${(lg[si[c]] / 10).toFixed(1)}</td>`
     : `<td class="${c === "PA" ? "sep" : ""}${TXT.has(c) ? " txt" : ""}"></td>`).join("") + "</tr>" : "";
+  const none = isSeasonal() && !ready(sd)
+    ? {loading: "Loading the seasonal factors…", failed: "The seasonal factors didn't load. Reload the page to try again.",
+       none: "No seasonal factors for this level and year."}[sd] : "";
   $("body").innerHTML = rows.length ? league + rows.map((r, i) => "<tr>" + SHOW.map(c => {
     if (c === "Rk.") return `<td class="rk">${i + 1}</td>`;
     const v = r[ci[c]];
@@ -492,25 +487,32 @@ function render() {
     if (COLORED.includes(c)) return `<td class="stat${c === "Park Factor" ? " pf sep" : ""}" style="background:${shade(v, c)}">${fmt(v, c)}</td>`;
     return `<td class="dim${c === "PA" ? " sep" : ""}">${c === "Year" ? v : v.toLocaleString()}</td>`;
   }).join("") + "</tr>").join("")
-    : `<tr class="empty"><td colspan="${SHOW.length}">No parks match these filters${state.qual ? " — try turning off Qualified parks" : ""}.</td></tr>`;
+    : `<tr class="empty"><td colspan="${SHOW.length}">${none || `No parks match these filters${state.qual ? " — try turning off Qualified parks" : ""}.`}</td></tr>`;
   const n = rows.length, unit = (state.year === ALL ? "park season" : "park") + (n === 1 ? "" : "s");
   const years = rows.map(r => r[ci.Year]);
   const when = state.year === ALL ? (n ? `, ${Math.min(...years)}–${Math.max(...years)}` : "")
     : state.level ? ` in ${yearOf(state.level)}` : state.year ? ` in ${state.year}` : " in each level's most recent year";
-  const wk = SEAS.weeks[state.week][2];
+  const wk = ready(sd) ? sd.weeks[wi] : null;
   $("status").textContent = isSeasonal()
-    ? `${n} MLB ${unit}, ${wk}, ${SEAS.year}, ${SIDE_LABEL[state.side]}, against ${state.base === "week" ? "that week's" : "the season's"} average park`
+    ? (wk ? `${n} ${state.level} ${unit}, ${wk[2]}, ${sd.year}, ${SIDE_LABEL[state.side]}, against ${state.base === "week" ? "that week's" : "the season's"} average park` : none)
     : state.level
     ? `${n} ${state.level} ${unit}${when}, ${SIDE_LABEL[state.side]}`
     : `${n} ${unit} across all levels${when}, ${SIDE_LABEL[state.side]} (each indexed to its own level)`;
   $("seasonbar").hidden = !isSeasonal();
-  $("wk_label").textContent = `${wk}, ${SEAS.year}`;
-  $("lg_note").textContent = `League that week vs its season: wOBA ${(lg[sci["Park Factor"]] / 10).toFixed(1)} · HR ${(lg[sci.HR] / 10).toFixed(1)} · K ${(lg[sci.K] / 10).toFixed(1)}`;
-  $("week").value = state.week;
-  for (const id of ["level", "year"]) {
-    $(id).disabled = isSeasonal();
-    $(id).title = isSeasonal() ? "The Seasonal view covers MLB 2027" : "";
+  $("play").disabled = $("week").disabled = !wk;
+  $("wk_label").textContent = wk ? `${wk[2]}, ${sd.year}` : none;
+  $("lg_note").textContent = lg ? `League that week vs its season: wOBA ${(lg[si["Park Factor"]] / 10).toFixed(1)} · HR ${(lg[si.HR] / 10).toFixed(1)} · K ${(lg[si.K] / 10).toFixed(1)}` : "";
+  if (wk) {
+    const nw = sd.weeks.length;
+    $("week").max = nw - 1; $("week").value = wi;
+    $("months").innerHTML = sd.weeks.map((w, i) => i && w[0].slice(0, 2) !== sd.weeks[i - 1][0].slice(0, 2)
+      ? `<span style="left:${(100 * i / (nw - 1)).toFixed(2)}%">${MONTHS[+w[0].slice(0, 2)]}</span>` : "").join("");
   }
+  // one level and one year at a time in the Seasonal view
+  $("level").options[0].disabled = isSeasonal();
+  const allYears = $("year").querySelector(`option[value="${ALL}"]`);
+  if (allYears) allYears.disabled = isSeasonal();
+  $("level").title = $("year").title = isSeasonal() ? "The Seasonal view shows one level and one year at a time" : "";
   document.querySelectorAll("#view button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.view));
   document.querySelectorAll("#base button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.base));
   document.querySelectorAll("#side button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.side));
@@ -522,13 +524,13 @@ function render() {
 }
 
 // the filters live in the link hash (#org=SEA&side=L&sort=HR…), defaults left out;
-// with an org picked, All levels is the default level (but not in the Seasonal view, MLB only)
+// with an org picked, All levels is the default level (but not in the Seasonal view, one level at a time)
 const levelDefault = () => state.org && !isSeasonal() ? "" : "MLB";
 function toHash() {
   const p = new URLSearchParams();
   if (isSeasonal()) {
     p.set("view", "seasonal");
-    p.set("wk", SEAS.weeks[state.week][0]);  // the week's first day, MM-DD
+    if (state.wk) p.set("wk", state.wk);  // the picked week's first day, MM-DD
     if (state.base !== DEFAULTS.base) p.set("base", state.base);
   }
   if (state.side !== DEFAULTS.side) p.set("side", state.side);
@@ -546,8 +548,7 @@ function fromHash() {
   const p = new URLSearchParams(location.hash.slice(1));
   Object.assign(state, DEFAULTS);
   if (p.get("view") === "seasonal") state.view = "seasonal";
-  const wi = SEAS.weeks.findIndex(w => w[0] === p.get("wk"));
-  if (wi >= 0) state.week = wi;
+  if (/^\d\d-\d\d$/.test(p.get("wk") || "")) state.wk = p.get("wk");
   if (p.get("base") === "week") state.base = "week";
   if (["L", "R"].includes(p.get("side"))) state.side = p.get("side");
   if (ORGS.includes(p.get("org"))) state.org = p.get("org");
@@ -557,7 +558,7 @@ function fromHash() {
   state.league = p.get("league") || "";  // refreshOptions drops a league or team that isn't there
   state.team = p.get("team") || "";
   if (p.get("qual") === "0") state.qual = false;
-  if (isSeasonal()) { state.level = "MLB"; state.year = ""; }
+  seasonalScope();
   if (showCols().includes(p.get("sort"))) {
     state.sort = p.get("sort");
     state.dir = p.get("dir") === "asc" ? 1 : -1;
@@ -568,11 +569,16 @@ $("side").addEventListener("click", e => { const b = e.target.closest("button");
 $("view").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   state.view = b.dataset.v;
-  if (isSeasonal()) { state.level = "MLB"; state.year = ""; } else stop();
+  if (isSeasonal()) seasonalScope(); else stop();
   refreshOptions(); render();
 });
 $("base").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.base = b.dataset.v; render(); } });
-$("week").addEventListener("input", e => { stop(); state.week = +e.target.value; render(); });
+$("week").addEventListener("input", e => {
+  stop();
+  const d = seasonalData();
+  if (ready(d)) state.wk = d.weeks[+e.target.value][0];
+  render();
+});
 // ▶ steps a week at a time to the end of the season (from opening week again once at the end)
 let timer = null;
 function stop() {
@@ -581,9 +587,15 @@ function stop() {
 }
 $("play").addEventListener("click", () => {
   if (timer) return stop();
-  if (state.week >= NW - 1) { state.week = 0; render(); }
+  const d = seasonalData();
+  if (!ready(d)) return;
+  if (weekIndex(d) >= d.weeks.length - 1) { state.wk = d.weeks[0][0]; render(); }
   $("play").textContent = "❚❚"; $("play").setAttribute("aria-label", "Pause");
-  timer = setInterval(() => { if (state.week >= NW - 1) return stop(); state.week++; render(); }, 650);
+  timer = setInterval(() => {
+    const d = seasonalData(), i = ready(d) ? weekIndex(d) : -1;
+    if (i < 0 || i >= d.weeks.length - 1) return stop();
+    state.wk = d.weeks[i + 1][0]; render();
+  }, 650);
 });
 $("level").addEventListener("change", e => { state.level = e.target.value; state.league = state.team = ""; refreshOptions(); render(); });
 $("year").addEventListener("change", e => { state.year = e.target.value; refreshOptions(); render(); });
@@ -612,14 +624,15 @@ function copyText(text) {
 const CSV_COLS = ["Rk.", "Level", "Year", "Side", "League", "Team", "Org", "Venue", "Games", ...COLORED, "PA"];
 const csvCell = v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
 $("csv").addEventListener("click", () => {
+  const sd = isSeasonal() ? seasonalData() : null, wk = ready(sd) ? sd.weeks[weekIndex(sd)] : null;
   const cols = isSeasonal() ? [...CSV_COLS.slice(0, 3), "Week", "Compared to", ...CSV_COLS.slice(3)] : CSV_COLS;
-  const extra = {"Week": SEAS.weeks[state.week][2], "Compared to": state.base === "week" ? "Same week" : "Season average"};
+  const extra = {"Week": wk ? wk[2] : "", "Compared to": state.base === "week" ? "Same week" : "Season average"};
   const lines = [cols, ...shown.map((r, i) => cols.map(c => c === "Rk." ? i + 1 : c in extra ? extra[c] : r[ci[c]]))];
   const text = lines.map(l => l.map(csvCell).join(",")).join("\r\n") + "\r\n";
   const blob = new Blob(["\ufeff" + text], {type: "text/csv;charset=utf-8"});  // BOM so Excel reads UTF-8
   const year = state.year === ALL ? "all-years" : state.level ? yearOf(state.level) : state.year || "most-recent";
   const name = ["park_factors", year, state.level || "all-levels",
-    isSeasonal() ? `seasonal_wk${SEAS.weeks[state.week][0]}_vs-${state.base === "week" ? "week" : "season"}` : "",
+    wk ? `seasonal_wk${wk[0]}_vs-${state.base === "week" ? "week" : "season"}` : "",
     state.org, state.league, state.team,
     state.side === "All" ? "" : state.side + "HB"].filter(Boolean).join("_").replace(/\+/g, "plus");
   const a = Object.assign(document.createElement("a"), {href: URL.createObjectURL(blob), download: name + ".csv"});
