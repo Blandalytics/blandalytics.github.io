@@ -201,10 +201,11 @@ const TIPS = {
   "Games": "Games at the venue (MLB 2027: the 2027 schedule; other years: completed games that season)",
   "PA": "PAs at the venue and level (past years: that season's; most recent year: every season's)"
 };
-// the Level column only shows on All levels, and Year on All years or when All levels mixes the
-// levels' most recent years
+// the Level column only shows on All levels, Year on All years or when All levels mixes the
+// levels' most recent years, and Org off MLB (where it repeats Team)
 const showCols = () => ["Rk.", ...(state.level ? [] : ["Level"]),
-  ...(state.year === ALL || !(state.level || state.year) ? ["Year"] : []), "League", "Team", "Org", "Venue", "Games", ...COLORED, "PA"];
+  ...(state.year === ALL || !(state.level || state.year) ? ["Year"] : []), "League", "Team",
+  ...(state.level === "MLB" ? [] : ["Org"]), "Venue", "Games", ...COLORED, "PA"];
 const TXT = new Set(["Level", "League", "Team", "Org", "Venue"]);
 
 const ci = Object.fromEntries(DATA.cols.map((c, i) => [c, i]));
