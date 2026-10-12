@@ -827,6 +827,17 @@ pro-rates to its own median games per venue, so short seasons scale down (MLB 20
 sites included, so Las Vegas Ballpark's 6 and Field of Dreams' 1 drop out); every other year
 counts the venue's completed regular-season games that season.
 
+**Neutral sites** are credited to their level. A venue with fewer games at a level that season
+than a tenth of a full home schedule (the same full schedule as the qualifying cutoff: under 8.1
+MLB games, under 7.5 AAA games, and so on) is no club's home. Its Team and Org show the level (MLB,
+AAA, …) instead of the club that was home in those games. Examples: London Stadium, Tokyo Dome,
+Gocheok Sky Dome, Estadio Alfredo Harp Helú, Estadio de Beisbol Monterrey, Hiram Bithorn Stadium,
+Field of Dreams, Rickwood Field, Bristol Motor Speedway, the Little League Classic's Williamsport
+park, and the Athletics' six games a year at Las Vegas Ballpark (which stays LV / ATH at AAA). The
+Blue Jays' 2021 homes, Sahlen Field and TD Ballpark, keep TOR. `build_leaderboard.py` applies
+this (`NEUTRAL_SHARE`), so the CSVs keep StatsAPI's home club. Picking the level as the Org lists
+a level's neutral sites. They are hidden while Qualified parks is on.
+
 The factors come from the projection system's park model: one joint Bayesian fit of every plate
 appearance (MLB 2015–26, the full-season minors 2021–26) with batter, pitcher, league-season,
 home-field and platoon terms, a venue factor that drifts across seasons with breaks at known

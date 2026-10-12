@@ -34,6 +34,9 @@ HOME_GAMES = {"MLB": 81, "AAA": 75, "AA": 69, "A+": 66, "A": 66}  # a full seaso
 # parks with a new name for 2027, applied to the board's MLB rows (the 2027 season); earlier
 # seasons keep the name they had then
 NAMES_2027 = {"Comerica Park": "Fifth Third Park"}
+# a venue with fewer games at a level that season than this share of a full home schedule there
+# is a neutral site, no club's home (London Stadium, Tokyo Dome, Field of Dreams, Rickwood Field, …)
+NEUTRAL_SHARE = 0.1
 
 
 def parse_md(md):
@@ -87,18 +90,38 @@ def seasonal_years():
     return out
 
 
-def min_games(cols, rows):
-    """The qualifying cutoff by level and year: more than 50 of MLB's 81 home games, pro-rated to
-    the level's home schedule. Past seasons take theirs from the median games per venue, so the
-    short ones (MLB 2020, the minors' 2021) scale down."""
+def full_schedule(cols, rows):
+    """(level, year) -> a full season's home games: the level's schedule for its most recent year,
+    else the median games per venue that season, so the short ones (MLB 2020, the minors' 2021)
+    scale down."""
     li, yi, gi = cols.index("Level"), cols.index("Year"), cols.index("Games")
     games = defaultdict(list)
     for r in rows:
         games[(r[li], r[yi])].append(r[gi])
+    return {(lv, yr): HOME_GAMES[lv] if yr == LATEST[lv] else statistics.median(g) for (lv, yr), g in games.items()}
+
+
+def min_games(cols, rows):
+    """The qualifying cutoff by level and year: more than 50 of MLB's 81 home games, pro-rated to
+    the level's full home schedule that season (full_schedule)."""
     out = defaultdict(dict)
-    for (lv, yr), g in sorted(games.items()):
-        full = HOME_GAMES[lv] if yr == LATEST[lv] else statistics.median(g)
+    for (lv, yr), full in sorted(full_schedule(cols, rows).items()):
         out[lv][yr] = round(50 * full / 81, 1)
+    return out
+
+
+def neutral_sites(cols, rows):
+    """Credit neutral sites to their level: a venue with fewer games at a level that season than
+    NEUTRAL_SHARE of a full home schedule (full_schedule) is no club's home, so its Team and Org
+    become the level (MLB, AAA, …) instead of the club that was home in those games. Returns the
+    (level, year, venue) reclassified."""
+    full = full_schedule(cols, rows)
+    li, yi, gi, ti, oi, vi = (cols.index(c) for c in ("Level", "Year", "Games", "Team", "Org", "Venue"))
+    out = set()
+    for r in rows:
+        if r[gi] < NEUTRAL_SHARE * full[(r[li], r[yi])]:
+            r[ti] = r[oi] = r[li]
+            out.add((r[li], r[yi], r[vi]))
     return out
 
 
@@ -117,6 +140,8 @@ def main():
     cols = ["Level", "Year"] + cols[1:]
     rows = [[r[0], LATEST[r[0]]] + r[1:] for r in rows] + load_history(cols)
     mins = min_games(cols, rows)
+    neutral = neutral_sites(cols, rows)
+    print(f"{len(neutral)} neutral park seasons credited to their level")
     cols = [SHOW_AS.get(c, c) for c in cols]
     renamed = {new: f"{old} through 2026" for old, new in NAMES_2027.items()}
     data = json.dumps({"cols": cols, "rows": rows, "latest": LATEST, "minGames": mins, "renamed": renamed,
@@ -297,6 +322,7 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
         <p><b>Scale:</b> 100 is the average park at that level. <b>Park Factor</b> is the wOBA index and <b>R</b> is runs (<a href="https://en.wikipedia.org/wiki/Base_runs">BaseRuns</a>). The other columns are indexes for each outcome: <b>BACON</b> is Batting Average on CONtact (home runs included), <b>wOBACon</b> is wOBA on Contact, and <b>HR p10 / p90</b> factors provide an 80% Confidence Interval for the park's HR true factor. The spread is wider for newer parks or those with recent renovations (Ex: <a href="https://www.mlb.com/news/royals-moving-outfield-walls-at-kauffman-stadium">Kauffman Stadium</a> in 2026).</p>
         <p><b>Colors:</b> centered on 100 and saturated at 90 and 110. Red helps hitters and blue hurts them, so for <b>K</b> the scale is flipped: more strikeouts shade blue.</p>
         <p><b>Model:</b> one joint Bayesian fit of every plate appearance (MLB 2015–26; AAA, AA, A+ and A 2021–26) with batter, pitcher, league-season, home-field and platoon terms, a per-venue factor that drifts across seasons (with breaks for known dimension changes) and a per-venue left/right split. If a park is used across multiple leagues (Ex: Sutter Health Park has hosted both AAA and MLB games), the data from all leagues informs that park factor.</p>
+        <p><b>Neutral sites:</b> a park with fewer games at a level that season than a tenth of a home schedule is no club's home (London Stadium, Tokyo Dome, Estadio Alfredo Harp Helú, Field of Dreams, Rickwood Field, the Little League Classic in Williamsport, …), so its Team and Org show the level instead: MLB, AAA, and so on. Pick that level as the Org to list them. With so few games, they are hidden while Qualified parks is on.</p>
         <p><b>Games:</b> MLB 2027 rows use the 2027 schedule (games at the venue that season, neutral sites included); every other year counts the venue's completed regular-season games that season. <b>Qualified parks</b> hides venues with 50 or fewer games, pro-rated to each level's home schedule, so shortened seasons scale down: <span id="thresholds"></span>. <b>PA</b> is the venue's plate appearances at that level in the data: that season's for past years, and every season's for each level's most recent year.</p>
         <p><b>Seasonal:</b> each level and year's parks week by week: MLB 2015–2027 (2027 on its schedule, the earlier seasons from the games played) and AAA, AA, A+ and A 2021–2026. They come from a second fit of the same model with two curves by date added: each level's own calendar (every park together: cold April air, summer heat, September call-ups) and each park's deviation from it (a curve for its roof type plus its own), one shape per park across all its seasons. Drag the slider or press ▶ to move through the season; switching the year keeps the same point in the calendar. <b>Compared to Season average</b> sets 100 at the level's average park over the whole season, so the factors carry the calendar too (MLB home runs run about 8% below average in early April): how the park played or will play that week. <b>Same week</b> sets 100 at that week's average park, which leaves only the park's own pattern (roofed parks such as American Family Field play relatively better in April, before the summer lift elsewhere). The <b>average</b> row is the league that week against its season average. Past seasons are all batters; each level's most recent year has the LHB/RHB split. Most parks move only a point or two over a season, home runs the most, so this view shows one decimal. A park's seasonal factors average out to about its Full season factor (the two fits can differ by a point).</p>
         <p><b>All levels:</b> every row is still indexed to its own level's average, so a 105 in AA and a 105 in MLB are each 5% above their level, not equal environments. Picking an <b>Org</b> switches to All levels to show the whole system; pick a level after that to narrow it.</p>
