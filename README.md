@@ -758,7 +758,8 @@ and season. Filters for **View** (Full season / Seasonal), **Batter side** (All 
 **Level** (one level or All levels), **Year**, **League** (the level and year's leagues),
 **Team** (the level, year, league and org's clubs) and **Org**, plus **Qualified parks**; it opens
 on MLB 2027, all batters, qualified parks, sorted by Park Factor. Picking an org
-switches Level to All levels, so the whole system shows at once; All levels adds a Level column,
+switches Level to All levels, so the whole system shows at once. The Org column is hidden on MLB,
+where it repeats Team. All levels adds a Level column,
 and every row stays indexed to its own level's average. Any header sorts the table, and
 **Reset filters** goes back to the opening view.
 
