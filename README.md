@@ -820,10 +820,9 @@ hurts them, so K runs the other way (more strikeouts shade blue). The CSVs keep 
 names for two of them: AVG is `H` and K is `SO`.
 
 **Qualified parks** keeps venues with more than 50 games, pro-rated to each row's level's home
-schedule: MLB 50 of 81, AAA 46.3 of 75, AA 42.6 of 69, A+ and A 40.7 of 66. The page shows each
-cutoff in whole games, rounded down: more than 46.3 games keeps the same parks as more than 46. A past season
-pro-rates to its own median games per venue, so short seasons scale down (MLB 2020: more than
-18.5; the minors' 2021: 37 to 40.1). MLB 2027 games are the 2027 schedule's at each venue (neutral
+schedule and rounded to the nearest game: MLB 50 of 81, AAA 46 of 75, AA 43 of 69, A+ and A 41 of
+66. A past season pro-rates to its own median games per venue, so short seasons scale down (MLB
+2020: more than 19; the minors' 2021: 37 to 40). MLB 2027 games are the 2027 schedule's at each venue (neutral
 sites included, so Las Vegas Ballpark's 6 and Field of Dreams' 1 drop out); every other year
 counts the venue's completed regular-season games that season.
 

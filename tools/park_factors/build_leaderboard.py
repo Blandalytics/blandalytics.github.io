@@ -102,11 +102,12 @@ def full_schedule(cols, rows):
 
 
 def min_games(cols, rows):
-    """The qualifying cutoff by level and year: more than 50 of MLB's 81 home games, pro-rated to
-    the level's full home schedule that season (full_schedule)."""
+    """The qualifying cutoff by level and year, in whole games: more than 50 of MLB's 81 home games,
+    pro-rated to the level's full home schedule that season (full_schedule) and rounded to the
+    nearest game, halves up (AAA 46 of 75, AA 43 of 69, A+ and A 41 of 66, MLB 2020 19)."""
     out = defaultdict(dict)
     for (lv, yr), full in sorted(full_schedule(cols, rows).items()):
-        out[lv][yr] = round(50 * full / 81, 1)
+        out[lv][yr] = int(50 * full / 81 + 0.5)
     return out
 
 
@@ -336,11 +337,9 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
 const DATA = __DATA__;
 
 const LEVELS = ["MLB", "AAA", "AA", "A+", "A"];
-// the qualifying cutoff by level and year (50 of MLB's 81 home games, pro-rated; short seasons scale down)
+// the qualifying cutoff by level and year, in whole games (50 of MLB's 81 home games, pro-rated and
+// rounded to the nearest game; short seasons scale down)
 const minGames = (lv, yr) => DATA.minGames[lv][yr];
-// the cutoff as shown: whole games, rounded down (games are whole, so more than 46.3 and more than
-// 46 keep the same parks; rounding 40.7 up to 41 would not)
-const minShown = (lv, yr) => Math.floor(minGames(lv, yr));
 // the year on screen for a level: the one picked, else the level's most recent; "all" is every year
 const ALL = "all";
 const yearOf = lv => state.year && state.year !== ALL ? +state.year : DATA.latest[lv];
@@ -423,8 +422,8 @@ $("level").innerHTML = `<option value="">All levels</option>` + LEVELS.map(l => 
 
 const ORGS = uniq(DATA.rows.map(r => r[ci.Org]));
 fill($("org"), ORGS, "All orgs", "");
-$("thresholds").textContent = LEVELS.map(l => `${l} ${DATA.latest[l]} more than ${minShown(l, DATA.latest[l])}`).join(", ") +
-  `; for example MLB 2020 more than ${minShown("MLB", 2020)} and AAA 2021 more than ${minShown("AAA", 2021)}`;
+$("thresholds").textContent = LEVELS.map(l => `${l} ${DATA.latest[l]} more than ${minGames(l, DATA.latest[l])}`).join(", ") +
+  `; for example MLB 2020 more than ${minGames("MLB", 2020)} and AAA 2021 more than ${minGames("AAA", 2021)}`;
 
 // years: All years on top, then newest first ("" is the level's most recent, and the default);
 // leagues in level order (MLB, IL, PCL, EL, …); teams alphabetically within the level, year, league and org
@@ -481,7 +480,7 @@ function render() {
   });
   const SHOW = showCols();
   $("qual_label").textContent = state.level && state.year !== ALL
-    ? `Qualified parks (more than ${minShown(state.level, yearOf(state.level))} games)`
+    ? `Qualified parks (more than ${minGames(state.level, yearOf(state.level))} games)`
     : `Qualified parks (more than 50 games, pro-rated by ${state.level ? "season" : "level and season"})`;
   const sd = isSeasonal() ? seasonalData() : null, wi = ready(sd) ? weekIndex(sd) : 0;
   const rows = (isSeasonal() ? (ready(sd) ? seasonalRows(sd, wi) : []) : DATA.rows).filter(r =>
