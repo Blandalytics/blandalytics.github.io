@@ -16,6 +16,7 @@ Cards is hidden from all three for now: its tile and links are commented out in 
 | `index.html` | the page: the definition, a section of tiles per sport (Baseball, then Hockey), the menu grouped the same way, and the footer |
 | `assets/css/main.css`, `assets/js/` | the Phantom template, unchanged |
 | `assets/css/blandalytics.css` | the site's palette and font over the template, the tile scrim, the footer wordmark |
+| `shared/share-image.js` | **Share image**, the one export button of every tool that makes a figure: a menu of Copy image and Download PNG (plus a tool's other downloads, such as Release Angles' GIF). Copy image falls back to a download where the browser refuses the clipboard. Each tool hands it a function that draws the PNG and one that names the file; the menu items get ids (`<button id>_copy`, `<button id>_download`) for `grab_app_pngs.py`. Pages load it as `/shared/share-image.js?v=N`: bump N with each change |
 | `images/tile-*.webp` | the tile pictures, one per tool: `tile-NAME.webp` at 900 px and `tile-NAME-720.webp`, offered through `srcset` |
 | `tools/homepage/grab_app_pngs.py` | runs each tool in headless Chrome and saves the PNG from its own export button (the NHL Draft Tool and the Auction Calculator have none, so it screenshots the options table of a mock draft and the top of the values table) |
 | `tools/homepage/make_tiles.py` | crops those exports into square tiles (a figure whose edges carry text, like Batted Ball Charts and Swing Profiles, is padded out with its background instead); `blandalytics.css` holds every tile at 1:1 |
@@ -890,9 +891,9 @@ AAA, AA, A+ and A 2021–2026. A level, a year (or All years), a stat and the we
 view: a chart of that stat (the model line, the actual weeks as dots sized by plate appearances,
 and in All years their average by date) and a table of every stat by week (Model or Actual,
 colored as on Park Factors). **Share image** copies or downloads the chart on screen as a
-900 × 900 PNG in the homepage tile's style (title, Pitcher List Stats wordmark, key and
-"100 = <level> Season Average"), drawn on a canvas in the browser. Where the browser refuses
-the clipboard, Copy image downloads the PNG instead.
+900 × 900 PNG in the homepage tile's style (the title "<level> <metric> Factor, by Week", the
+years, the Pitcher List Stats wordmark, the key and "100 = <level> Season Average"), drawn on a
+canvas in the browser.
 
 | file | role |
 |---|---|
