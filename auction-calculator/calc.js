@@ -559,51 +559,56 @@ function lockSpecOf(c, bare) {
 
 // How a league lists a player who hits and pitches (by MLBAM id, a row in each file): as two
 // players (split); as one who fills a hitter and a pitcher spot at once, both lines counting
-// (simultaneous); or as one in one spot, hitter or pitcher chosen each day or each week
-export const TWO_WAY_MODES = ["split", "simultaneous", "daily", "weekly"];
-const SEASON_DAYS = 182, OFF_DAYS = 20, GAMES = 162, WEEKS = 26;
-// A week's team games: 7 days of a 182-day season with 20 off days
-const WEEK_GAMES = Array.from({ length: 8 }, (_, k) => (choose(GAMES, k) * choose(OFF_DAYS, 7 - k)) / choose(SEASON_DAYS, 7));
-// A starter's weeks, as [chance, team games, his starts]: a turn every 6 team games (5 when he
-// projects for more than 27 starts) from a random start, with turns skipped (rest, innings
-// limits) so the season comes to his projected starts. The spec's schedule simulation, in closed
-// form: about 6% of weeks have 2 starts in a 6-man rotation
-function startWeeks(starts) {
+// (simultaneous); or as one in one spot (oneslot), hitter or pitcher switched whenever lineups
+// lock: each day, each Monday and Friday, or each week
+export const TWO_WAY_MODES = ["split", "simultaneous", "oneslot"];
+const SEASON_DAYS = 182, OFF_DAYS = 20, GAMES = 162;
+// A lock window's team games: L days of a 182-day season with 20 off days
+const windowGames = (L) => Array.from({ length: L + 1 }, (_, k) => (L - k <= OFF_DAYS ? (choose(GAMES, k) * choose(OFF_DAYS, L - k)) / choose(SEASON_DAYS, L) : 0));
+// A starter's lock windows of L days, as [chance, team games, his starts]: a turn every 6 team
+// games (5 when he projects for more than 27 starts) from a random start, with turns skipped
+// (rest, innings limits) so the season comes to his projected starts. The spec's schedule
+// simulation, in closed form: about 6% of weeks have 2 starts in a 6-man rotation
+function startWindows(starts, L) {
   const r = starts <= GAMES / 6 ? 6 : 5, keep = Math.min(1, (starts * r) / GAMES);
-  const weeks = [];
-  WEEK_GAMES.forEach((pg, g) => {
+  const windows = [];
+  windowGames(L).forEach((pg, g) => {
     const base = Math.floor(g / r), frac = g / r - base;
     for (const [turns, pt] of [[base, 1 - frac], [base + 1, frac]]) {
-      if (pt <= 0) continue;
-      for (let n = 0; n <= turns; n++) weeks.push([pg * pt * choose(turns, n) * keep ** n * (1 - keep) ** (turns - n), g, n]);
+      if (pt <= 0 || pg <= 0) continue;
+      for (let n = 0; n <= turns; n++) windows.push([pg * pt * choose(turns, n) * keep ** n * (1 - keep) ** (turns - n), g, n]);
     }
   });
-  return weeks;
+  return windows;
 }
 /**
  * A two-way player's SGP above replacement from his hitting (H) and his pitching (P, each above
- * its own replacement) and his projected starts, as his league uses him: both lines at once; one
- * spot, chosen daily (he pitches his start days when a start beats a day's hitting, and loses
- * those days' hitting, about 15%); or chosen weekly (each week, its hitting or its starts,
- * whichever is worth more). The roster spot he saves (b) adds nothing: a spot's best bench use
- * is a replacement player, 0 above replacement here. Split leagues value two players (NaN)
+ * its own replacement), his projected starts and the league's lineup lock, as his league uses
+ * him: both lines at once (simultaneous); or one spot (oneslot), hitter or pitcher for each lock
+ * window, whichever the window is worth more as: its hitting, or its starts. Under daily locks
+ * that's the spec's one-slot daily rule (he pitches his start days when a start beats a day's
+ * hitting, and loses those days' hitting, about 15%); under weekly ones its one-slot weekly rule;
+ * Monday/Friday locks switch twice a week. The roster spot he saves (b) adds nothing: a spot's
+ * best bench use is a replacement player, 0 above replacement here. Split leagues value two
+ * players (NaN)
  */
-export function twoWayValue(H, P, mode, starts) {
+export function twoWayValue(H, P, mode, starts, lock = "daily") {
   if (mode === "split") return NaN;
-  const { hit, pitch } = twoWayShares(H, P, mode, starts);
+  const { hit, pitch } = twoWayShares(H, P, mode, starts, lock);
   return hit * H + pitch * P;
 }
 /** The same as the shares of his season hitting and pitching he's used for (value = hit·H + pitch·P) */
-export function twoWayShares(H, P, mode, starts) {
+export function twoWayShares(H, P, mode, starts, lock = "daily") {
   if (mode === "simultaneous") return H > 0 || P > 0 ? { hit: H > 0 ? 1 : 0, pitch: P > 0 ? 1 : 0 } : H >= P ? { hit: 1, pitch: 0 } : { hit: 0, pitch: 1 };
-  if (!(starts > 0) || (mode !== "daily" && mode !== "weekly")) return { hit: 1, pitch: 0 };
-  if (mode === "daily") return P / starts > H / GAMES ? { hit: 1 - starts / GAMES, pitch: 1 } : { hit: 1, pitch: 0 };
-  const weeks = startWeeks(starts);
-  const En = weeks.reduce((a, [q, , n]) => a + q * n, 0), perStart = P / (WEEKS * En);
+  if (!(starts > 0) || mode !== "oneslot") return { hit: 1, pitch: 0 };
+  const lengths = LOCKS[lock] || LOCKS.daily;
+  const count = SEASON_DAYS / lengths.reduce((a, b) => a + b, 0);   // windows of each length a season
+  const all = lengths.map((L) => startWindows(starts, L));
+  const season = count * all.flat().reduce((a, [q, , n]) => a + q * n, 0), perStart = P / season;
   let hit = 0, pitch = 0;
-  for (const [q, g, n] of weeks) {
-    if ((H * g) / GAMES >= n * perStart) hit += (WEEKS * q * g) / GAMES;
-    else pitch += (q * n) / En;
+  for (const windows of all) for (const [q, g, n] of windows) {
+    if ((H * g) / GAMES >= n * perStart) hit += (count * q * g) / GAMES;
+    else pitch += (count * q * n) / season;
   }
   return { hit, pitch };
 }
@@ -857,7 +862,8 @@ function draftPool(value, posStrings, caps, types, benchSlots) {
  *   minBid, budget, hitterShare (0-1: the hitters' share of the dollars above the min bids;
  *   null for the split the values make), curve (1 or more: the dollar curve's exponent, 1 for
  *   a straight line), lock ("daily" | "split" | "weekly": how often lineups are set),
- *   twoWay ("split" | "simultaneous" | "daily" | "weekly": how two-way players are used),
+ *   twoWay ("split" | "simultaneous" | "oneslot": how two-way players are used; one slot
+ *   switches at each lineup lock),
  *   phi, ptCV (noise where the projections have no percentiles), fillPT, specialists,
  *   hitterCats, pitcherCats (Categories), hitterPoints, pitcherPoints ([[cat, pts]], Points)
  * Exactly the players on legal rosters (lineups, plus the bench unless it's minimized) are
@@ -943,14 +949,14 @@ export function auctionValues(H, P, s) {
       hRate: rateOf(hOver, hCurve, hN, share * spare), pRate: rateOf(pOver, pCurve, pN, (1 - share) * spare) };
   };
 
-  // Two-way players: in a one-spot league (chosen daily or weekly) he's in the hitter pool at his
+  // Two-way players: in a one-spot league (switched at each lineup lock) he's in the hitter pool at his
   // combined value, and his pitcher row leaves the pitcher pool, so each side still drafts its
   // spots and spends its dollars. His pitching counts at the pitchers' price, since the hitter
   // split can make a pitcher's SGP cost less than a hitter's. Simultaneous leagues value both
   // rows on their own sides, then show them as one
   const twoWay = s.twoWay ?? "split";
   const pairs = twoWay === "split" ? [] : twoWayPairs(H, P);
-  const oneSpot = twoWay === "daily" || twoWay === "weekly";
+  const oneSpot = twoWay === "oneslot";
   h.twAdj = new Array(H.n).fill(0);
   const before = pairs.length && oneSpot ? price() : null;
   const ratio = before && before.hRate.perSGP > 0 ? before.pRate.perSGP / before.hRate.perSGP : 1;
@@ -958,7 +964,7 @@ export function auctionValues(H, P, s) {
     t.H = h.sgpar[t.ih]; t.P = p.sgpar[t.ip]; t.starts = startsOf(P, t.ip);
     if (!oneSpot || !Number.isFinite(t.H) || !Number.isFinite(t.P)) continue;
     // (his days or weeks are chosen in those same units, so he's never worth less than either role)
-    Object.assign(t, twoWayShares(t.H, t.P * ratio, twoWay, t.starts));
+    Object.assign(t, twoWayShares(t.H, t.P * ratio, twoWay, t.starts, s.lock ?? "daily"));
     const V = t.hit * t.H + t.pitch * t.P * ratio;
     h.twAdj[t.ih] = V - t.H;
     h.sgpar[t.ih] = V;
@@ -1035,7 +1041,7 @@ export function auctionValues(H, P, s) {
   };
   for (const t of pairs) {
     const hp = rows.h[t.ih], pp = rows.p[t.ip];
-    hp.twoWay = { mode: twoWay, pos: pp.pos, stats: pp.stats, H: t.H, P: t.P, starts: t.starts, hit: t.hit ?? 1, pitch: t.pitch ?? 0, priceRatio: ratio,
+    hp.twoWay = { mode: twoWay, lock: s.lock ?? "daily", pos: pp.pos, stats: pp.stats, H: t.H, P: t.P, starts: t.starts, hit: t.hit ?? 1, pitch: t.pitch ?? 0, priceRatio: ratio,
       hPos: hp.pos, hValue: hp.value, hDrafted: hp.drafted, pDrafted: false, value: 0 };
     hp.pos = `${hp.pos},${pp.pos}`;
     if (twoWay === "simultaneous" && pp.drafted) {
