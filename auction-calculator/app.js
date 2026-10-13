@@ -1,7 +1,8 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=14";
+import * as C from "./calc.js?v=15";
+import * as R from "./risk.js?v=1";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -10,6 +11,11 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const params = new URLSearchParams(location.search);
 const DATA = new URL(params.get("data") || "https://data.blandalytics.com/projections/", location.href).href;
 const FILES = { h: "hitters_auction_ev.csv", p: "pitchers_auction_ev.csv" };
+// The risk files (each player's simulation draws, for the risk-aware $) sit beside the projections,
+// one per side and basis; ?riskdata=<base> reads them from somewhere else (a local folder's server)
+const RISK_DATA = new URL(params.get("riskdata") || DATA, location.href).href.replace(/\/?$/, "/");
+const RISK_FILES = { h: FILES.h.replace("_auction", "_risk").replace(/\.csv$/, ".bin"), p: FILES.p.replace("_auction", "_risk").replace(/\.csv$/, ".bin") };
+const RISK_BASIS = FILES.h.includes("_ev") ? "ev" : "healthy";
 const STORE = "auction-calculator:v1";
 const VIEW_STORE = "auction-calculator:view";
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
@@ -68,6 +74,28 @@ async function loadDefaults() {
     $("proj").open = true;   // the uploads are the way on from here
   }
   renderSources();
+  update();
+}
+
+// The risk files load only once the risk-aware $ is switched on
+const risk = { state: "idle", files: null, error: null };
+async function loadRisk() {
+  if (risk.state !== "idle") return;
+  risk.state = "loading";
+  try {
+    const [h, p] = await Promise.all(["h", "p"].map(async (k) => {
+      const r = await fetch(RISK_DATA + RISK_FILES[k], { cache: "default" });
+      if (!r.ok) throw new Error(`${RISK_FILES[k]}: HTTP ${r.status}`);
+      const file = R.parseRiskFile(await r.arrayBuffer());
+      if (file.side !== k || file.head.basis !== RISK_BASIS) throw new Error(`${RISK_FILES[k]} is for ${file.side}, basis ${file.head.basis}`);
+      return file;
+    }));
+    risk.files = { h, p };
+    risk.state = "ready";
+  } catch (e) {
+    risk.state = "error";
+    risk.error = e.message || String(e);
+  }
   update();
 }
 
@@ -260,10 +288,32 @@ function readSettings() {
   return s;
 }
 
+// ---- the risk-aware $ ------------------------------------------------------------------------
+
+const RISK_INPUTS = ["risk_payout", "risk_playoffs", "risk_txn", "risk_il"];
+const riskOn = () => $("risk_on").checked;
+function showRisk() {
+  $("risk_fields").hidden = !riskOn();
+  $("risk_playoffs_field").hidden = $("risk_payout").value !== "playoffs";
+}
+$("risk_on").addEventListener("change", showRisk);
+$("risk_payout").addEventListener("change", showRisk);
+
+// Read only while the risk-aware $ is on, so its settings never stop the calculator's own values
+function readRiskSettings(teams) {
+  const n = (id) => Number($(id).value);
+  const whole = (id, lo, hi) => $(id).value !== "" && Number.isInteger(n(id)) && n(id) >= lo && n(id) <= hi;
+  if (!whole("risk_il", 0, 10)) return { error: "IL slots must be a whole number from 0 to 10" };
+  const payout = $("risk_payout").value;
+  if (payout === "playoffs" && !whole("risk_playoffs", 1, teams - 1)) return { error: `Playoff teams must be a whole number from 1 to ${teams - 1}` };
+  return { payout, playoffTeams: n("risk_playoffs"), transactions: $("risk_txn").value, ilSlots: n("risk_il") };
+}
+
 function save() {
   const form = { style: style(), cats, points, split: manualSplit };
   for (const id of [...NUM_INPUTS, ...SELECTS]) form[id] = $(id).value;
   for (const id of CHECKS) form[id] = $(id).checked;
+  form.risk = { on: riskOn(), ...Object.fromEntries(RISK_INPUTS.map((id) => [id, $(id).value])) };
   try { localStorage.setItem(STORE, JSON.stringify(form)); } catch { /* private mode */ }
 }
 
@@ -280,6 +330,14 @@ function restore() {
   if (form.cats?.h && form.cats?.p) cats = form.cats;
   if (Array.isArray(form.points?.h) && Array.isArray(form.points?.p)) points = form.points;
   manualSplit = typeof form.split === "string" ? form.split : defaultSplit();
+  if (form.risk && typeof form.risk === "object") {
+    $("risk_on").checked = form.risk.on === true;
+    for (const id of RISK_INPUTS) {
+      const v = form.risk[id];
+      if (typeof v !== "string") continue;
+      if ($(id).tagName === "SELECT" ? [...$(id).options].some((o) => o.value === v) : true) $(id).value = v;
+    }
+  }
 }
 
 // ---- lineup slots ---------------------------------------------------------------------------
@@ -393,7 +451,12 @@ function update() {
     if ([...points.h, ...points.p].some(([, v]) => !Number.isFinite(v))) return fail("Every scored category needs a point value.");
   }
 
-  result = C.auctionValues(H, P, s);
+  // The risk-aware $ (off by default): the calculator keeps its workings for it, and risk.js prices
+  // each player's simulation draws in them. With it off, nothing here changes the values
+  const rs = riskOn() ? readRiskSettings(s.teams) : null;
+  const ownData = !uploads.h && !uploads.p;
+  const useRisk = !!rs && !rs.error && ownData && risk.state === "ready";
+  result = C.auctionValues(H, P, useRisk ? { ...s, debug: true } : s);
   result.settings = s;
   const noTeams = (t) => t.data.Team.every((x) => x === null);
   const warnings = [];
@@ -401,6 +464,22 @@ function update() {
     warnings.push("Projections without a Team column can't be filtered to AL/NL-Only; that side is priced over every player.");
   }
   if (!result.converged) warnings.push("The values didn't settle in 20 passes; these use the mean of the last two.");
+  if (useRisk) {
+    try {
+      result.risk = R.applyRisk(C, result, H, P, s, risk.files, rs);
+      warnings.push(...result.risk.warnings);
+      if (s.style === "Points") warnings.push("Points leagues: the risk-aware $ has the option value only (the payout's value of variance needs the categories' team totals).");
+    } catch (e) {
+      result.risk = null;
+      warnings.push(`The risk-aware $ failed: ${e.message || e}`);
+    }
+    delete result.debug;
+  } else if (rs) {
+    if (rs.error) warnings.push(`Risk: ${rs.error}.`);
+    else if (!ownData) warnings.push("The risk-aware $ needs the default projections: its draws come from their simulation.");
+    else if (risk.state === "error") warnings.push(`The risk files didn't load (${risk.error}).`);
+    else { warnings.push("Loading the risk files…"); loadRisk(); }
+  }
   status(warnings.join(" "), "warn");
   if (autoSplit()) showSplit();
   showLock();
@@ -457,6 +536,27 @@ const INFO = [
 const SLOT_COL = { key: "slot", label: "Slot", get: (p) => p.slot ?? "", cell: (p) => esc(p.slot ?? ""), cls: "l muted", text: true };
 const POINTS_COL = { key: "points", label: "Points", get: (p) => p.points, cell: (p) => fmt("", p.points) };
 const VALUE_COL = { key: "value", label: "Auction $", frozen: true, get: (p) => p.value, cell: (p) => money(p.value), cls: (p) => "val" + (p.value < result.settings.minBid ? " neg" : "") };
+// The risk-aware $ and its move from the Auction $ (with the Risk setting on)
+const riskValue = (p) => (p.risk ? p.risk.value : NaN);
+const sgp = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2);
+function riskTip(p) {
+  const r = p.risk;
+  if (!r) return "";
+  if (!r.draws) return `No simulation draws: his calculator value, priced with the others' risk-aware values (${money(r.value)})`;
+  const parts = [`value ${r.mu.toFixed(2)}`, `option ${sgp(r.option)} (a bust dropped after ${Math.round(100 * r.lambda)}% of the season)`];
+  if (Math.abs(r.payout) >= 0.005) parts.push(`payout ${sgp(r.payout)} (season SD ${r.sd.toFixed(2)})`);
+  if (r.il >= 0.005) parts.push(`IL ${sgp(-r.il)}`);
+  return `Risk-aware ${money(r.value)} against ${money(p.value)}. In SGP above replacement: ${parts.join(", ")}`
+    + `${r.drafted ? "" : ". Not on a drafted roster at these values"}`;
+}
+const RISK_COL = {
+  key: "risk", label: "Risk $", get: riskValue, cell: (p) => money(riskValue(p)), cls: (p) => "risk" + (riskValue(p) < result.settings.minBid ? " neg" : ""), tip: riskTip,
+  title: "The risk-aware dollars: each player's value plus the option to drop him for a free agent if he busts, plus what his variance is worth for the payout, less an IL cost, priced over the same roster spots and budget. A beta",
+};
+const RISK_MOVE_COL = {
+  key: "riskmove", label: "Risk ±", get: (p) => riskValue(p) - p.value, cell: (p) => signed(riskValue(p) - p.value), cls: (p) => signCls(riskValue(p) - p.value),
+  title: "Risk $ less Auction $",
+};
 
 // ---- the value breakdown -------------------------------------------------------------------
 
@@ -493,7 +593,7 @@ const GROUPS = { h: "Hitting", p: "Pitching", v: "Value", h$: "Hitting $", p$: "
 
 function columns() {
   // The dollars sit by the name, so they're on screen on a phone too
-  const info = [INFO[0], INFO[1], VALUE_COL, INFO[2], INFO[3], SLOT_COL,
+  const info = [INFO[0], INFO[1], VALUE_COL, ...(result.risk ? [RISK_COL, RISK_MOVE_COL] : []), INFO[2], INFO[3], SLOT_COL,
     ...(result.settings.style === "Points" ? [POINTS_COL] : [])];
   const stat = (type, cat, first) => ({
     key: `${type}:${cat}`, label: cat, group: type, first,
@@ -648,7 +748,8 @@ $("download").onclick = () => {
   const both = new Set(hitterCols.filter((c) => pitcherCols.includes(c)));
   const name = (c, side) => (byValue ? c + " $" : c) + (both.has(c) ? "_" + side : "");
   const extra = byValue ? breakdownColumns().filter((c) => c.group === "v") : [];
-  const head = ["Rank", "Name", "Team", "Y! Pos", "Slot", ...(settings.style === "Points" ? ["Points"] : []), "Value",
+  const withRisk = !!result.risk;
+  const head = ["Rank", "Name", "Team", "Y! Pos", "Slot", ...(settings.style === "Points" ? ["Points"] : []), "Value", ...(withRisk ? ["Risk $"] : []),
     ...extra.map((c) => c.label), ...hitterCols.map((c) => name(c, "h")), ...pitcherCols.map((c) => name(c, "p"))];
   const num = (v, d) => (v === undefined || Number.isNaN(v) ? "" : d === undefined ? String(v) : v.toFixed(d));
   const cell = (v) => (/[",\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v);
@@ -656,6 +757,7 @@ $("download").onclick = () => {
   const lines = [head.map(cell).join(",")];
   for (const p of players) {
     lines.push([num(p.rank), p.name, p.team, p.pos, p.slot ?? "", ...(settings.style === "Points" ? [num(p.points, 2)] : []), num(p.value, 2),
+      ...(withRisk ? [num(riskValue(p), 2)] : []),
       ...extra.map((c) => num(c.get(p), 2)),
       ...hitterCols.map((c) => sideValue(p, "h", c)),
       ...pitcherCols.map((c) => sideValue(p, "p", c))].map((v) => cell(String(v))).join(","));
@@ -717,6 +819,7 @@ document.querySelectorAll("button.tip").forEach((b) => b.setAttribute("aria-labe
 restore();
 showSplit();
 showFormat();
+showRisk();
 showSlotTotals();
 showPreset();
 renderSources();

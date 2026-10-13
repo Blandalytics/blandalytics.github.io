@@ -1252,15 +1252,50 @@ projections and schedules, so the capture factors stand in; a rotation-size sett
 chances and the capture factors assume 5-man rotations); innings or starts caps, which bind even
 daily; and the optional H2H daily-lock haircut (Task 5.5).
 Not done from the procedure: the draft-state weights (Task 12, re-weighting categories for one
-team during a live draft), risk as an option value, and the history check against real standings
-(Task 13.4). The dollar curve's γ = 1.05 is the handoff's "mildly convex", not fit to auction
-prices. The method is checked by simulation only, not against real
+team during a live draft) and the history check against real standings (Task 13.4); risk as an
+option value is the beta below. The dollar curve's γ = 1.05 is the handoff's "mildly convex", not
+fit to auction prices. The method is checked by simulation only, not against real
 league standings.
+
+**Risk-aware $ (beta, off by default; `risk.js`).** The risk-aware valuation spec
+(`risk-aware-valuation-parameters.md` in the projections repository; its plan's steps R6, R7 and
+R9). With **Risk (beta) › Risk-aware $** on, the page loads each side's risk file beside the
+projections (`hitters_risk_ev.bin`, `pitchers_risk_ev.bin`: every player's season as 50 draws from
+the projections' simulation, one from each 2% band of his outcomes; not in the bucket yet, so for
+now `?riskdata=<base>`, or `?data=<base>` for both, points at a local server) and values every draw exactly as it values his projection, in the finished
+run's frame (weights, pool rates, the playing-time fill for his role, the slot he's valued at, the
+specialist correction, a lineup lock's share): V, SGP above replacement, per draw. Then
+`Δ = E[max(V, r)] − E[V]` over the draws is the option to drop a bust for a free agent (r, the
+floor, is his slot's replacement level, 0 SGP, plus an in-season premium table that's empty for
+now), and `EffValue = μ + (1 − λ)·Δ` with μ the calculator's own value (the draws' mean V sits
+$2–4 above μ for hitters on the expected-value basis, from the convexity of the playing-time fill,
+so the option is an increment over μ rather than `E[max(V, r)]` itself); λ, the share of the
+season a bust plays before it shows, is the spec's placeholder (hitters 0.25, pitchers 0.125),
+plus the transaction delay (2, 5 or 14 days). `Var_eff = (λσ)² + (1 − λ)²·Var[max(V, r)]`. The
+**Payout** sets the target H for an average team before the draft: the expected total of the
+winner, or of the last playoff team, simulated from the calculator's team-total model (roto:
+standings points by rank, where every team's rank is uniform whatever σ_k, so M = K(N + 1)/2 and
+S² = K(N² − 1)/12; head-to-head: a round robin of weekly matchups, each week's total its draft
+strength / W plus a week's luck ν_k / W, as the H2H weights assume, the record its category wins;
+all-play the same against everyone). `CE = EffValue − (z / 2S)·Var_eff` with `z = (M − H)/S`, or
+the certain value with the exact probability gain when `√Var_eff > 0.4·S`. **IL slots**: with a
+team's IL slots all taken (Poisson, from the drafted players' extended lost time: draws a quarter or
+more below their 75th percentile), a player's extended lost time costs a bench spot's price, the min
+bid. The **Risk $** column is CE priced as the calculator prices SGP: the drafted players chosen by
+CE over the same slots and bench, the same budget, split and curve, so it spends exactly the same
+dollars on exactly as many roster spots. Points leagues get the option value only. In the default
+league on the 2027 test simulation the largest moves are about ±$5: high-variance SPs gain
+(Misiorowski +$4.25), low-variance closers lose (their draws carry no preseason role risk yet).
+Not done: the spread factor, λ and the in-season premium are placeholders (all 1, the spec's
+values, and 0) until the backtests fit them; no correlation between players; no keeper horizon;
+no draft mode (a separate step). Turned off, the page's values are byte-for-byte what they were.
 
 | file | role |
 |---|---|
 | `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`), the player pool, the start z-scores and points, the SGP passes (`valueSide`), replacement by lineup slot (`positionReplacement`, with a span and per category), the drafted players, dollars and value breakdown (`auctionValues`), rank; no DOM, so Node runs it too |
-| `auction-calculator/index.html`, `app.js` | the page: settings and the league formats (`PRESETS`), uploads (UTF-8 or Windows-1252), the scoring controls, the table, the CSV |
+| `auction-calculator/index.html`, `app.js` | the page: settings and the league formats (`PRESETS`), uploads (UTF-8 or Windows-1252), the scoring controls, the table, the CSV; with the Risk setting on, the risk files and the Risk $ columns |
+| `auction-calculator/risk.js` | the risk-aware $: the risk file's reader, each draw valued in the calculator's frame (`lineValues`), the option value, the objective (`objective`, simulated), CE and its pricing (`applyRisk`), and the spec's section 9 formulas; the placeholder tables (`SPREAD`, `LAMBDA`, `R_PREMIUM`, `TRANSACTIONS`); no DOM |
+| `tools/auction_calculator/risk_checks.mjs`, `risk_ref.py` | the spec's section 7 checks; parity with its section 9 reference code in Python (`risk_ref.py`, or the spec bundle's `risk_reference.py` with `--ref`); that `risk.js` values every projection line exactly as `calc.js` does and that the Risk $ spends the same dollars on the same roster spots, over 51 leagues; that the calculator's output is the same with risk's hook on or off (and as an older `calc.js` with `--baseline`); the risk files against the CSVs; and an end-to-end run with the 15 largest moves and Δ by $ tier (`--csv` writes every player's numbers) |
 | `tools/auction_calculator/run_ref.py` | runs `auction_calc.py` headless through a stub `streamlit` (`stub/`), on local CSVs with settings from `ST_OVERRIDES`, and prints every player's score (its `unadjusted_value`) |
 | `tools/auction_calculator/compare.mjs` | scores the same CSVs and settings with `calc.js` and checks every player's start value against the script's |
 | `tools/auction_calculator/sgp_dump.mjs`, `sgp_check.py` | dumps one league's last pass and recomputes it independently in Python (numpy, scipy): pool rates and rate-stat counts from the raw CSVs, tier variance, noise, G, SGP, the specialist curve with the procedure's reference code, and the drafted pool against `linear_sum_assignment`; under a lineup lock, the chance the SP spots bind by scipy's binomial, each SP's capture factor from Table 9.2, and the lock's weights on the pool rates, the draft variance, the noise and SGP above replacement |
@@ -1282,6 +1317,7 @@ python tools/auction_calculator/sgp_check.py hitters_auction_ev.csv pitchers_auc
 node tools/auction_calculator/sgp_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
 node tools/auction_calculator/invariants.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
 node tools/auction_calculator/locks_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
+node tools/auction_calculator/risk_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv hitters_risk_ev.bin pitchers_risk_ev.bin
 ```
 
 To update the projections, upload new `hitters_auction_ev.csv` / `pitchers_auction_ev.csv` to the
@@ -1289,7 +1325,7 @@ bucket's `projections/` folder with the same columns (`Name`, `MLBAMID`, `Team`,
 the stats, and the `<stat>_p10` / `<stat>_p90` percentiles the season's luck is read from). The page shows how many players each default file has, not where
 it comes from. The zone caches them for four hours; purge their URLs to show them sooner. After
 any change to the JavaScript, bump the `?v=` on the script tag in `index.html` and on `app.js`'s
-import of `calc.js`.
+imports of `calc.js` and `risk.js` (`risk.js` imports nothing: `app.js` hands it `calc.js`).
 
 ## NHL Draft Tool
 

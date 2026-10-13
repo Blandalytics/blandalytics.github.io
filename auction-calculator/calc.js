@@ -487,8 +487,8 @@ function sumCols(T, terms) {
   return out;
 }
 
-/** How one category turns a player's projection into the count he adds to a team */
-function categorySpec(T, side, cat, points) {
+/** How one category turns a player's projection into the count he adds to a team (risk.js reads simulation draws with it too) */
+export function categorySpec(T, side, cat, points) {
   const sd = percentileSd(T, cat);
   const nums = (col) => T.data[col].map((v) => (Number.isNaN(v) ? 0 : v));
   if (points !== undefined) {
@@ -627,7 +627,7 @@ function twoWayPairs(H, P) {
 const startsOf = (P, i) => (isNumeric(P, "GS") && P.data.GS[i] > 0 ? P.data.GS[i] : P.data.IP[i] / 5.5);
 
 /** Each player's role, for filling his missing playing time: C or H; SP or RP (or P) */
-function rolesOf(T, side) {
+export function rolesOf(T, side) {
   if (side === "h") return T.data["Y! Pos"].map((p) => (tokensOf(p).includes("C") ? "C" : "H"));
   const pos = T.data["Y! Pos"], gs = isNumeric(T, "GS") ? T.data.GS : null, g = isNumeric(T, "G") ? T.data.G : null;
   return T.data.IP.map((_, i) => {
@@ -1085,8 +1085,13 @@ export function auctionValues(H, P, s) {
     twoWay: { mode: twoWay, players: pairs.map((t) => rows.h[t.ih].name) },
     iterations: { h: h.iterations, p: p.iterations }, converged: h.converged && p.converged,
     fillTargets: { h: h.targets, p: p.targets },
-    // the last pass's workings, for tools/auction_calculator/sgp_check.py
-    debug: s.debug ? { h, p } : undefined,
+    // the last pass's workings, for tools/auction_calculator/sgp_check.py, and the pricing that
+    // risk.js prices other values with (each side's drafted slots, last player, curve and rate, and
+    // the slots, bench and positions its drafted players are chosen by)
+    debug: s.debug ? { h, p, pricing: {
+      h: { slot: hSlot, base: hBase, ...hRate, caps: hCaps, bench: benchH, pos: hPos, types: SLOT_TYPES },
+      p: { slot: pSlot, base: pBase, ...pRate, caps: pCaps, bench: s.teams * bench - benchH, pos: pPos, types: PITCHER_SLOT_TYPES },
+      spare, share, gamma } } : undefined,
   };
 }
 
