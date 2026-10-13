@@ -246,11 +246,13 @@ function tileStep(range) {
   for (const s of [1, 2, 4, 5, 10, 20, 25, 50]) if (range / s <= 5) return s;
   return 100;
 }
+// the image's title: "<level> <metric> Factor, by Week"
+const TITLE_NAMES = {R: "Run"};
 const yearLabel = ys => (state.year === ALL ? `${ys[ys.length - 1]}–${ys[0]}` : yearShown() === 2027 ? "2027 Schedule" : String(yearShown()));
 const fileName = () => `league_calendar_${state.level.replace("+", "plus")}_${state.year === ALL ? "all_years" : yearShown()}_${state.stat}.png`;
 
 async function tileBlob() {
-  const s = cur(), c = si(), all = state.year === ALL, name = NAMES[state.stat] || state.stat;
+  const s = cur(), c = si(), all = state.year === ALL;
   await Promise.all(["700 36px", "700 19px", "400 21px", "400 17px", "400 16px", "400 15px"].map(f => document.fonts.load(`${f} "DM Sans"`)));
   const logo = await loadLogo();
   const {W, L, R, T, B} = TILE;
@@ -281,10 +283,10 @@ async function tileBlob() {
   // title, subtitle, wordmark
   g.font = '700 36px "DM Sans"';
   g.fillStyle = TILE.cyan;
-  g.fillText(`${state.level} League Calendar`, 90, 64);
+  g.fillText(`${state.level} ${TITLE_NAMES[state.stat] || state.stat} Factor, by Week`, 90, 64);
   g.font = '400 21px "DM Sans"';
   g.fillStyle = TILE.sub;
-  g.fillText(`${name} by Week, ${yearLabel(ys.length ? ys : [yearShown()])}`, 90, 100);
+  g.fillText(yearLabel(ys.length ? ys : [yearShown()]), 90, 100);
   g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
   // the grid, 100 brighter, and the months
   g.font = '400 17px "DM Sans"';
@@ -362,61 +364,8 @@ async function tileBlob() {
   g.fillText(`100 = ${state.level} Season Average`, 90, 871);
   return new Promise(res => cv.toBlob(res, "image/png"));
 }
-function save(blob, name) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
-// Share image: a menu of Copy image and Download PNG. The ClipboardItem is made in the click
-// itself, around the promise of the image, so the copy keeps the click's permission while the
-// image is drawn (Safari insists on it); where the clipboard is refused, the PNG downloads.
-const menu = $("share_menu"), SHARE = "Share image ▾";
-function closeMenu() {
-  menu.hidden = true;
-  $("share").setAttribute("aria-expanded", "false");
-}
-$("share").addEventListener("click", () => {
-  const open = menu.hidden;
-  menu.hidden = !open;
-  $("share").setAttribute("aria-expanded", String(open));
-  if (open) menu.querySelector("button").focus();
-});
-document.addEventListener("click", e => { if (!menu.hidden && !e.target.closest(".share")) closeMenu(); });
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape" && !menu.hidden) { closeMenu(); $("share").focus(); }
-});
-menu.addEventListener("click", async e => {
-  const b = e.target.closest("button[data-act]");
-  if (!b || !D) return;
-  const btn = $("share"), blob = tileBlob();
-  closeMenu();
-  btn.disabled = true;
-  try {
-    if (b.dataset.act === "copy") {
-      try {
-        await navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
-        btn.textContent = "Copied";
-      } catch (err) {
-        console.error(err);
-        save(await blob, fileName());
-        btn.textContent = "Downloaded (no clipboard here)";
-      }
-    } else {
-      save(await blob, fileName());
-      btn.textContent = "Downloaded";
-    }
-  } catch (err) {
-    console.error(err);
-    btn.textContent = "Could not make the image";
-  } finally {
-    btn.disabled = false;
-    setTimeout(() => { btn.textContent = SHARE; }, 1600);
-  }
-});
+// Share image (shared/share-image.js): copy or download that image
+ShareImage.image($("share"), tileBlob, fileName);
 
 // events
 $("level").addEventListener("change", e => { state.level = e.target.value; refreshOptions(); render(); });
