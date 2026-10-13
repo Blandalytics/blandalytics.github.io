@@ -1,6 +1,7 @@
 // LiveCards (src/cards/live.js) on one real game against an in-memory bucket: the cards a
-// game in progress gets, nothing rebuilt when no count has moved, the final pass, and the
-// index the picker reads. Uses a folder from tools/pitcher_card/parity.py:
+// game in progress gets, nothing rebuilt when nothing has moved, a rebuild when only the
+// box score has, the final pass (which comes at "Game Over"), and the index the picker
+// reads. Uses a folder from tools/pitcher_card/parity.py:
 //
 //   node tools/live/test/live_cards.mjs /tmp/parity [gamePk]
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -54,8 +55,7 @@ async function tick(feed, now) {
 const plays = full.liveData.plays.allPlays;
 const half = structuredClone(full);
 half.liveData.plays.allPlays = plays.slice(0, Math.floor(plays.length / 2));
-half.gameData.status.codedGameState = "I";
-half.gameData.status.detailedState = "In Progress";
+Object.assign(half.gameData.status, { abstractGameState: "Live", codedGameState: "I", detailedState: "In Progress" });
 const halfRows = gameRows(half);
 const pitchersSoFar = new Set(halfRows.map((r) => r.pitcher));
 const built = await tick(half, Date.UTC(2026, 8, 20, 22));
@@ -78,13 +78,25 @@ check("entries point at the card files", game.pitchers.every((p) => p.file.endsW
 // the same feed again: nothing has moved
 check("an unchanged feed rebuilds nothing", (await tick(half, Date.UTC(2026, 8, 20, 22, 1))) === 0);
 
-// the final pass: every pitcher once more, and the game marked final
+// the box score catching up after the pitch: the same count, two more runs charged
+const lag = structuredClone(half);
+const teams = lag.liveData.boxscore.teams;
+const line = (teams.home.players[`ID${pid}`] ?? teams.away.players[`ID${pid}`]).stats.pitching;
+line.earnedRuns += 2;
+check("a box-score change alone rebuilds that pitcher", (await tick(lag, Date.UTC(2026, 8, 20, 22, 2))) === 1);
+check("...and his card carries it", JSON.parse(store.get(`live/cards/${pk}-${pid}.json`)).line.includes(`, ${line.earnedRuns} ER,`));
+
+// the final pass: every pitcher once more, at "Game Over" (the poller's last look at a
+// game can come before "Final"), and the game marked final
 const pitchersAll = new Set(gameRows(full).map((r) => r.pitcher));
-const last = await tick(full, Date.UTC(2026, 8, 21, 2));
+const over = structuredClone(full);
+Object.assign(over.gameData.status, { abstractGameState: "Final", codedGameState: "O", detailedState: "Game Over" });
+const last = await tick(over, Date.UTC(2026, 8, 21, 2));
 index = JSON.parse(store.get(INDEX));
 check("the final pass rebuilds every pitcher", last === pitchersAll.size, `${last} of ${pitchersAll.size}`);
-check("the game is marked final", index.games[pk].final === true);
-check("after that, nothing", (await tick(full, Date.UTC(2026, 8, 21, 2, 1))) === 0);
+check("the game is marked final at Game Over", index.games[pk].final === true && index.games[pk].status === "Game Over");
+check("then Final rebuilds nothing", (await tick(full, Date.UTC(2026, 8, 21, 2, 1))) === 0);
+check("...and moves the status on", JSON.parse(store.get(INDEX)).games[pk].status === full.gameData.status.detailedState);
 
 // once the nightly build has the game, it leaves the live index
 store.set("cards/index.json", JSON.stringify({ days: {}, games: { [pk]: "2026-09-20" } }));

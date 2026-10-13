@@ -173,9 +173,12 @@ linked in the picker as `pitcher-cards/#<gamePk>-<pitcherId>`.
 
 While MLB games are on, the live Worker ([`tools/live/`](tools/live/)) builds the cards itself,
 from the same feed it polls every 30 seconds: a pitcher's card is rebuilt whenever his pitch
-count moves, so the picker's **Live** entry is within a minute of the last pitch (it re-reads
-the live index every 20 seconds and redraws the card in place). A game gets one last pass when
-it ends and leaves the live index once the nightly run has written its permanent cards.
+count or his box-score line moves (the box score trails the pitches by a poll or two, and the
+runners he leaves on base can score after he's gone), so the picker's **Live** entry is within
+a minute of the last pitch (it re-reads the live index every 20 seconds and redraws the card
+in place). A game gets one last pass when it ends, at "Game Over" or "Final", whichever the
+poller sees first, and leaves the live index once the nightly run has written its permanent
+cards.
 
 The Worker can't run the Python, so [`tools/live/src/cards/`](tools/live/src/cards/) is a
 JavaScript port of the card's pipeline: `feed.js` reads the feed into the scraper's rows,

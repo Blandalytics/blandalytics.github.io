@@ -1,23 +1,28 @@
 /**
  * Live pitcher cards, built by the poller from the feed it has just fetched.
  *
- * For each MLB game whose feed moved, every pitcher whose pitch count has changed since
- * his last build gets a fresh card dict (build.js), scored by the JS port of the pitch
- * models (scorer.js) and compared with his pack of past seasons. The picker draws it.
- * A game gets one last pass for every pitcher once it is final, and leaves the index
- * when the nightly build has written its permanent cards.
+ * For each MLB game whose feed moved, every pitcher whose pitch count or box-score line
+ * has changed since his last build gets a fresh card dict (build.js), scored by the JS
+ * port of the pitch models (scorer.js) and compared with his pack of past seasons. The
+ * picker draws it. The box score is watched as well as the count because it lags: a
+ * play's hits and runs reach it a poll or two after its last pitch reaches the feed, and
+ * the runners a pitcher leaves on base can score after he has gone. A game gets one last
+ * pass for every pitcher once it is over ("Game Over" as much as "Final": the poller's
+ * last look at a game can come before the "Final"), and leaves the index when the
+ * nightly build has written its permanent cards.
  *
  *   live/cards/<gamePk>-<pitcherId>.json   one card dict
  *   live/cards/index.json                  the games and pitchers, as a day manifest
  *                                          (cards/days/<date>.json) plus status, final
- *                                          and each pitcher's pitch count at his build
+ *                                          and each pitcher's pitch count and box-score
+ *                                          line at his build
  *
  * Inputs the Python pipeline publishes to the bucket: cards/models/scorer.pack (the
  * models, see bundle.js), cards/pitchers/<id>.json (packs.py) and cards/arms/<year>.json.
  */
 
 import { loadBundle } from "./bundle.js";
-import { build } from "./build.js";
+import { build, CARD_BOX } from "./build.js";
 import { gameRows } from "./feed.js";
 import { heightFeet } from "./groups.js";
 import { score } from "./scorer.js";
@@ -80,8 +85,15 @@ function pitcherOrder(feed) {
   return [...home.slice(0, 1), ...away.slice(0, 1), ...home.slice(1), ...away.slice(1)];
 }
 
+/** The box-score line a pitcher's card reads, as one string to compare builds by. */
+function boxLine(feed, pid) {
+  const t = feed.liveData.boxscore.teams;
+  const stats = (t.home.players[`ID${pid}`] ?? t.away.players[`ID${pid}`])?.stats?.pitching ?? {};
+  return CARD_BOX.map((k) => stats[k] ?? "").join("/");
+}
+
 /** build_site.entry: what the picker needs to know about a card. */
-function entry(pk, card, pitches) {
+function entry(pk, card, pitches, box) {
   return {
     id: card.pitcher_id,
     name: card.name,
@@ -93,6 +105,7 @@ function entry(pk, card, pitches) {
     years: card.comparisons.map((c) => c.year),
     file: `${DATA_URL}/live/cards/${pk}-${card.pitcher_id}.json`,
     pitches,
+    box,
   };
 }
 
@@ -125,16 +138,16 @@ export class LiveCards {
     const counts = new Map();
     for (const r of rows) counts.set(r.pitcher, (counts.get(r.pitcher) ?? 0) + 1);
     const followed = this.index.games[pk];
-    const final = feed.gameData.status.codedGameState === "F";
-    const have = new Map((followed?.pitchers ?? []).map((p) => [p.id, p.pitches]));
+    const status = feed.gameData.status;
+    const final = status.abstractGameState === "Final";
     const lastPass = final && !followed?.final; // every pitcher once more when it ends
-    const todo = pitcherOrder(feed).filter((pid) => counts.has(pid) && (lastPass || have.get(pid) !== counts.get(pid)));
-    if (!todo.length && !lastPass) return 0;
-    const n = await this.build(feed, rows, todo, counts);
+    const built = new Map((followed?.pitchers ?? []).map((p) => [p.id, p]));
+    const moved = (pid) => built.get(pid)?.pitches !== counts.get(pid) || built.get(pid)?.box !== boxLine(feed, pid);
+    const todo = pitcherOrder(feed).filter((pid) => counts.has(pid) && (lastPass || moved(pid)));
+    const n = todo.length ? await this.build(feed, rows, todo, counts) : 0;
     const game = this.index.games[pk];
-    if (game) {
-      game.status = feed.gameData.status.detailedState;
-      game.final = final;
+    if (game && (game.status !== status.detailedState || game.final !== final)) {
+      Object.assign(game, { status: status.detailedState, final });
       this.dirty = true;
     }
     return n;
@@ -157,7 +170,7 @@ export class LiveCards {
         await this.env.BUCKET.put(`live/cards/${pk}-${pid}.json`, JSON.stringify(card), {
           httpMetadata: { contentType: "application/json; charset=utf-8", cacheControl: CARD_CACHE },
         });
-        this.add(pk, card, counts.get(pid));
+        this.add(pk, card, counts.get(pid), boxLine(feed, pid));
         n += 1;
       } catch (err) {
         console.log(`card ${pk}-${pid} failed: ${err.stack ?? err}`);
@@ -166,11 +179,11 @@ export class LiveCards {
     return n;
   }
 
-  add(pk, card, pitches) {
+  add(pk, card, pitches, box) {
     const home = card.home ? card.team : card.opp;
     const away = card.home ? card.opp : card.team;
     const game = (this.index.games[pk] ??= { date: card.date, home, away, pitchers: [] });
-    game.pitchers = [...game.pitchers.filter((p) => p.id !== card.pitcher_id), entry(pk, card, pitches)];
+    game.pitchers = [...game.pitchers.filter((p) => p.id !== card.pitcher_id), entry(pk, card, pitches, box)];
     this.dirty = true;
   }
 

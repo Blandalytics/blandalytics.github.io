@@ -68,10 +68,15 @@ const num = (v) => (missing(v) ? null : v);
 // ---- the feed ------------------------------------------------------------------------
 /** The `fields` names gameInfo reads, beyond feed.js's ROW_FIELDS: bio and box score. */
 export const CARD_FIELDS = [
-  "status", "codedGameState", "detailedState", "players", "fullName", "currentAge", "height",
-  "boxscore", "pitchers", "stats", "pitching", "inningsPitched", "earnedRuns", "hits",
-  "homeRuns", "baseOnBalls", "strikeOuts", "numberOfPitches", "gamesStarted", "outs",
-  "battersFaced",
+  "status", "abstractGameState", "codedGameState", "detailedState", "players", "fullName",
+  "currentAge", "height", "boxscore", "pitchers", "stats", "pitching", "inningsPitched",
+  "earnedRuns", "hits", "homeRuns", "baseOnBalls", "strikeOuts", "numberOfPitches",
+  "gamesStarted", "outs", "battersFaced",
+];
+// what a card reads from the pitcher's box-score line (the game line and the game grade)
+export const CARD_BOX = [
+  "inningsPitched", "outs", "earnedRuns", "hits", "homeRuns", "baseOnBalls", "strikeOuts",
+  "numberOfPitches", "battersFaced", "gamesStarted",
 ];
 
 export function parseHeight(text) {
