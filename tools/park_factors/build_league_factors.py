@@ -1,4 +1,4 @@
-"""Build the data of blandalytics.com/league-calendar/: each level's run environment week by week.
+"""Build the data of blandalytics.com/league-factors/: each level's run environment week by week.
 
 Two sources, both from the park model of the projections repository (src/model/parks.py):
 
@@ -11,7 +11,7 @@ Two sources, both from the park model of the projections repository (src/model/p
   week's games and PAs. These keep that year's weather and who played.
 
 Both use the same weeks (seven days from each level-season's first game day). This writes
-league-calendar/data.json:
+league-factors/data.json:
   {"cols": [page column names], "levels": [...], "years": {level: [years, newest first]},
    "series": {level: {year: {"weeks": [[first "MM-DD", last, label], ...],
                              "model": [[10 x index per column] per week],
@@ -19,7 +19,7 @@ league-calendar/data.json:
                              "games": [...] or null, "pa": [...] or null}}},
    "generated": "YYYY-MM-DD"}
 Usage:
-  python tools/park_factors/build_calendar.py [path/to/park_factors_calendar_observed.csv]
+  python tools/park_factors/build_league_factors.py [path/to/park_factors_calendar_observed.csv]
 (the default is the copy next to this script; a path given is copied there first)
 """
 import csv
@@ -35,7 +35,7 @@ from build_leaderboard import LATEST, ROOT
 HERE = Path(__file__).parent
 OBSERVED = HERE / "park_factors_calendar_observed.csv"
 SEASONAL = ROOT / "park-factors" / "seasonal"
-OUT = ROOT / "league-calendar" / "data.json"
+OUT = ROOT / "league-factors" / "data.json"
 LEVELS = ["MLB", "AAA", "AA", "A+", "A"]
 DROP = {"HR p10", "HR p90"}  # the park page's HR interval: not on the league curve
 SHOW = {"Park Factor": "wOBA"}  # the park page's overall index is wOBA per PA
