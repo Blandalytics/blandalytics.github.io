@@ -80,7 +80,12 @@ def main():
     # the curve's low and high, labeled
     for (x, v), dy in ((min(line, key=lambda p: p[1]), 34), (max(line, key=lambda p: p[1]), -20)):
         svg.append(f'<circle cx="{X(x):.1f}" cy="{Y(v):.1f}" r="8" fill="{CYAN}" stroke="rgb(41,44,66)" stroke-width="3"/>')
-        svg.append(f'<text x="{X(x):.1f}" y="{Y(v) + dy:.1f}" text-anchor="middle" class="lab">{v:.1f}</text>')
+        # the label on a slight shade of the ground, so it reads over the dots (DM Sans Bold
+        # at 19 px: about 11 px a digit, 5 px the point, 14 px above the baseline)
+        text, ty = f"{v:.1f}", Y(v) + dy
+        w = 11 * sum(ch.isdigit() for ch in text) + 5 * text.count(".")
+        svg.append(f'<rect x="{X(x) - w / 2 - 6:.1f}" y="{ty - 18:.1f}" width="{w + 12}" height="22" rx="5" fill="rgba(41,44,66,0.8)"/>')
+        svg.append(f'<text x="{X(x):.1f}" y="{ty:.1f}" text-anchor="middle" class="lab">{text}</text>')
 
     logo = "data:image/png;base64," + base64.b64encode(LOGO.read_bytes()).decode()
     html = TEMPLATE.format(logo=logo, svg="".join(svg), first=min(years), last=max(years), cyan=CYAN, gold=GOLD, dot=DOT)

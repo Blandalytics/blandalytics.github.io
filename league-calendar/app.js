@@ -334,8 +334,16 @@ async function tileBlob() {
     g.beginPath(); g.arc(X(x), y, 8, 0, 2 * Math.PI);
     g.fillStyle = TILE.cyan; g.fill();
     g.lineWidth = 3; g.strokeStyle = TILE.bg; g.stroke();
+    // the label on a slight shade of the ground, so it reads over the dots
+    const text = v.toFixed(1), tx = Math.max(L + 24, Math.min(R - 24, X(x))), ty = under ? y + 34 : y - 20;
+    const m = g.measureText(text), up = m.actualBoundingBoxAscent || 14, down = m.actualBoundingBoxDescent || 0;
+    g.fillStyle = "rgba(41,44,66,0.8)";
+    g.beginPath();
+    const bx = tx - m.width / 2 - 6, by = ty - up - 4, bw = m.width + 12, bh = up + down + 8;
+    if (g.roundRect) g.roundRect(bx, by, bw, bh, 5); else g.rect(bx, by, bw, bh);
+    g.fill();
     g.fillStyle = "#fff";
-    g.fillText(v.toFixed(1), Math.max(L + 24, Math.min(R - 24, X(x))), under ? y + 34 : y - 20);
+    g.fillText(text, tx, ty);
   }
   // the key and the note
   g.font = '400 16px "DM Sans"';
