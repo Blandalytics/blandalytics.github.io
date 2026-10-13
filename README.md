@@ -19,7 +19,7 @@ Cards is hidden from all three for now: its tile and links are commented out in 
 | `shared/share-image.js` | **Share image**, the one export button of every tool that makes a figure: a menu of Copy image and Download PNG (plus a tool's other downloads, such as Release Angles' GIF). Copy image falls back to a download where the browser refuses the clipboard. Each tool hands it a function that draws the PNG and one that names the file; the menu items get ids (`<button id>_copy`, `<button id>_download`) for `grab_app_pngs.py`. Pages load it as `/shared/share-image.js?v=N`: bump N with each change |
 | `images/tile-*.webp` | the tile pictures, one per tool: `tile-NAME.webp` at 900 px and `tile-NAME-720.webp`, offered through `srcset` |
 | `tools/homepage/grab_app_pngs.py` | runs each tool in headless Chrome and saves the PNG from its own export button (the NHL Draft Tool and the Auction Calculator have none, so it screenshots the options table of a mock draft and the top of the values table) |
-| `tools/homepage/make_tiles.py` | crops those exports into square tiles (a figure whose edges carry text, like Batted Ball Charts and Swing Profiles, is padded out with its background instead); `blandalytics.css` holds every tile at 1:1 |
+| `tools/homepage/make_tiles.py` | crops those exports into square tiles (a figure whose edges carry text, like Batted Ball Charts and Swing Profiles, is padded out with its background instead; Model Drilldown's is the card's header over its waterfall tile, cut from the 16:9 card); `blandalytics.css` holds every tile at 1:1 |
 
 ### Updating the tiles
 
