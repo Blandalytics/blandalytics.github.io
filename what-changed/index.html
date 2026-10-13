@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>What Changed · Blandalytics</title>
+    <meta
+      name="description"
+      content="Each day's changes to the rest-of-season projections, player by player: how much auction value moved, and why (new results, role and playing time, the league environment, the days played)."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+    />
+    <style>
+      :root {
+        --ground: #0d1117;
+        --surface: #151b23;
+        --card: #292c42;
+        --raise: #30344f;
+        --ink: #e3e9f1;
+        --muted: #8a96a6;
+        --faint: #6b7684;
+        --grid: #3a3e5a;
+        --accent: #6cb4ff;
+        --up: #f1c647;
+        --down: #00d4ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--ground);
+        color: var(--ink);
+        font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-size: 15px;
+        line-height: 1.45;
+        padding: 24px 16px;
+      }
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      a {
+        color: var(--accent);
+      }
+      nav.tools {
+        font-size: 13px;
+        color: var(--faint);
+      }
+      header h1 {
+        margin: 0;
+        font-size: 26px;
+      }
+      header p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        max-width: 78ch;
+      }
+      .banner {
+        background: var(--raise);
+        border-left: 3px solid var(--up);
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      input,
+      select {
+        font: inherit;
+        font-size: 14px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--grid);
+        background: var(--surface);
+        color: var(--ink);
+      }
+      label.check {
+        font-size: 14px;
+        color: var(--muted);
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--grid);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .seg button {
+        font: inherit;
+        font-size: 13px;
+        color: var(--muted);
+        background: var(--surface);
+        border: 0;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--raise);
+        color: var(--ink);
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .legend i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        margin-right: 5px;
+        vertical-align: -1px;
+      }
+      .wrap {
+        overflow-x: auto;
+        background: var(--card);
+        border-radius: 12px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+      }
+      th,
+      td {
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--grid);
+        text-align: left;
+        white-space: nowrap;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 12px;
+        position: sticky;
+        top: 0;
+        background: var(--card);
+      }
+      th[data-c] {
+        cursor: pointer;
+        user-select: none;
+      }
+      th[aria-sort='descending']::after {
+        content: ' ▾';
+      }
+      th[aria-sort='ascending']::after {
+        content: ' ▴';
+      }
+      td.n {
+        text-align: right;
+        font-family: 'JetBrains Mono', monospace;
+      }
+      td.up {
+        color: var(--up);
+      }
+      td.down {
+        color: var(--down);
+      }
+      tr.row {
+        cursor: pointer;
+      }
+      tr.row:hover td {
+        background: #2e3250;
+      }
+      .sub {
+        color: var(--faint);
+        font-size: 12px;
+      }
+      .div {
+        position: relative;
+        width: 240px;
+        height: 14px;
+        background: #1f2333;
+        border-radius: 7px;
+        overflow: hidden;
+      }
+      .div i {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+      }
+      .div b {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: var(--faint);
+      }
+      tr.detail td {
+        white-space: normal;
+        background: #23263a;
+      }
+      .txt {
+        margin: 2px 0 8px;
+        max-width: 90ch;
+      }
+      table.stats {
+        width: auto;
+        font-size: 12px;
+      }
+      table.stats th,
+      table.stats td {
+        padding: 3px 8px;
+        position: static;
+        background: none;
+      }
+      .more {
+        align-self: center;
+      }
+      .more button {
+        font: inherit;
+        color: var(--ink);
+        background: var(--raise);
+        border: 1px solid var(--grid);
+        border-radius: 8px;
+        padding: 8px 14px;
+        cursor: pointer;
+      }
+      .foot {
+        color: var(--faint);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav class="tools">
+        <a href="/">Blandalytics</a> · <a id="to-dd" href="../projection-drilldown/">Projection Drilldown</a> ·
+        <a id="to-risk" href="../playing-time-risk/">Playing-Time Risk</a>
+      </nav>
+      <header>
+        <h1>What Changed</h1>
+        <p id="sub">Each day's changes to the rest-of-season projections, and why.</p>
+      </header>
+      <div class="banner" id="banner" hidden></div>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Role">
+          <button type="button" data-r="h" aria-pressed="true">Hitters</button>
+          <button type="button" data-r="p" aria-pressed="false">Pitchers</button>
+        </div>
+        <div class="seg" role="group" aria-label="Playing-time basis">
+          <button type="button" data-b="ev" aria-pressed="true">Expected</button>
+          <button type="button" data-b="hb" aria-pressed="false">Healthy</button>
+        </div>
+        <select id="date" aria-label="Date"></select>
+        <input id="q" type="search" placeholder="Find a player" aria-label="Find a player" />
+        <select id="team" aria-label="Team"><option value="">All teams</option></select>
+        <input id="pos" type="search" placeholder="Position (e.g. SS, RP)" aria-label="Position" size="16" />
+        <label class="check"><input type="checkbox" id="mat" checked /> Material changes only</label>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div class="wrap"><table id="t"></table></div>
+      <div class="more"><button type="button" id="more">Show more</button></div>
+      <p class="foot" id="foot"></p>
+    </main>
+    <script type="module" src="app.js?v=1"></script>
+  </body>
+</html>
