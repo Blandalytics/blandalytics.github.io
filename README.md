@@ -876,15 +876,15 @@ For new seasonal factors:
 2. Run
    `python tools/park_factors/build_seasonal.py path/to/park_factors_seasonal_weekly_2027.csv path/to/park_factors_seasonal_history.csv`.
 3. Rebuild the page, so it lists the years.
-4. Rebuild the League Calendar (below), which reads the same files.
+4. Rebuild League Factors (below), which reads the same files.
 
 The handoff markdown and the model's history file stay with the park model; only the CSVs
 built from them are committed. After
 rebuilding the tile, bump its `?v=` in `index.html` so Cloudflare serves the new image.
 
-## League Calendar
+## League Factors
 
-`league-calendar/` charts each level's run environment week by week, from the same park model:
+`league-factors/` charts each level's run environment week by week, from the same park model:
 the model's calendar curve (the Seasonal view's league row: the level's curve with the same
 batters and pitchers all season, plus the parks in use that week) against what each week
 produced. 100 is the level's season average. It covers MLB 2015–2027 (2027 on its schedule) and
@@ -898,19 +898,19 @@ canvas in the browser.
 
 | file | role |
 |---|---|
-| `league-calendar/index.html`, `app.js` | the page; it loads `data.json` and the fonts only (and `logo.png` for Share image) |
-| `league-calendar/logo.png` | the Pitcher List Stats wordmark for the shared image, a copy of `tools/park_factors/tile_logo.png` |
-| `league-calendar/data.json` | per level and year: the weeks, the model's indexes and (past years) the actual indexes, games and PAs of each week, as 10 × the index (150 kB) |
+| `league-factors/index.html`, `app.js` | the page; it loads `data.json` and the fonts only (and `logo.png` for Share image) |
+| `league-factors/logo.png` | the Pitcher List Stats wordmark for the shared image, a copy of `tools/park_factors/tile_logo.png` |
+| `league-factors/data.json` | per level and year: the weeks, the model's indexes and (past years) the actual indexes, games and PAs of each week, as 10 × the index (150 kB) |
 | `tools/park_factors/park_factors_calendar_observed.csv` | the actual weeks, from the park model's `parks.calendar_observed` (every level, season and week: that week's PAs against the season's, unadjusted) |
-| `tools/park_factors/build_calendar.py` | writes `data.json` from the Seasonal view's files and that CSV. It fails if the two disagree on a level-season's weeks |
-| `tools/park_factors/build_calendar_tile.py` | the homepage tile, from `data.json`: MLB wOBA by week as the page's All years chart draws it (the model curve, the actual weeks of 2015–2026 and their average), in the style of the Park Factors tile, screenshotted at 900 × 900 by headless Edge and saved as `images/tile-league-calendar.webp` and `-720.webp` |
+| `tools/park_factors/build_league_factors.py` | writes `data.json` from the Seasonal view's files and that CSV. It fails if the two disagree on a level-season's weeks |
+| `tools/park_factors/build_league_factors_tile.py` | the homepage tile, from `data.json`: MLB wOBA by week as the page's All years chart draws it (the model curve, the actual weeks of 2015–2026 and their average), in the style of the Park Factors tile, screenshotted at 900 × 900 by headless Edge and saved as `images/tile-league-factors.webp` and `-720.webp` |
 
 To update, after new seasonal factors (`--seasonal-table` also writes
 `park_factors_calendar_observed.csv`):
 
 ```
-python tools/park_factors/build_calendar.py path/to/park_factors_calendar_observed.csv
-python tools/park_factors/build_calendar_tile.py    # then bump the tile's ?v= in index.html
+python tools/park_factors/build_league_factors.py path/to/park_factors_calendar_observed.csv
+python tools/park_factors/build_league_factors_tile.py    # then bump the tile's ?v= in index.html
 ```
 
 ## Model Drilldown

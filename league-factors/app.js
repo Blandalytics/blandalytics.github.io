@@ -1,6 +1,6 @@
 "use strict";
-// League Calendar: each level's run environment week by week. The data (data.json) comes from
-// tools/park_factors/build_calendar.py: per level and year, the weeks, the model's calendar curve
+// League Factors: each level's run environment week by week. The data (data.json) comes from
+// tools/park_factors/build_league_factors.py: per level and year, the weeks, the model's calendar curve
 // and (past years) what each week produced, every value 10 x an index (100 = the season average).
 
 const $ = id => document.getElementById(id);
@@ -232,7 +232,7 @@ function renderGrid(s, wi) {
 }
 
 // the tile image: the chart on screen, drawn as the homepage tile is (900 x 900, the Pitcher List
-// Stats colors and wordmark, tools/park_factors/build_calendar_tile.py), to copy or download
+// Stats colors and wordmark, tools/park_factors/build_league_factors_tile.py), to copy or download
 const TILE = {W: 900, L: 118, R: 862, T: 176, B: 742, bg: "rgb(41,44,66)", cyan: "rgb(4,209,249)",
   gold: "rgb(255,209,102)", dot: "#9aa0b8", sub: "#9aa0b8", axis: "#c0c4d3"};
 let logoImg = null;
@@ -249,7 +249,7 @@ function tileStep(range) {
 // the image's title "<level> <metric> Factor" over "<years>, by Week"
 const TITLE_NAMES = {R: "Run"};
 const yearLabel = ys => (state.year === ALL ? `${ys[ys.length - 1]}–${ys[0]}` : yearShown() === 2027 ? "2027 Schedule" : String(yearShown()));
-const fileName = () => `league_calendar_${state.level.replace("+", "plus")}_${state.year === ALL ? "all_years" : yearShown()}_${state.stat}.png`;
+const fileName = () => `league_factors_${state.level.replace("+", "plus")}_${state.year === ALL ? "all_years" : yearShown()}_${state.stat}.png`;
 
 async function tileBlob() {
   const s = cur(), c = si(), all = state.year === ALL;

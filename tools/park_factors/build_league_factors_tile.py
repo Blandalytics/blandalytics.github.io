@@ -1,11 +1,11 @@
-"""Render the home-page tile for the League Calendar (images/tile-league-calendar*.webp).
+"""Render the home-page tile for League Factors (images/tile-league-factors*.webp).
 
 MLB wOBA week by week, as the page's All years chart draws it: the model's calendar curve (2027
 schedule), every actual week of 2015-2026 as a dot sized by plate appearances, and their
 plate-appearance-weighted average by date. Laid out as HTML in the style of the Park Factors tile
 (DM Sans, Pitcher List Stats colors and wordmark), screenshotted with headless Edge at 900x900,
 then written as the 900 and 720 WebPs.
-Usage: python tools/park_factors/build_calendar_tile.py   (reads league-calendar/data.json)
+Usage: python tools/park_factors/build_league_factors_tile.py   (reads league-factors/data.json)
 """
 import base64
 import json
@@ -19,7 +19,7 @@ from PIL import Image
 from build_leaderboard import ROOT
 from build_tile import EDGE, LOGO, OUT
 
-DATA = ROOT / "league-calendar" / "data.json"
+DATA = ROOT / "league-factors" / "data.json"
 STAT = "wOBA"
 CYAN, GOLD, DOT = "rgb(4,209,249)", "rgb(255,209,102)", "#9aa0b8"
 # the chart's box on the 900 x 900 tile
@@ -96,9 +96,9 @@ def main():
         subprocess.run([EDGE, "--headless", "--disable-gpu", "--hide-scrollbars", "--virtual-time-budget=5000",
                         f"--screenshot={png}", "--window-size=900,900", page.as_uri()], check=True)
         im = Image.open(png).convert("RGB").crop((0, 0, 900, 900))
-    im.save(OUT / "tile-league-calendar.webp", quality=88, method=6)
-    im.resize((720, 720), Image.LANCZOS).save(OUT / "tile-league-calendar-720.webp", quality=88, method=6)
-    print("wrote", OUT / "tile-league-calendar.webp", OUT / "tile-league-calendar-720.webp")
+    im.save(OUT / "tile-league-factors.webp", quality=88, method=6)
+    im.resize((720, 720), Image.LANCZOS).save(OUT / "tile-league-factors-720.webp", quality=88, method=6)
+    print("wrote", OUT / "tile-league-factors.webp", OUT / "tile-league-factors-720.webp")
 
 
 TEMPLATE = """<!doctype html><html><head><meta charset="utf-8">
