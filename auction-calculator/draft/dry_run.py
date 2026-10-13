@@ -29,17 +29,26 @@ PROJ = os.environ.get("PROJ_2027", r"C:\Users\krbla\claude_sessions\projections\
 HIT_DIR, PIT_DIR = os.path.join(PROJ, "B1_b4_sim_risk"), os.path.join(PROJ, "B2s_env_sim_risk")
 
 
+RISK_FILES = (os.path.join(HIT_DIR, "hitters_risk_ev.bin"), os.path.join(PIT_DIR, "pitchers_risk_ev.bin"))
+
+
+def export_table(out, extra=(), settings=None):
+    """The page's table (export_players.mjs: calc.js, then risk.js's risk-aware $ on the risk files)."""
+    cmd = ["node", os.path.join(HERE, "export_players.mjs"), os.path.join(HIT_DIR, "hitters_auction_ev.csv"),
+           os.path.join(PIT_DIR, "pitchers_auction_ev.csv"), out] + ([json.dumps(settings)] if settings else []) + ["--risk", *RISK_FILES, *extra]  # fmt: skip
+    subprocess.run(cmd, check=True, capture_output=True)
+    return out
+
+
 def load_inputs(players=None):
     """(table JSON text, hitters risk bytes, pitchers risk bytes); the table is exported with Node if no file is given."""
     if players is None:
-        players = os.path.join(tempfile.gettempdir(), "draft_players_2027.json")
-        subprocess.run(["node", os.path.join(HERE, "export_players.mjs"), os.path.join(HIT_DIR, "hitters_auction_ev.csv"),
-                        os.path.join(PIT_DIR, "pitchers_auction_ev.csv"), players], check=True, capture_output=True)  # fmt: skip
+        players = export_table(os.path.join(tempfile.gettempdir(), "draft_players_2027.json"))
     with open(players, encoding="utf-8") as f:
         table = f.read()
-    with open(os.path.join(HIT_DIR, "hitters_risk_ev.bin"), "rb") as f:
+    with open(RISK_FILES[0], "rb") as f:
         rh = f.read()
-    with open(os.path.join(PIT_DIR, "pitchers_risk_ev.bin"), "rb") as f:
+    with open(RISK_FILES[1], "rb") as f:
         rp = f.read()
     return table, rh, rp
 

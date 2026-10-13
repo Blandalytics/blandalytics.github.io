@@ -233,7 +233,9 @@ class H2H:
         return (rng.random((self.reps, w, pairs, self.n_cats)), rng.random((self.reps, self.rounds + 1, 4, self.n_cats)),
                 rng.random((self.reps, self.lg.teams)))  # fmt: skip
 
-    def odds(self, p, u, team):
+    def odds(self, p, u, team, all_wins=False):
+        """(playoff share, title share, mean category wins) of `team`; with all_wins, also every
+        team's regular-season category wins in each season, [reps, teams]."""
         reg, po, tie = u
         a, b = self.sched[:, :, 0], self.sched[:, :, 1]
         p4 = p if p.ndim == 4 else p[None]
@@ -251,7 +253,8 @@ class H2H:
                 continue
             made += 1
             champ += self._bracket(seeds, p4[ridx[r]], po[r]) == team
-        return made / self.reps, champ / self.reps, float(wins[:, team].mean())
+        out = (made / self.reps, champ / self.reps, float(wins[:, team].mean()))
+        return out + (wins,) if all_wins else out
 
     def _bracket(self, seeds, p, u):
         """The champion of a bracket on `seeds` (best first): byes to the top seeds, then each round

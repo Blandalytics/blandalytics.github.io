@@ -109,6 +109,18 @@ class Pool:
         self.signature = [league.signature(p["type"], p["pos"]) for p in kept]
         self.adp = np.array([p.get("adp") if p.get("adp") is not None else np.nan for p in kept], float)
 
+        # risk.js's numbers before the draft (table.js `risk`, when the page ran the risk-aware $):
+        # the risk-aware $, CE and its $ at the calculator's prices, EffValue and Var_eff (SGP above
+        # replacement); NaN for a player without them.  `own` is the user's own $ board for the
+        # nomination rule: the risk-aware $, else the calculator's $.
+        def rcol(key):
+            return np.array([_num((p.get("risk") or {}).get(key)) for p in kept], float)
+
+        self.risk_value, self.risk_ce, self.risk_bid = rcol("value"), rcol("ce"), rcol("bid")
+        self.risk_eff, self.risk_var = rcol("eff"), rcol("varEff")
+        self.own = np.where(np.isfinite(self.risk_value), self.risk_value, self.value)
+        self.risk_meta = table.get("risk") or None  # {objective, pricing, settings} of risk.js
+
         # the projection's components and playing time, with the fill
         self.proj = np.array([[_comp(p["proj"], c, p["type"]) for c in comps] for p in kept], float)
         self.proj_pt = np.array([p["proj"].get("PA" if p["type"] == "h" else "IP", 0.0) for p in kept], float)
@@ -175,6 +187,14 @@ class Pool:
         hits = [i for i, nm in enumerate(self.name) if t in nm.lower()]
         exact = [i for i in hits if self.name[i].lower() == t]
         return exact or hits
+
+
+def _num(v):
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return np.nan
+    return v if np.isfinite(v) else np.nan
 
 
 def _comp(stats, comp, side):

@@ -12,6 +12,12 @@
 //          players: [{ type, name, mlbamid, team, pos, value, sgpar, drafted, valuedAt, proj }] }
 // proj holds the projection's counts that the draft's categories are built from (the same names
 // as the risk file's stats; a pitcher's HD is written as HLD and TBF as BF).
+//
+// With the risk-aware $ (result.risk from risk.js applyRisk, on a run with debug: true) each player
+// also carries risk: { value (the risk-aware $), ce, bid (CE at the calculator's prices), eff
+// (EffValue), varEff, sd } in SGP above replacement, and the table carries risk: { objective (M, S,
+// H of an average team before the draft), pricing ({ gamma, h, p: { base, k, perSGP, flat } }, as
+// risk.js dollarsOf takes it), settings }. The engine recomputes CE with its own M, S, H (py/ce.py).
 
 export const PROJ_COLS = {
   h: ["PA", "AB", "H", "2B", "3B", "HR", "R", "RBI", "SB", "CS", "BB", "HBP", "SF", "K", "G"],
@@ -53,12 +59,22 @@ export function draftTable(result, H, P, s) {
     const id = finite(Number(x.mlbamid));
     const i = id !== null && ix.byId.has(id) ? ix.byId.get(id) : ix.byName.get(x.name);
     if (i === undefined || !Number.isFinite(x.value)) continue;
+    const rk = x.risk;
     players.push({
       type, name: x.name, mlbamid: id, team: x.team ?? "", pos: (x.twoWay ? x.twoWay.hPos : x.pos) ?? (type === "p" ? "P" : "UT"),
       value: x.value, sgpar: finite(x.sgpar), drafted: !!x.drafted, valuedAt: x.valuedAt ?? null, proj: projOf(T, i, type),
+      ...(rk ? { risk: { value: finite(rk.value), ce: finite(rk.ce), bid: finite(rk.bid), eff: finite(rk.eff), varEff: finite(rk.varEff), sd: finite(rk.sd) } } : {}),
     });
   }
   const targets = (t) => (t ? Object.fromEntries(Object.entries(t).map(([role, f]) => [role, finite(f.target)])) : null);
+  const pr = result.risk && result.debug && result.debug.pricing;
+  const side = (q) => ({ base: q.base, k: q.k, perSGP: q.perSGP, flat: q.flat });
+  const ob = pr && result.risk.objective;
+  const risk = pr ? {
+    objective: ob ? { format: ob.format, payout: ob.payout, place: ob.place, M: ob.M, S: ob.S, H: ob.H, z: ob.z, unit: ob.unit } : null,
+    pricing: { gamma: pr.gamma, h: side(pr.h), p: side(pr.p) },
+    settings: result.risk.settings,
+  } : null;
   return {
     version: 1,
     settings: {
@@ -67,6 +83,7 @@ export function draftTable(result, H, P, s) {
     },
     perSGP: result.perSGP,
     fillTargets: { h: targets(result.fillTargets && result.fillTargets.h), p: targets(result.fillTargets && result.fillTargets.p) },
+    risk,
     players,
   };
 }

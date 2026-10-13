@@ -1,6 +1,6 @@
-# Draft mode: the engine (R8, part 1)
+# Draft mode: the engine and the page (R8)
 
-Status (2026-10-13): part 1 is built and tested. Part 2 adds the CE, the payout setting of R7 and the page. Part 3 checks the draft mode against drafters by the median values.
+Status (2026-10-13): parts 1 and 2 are built and tested. Part 1 is the engine. Part 2 is the page, the payout's objective, the CE of risk.js joined to the engine, and the rule for the user's nominations (section 12). Part 3 checks the draft mode against drafters by the median values (section 11).
 
 The draft mode finishes a draft in progress many times from the user's seat. It prices each option by the team's simulated finish. The engine is a port of the NHL draft tool (`C:\Users\krbla\claude_sessions\nhl_draft`, `pick_engine.py`, `draft_tool.py`, `web_api.py`) to the MLB league of the Auction Calculator. It adds an auction draft and real outcome draws.
 
@@ -10,15 +10,20 @@ Plan of record: `risk_valuation_plan.md` (projections repository), section 3 (R8
 
 | File | What it holds |
 |---|---|
-| `table.js` | `draftTable(result, H, P, settings)`: the engine's player table from a calc.js result (section 9) |
-| `export_players.mjs` | The same table under Node, with the calculator's default settings (for the tests and dry runs) |
+| `index.html`, `app.js`, `worker.js` | The page: the draft's settings, the stops and their tables; the engine in a web worker (Pyodide 0.28.3, the `nhl-draft` pattern) |
+| `setup.js` | The page's inputs without the DOM: the calculator's settings from its saved form, the table with risk.js's fields, the session's cfg |
+| `table.js` | `draftTable(result, H, P, settings)`: the engine's player table from a calc.js result (section 9), with risk.js's fields |
+| `export_players.mjs` | The same table (and cfg) under Node, built by `setup.js` as the page builds it (for the tests, the checks and the dry runs) |
 | `py/league.py` | League settings, the Yahoo slot eligibility, the categories, roto scoring and the head-to-head model |
 | `py/pool.py` | The player pool: the table joined to the risk files (R1), with the playing-time fill on each draw |
 | `py/engine.py` | Legality, the per-simulation world, the snake and auction play-outs, the scoring, the candidates |
 | `py/draft.py` | The live draft state (snake and auction), the snapshot for the engine, the candidate lists |
 | `py/web_api.py` | `Session`: the engine driven by JSON, for a Pyodide web worker (as `nhl-draft/py/web_api.py`) |
+| `py/ce.py` | CE (the specification, 6.4) and its $ (risk.js `dollarsOf`) with the engine's M, S, H |
 | `dry_run.py` | An automatic mock draft from one seat, snake or auction |
 | `tests.py` | Plain-assert tests and the run time of each decision type |
+| `page_check.py` | The page's contract: the page's own JSON through `Session`, mock and live, snake and auction (also a test in `tests.py`) |
+| `ce_vs_engine.py` | The engine's order of the options against CE's; the maximum bids on each objective; one room on each objective |
 
 The Python is numpy only (no pandas, no scipy), as in `nhl-draft/py/`. The same files run in CPython and in Pyodide.
 
@@ -59,7 +64,7 @@ The Python is numpy only (no pandas, no scipy), as in `nhl-draft/py/`. The same 
 3. The highest bid wins at the second-highest bid + $1 (at least the min bid). A tie goes to the nominator, then by a random priority of the world. If nobody bids the min bid, the nominator buys the player at the min bid.
 4. A team's inflation = its money above the min bids ÷ (its open spots × the $ above the min bid still available per open spot of the league), within [0.2, 3]. The available $ is the calculator's drafted players that are not gone, above the min bid. At the start the inflation is 1.0 for every team, because the calculator's values add up to the budgets. A team that spends ahead of its share bids less later; a team that spends behind its share bids more.
 
-The parameters have no validation. With the defaults the market prices the first 25 lots at 1.15 × value and lots 101–150 at 0.79 × value (6 drafts, lots of $5 or more). The early overpay is the winner's curse of 11 noisy bidders. All the money is spent (98% or more).
+The parameters have no validation. With the defaults the market prices the first 25 lots at 1.15 × value, lots 26–50 at 1.03, lots 51–100 at 0.92 and lots 101–150 at 0.79 (6 live drafts, lots of $5 or more). The early overpay is the winner's curse of 11 noisy bidders. The rooms spend $3,119 of the league's $3,120 (mean of the 6 drafts).
 
 **The live world.** The live rivals draw their valuations one time at the start of the draft and keep them, so the room has a settled character (`nhl_draft`). Each simulation draws a new world.
 
@@ -95,9 +100,9 @@ At a rival's snake stop, the stop is priced as if the user were on the clock now
 
 **The decision.**
 
-* Snake: the options are ranked by the objective (win for a roto league, playoff for a head-to-head league; ties go to roto points). The skip baseline is shown and is never recommended.
+* Snake: the options are ranked by the objective (section 12.2; ties go to roto points). The skip baseline is shown and is never recommended.
 * Auction: the maximum bid is the break-even price. The engine prices forced buys at 0.6, 0.8, 1.0, 1.2 and 1.4 × the expected price, paired with the pass in each world. It fits the mean gain over the pass as a line in the price, weighted by the standard error. The root of the line is the maximum bid. The argmax of noisy bid candidates is not used: it favors the noisiest (the highest) bids. The break-even is given for the objective and for roto points.
-* The baseline world also gives O1–O3 for part 2: M and S (the mean and SD of the user's roto points) and H (the mean total of the league's winner).
+* The baseline's play-outs also give O1–O3 of the user's team (section 12.3).
 
 ## 6. Head-to-head (the assumption)
 
@@ -139,11 +144,11 @@ CPython 3.14 on the user's PC, inline (no worker pool), default league, 200 simu
 | auction bid (roto) | 6 | 4.7 s | 3.9 ms |
 | auction bid (h2h) | 6 | 5.6 s | 4.7 ms |
 
-Later stops are faster (shorter play-outs). The nhl_draft tool takes about 1.6 ms per play-out inline. Pyodide is slower than CPython (about 1.5–2 × for this kind of code, not measured). The session runs in chunks (`chunk`), so the page can show early results.
+Later stops are faster (shorter play-outs). The nhl_draft tool takes about 1.6 ms per play-out inline. In Pyodide 0.28.3 (the page, Chromium) the first snake pick of the default league takes 3.2 s for 15 options × 100 simulations (2.2 ms per play-out), about the speed of CPython; the page is ready about 2.5 s after it opens when the Pyodide files are in the cache. The session runs in chunks (`chunk`), so the page shows early results.
 
 ## 9. The interface needed from calc.js
 
-The engine needs no change to calc.js. The page calls `draftTable(C.auctionValues(H, P, s), H, P, s)` (`table.js`) on the result it already has, and posts the JSON to the worker with the two risk files (ArrayBuffers). It uses only public fields of the result: `players` (type, name, mlbamid, team, pos, value, sgpar, drafted, valuedAt, twoWay), `perSGP` and `fillTargets`. It reads the projected counts from the prepared tables H and P by MLBAM id. Two-way players follow the calculator's mode; the default (split) gives two rows.
+The engine needs no change to calc.js or risk.js. The page (`setup.js` `buildTable`) runs `C.auctionValues(H, P, { ...s, debug: true })`, then risk.js's `applyRisk` on it, then `draftTable(result, H, P, s)` (`table.js`), and posts the JSON to the worker with the two risk files (ArrayBuffers). From risk.js the table takes each player's risk-aware $, CE, its $, EffValue and Var_eff, and the pricing of `debug.pricing` (section 12.3). It uses only public fields of the calculator's result: `players` (type, name, mlbamid, team, pos, value, sgpar, drafted, valuedAt, twoWay), `perSGP` and `fillTargets`. It reads the projected counts from the prepared tables H and P by MLBAM id. Two-way players follow the calculator's mode; the default (split) gives two rows.
 
 ## 10. Assumptions and limits
 
@@ -153,16 +158,86 @@ The engine needs no change to calc.js. The page calls `draftTable(C.auctionValue
 4. The lineup is set by the projections at the end of the draft.
 5. Redraft only (the user's decision). Keepers are board step w41.
 6. The head-to-head model is the approximation of section 6.
-7. The user nominates the best player on its board in the dry run. The session prices nominations, but the rule for the user's nomination is part 2's.
+7. The user's nominations follow the rule of section 12.4. The rule has no validation.
 8. The decisions are noisy. The break-even of a $62.1 player (the first lot, 4 seeds of the worlds): SD $4.1 on win and $2.9 on roto points at 200 simulations; SD $10.9 and $9.6 at 40 (`tests.py`, `break_even_repeatability`).
 
-## 11. Part 2 and part 3
+## 11. Part 3
 
-Part 2:
+Part 2 is section 12. Part 3 checks the draft mode before any adoption (the plan's R10 rule: no adoption without a gate):
 
-1. The CE (R7) with M, S and H from this engine (the `target` of each result), and the payout setting (winner-take-all, head-to-head playoffs).
-2. The page: a worker (`nhl-draft/worker.js` pattern) that loads `py/*.py`, the table from `table.js` and the two risk files; the stops (pick, nominate, bid, enter a real draft's result).
-3. A rule for the user's nomination; an option to price fewer lots (`auto_below`).
-4. ADP for the snake rivals if a source exists.
+1. Many rooms: at least 50 seeds of the worlds × several seats, in both modes (snake, auction) and both payouts (roto winner-take-all, head-to-head playoffs). In each room the draft mode drafts one seat and the other seats draft by the median values (the calculator's $ board, value bids). The same rooms (common random numbers) are drafted again with a plain value drafter in the seat, and with a CE drafter (the board and the bids by CE now, section 12.3).
+2. Score each finished draft on many seasons of the outcome draws (`Session.final`): win%, playoff%, title%, mean roto points, and in an auction the money left. Report the paired differences with their standard errors.
+3. Compare the objectives: the payout's (the default) against mean roto points, in particular the auction's break-even bids (section 12.2), and the nomination rule (section 12.4) against "nominate the best on your board" and against the engine's own choice.
+4. Rivals that are not the engine's own model: the engine plans against rivals with its own valuation noise and bidding rule (section 4), so a check only against those rivals favors it. Use rivals with other noise and bench shares, and, if a source exists, ADP for the snake rivals.
+5. The noise of the decisions: the simulations per option that the page can afford (100 by default) against 200 and 400 (section 10, item 8).
+6. The user's own policy in the play-outs: the calculator's $ board (now) against the risk-aware $ board.
 
-Part 3: run the draft mode against drafters by the median values, as the evaluation of `nhl_draft` (win% and mean standings points), in both modes and both formats. Compare it with a plain value bidder on the same rooms.
+## 12. Part 2: the page, the objective, the CE and the nominations
+
+### 12.1 The page
+
+The calculator's header links to the page ("Draft mode (beta)").
+
+1. The page reads the calculator's saved settings (localStorage `auction-calculator:v1`, written by `../app.js`): the teams, slots, bench, budget, min bid, categories, format, and the Risk (beta) payout and playoff teams. Without saved settings it uses the calculator's default league. It refuses a points league. It plays all-play as head-to-head. Uploaded projections do not carry over: the page loads the default projections and their risk files as the calculator does (`?data=`, `?riskdata=`). Without the risk files the engine plays every season at the projections, and the risk columns are empty.
+2. The user sets snake or auction, the seat, mock or live, the payout and the playoff teams, the ranking measure (the payout's, or mean roto points), the simulations per option (100), the seed, the do-not-draft names, and in a mock auction the $ under which lots go by value without a stop (3).
+3. Start: calc.js prices the league (with `debug`), risk.js applies the risk-aware $ with the draft's payout, and `table.js` builds the table (`setup.js` `buildTable`). The worker gets the table, the cfg (`sessionConfig`) and the two risk files, and runs the engine in Pyodide 0.28.3 from jsDelivr (its files kept in Cache Storage, as `nhl-draft`).
+4. The stops:
+
+| Stop | Mock | Live |
+|---|---|---|
+| snake, the user's pick | priced; "take" | priced; "take" |
+| snake, a rival's pick | none (the rivals pick) | the user enters the pick; "Re-simulate" prices the stop |
+| auction, the user's nomination | priced (section 12.4); "nominate" | priced; "nominate", or the user enters a rival's nomination |
+| auction, a lot on the block | priced; the user's maximum bid (the break-even by default) against the mock room | priced; the user enters the winner and the price |
+| auction, a rival's nomination | none | the user enters the player and the nominator |
+
+A priced stop shows the options table (the calculator's $, the risk-aware $, CE now in $ and its rank, the objective, mean roto points, p10, p90, finish, the gap to the best, the share of worlds where the option is best); in an auction the lot (the break-even on the objective and on roto points, the CE maximum bid, the calculator's $, the risk-aware $, the room's expected price) and the forced buys; the expected category points (the baseline, then what each option adds, as `nhl_draft`'s second table); and the league's course by category. The header shows the user's roster, the budget and the maximum bid, the room's inflation, and the engine's M, S, H and z. At the end the page shows every team's odds over 200 seasons. Undo goes back one stop.
+
+### 12.2 The objective
+
+The objective follows the payout (the user's decision of 2026-10-13; the user confirmed win% as the default, also for the break-even bid):
+
+| Payout | Roto | Head-to-head |
+|---|---|---|
+| winner take all | win%: first in the roto standings | title%: the winner of the playoffs |
+| playoffs | top-P%: in the top P by roto points (risk.js's "playoffs") | playoff% |
+
+Mean roto points is the option. The auction's break-even uses the same measure; the page also shows the break-even on roto points.
+
+What the default does to the bids (`ce_vs_engine.py`, one mock auction room, seat 5, roto, 200 simulations, the first 20 lots of $5 or more): the break-even on win% is 0.90 × the calculator's $ (the median of the lots), on roto points 0.84 ×. Win% gives the higher maximum bid at 12 of the 20 lots and the lower at 7. Part 1's lot (Rice: $26 on win%, $9 on roto points) is an extreme case. In this room the rivals paid 1.1–1.3 × the value for the first lots (the winner's curse of section 4), so at either objective's bids the user bought only 2 of the 20 lots.
+
+The same room drafted on each objective (seat 5, every lot of $5 or more priced at 60 simulations, the rule's nominations, final odds over 400 seasons): on win% the user's team has 64.9 mean roto points (6th of 12), win% 8.3%, a roster worth $228 for its $260; on roto points 69.1 points (1st), win% 10.0%, a roster worth $258. One room is not evidence: part 3 runs many rooms. A possible cause to check there: at 60 simulations the win% break-even is noisier than the roto-point one (section 10, item 8), and a noisy maximum bid wins mostly the lots that it overestimates.
+
+### 12.3 The CE join (O1–O3 during the draft)
+
+The baseline's play-outs (the skip in a snake, the pass in an auction, the rule's choice at a nomination) give the user's team now (the plan's R8 step 2):
+
+* M and S: the mean and the SD of the team's total; H: the mean total of the team at the payout's place (first, or the P-th); z = (M − H) / S;
+* in roto the totals are roto points; in head-to-head they are regular-season category wins, scaled to all `weeks` (the units of calc.js's head-to-head SGP). The roto-point version is also in the result (`target_roto`).
+
+`py/ce.py` recomputes CE (the specification, 6.4; the exact gain when √Var_eff > 0.4·S) from risk.js's EffValue and Var_eff of each player with these M, S, H, and prices it with risk.js's `dollarsOf`. With risk.js's own M, S, H it gives risk.js's CE and $ exactly (`tests.py`, `ce_port_matches_risk_js`). In an auction the CE maximum bid (the specification, 6.5) is CE now in $ at the user's inflation (the bench share if the player would not start), at most the maximum bid.
+
+Where the engine and CE disagree (`ce_vs_engine.py`, seat 5, the user's first 8 picks, 200 simulations):
+
+* Roto, winner take all: the top option agrees at 0 of 8 picks. CE ranks a starting pitcher first at every pick (Skubal, Sale, Gilbert, Ohtani's pitching, Wheeler, Cole); the engine ranks other players first. Each gap is small (0.1 to 1.5 points of win%, 0.2 to 1.9 paired standard errors), but the pattern does not change.
+* Head-to-head, playoffs: the top option agrees at 3 of 8 picks. At picks 77 and 92 CE's first option (Glasnow, Messick) is the engine's 12th and 9th, 2.8 and 2.1 points of playoff% behind (3 to 4 standard errors).
+* The rank correlation of the two orders is about 0.9 at the first picks and 0.0 to 0.5 at most later picks.
+
+The reasons: CE values a player in an average team's slot, with his own variance only. The engine sees the roster's fit (a late SP can sit on the bench, or take a P slot from a better pitcher), the categories the team already has, and what the rivals take next. The engine is the specification's full method (section 8); CE is its approximation.
+
+### 12.4 The nomination rule
+
+For each undrafted player that the user can roster: E is the room's expected price (the calculator's $ above the min bid at the room's inflation, in whole $). U is the user's own price (the risk-aware $, else the calculator's $, at the user's inflation; the bench share if the player would not start; whole $; at most the maximum bid).
+
+1. A drain is a player with U ≤ E − $2. A rival likely buys him at about his market price, and the money leaves the rivals' budgets for a player that the user does not want at that price. (A gap of $1 can come from the whole-dollar rounding only.)
+2. Nominate the dearest drain (the largest E; ties go to the larger E − U).
+3. If there is no drain, nominate the dearest player who would start for the user (a target: the user is a likely buyer).
+4. The engine prices the 5 dearest drains and the 2 best targets. Each lot opens with the player, and the user bids U. The engine's best option replaces the rule's choice only if it is better on the objective by more than 2 paired standard errors. (The gaps between nominations are small, and the argmax of noisy options is noise.)
+
+With the calculator's $ alone, E = U for every starter at the start, so the rule nominates the dearest player. With the risk-aware $, the drains are the players that risk.js values under the calculator's $ (in the 2027 test files, mostly closers).
+
+### 12.5 Checks
+
+* `tests.py`: 24 tests. Part 2 adds: CE against risk.js, the objective of each payout, the head-to-head target and CE now, the nomination rule, the entries of a live auction and a live snake, the page's contract. `python tests.py --quick` takes about 35 s.
+* `page_check.py`: 5 scenarios (a mock snake in an ESPN-like OBP roto league, a mock auction in a Yahoo head-to-head league with the playoffs payout, a mock auction on roto points, a live snake, a live auction). The page's JSON comes from `setup.js` under Node; each stop, result, action and final answer has every key that the page reads; the mock drafts play to the end. About 9 s.
+* The page in a browser (the desktop app's Browser pane, a local static server on port 8790 with the 2027 test files): the settings carry over from the calculator (a 10-team head-to-head league with the playoffs payout); a mock snake to the end; a mock auction (bids, a nomination, undo); a live auction (the user's nomination and its sale, a rival's nomination, the user's purchase). No console errors; no requests other than to the local server and Pyodide; no horizontal page scroll at 375 px.

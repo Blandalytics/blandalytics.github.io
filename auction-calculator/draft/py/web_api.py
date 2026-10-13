@@ -7,16 +7,28 @@ the page can draw early and sharpen.
     s = Session(cfg, table_json, risk_h_bytes, risk_p_bytes)
     s.begin_stop()             # -> stop info; in a mock draft the rivals act until the user's turn
     s.simulate(progress)       # progress(json) after every chunk; returns the final json
-    snake:    s.take(index=i) / s.take(text="p judge")
+    snake:    s.take(index=i) / s.take(text="p judge")   (at a rival's stop of a live draft: his pick)
     auction:  s.nominate(index=i) on the user's turn; s.bid(amount) settles the lot on the block
+              against the mock rivals; live: s.block(index=i, team=t) puts a rival's nomination on the
+              block, s.record(team=t, price=p) enters the lot's result
     either:   s.auto() (take the recommendation), s.record(...) (a real draft), s.undo(), s.board(),
-              s.rosters(), s.final()
+              s.rosters(), s.final(), s.pool_json()
 
 cfg keys (all optional): mode ("snake" | "auction"), slot (1-based seat), sims, seed, format
-("roto" | "h2h"), weeks, playoff_teams, objective ("win" | "playoff" | "champ" | "points"), mock,
-dnd (names), per_pos, board, keep (pool size per side, x the drafted count), sigma_market, sigma_team,
-bench_share, outcomes (seasons per play-out), chunk, auto_below ($: lots worth less are bid on by value
-without a stop).
+("roto" | "h2h"), weeks, playoff_teams, payout ("winner" | "playoffs"), objective (None: the payout's;
+"win" | "playoff" | "champ" | "points"), mock, dnd (names), per_pos, board, keep (pool size per side, x
+the drafted count), sigma_market, sigma_team, bench_share, outcomes (seasons per play-out), chunk,
+auto_below ($: lots worth less are bid on by value without a stop), n_drain, n_target (the nomination
+candidates, Draft.nominees).
+
+The objective follows the payout (the user's decision, 2026-10-13): winner-take-all -> win% (in a
+head-to-head league the title), playoffs -> playoff% (head-to-head: the playoff share; roto: the share
+of seasons in the top playoff_teams by roto points).  "points" (mean roto points) is the option.  The
+auction's break-even bid uses the same objective.
+
+Each result also joins risk.js (the table's `risk` fields): the risk-aware $ before the draft, and CE
+recomputed with the engine's M, S, H of the user's team at this stop (ce.py; the plan's R8 step 2),
+in SGP and in $; in an auction the CE's maximum bid (spec 6.5) next to the engine's break-even.
 """
 
 import json
@@ -25,15 +37,20 @@ import warnings
 
 import numpy as np
 
+import ce
 from draft import Draft
 from engine import CAT0, CHAMP, FIN, GOT, HWINS, PAID, PLAYOFF, PTS, VAL, WIN, Engine
 from league import SLOT_ORDER, League
 from pool import Pool
 
-DEFAULTS = dict(mode="snake", slot=1, sims=200, seed=20270401, format=None, weeks=None, playoff_teams=6, objective=None,
+DEFAULTS = dict(mode="snake", slot=1, sims=200, seed=20270401, format=None, weeks=None, playoff_teams=6, payout=None, objective=None,
                 mock=True, dnd=[], per_pos=1, board=6, keep=2.0, sigma_market=0.15, sigma_team=0.10, bench_share=0.25, outcomes=8,
-                chunk=20, auto_below=0.0)  # fmt: skip
+                chunk=20, auto_below=0.0, n_drain=5, n_target=2)  # fmt: skip
 OBJECTIVE = {"win": WIN, "playoff": PLAYOFF, "champ": CHAMP, "points": PTS}
+PAYOUTS = ("winner", "playoffs")
+# the objective each payout pays on, by the league's format
+PAYOUT_OBJECTIVE = {("winner", "roto"): "win", ("winner", "h2h"): "champ", ("playoffs", "roto"): "playoff", ("playoffs", "h2h"): "playoff"}
+ENGINE_OVER_RULE = 2.0  # paired standard errors the engine's nomination must gain to replace the rule's
 
 
 class Session:
@@ -43,23 +60,34 @@ class Session:
         self.log_fn = log or (lambda *a: None)
         table = json.loads(table) if isinstance(table, (str, bytes)) else table
         self.lg = League.from_settings(table["settings"], format=c["format"], weeks=c["weeks"], playoff_teams=int(c["playoff_teams"]))
+        self.payout = c["payout"] or ("playoffs" if self.lg.format == "h2h" else "winner")
+        if self.payout not in PAYOUTS:
+            raise ValueError("payout is winner or playoffs")
+        self.objective = c["objective"] or PAYOUT_OBJECTIVE[(self.payout, self.lg.format)]
+        if self.objective not in OBJECTIVE:
+            raise ValueError("objective is win, playoff, champ or points")
         self.log_fn("reading the outcome draws")
         self.pool = Pool(table, self.lg, {"h": risk_h, "p": risk_p}, keep=float(c["keep"]))
         dnd = [i for nm in c["dnd"] for i in self.pool.by_name(nm)[:1]]
-        self.objective = c["objective"] or ("playoff" if self.lg.format == "h2h" else "win")
-        h2h = self.lg.format == "h2h" or self.objective in ("playoff", "champ")
         self.eng = Engine(self.pool, self.lg, float(c["sigma_market"]), float(c["sigma_team"]), float(c["bench_share"]),
-                          h2h=h2h, dnd=dnd, outcomes=int(c["outcomes"]))  # fmt: skip
+                          h2h=self.lg.format == "h2h", dnd=dnd, outcomes=int(c["outcomes"]))  # fmt: skip
         self.rng = np.random.default_rng(int(c["seed"]))
         self.draft = Draft(self.eng, int(c["slot"]) - 1, self.rng, c["mode"], int(c["per_pos"]), int(c["board"]))
         self.mock, self.sims, self.chunk = bool(c["mock"]), int(c["sims"]), int(c["chunk"])
         self.snaps, self.between, self.opts, self.result, self.kind = [], [], [], None, None
 
+    def objective_label(self, objective=None):
+        o = objective or self.objective
+        if o == "playoff":
+            return "playoff%" if self.lg.format == "h2h" else "top-%d%%" % self.lg.playoff_teams
+        return {"win": "win%", "champ": "title%", "points": "roto pts"}[o]
+
     # ---- describing the draft ---------------------------------------------------------------------
 
     def player(self, i):
         p = self.pool
-        return {"i": int(i), "name": p.name[i], "pos": p.pos[i], "mlb": p.team[i], "value": round(float(p.value[i]), 1)}
+        return {"i": int(i), "name": p.name[i], "pos": p.pos[i], "mlb": p.team[i], "value": round(float(p.value[i]), 1),
+                "risk": _r(p.risk_value[i], 1)}  # fmt: skip
 
     def log_row(self, row):
         n, team, i, price = row
@@ -89,17 +117,27 @@ class Session:
 
     def stop_info(self):
         d = self.draft
-        info = {"done": d.done(), "mode": d.mode, "kind": self.kind, "mock": self.mock, "sims": self.sims,
-                "objective": self.objective, "format": self.lg.format, "teams": self.lg.teams, "user_team": d.user + 1,
-                "budget": d.budget[d.user] if d.mode == "auction" else None,
-                "max_bid": d.max_bid(d.user) if d.mode == "auction" else None,
-                "roster": self.roster_rows(d.user), "between": [self.log_row(r) for r in self.between], "options": []}  # fmt: skip
+        auction = d.mode == "auction"
+        info = {"done": d.done(), "mode": d.mode, "kind": self.kind, "mock": self.mock, "sims": self.sims, "payout": self.payout,
+                "objective": self.objective, "objective_label": self.objective_label(), "format": self.lg.format,
+                "playoff_teams": self.lg.playoff_teams, "teams": self.lg.teams, "user_team": d.user + 1, "cats": self.lg.cats,
+                "made": len(d.log), "total": self.lg.teams * self.lg.roster_size, "open_spots": d.spots[d.user],
+                "budget": d.budget[d.user] if auction else None, "max_bid": d.max_bid(d.user) if auction else None,
+                "money": list(d.budget) if auction else None, "spots": list(d.spots) if auction else None,
+                "gone": [i for i in range(self.eng.n) if d.gone[i]], "roster": self.roster_rows(d.user),
+                "between": [self.log_row(r) for r in self.between], "options": []}  # fmt: skip
         if not d.done() and d.mode == "snake":
             rd, team, overall = d.on_clock()
             info.update({"round": rd, "team": team + 1, "overall": overall, "mine": team == d.user})
-        if d.mode == "auction" and d.lot is not None:
-            j, nom = d.lot
-            info.update({"lot": self.player(j), "nominator": nom + 1, "inflation": round(d.inflation(), 3)})
+        if auction and not d.done():
+            info["inflation"] = round(d.inflation(), 3)
+            if d.lot is not None:
+                j, nom = d.lot
+                info.update({"lot": self.player(j), "nominator": nom + 1, "mine": True,
+                             "expected_price": d.expected_price(j), "own_price": d.own_price(j)})  # fmt: skip
+            else:
+                nom = d.nominator()
+                info.update({"nominator": None if nom is None else nom + 1, "mine": nom == d.user})
         return info
 
     # ---- the flow ---------------------------------------------------------------------------------
@@ -120,7 +158,7 @@ class Session:
                 if d.lot is None:
                     if d.nominator() == d.user:
                         self.kind = "nominate"
-                        self.opts = [(("pick", i), "board") for i in d.my_board() if d.legal_for(d.user, i)][: d.n_board]
+                        self.opts = d.nominees(int(self.cfg["n_drain"]), int(self.cfg["n_target"]))
                         break
                     if not self.mock:
                         self.kind = "enter"
@@ -146,6 +184,8 @@ class Session:
         row = {"kind": cand[0], "why": why}
         if cand[0] == "pick":
             row.update(self.player(cand[1]))
+            if self.kind == "nominate":  # the nomination rule's E and U
+                row.update(expected_price=self.draft.expected_price(cand[1]), own_price=self.draft.own_price(cand[1]))
         elif cand[0] in ("bid", "buy"):
             row["amount"] = int(cand[1])
         return row
@@ -181,6 +221,23 @@ class Session:
         d.nominate(i)
         return json.dumps({"ok": True, "lot": self.player(i)})
 
+    def block(self, index=None, text=None, team=None):
+        """Auction, a live draft: a nomination entered by the user (a rival's, or out of turn): player
+        i goes on the block, nominated by `team` (1-based; default the team whose turn it is)."""
+        d = self.draft
+        if d.mode != "auction" or d.done():
+            return json.dumps({"ok": False, "message": "no auction in progress"})
+        if d.lot is not None:
+            return json.dumps({"ok": False, "message": "%s is on the block: enter his result first" % self.pool.name[d.lot[0]]})
+        i = self._resolve(index, text)
+        if isinstance(i, str):
+            return json.dumps({"ok": False, "message": i})
+        t = None if team in (None, "", 0) else int(team) - 1
+        if t is not None and not 0 <= t < self.lg.teams:
+            return json.dumps({"ok": False, "message": "no team %s" % team})
+        d.nominate(i, t)
+        return json.dumps({"ok": True, "lot": self.player(i), "nominator": d.lot[1] + 1})
+
     def bid(self, amount):
         """Auction: settle the lot on the block with the user's maximum bid (0: no bid)."""
         d = self.draft
@@ -190,17 +247,38 @@ class Session:
         self.between = [] if win == d.user else self.between + [d.log[-1]]
         return json.dumps({"ok": True, "result": self.log_row(d.log[-1]), "mine": win == d.user})
 
-    def record(self, index, team, price=None):
-        """A real draft's result (snake: the pick on the clock; auction: the lot's winner and price)."""
+    def record(self, index=None, team=None, price=None, text=None):
+        """A real draft's result.  Snake: player i to `team`.  Auction: the lot's winner and price (the
+        player on the block by default; with nothing on the block, i is nominated first)."""
         d = self.draft
-        i = int(index)
-        if d.gone[i]:
-            return json.dumps({"ok": False, "message": "%s is already gone" % self.pool.name[i]})
-        if d.mode == "auction" and d.lot is None:
-            d.nominate(i)
-        d.record(i, int(team) - 1, price)
-        self.between.append(d.log[-1])
-        return json.dumps({"ok": True, "result": self.log_row(d.log[-1])})
+        if d.done():
+            return json.dumps({"ok": False, "message": "the draft is complete"})
+        if d.mode == "auction" and index is None and text is None and d.lot is not None:
+            i = d.lot[0]
+        else:
+            i = self._resolve(index, text)
+            if isinstance(i, str):
+                return json.dumps({"ok": False, "message": i})
+        if team in (None, ""):
+            return json.dumps({"ok": False, "message": "which team?"})
+        t = int(team) - 1
+        if not 0 <= t < self.lg.teams or d.spots[t] == 0:
+            return json.dumps({"ok": False, "message": "team %s has no open roster spot" % team})
+        if d.mode == "auction":
+            if d.lot is not None and d.lot[0] != i:
+                return json.dumps({"ok": False, "message": "%s is on the block" % self.pool.name[d.lot[0]]})
+            if price in (None, ""):
+                return json.dumps({"ok": False, "message": "what price?"})
+            p = int(price)
+            if p < self.lg.min_bid or p > d.max_bid(t):
+                return json.dumps({"ok": False, "message": "team %d can pay $%d to $%d" % (t + 1, self.lg.min_bid, d.max_bid(t))})
+            if d.lot is None:
+                d.nominate(i)
+            d.record(i, t, p)
+        else:
+            d.record(i, t, None)
+        self.between = [] if (t == d.user and d.mode == "auction") else self.between + [d.log[-1]]
+        return json.dumps({"ok": True, "result": self.log_row(d.log[-1]), "mine": t == d.user})
 
     def auto(self):
         """Take the recommendation: the best option once simulated, else the first one."""
@@ -226,6 +304,8 @@ class Session:
     def _resolve(self, index, text):
         if index is not None:
             i = int(index)
+            if not 0 <= i < self.eng.n:
+                return "no player %d" % i
         else:
             t = (text or "").strip()
             cmd, _, arg = t.partition(" ")
@@ -246,11 +326,11 @@ class Session:
 
     def candidates(self):
         """The candidates the engine prices at this stop, as (candidate, label, the option).  A
-        nomination of player i is priced as the lot opening with i and the user bidding its value bid
-        on him (Draft.user_value_bid): what the room does with him, and what the user's team becomes."""
+        nomination of player i is priced as the lot opening with i and the user bidding his own price
+        on him (Draft.own_price): what the room does with him, and what the user's team becomes."""
         d = self.draft
         if self.kind == "nominate":
-            return [(("bid", d.user_value_bid(c[1])), why, c) for c, why in self.opts]
+            return [(("bid", d.own_price(c[1])), why, c) for c, why in self.opts]
         return [(c, why, c) for c, why in self.opts]
 
     def simulate(self, progress=None):
@@ -261,22 +341,25 @@ class Session:
         cands = self.candidates()
         snap = d.snap()
         base = next((k for k, (c, _, _) in enumerate(cands) if c[0] == "skip"), 0)
-        out = league = None
+        out = league = wins = None
         done, n = 0, self.sims
         while done < n:
             k = min(self.chunk, n - done)
             rng = self.rng.spawn(1)[0]
             if self.kind == "nominate":  # each nomination is its own lot: one play-out each, same worlds
                 seed = int(rng.integers(1 << 62))
-                parts = [eng.chunk(snap._replace(lot=(orig[1], d.user)), [c], k, np.random.default_rng(seed)) for c, _, orig in cands]
+                parts = [eng.chunk(snap._replace(lot=(orig[1], d.user)), [c], k, np.random.default_rng(seed), 0, with_wins=True)
+                         for c, _, orig in cands]  # fmt: skip
                 o = np.concatenate([p[0] for p in parts], axis=1)
-                lg = parts[base][1]
+                lg, hw = parts[base][1], parts[base][2]
             else:
-                o, lg = eng.chunk(snap, [c for c, _, _ in cands], k, rng, base)
+                o, lg, hw = eng.chunk(snap, [c for c, _, _ in cands], k, rng, base, with_wins=True)
             out = o if out is None else np.concatenate([out, o], axis=2)
             league = lg if league is None else np.concatenate([league, lg], axis=2)
+            if hw is not None:
+                wins = hw if wins is None else np.concatenate([wins, hw], axis=2)
             done += k
-            self.result = self.tables(cands, out, league, base, done, n)
+            self.result = self.tables(cands, out, league, wins, base, done, n)
             if progress is not None and done < n:
                 progress(json.dumps(self.public(self.result)))
         return json.dumps(self.public(self.result))
@@ -285,7 +368,42 @@ class Session:
     def public(result):
         return {k: v for k, v in result.items() if k != "best"} | {"best_row": result["best"]["row"]}
 
-    def tables(self, cands, out, league, base, done, of):
+    def target(self, league, wins):
+        """O1-O3 of the user's team at this stop, from the baseline's play-outs (the pass or the skip):
+        M and S, the mean and SD of the team's total, and H, the mean total of the team at the payout's
+        place (the winner, or the last playoff team).  In roto the totals are roto points; in a
+        head-to-head league category wins, scaled from the regular season to all `weeks` (the units
+        of the calculator's head-to-head SGP, so CE can use them).  Also the roto-point version."""
+        me, T = self.draft.user, self.lg.teams
+        place = 1 if self.payout == "winner" else max(1, min(self.lg.playoff_teams, T))
+
+        def mshz(x, unit):  # x: [teams, seasons]
+            srt = -np.sort(-x, axis=0)
+            m, h = float(x[me].mean()), float(srt[place - 1].mean())
+            s = float(x[me].std(ddof=1)) if x.shape[1] > 1 else math.nan
+            return {"M": _r(m, 2), "S": _r(s, 2), "H": _r(h, 2), "z": _r((m - h) / s, 3) if s > 0 else None, "unit": unit, "place": place}
+
+        roto = mshz(np.nansum(league, axis=1), "roto points")
+        if wins is None or self.eng.h2h is None:
+            return roto, roto
+        scale = self.lg.weeks / self.eng.h2h.reg_weeks
+        return mshz(wins.reshape(T, -1) * scale, "category wins"), roto
+
+    def ce_cols(self, i, tgt):
+        """risk.js joined to this stop: the risk-aware $ before the draft, CE before the draft (an
+        average team), and CE now (the user's team: the engine's M, S, H) in SGP and in $."""
+        p = self.pool
+        out = {"risk": _r(p.risk_value[i], 1), "ce0": _r(p.risk_ce[i], 2), "ce": None, "ce_usd": None}
+        meta = p.risk_meta
+        if not meta or not math.isfinite(p.risk_eff[i]) or None in (tgt["M"], tgt["S"], tgt["H"]):
+            return out
+        c = ce.ce(float(p.risk_eff[i]), float(p.risk_var[i]), tgt["M"], tgt["S"], tgt["H"])
+        pr = meta["pricing"]
+        usd = ce.dollars_of(c, bool(p.drafted[i]), pr[p.side[i]], pr["gamma"], self.lg.min_bid, False)
+        out.update(ce=_r(c, 2), ce_usd=_r(usd, 1))
+        return out
+
+    def tables(self, cands, out, league, wins, base, done, of):
         """The options table: each candidate's measures (means over the shared worlds), its spread on
         roto points, and the best by the objective (ties to roto points, then to the cheaper bid)."""
         obj = OBJECTIVE[self.objective]
@@ -302,36 +420,71 @@ class Session:
         ranked = out[obj]
         top = ranked == np.nanmax(ranked, axis=0)
         best_share = (top / np.maximum(1, top.sum(axis=0))).sum(axis=1) / ranked.shape[1]
+        tgt, tgt_roto = self.target(league, wins)
         rows = []
         for k in order:
             c, why, orig = cands[k]
             r = self.option_row(orig, why)
             r.update({"roto": _r(mean[PTS, k], 1), "finish": _r(mean[FIN, k], 2), "win": _r(mean[WIN, k], 3),
                       "team_value": _r(mean[VAL, k], 1), "p10": _r(p10[k], 1), "p90": _r(p90[k], 1), "best": _r(best_share[k], 3),
-                      "gap": _r(mean[obj, k] - mean[obj, order[0]], 3)})  # fmt: skip
-            if self.lg.format == "h2h" or self.objective in ("playoff", "champ"):
-                r.update({"playoff": _r(mean[PLAYOFF, k], 3), "champ": _r(mean[CHAMP, k], 3), "h2h_wins": _r(mean[HWINS, k], 1)})
+                      "gap": _r(mean[obj, k] - mean[obj, order[0]], 3), "objective": _r(mean[obj, k], 3),
+                      "playoff": _r(mean[PLAYOFF, k], 3), "champ": _r(mean[CHAMP, k], 3), "h2h_wins": _r(mean[HWINS, k], 1)})  # fmt: skip
             if c[0] in ("bid", "buy"):
                 r.update({"got": _r(mean[GOT, k], 3), "paid": _r(np.nanmean(out[PAID, k]) if np.isfinite(out[PAID, k]).any() else math.nan, 1)})
+            if orig[0] == "pick":
+                r.update(self.ce_cols(orig[1], tgt))
             r["cats"] = [_r(v, 2) for v in mean[CAT0:, k]]
             rows.append(r)
-        # the team's standing in the baseline world: M, S (O2, O3) and the winner's mean total H (O1)
-        totals = np.nansum(league, axis=1)  # [teams, sims]
+        # the league in the baseline world, and the team's standing: M, S (O2, O3), H (O1)
         me = self.draft.user
         lmean = np.nanmean(league, axis=2)
         standings = [{"team": int(t) + 1, "you": int(t) == me, "cats": [_r(v, 1) for v in lmean[t]], "total": _r(lmean[t].sum(), 1)}
                      for t in np.argsort(-lmean.sum(axis=1), kind="stable")]  # fmt: skip
-        target = {"M": _r(totals[me].mean(), 2), "S": _r(totals[me].std(ddof=1) if totals.shape[1] > 1 else math.nan, 2),
-                  "H": _r(totals.max(axis=0).mean(), 2)}  # fmt: skip
-        res = {"sims": int(done), "of": int(of), "objective": self.objective, "cats": self.lg.cats, "kind": self.kind,
-               "options": rows, "standings": standings, "target": target, "best": {"cand": cands[order[0]][2], "row": rows[0]}}  # fmt: skip
+        base_row = next(r for r, k in zip(rows, order) if k == base)
+        res = {"sims": int(done), "of": int(of), "objective": self.objective, "objective_label": self.objective_label(), "payout": self.payout,
+               "cats": self.lg.cats, "kind": self.kind, "options": rows, "standings": standings, "target": tgt, "target_roto": tgt_roto,
+               "baseline": {"cats": base_row["cats"], "total": base_row["roto"], "why": base_row["why"], "kind": base_row["kind"],
+                            "i": base_row.get("i"), "name": base_row.get("name"), "amount": base_row.get("amount")},
+               "best": {"cand": cands[order[0]][2], "row": rows[0]}}  # fmt: skip
+        picks = [r for r in rows if r["kind"] == "pick"]
+        if picks and any(r.get("ce") is not None for r in picks):  # the order by CE now against the engine's
+            by_ce = sorted((r for r in picks if r.get("ce") is not None), key=lambda r: -r["ce"])
+            for n, r in enumerate(by_ce, start=1):
+                r["ce_rank"] = n
+            res["ce_order"] = {"engine_top": picks[0]["name"], "ce_top": by_ce[0]["name"], "agree": picks[0]["i"] == by_ce[0]["i"]}
+        if self.kind == "nominate":
+            res.update(self.nomination(cands, out, order, rows, obj))
         if self.kind == "bid":
             be = self.break_even(cands, out, base, obj)
             res["break_even"] = {self.objective: be, "points": self.break_even(cands, out, base, PTS)}
             j = self.draft.lot[0]
+            lot_ce = self.ce_cols(j, tgt)
+            ce_bid = self.draft.user_value_bid(j, lot_ce["ce_usd"]) if lot_ce["ce_usd"] is not None else None
+            res["lot"] = {**self.player(j), **lot_ce, "ce_bid": ce_bid, "expected_price": self.draft.expected_price(j),
+                          "own_price": self.draft.own_price(j)}  # fmt: skip
             res["best"] = {"cand": ("bid", be["max_bid"]), "row": {**self.player(j), "kind": "bid", "amount": be["max_bid"],
                            "why": "break-even", "p_star": be["p_star"], "win": rows[0]["win"], "roto": rows[0]["roto"]}}  # fmt: skip
         return res
+
+    def nomination(self, cands, out, order, rows, obj):
+        """The nomination's recommendation: the rule's choice (Draft.nominees, the first candidate),
+        unless the engine's best beats it on the objective by more than ENGINE_OVER_RULE paired
+        standard errors over the shared worlds (the gaps between nominations are small, and the
+        argmax of noisy candidates would be noise)."""
+        rule, top = 0, order[0]
+        gain = se = 0.0
+        if top != rule:
+            d = out[obj, top] - out[obj, rule]
+            gain = float(np.mean(d))
+            se = float(np.std(d, ddof=1) / math.sqrt(len(d))) if len(d) > 1 else math.inf
+        engine = top != rule and gain > ENGINE_OVER_RULE * se
+        k = top if engine else rule
+        row = rows[order.index(k)]
+        rows[order.index(rule)]["rule"] = True
+        return {"nomination": {"rule": cands[rule][2][1], "engine": cands[top][2][1], "rule_name": self.pool.name[cands[rule][2][1]],
+                               "engine_name": self.pool.name[cands[top][2][1]], "gain": _r(gain, 4), "se": _r(se, 4),
+                               "chosen": "engine" if engine else "rule"},
+                "best": {"cand": cands[k][2], "row": row}}  # fmt: skip
 
     def break_even(self, cands, out, base, m):
         """The maximum bid: the price at which buying the lot equals passing on it, on measure m.
@@ -380,6 +533,10 @@ class Session:
         return json.dumps([{"team": t + 1, "you": t == d.user, "budget": d.budget[t] if d.mode == "auction" else None,
                             "players": self.roster_rows(t)} for t in range(self.lg.teams)])  # fmt: skip
 
+    def pool_json(self):
+        """The engine's players for the page's pickers: pool index, name, positions, team, $ and risk $."""
+        return json.dumps([self.player(i) for i in range(self.eng.n)])
+
     def final(self, n_sims=None):
         """The finished draft: every roster, and every team's odds over the outcome draws."""
         d, eng = self.draft, self.eng
@@ -388,17 +545,18 @@ class Session:
         res = eng.season(d.rosters, n, np.random.default_rng(int(self.cfg["seed"]) + 7))  # [teams, measures, sims]
         for t in range(self.lg.teams):
             r = res[t]
-            row = {"team": t + 1, "you": t == d.user, "roto": _r(np.mean(r[PTS]), 1), "finish": _r(np.mean(r[FIN]), 2),
-                   "win": _r(np.mean(r[WIN]), 3), "team_value": _r(np.mean(r[VAL]), 1),
-                   "spent": (self.lg.budget - d.budget[t]) if d.mode == "auction" else None}  # fmt: skip
-            if self.lg.format == "h2h" or self.objective in ("playoff", "champ"):
-                row.update({"playoff": _r(np.mean(r[PLAYOFF]), 3), "champ": _r(np.mean(r[CHAMP]), 3)})
-            rows.append(row)
+            rows.append({"team": t + 1, "you": t == d.user, "roto": _r(np.mean(r[PTS]), 1), "finish": _r(np.mean(r[FIN]), 2),
+                         "win": _r(np.mean(r[WIN]), 3), "team_value": _r(np.mean(r[VAL]), 1), "playoff": _r(np.mean(r[PLAYOFF]), 3),
+                         "champ": _r(np.mean(r[CHAMP]), 3), "spent": (self.lg.budget - d.budget[t]) if d.mode == "auction" else None,
+                         "cats": [_r(v, 1) for v in np.mean(r[CAT0:], axis=1)]})  # fmt: skip
         rows.sort(key=lambda x: -x["roto"])
-        return json.dumps({"roster": self.roster_rows(d.user), "standings": rows, "sims": n, "cats": self.lg.cats})
+        return json.dumps({"roster": self.roster_rows(d.user), "standings": rows, "sims": n, "cats": self.lg.cats, "objective": self.objective,
+                           "objective_label": self.objective_label(), "format": self.lg.format, "payout": self.payout})  # fmt: skip
 
 
 def _r(v, nd):
+    if v is None:
+        return None
     v = float(v)
     return None if not math.isfinite(v) else round(v, nd)
 

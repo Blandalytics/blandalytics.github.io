@@ -14,9 +14,10 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "py"))
 
+import ce  # noqa: E402
 import numpy as np  # noqa: E402
 from dry_run import load_inputs  # noqa: E402
-from draft import Draft  # noqa: E402
+from draft import DRAIN_MARGIN, Draft  # noqa: E402
 from engine import GOT, PAID, PTS, SKIP, Engine  # noqa: E402
 from league import CATEGORIES, H2H, League, Scorer, norm_cdf, round_robin  # noqa: E402
 from pool import Pool, decode  # noqa: E402
@@ -301,7 +302,8 @@ def session_snake_flow_and_undo():
     assert info["kind"] == "pick" and info["overall"] == 3 and len(info["between"]) == 2
     res = json.loads(s.simulate())
     assert res["sims"] == 12 and res["options"][-1]["kind"] == "skip"
-    assert set(res["target"]) == {"M", "S", "H"} and res["target"]["H"] >= res["target"]["M"]
+    assert {"M", "S", "H", "z", "unit", "place"} <= set(res["target"]) and res["target"]["H"] >= res["target"]["M"]
+    assert res["target"]["unit"] == "roto points" and res["target"]["place"] == 1  # roto, winner-take-all
     first = json.loads(s.auto())
     assert first["ok"] and first["pick"]["you"]
     info2 = json.loads(s.begin_stop())
@@ -348,6 +350,164 @@ def session_final_odds():
     assert len(st) == LG.teams and 0.9 <= sum(r["win"] for r in st) <= 1.0 + 1e-6  # a tie for first is no win
     assert abs(sum(r["playoff"] for r in st) - LG.playoff_teams) < 0.01  # (rounded to 3 decimals)
     assert abs(sum(r["champ"] for r in st) - 1.0) < 0.01
+
+
+# ---- part 2: the payout, the CE join, the nomination rule, the live draft -----------------------
+
+
+@test
+def ce_port_matches_risk_js():
+    """py/ce.py gives risk.js's CE and its $ (x.ce, x.bid) with risk.js's own M, S, H before the draft."""
+    # the specification's section 7: the CE probability gains (exact .0409 / .0526 / .0714)
+    for sigma, want in ((1, 0.0409), (3, 0.0526), (5, 0.0714)):
+        c = ce.exact_certainty(1.0, sigma**2, 60, 8, 66)
+        assert abs(ce.Phi((60 + c - 66) / 8) - ce.Phi(-6 / 8) - want) < 5e-5
+    for p in (1e-9, 0.01, 0.3, 0.5, 0.9, 1 - 1e-9):
+        assert abs(ce.Phi(ce.Phi_inv(p)) - p) < 1e-12 * max(1.0, 1 / p)
+    meta = POOL.risk_meta
+    assert meta and meta["objective"]["unit"] == "standings points"
+    o, pr = meta["objective"], meta["pricing"]
+    n = bad_ce = bad_bid = 0
+    for i in range(POOL.n):
+        if not math.isfinite(POOL.risk_eff[i]):
+            continue
+        n += 1
+        c = ce.ce(POOL.risk_eff[i], POOL.risk_var[i], o["M"], o["S"], o["H"])
+        bad_ce += abs(c - POOL.risk_ce[i]) > 1e-9 * max(1.0, abs(c))
+        usd = ce.dollars_of(POOL.risk_ce[i], bool(POOL.drafted[i]), pr[POOL.side[i]], pr["gamma"], LG.min_bid)
+        bad_bid += abs(usd - POOL.risk_bid[i]) > 1e-6
+    assert n > 0.95 * POOL.n and bad_ce == 0 and bad_bid == 0, (n, bad_ce, bad_bid)
+    assert np.isfinite(POOL.own).all() and (POOL.own == np.where(np.isfinite(POOL.risk_value), POOL.risk_value, POOL.value)).all()
+
+
+@test
+def objective_follows_payout():
+    def make(**kw):
+        return Session(dict(sims=8, chunk=8, **kw), TABLE, RH, RP)
+
+    cases = [({}, "winner", "win", "win%"), (dict(payout="playoffs", playoff_teams=4), "playoffs", "playoff", "top-4%"),
+             (dict(format="h2h"), "playoffs", "playoff", "playoff%"), (dict(format="h2h", payout="winner"), "winner", "champ", "title%"),
+             (dict(objective="points"), "winner", "points", "roto pts")]  # fmt: skip
+    for kw, payout, objective, label in cases:
+        s = make(**kw)
+        assert (s.payout, s.objective, s.objective_label()) == (payout, objective, label), (kw, s.payout, s.objective)
+        assert (s.eng.h2h is not None) == (s.lg.format == "h2h")
+    # roto with a playoffs payout: the top-4 share of the roto standings, not the head-to-head model
+    s = make(payout="playoffs", playoff_teams=4, slot=4)
+    json.loads(s.begin_stop())
+    res = json.loads(s.simulate())
+    assert res["objective"] == "playoff" and res["target"]["place"] == 4 and res["target"]["unit"] == "roto points"
+    for r in res["options"]:
+        assert 0 <= r["win"] <= r["playoff"] <= 1 and r["objective"] == r["playoff"] and r["champ"] == r["win"] and r["h2h_wins"] is None
+    while not s.draft.done():
+        s.draft.auto()
+    fin = json.loads(s.final(n_sims=30))
+    assert 3.7 <= sum(r["playoff"] for r in fin["standings"]) <= 4 + 1e-6  # four places paid (a tie across 4th-5th pays neither)
+
+
+@test
+def h2h_target_and_ce_now():
+    s = Session(dict(mode="snake", slot=6, sims=12, chunk=6, format="h2h"), TABLE, RH, RP)
+    json.loads(s.begin_stop())
+    res = json.loads(s.simulate())
+    t, tr = res["target"], res["target_roto"]
+    K, W = len(s.lg.cats), s.lg.weeks
+    assert t["unit"] == "category wins" and tr["unit"] == "roto points" and t["place"] == s.lg.playoff_teams
+    assert 0.25 * W * K < t["M"] < 0.75 * W * K and t["H"] > t["M"] and t["S"] > 0, t  # the seat filled from waivers is below the cut
+    picks = [r for r in res["options"] if r["kind"] == "pick"]
+    for r in picks:  # CE now: risk.js's EffValue and Var_eff against the engine's M, S, H
+        i = r["i"]
+        want = ce.ce(POOL.risk_eff[i], POOL.risk_var[i], t["M"], t["S"], t["H"])
+        assert r["ce"] == round(want, 2) and r["risk"] == round(POOL.risk_value[i], 1), (r["name"], r["ce"], want)
+    assert sorted(r["ce_rank"] for r in picks) == list(range(1, len(picks) + 1))
+    assert res["ce_order"]["engine_top"] == picks[0]["name"]
+
+
+@test
+def nomination_rule():
+    d = Draft(ENG, 4, np.random.default_rng(3), "auction")
+    while d.nominator() != 4:  # rivals' lots until the user's turn
+        d.auto_nominate()
+        d.resolve(None)
+    noms = d.nominees(5, 2)
+    rows = [(d.expected_price(i), d.own_price(i), i) for i in d.my_board() if d.legal_for(4, i)]
+    drains = [r for r in rows if r[1] <= r[0] - DRAIN_MARGIN]
+    first = noms[0][0][1]
+    if drains:
+        assert d.expected_price(first) == max(r[0] for r in drains) and d.own_price(first) <= d.expected_price(first) - DRAIN_MARGIN
+        assert all(w.startswith("drain") for _, w in noms[: min(5, len(drains))])
+    else:
+        assert d.expected_price(first) == max(r[0] for r in rows if d.fills_a_slot(4, r[2]))
+    assert len({c[1] for c, _ in noms}) == len(noms) and any(w.startswith("target") for _, w in noms)
+    # a player who would not start for the user is worth only the bench share to him: a drain
+    full = Draft(ENG, 4, np.random.default_rng(3), "auction")
+    for i in [i for i in range(ENG.n) if POOL.signature[i] == ("C", "UT")][:3]:  # C and both UT spots
+        full.nominate(i, 4)
+        full.record(i, 4, 1)
+    c = next(i for i in full.my_board() if POOL.signature[i] == ("C", "UT") and POOL.value[i] > 5)
+    assert not full.fills_a_slot(4, c) and full.own_price(c) <= full.expected_price(c) - DRAIN_MARGIN
+    # the session: the rule's choice is the recommendation unless the engine beats it by 2 SE
+    s = Session(dict(mode="auction", slot=1, sims=10, chunk=5), TABLE, RH, RP)
+    info = json.loads(s.begin_stop())
+    assert info["kind"] == "nominate" and info["options"][0]["why"].split(":")[0] in ("drain", "target")
+    assert [c for c, _, _ in s.candidates()] == [("bid", s.draft.own_price(o[1])) for o, _ in s.opts]
+    res = json.loads(s.simulate())
+    nm = res["nomination"]
+    assert nm["rule"] == s.opts[0][0][1] and nm["chosen"] in ("rule", "engine")
+    assert res["best_row"]["i"] == (nm["rule"] if nm["chosen"] == "rule" else nm["engine"])
+    assert sum(1 for r in res["options"] if r.get("rule")) == 1
+    r = json.loads(s.auto())
+    assert r["ok"] and r["lot"]["i"] == res["best_row"]["i"]
+
+
+@test
+def live_auction_entries():
+    s = Session(dict(mode="auction", slot=1, sims=6, chunk=6, mock=False), TABLE, RH, RP)
+    info = json.loads(s.begin_stop())
+    assert info["kind"] == "nominate" and info["mine"]
+    i, j = s.draft.my_board()[0], s.draft.my_board()[1]
+    r = json.loads(s.block(index=i, team=3))  # a rival's nomination, entered out of turn
+    assert r["ok"] and r["nominator"] == 3
+    assert not json.loads(s.block(index=j))["ok"]  # one lot at a time
+    info = json.loads(s.begin_stop())
+    assert info["kind"] == "bid" and info["lot"]["i"] == i and info["nominator"] == 3
+    res = json.loads(s.simulate())
+    assert res["lot"]["i"] == i and res["lot"]["ce_bid"] is not None and res["break_even"]["win"]["max_bid"] >= 0
+    assert not json.loads(s.record(team=3, price=500))["ok"]  # more than team 3 can pay
+    assert not json.loads(s.record(index=j, team=3, price=40))["ok"]  # not the player on the block
+    r = json.loads(s.record(team=3, price=40))
+    assert r["ok"] and not r["mine"] and s.draft.budget[2] == LG.budget - 40 and i in s.draft.rosters[2]
+    info = json.loads(s.begin_stop())
+    assert info["kind"] == "enter" and info["nominator"] == 4 and not info["mine"] and i in info["gone"]
+    assert json.loads(s.block(text="p " + POOL.name[j]))["ok"]
+    json.loads(s.begin_stop())
+    r = json.loads(s.record(team=1, price=30))
+    assert r["ok"] and r["mine"] and s.draft.budget[0] == LG.budget - 30
+    assert json.loads(s.begin_stop())["roster"][0]["i"] == j
+    assert json.loads(s.undo())["ok"]
+    info = json.loads(s.begin_stop())
+    assert info["kind"] == "bid" and s.draft.budget[0] == LG.budget  # back to the lot on the block
+
+
+@test
+def live_snake_entries():
+    s = Session(dict(mode="snake", slot=2, sims=6, chunk=6, mock=False), TABLE, RH, RP)
+    info = json.loads(s.begin_stop())
+    assert info["kind"] == "pick" and not info["mine"] and info["team"] == 1 and info["options"]
+    i = s.draft.my_board()[0]
+    r = json.loads(s.take(text="p " + POOL.name[i]))
+    assert r["ok"] and r["pick"]["team"] == 1
+    info = json.loads(s.begin_stop())
+    assert info["mine"] and info["overall"] == 2 and i in info["gone"] and info["between"][-1]["i"] == i
+    assert all(o["i"] != i for o in info["options"] if o["kind"] == "pick")
+
+
+@test
+def page_contract():
+    """page_check.py: the page's own JSON (setup.js under Node) through Session, mock and live, both modes."""
+    import page_check
+
+    page_check.main(["--sims", "6"], out=lambda *a: None)
 
 
 # ---- timings and repeatability ------------------------------------------------------------------
