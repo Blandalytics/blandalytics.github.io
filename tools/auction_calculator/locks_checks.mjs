@@ -6,7 +6,7 @@
 // pitchers' share of the dollars (with the split from the values), and the order of two-way values
 // in the default league (simultaneous ≥ one slot ≥ split hitter, one slot daily ≥ Mon/Fri ≥ weekly).
 //
-//   node locks_checks.mjs hitters.csv pitchers.csv
+//   node locks_checks.mjs hitters.csv pitchers.csv [position_eligibility.csv]
 import { readFileSync } from "node:fs";
 import * as C from "../../auction-calculator/calc.js";
 
@@ -45,7 +45,9 @@ check(grid, "two-way: simultaneous ≥ max(H, P), and one slot daily ≥ Mon/Fri
 
 // The calculator on real projections
 const raw = { h: C.readProjections(readFileSync(process.argv[2], "utf8")), p: C.readProjections(readFileSync(process.argv[3], "utf8")) };
-const H = C.prepHitters(raw.h, "All", true), P = C.prepPitchers(raw.p, "All", true);
+// positions from last season's games at Yahoo's thresholds, as on the page, with an eligibility file
+const elig = process.argv[4] ? { table: C.readProjections(readFileSync(process.argv[4], "utf8")), rules: C.YAHOO_ELIGIBILITY } : null;
+const H = C.prepHitters(raw.h, "All", true, elig), P = C.prepPitchers(raw.p, "All", true, elig);
 const base = { slots: { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UT: 2 }, pitcherSlots: { SP: 2, RP: 2, P: 4 }, hitters: 10, pitchers: 8,
   bench: 5, minimizeBench: true, style: "Categories", format: "roto", weeks: 23, teams: 12, minBid: 1, budget: 260, span: 3, curve: 1.05,
   hitterShare: 0.65, hitterCats: C.DEFAULT_HITTER_CATS, pitcherCats: C.DEFAULT_PITCHER_CATS };

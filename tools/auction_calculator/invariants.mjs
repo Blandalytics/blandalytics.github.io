@@ -5,12 +5,14 @@
 // adds back up to his dollars; that a hitter share gives hitters exactly that share of the dollars
 // above the min bids (with none, the share is the values' own), on a straight or a convex dollar
 // curve, under any lineup lock and two-way mode (a simultaneous two-way row counted as the hitter
-// and the pitcher it merges); and that the valuation settled.
+// and the pitcher it merges); and that the valuation settled. With an eligibility file, positions
+// come from last season's games, at Yahoo's thresholds and a few others, as on the page.
 //
-//   node invariants.mjs hitters.csv pitchers.csv
+//   node invariants.mjs hitters.csv pitchers.csv [position_eligibility.csv]
 import { readFileSync } from "node:fs";
 import * as C from "../../auction-calculator/calc.js";
 const raw = { h: C.readProjections(readFileSync(process.argv[2], "utf8")), p: C.readProjections(readFileSync(process.argv[3], "utf8")) };
+const E = process.argv[4] ? C.readProjections(readFileSync(process.argv[4], "utf8")) : null;
 const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
 const fmts = {
   Yahoo: [12, { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UT: 2 }, { SP: 2, RP: 2, P: 4 }],
@@ -34,13 +36,17 @@ const variants = [
   { twoWay: "simultaneous" }, { twoWay: "simultaneous", hitterShare: 0.65, minimizeBench: false }, { twoWay: "oneslot" },
   { twoWay: "oneslot", hitterShare: 0.65, curve: 1.05 }, { twoWay: "oneslot", lock: "split" }, { twoWay: "oneslot", lock: "weekly" },
   { twoWay: "oneslot", hitterShare: 0.65, lock: "weekly" },
+  // eligibility thresholds (with a file): 20 games alone, everyone where he played most, everywhere he played
+  ...(E ? [{ eligibility: { gs: null, g: 20, sp: 5, rp: 8 } }, { eligibility: { gs: null, g: null, sp: null, rp: null } },
+    { eligibility: { gs: 1, g: 1, sp: 1, rp: 1 } }, { eligibility: { gs: 1, g: 1, sp: 1, rp: 1 }, twoWay: "simultaneous", lock: "weekly" }] : []),
 ];
 let fails = 0, runs = 0;
 for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (const v of variants) {
   const s = { slots, pitcherSlots, hitters: sum(slots), pitchers: sum(pitcherSlots),
     bench: 5, minimizeBench: true, style: "Categories", format: "roto", weeks: 23, teams, minBid: 1, budget: 260, span: 3,
     hitterCats: C.DEFAULT_HITTER_CATS, pitcherCats: C.DEFAULT_PITCHER_CATS, pool: "All", includeFa: true, hitterShare: null, ...v };
-  const H = C.prepHitters(raw.h, s.pool, s.includeFa), P = C.prepPitchers(raw.p, s.pool, s.includeFa);
+  const elig = E ? { table: E, rules: s.eligibility ?? C.YAHOO_ELIGIBILITY } : null;
+  const H = C.prepHitters(raw.h, s.pool, s.includeFa, elig), P = C.prepPitchers(raw.p, s.pool, s.includeFa, elig);
   const res = C.auctionValues(H, P, s);
   // a simultaneous two-way row, back into the hitter and the pitcher it merges
   const rows = res.players.flatMap((p) => (p.twoWay && p.twoWay.mode === "simultaneous" && p.twoWay.pDrafted

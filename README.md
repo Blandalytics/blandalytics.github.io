@@ -1030,7 +1030,8 @@ In `model-drilldown/`, run `npm install`, then `npm run check` (lint plus a form
 dollar values for every projected hitter and pitcher, priced for a league's settings. The sidebar
 holds a **League format**, which fills in a site's default teams and lineup slots (below; editing
 any of them makes it Custom); lineup slots per team for C, 1B, 2B, 3B, SS, CI, MI, OF and UT, and for
-SP, RP and P; **Bench spots**, **Minimize bench value**; **League type** (Categories or Points),
+SP, RP and P; **Position eligibility**, the games a player needs at a position to play it (GS and G
+for hitters, SP GS and RP G for pitchers; Yahoo's by default; below); **Bench spots**, **Minimize bench value**; **League type** (Categories or Points),
 **Teams**, **Min bid**, **Team budget**, **Categories format** (Roto, Head-to-head or H2H all-play,
 with **Weeks** for the H2H formats), **Player pool** (All, NL-Only, AL-Only), **Lineup lock** (Daily,
 Bi-weekly on Mondays and Fridays, or Weekly; below), **Two-way players** (Split, Simultaneous or One
@@ -1084,12 +1085,15 @@ way:
   SP and RP included, from the league's best lineups, so scarcity comes from the projections and
   the roster, not a fixed order.
 - **Default projections from the bucket.** `https://data.blandalytics.com/projections/hitters_auction_ev.csv`
-  and `pitchers_auction_ev.csv`, not the app's Google Sheet; `?data=<base>` reads them from elsewhere.
+  and `pitchers_auction_ev.csv`, not the app's Google Sheet, with `position_eligibility.csv` beside
+  them; `?data=<base>` reads all three from elsewhere.
 - **Team abbreviations.** The All pool keeps every player whatever their team (the script drops a
   team it doesn't know), and AL/NL-Only also knows `TB`, `SD`, `SF`, `KC`, `WSH`, `CWS` and `AZ`.
   A blank team, `FA` or `- - -` is a free agent.
-- **Pitchers' positions.** The table shows SP / RP from the projections rather than `P`, and the
-  dollar column sits by the name so it stays on screen on a phone.
+- **Positions from games.** The script takes the projections' `Y! Pos`; the page sets each
+  player's positions from last season's games by the league's eligibility rules (below), and the
+  table shows SP / RP rather than `P`. The dollar column sits by the name so it stays on screen on
+  a phone.
 
 ### How it works
 
@@ -1217,6 +1221,27 @@ under daily locks, $58.16 under Monday/Friday ones (78% of his hitting, 60% of h
 $55.87 under weekly ones, where he pitches only the weeks his starts are worth more than his hitting
 (11% of his pitching).
 
+**Position eligibility.** Positions come from last season's games, in
+`https://data.blandalytics.com/projections/position_eligibility.csv`: games (G) and games started
+(GS) at C, 1B, 2B, 3B, SS, OF and DH, and as a pitcher, for every player who played (by MLBAM id).
+A hitter qualifies at each fielding position where he has the **GS** or the **G**; a pitcher at SP
+with the **SP GS** and at RP with the **RP G** relief appearances (games less starts). The defaults
+are Yahoo's, from its help page: 5 starts or 10 games at a position, 3 starts for SP, 5 relief
+appearances for RP. A blank box skips that test (20 games alone, say). One short everywhere goes
+where he played most (games, then starts; UT when that's DH, SP or RP by which he did more of), as
+Fantrax does; Yahoo's help doesn't say. A player the file doesn't have, a prospect or a player who
+missed the season, or one in it who didn't play on that side, keeps the projections' `Y! Pos`, and
+so does everyone if the file doesn't load (the page says so). An uploaded projection file is
+matched by its `MLBAMID`. The legend says which season's games the positions come from, and each
+player's position tooltip the games behind his positions. The file's own `Y! Pos` (Yahoo's positions
+this season, which carry the season before over) backs the defaults up: Yahoo's thresholds never
+give a position it doesn't list, over 1,472 players, and loosening any of them by one does (GS 4
+adds 16, G 9 11, SP GS 2 21, RP G 4 18). On the October 13 files, 631 projected hitters and 775
+pitchers have 2026 games; at Yahoo's thresholds 26 of the hitters' positions differ from the
+projections' (George Springer, Christian Yelich, Brent Rooker, Jorge Polanco and Dominic Smith go to
+UT, CJ Kayfus from 1B,OF to OF) and none of the pitchers'. Only Rooker is drafted in the default
+league, at the same $9.27.
+
 **Replacement by lineup slot.** Each side's slots (`teams ×` each slot, plus `teams × bench/2` more
 UT or P when the bench isn't minimized) are filled for the most total value: players in order of
 value, each one placed if a slot it fits is open or can be opened by shifting starters already
@@ -1232,7 +1257,7 @@ among the slots he fits; one no slot takes (a DH when there's no UT) is worth a 
 A position whose starters spill into UT, P or a flex slot is exactly as deep as it. On the 2027
 projections (as of October 13) the Yahoo format prices C at +$12.36 and everything else level; CBS
 (one UT, 5 SP and 2 RP, no P) has C +$18.17, 2B / 3B +$1.13, SS +$0.99, 1B +$0.53; five OF, no UT,
-6 SP and 3 RP goes C +$14.08, 2B / 3B / OF +$1.42, SS +$0.92. Without any position info in the projections,
+6 SP and 3 RP goes C +$14.02, 2B / 3B / OF +$1.49, SS +$0.96. Without any position info (no `Y! Pos` and no games),
 every slot takes anyone.
 
 The league formats set teams, hitter slots and pitcher slots only; budget ($260), bench and scoring
@@ -1294,38 +1319,43 @@ no draft mode (a separate step). Turned off, the page's values are byte-for-byte
 
 | file | role |
 |---|---|
-| `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`), the player pool, the start z-scores and points, the SGP passes (`valueSide`), replacement by lineup slot (`positionReplacement`, with a span and per category), the drafted players, dollars and value breakdown (`auctionValues`), rank; no DOM, so Node runs it too |
+| `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`), the player pool, positions from last season's games (`eligibilityOf`, `withEligibility`), the start z-scores and points, the SGP passes (`valueSide`), replacement by lineup slot (`positionReplacement`, with a span and per category), the drafted players, dollars and value breakdown (`auctionValues`), rank; no DOM, so Node runs it too |
 | `auction-calculator/index.html`, `app.js` | the page: settings and the league formats (`PRESETS`), uploads (UTF-8 or Windows-1252), the scoring controls, the table, the CSV; with the Risk setting on, the risk files and the Risk $ columns |
 | `auction-calculator/risk.js` | the risk-aware $: the risk file's reader, each draw valued in the calculator's frame (`lineValues`), the option value, the objective (`objective`, simulated), CE and its pricing (`applyRisk`), and the spec's section 9 formulas; the placeholder tables (`SPREAD`, `LAMBDA`, `R_PREMIUM`, `TRANSACTIONS`); no DOM |
 | `tools/auction_calculator/risk_checks.mjs`, `risk_ref.py` | the spec's section 7 checks; parity with its section 9 reference code in Python (`risk_ref.py`, or the spec bundle's `risk_reference.py` with `--ref`); that `risk.js` values every projection line exactly as `calc.js` does and that the Risk $ spends the same dollars on the same roster spots, over 51 leagues; that the calculator's output is the same with risk's hook on or off (and as an older `calc.js` with `--baseline`); the risk files against the CSVs; and an end-to-end run with the 15 largest moves and Δ by $ tier (`--csv` writes every player's numbers) |
 | `tools/auction_calculator/run_ref.py` | runs `auction_calc.py` headless through a stub `streamlit` (`stub/`), on local CSVs with settings from `ST_OVERRIDES`, and prints every player's score (its `unadjusted_value`) |
 | `tools/auction_calculator/compare.mjs` | scores the same CSVs and settings with `calc.js` and checks every player's start value against the script's |
-| `tools/auction_calculator/sgp_dump.mjs`, `sgp_check.py` | dumps one league's last pass and recomputes it independently in Python (numpy, scipy): pool rates and rate-stat counts from the raw CSVs, tier variance, noise, G, SGP, the specialist curve with the procedure's reference code, and the drafted pool against `linear_sum_assignment`; under a lineup lock, the chance the SP spots bind by scipy's binomial, each SP's capture factor from Table 9.2, and the lock's weights on the pool rates, the draft variance, the noise and SGP above replacement |
+| `tools/auction_calculator/sgp_dump.mjs`, `sgp_check.py` | dumps one league's last pass and recomputes it independently in Python (numpy, scipy): with an eligibility file, every player's positions from his games (pandas) against the positions calc.js priced; pool rates and rate-stat counts from the raw CSVs, tier variance, noise, G, SGP, the specialist curve with the procedure's reference code, and the drafted pool against `linear_sum_assignment`; under a lineup lock, the chance the SP spots bind by scipy's binomial, each SP's capture factor from Table 9.2, and the lock's weights on the pool rates, the draft variance, the noise and SGP above replacement |
 | `tools/auction_calculator/sgp_checks.mjs` | the procedure's own validation: the 2√π / (N − 1) constant against simulated standings (within 2%), the tier variance against 3000 simulated snake drafts with ADP noise (within 5%), and a report of players who moved more than 20 places against the z-scores, with why |
 | `tools/auction_calculator/locks_checks.mjs` | the lineup-locks spec's own validation (Task 7): the binding chances against its Table 9.1 (within 0.03) and its 0.118 example, the q values, the two-way values against its Table 9.6 (one slot under daily locks and simultaneous exact, under weekly ones within 0.12), simultaneous ≥ max(H, P) and one slot daily ≥ Monday/Friday ≥ weekly ≥ H over a grid, daily locks changing no value, weekly locks not shrinking the pitchers' share, and the default league's two-way values in order under each lock |
-| `tools/auction_calculator/invariants.mjs` | over 190 leagues (every format; bench on and off, Points, roto / H2H / all-play, AL/NL-only, min bids, spans, fill and specialists off, hitter splits from 0 to 100% and the values' own, dollar curves, lineup locks, two-way modes, other categories), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget (less a minimized bench's min bids), that the hitters get exactly their split, that every value breakdown adds up, and that the values settled |
+| `tools/auction_calculator/eligibility_checks.mjs` | the eligibility rule on made-up players (starts or games, a blank threshold, where he played most, UT for a DH, SP / RP, ids, the projections' positions for the rest), then Yahoo's thresholds against the file's own `Y! Pos` (never a position it doesn't list; one looser, some), and whose positions the games change |
+| `tools/auction_calculator/invariants.mjs` | over 190 leagues (every format; bench on and off, Points, roto / H2H / all-play, AL/NL-only, min bids, spans, fill and specialists off, hitter splits from 0 to 100% and the values' own, dollar curves, lineup locks, two-way modes, other categories; with an eligibility file, Yahoo's thresholds throughout and 20 more leagues on other ones), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget (less a minimized bench's min bids), that the hitters get exactly their split, that every value breakdown adds up, and that the values settled |
 
 To check the model after a change (pandas, Pillow, numpy and scipy for the Python side):
 
 ```bash
 curl -sO https://data.blandalytics.com/projections/hitters_auction_ev.csv
 curl -sO https://data.blandalytics.com/projections/pitchers_auction_ev.csv
+curl -sO https://data.blandalytics.com/projections/position_eligibility.csv
 curl -sO https://raw.githubusercontent.com/blandalytics/plv_viz/main/auction_calc.py
 export ST_OVERRIDES='{"League Type": "Points", "Number of Teams": 15}'   # or {} for the defaults
 python tools/auction_calculator/run_ref.py auction_calc.py hitters_auction_ev.csv pitchers_auction_ev.csv > ref.json
 node tools/auction_calculator/compare.mjs hitters_auction_ev.csv pitchers_auction_ev.csv ref.json
-node tools/auction_calculator/sgp_dump.mjs hitters_auction_ev.csv pitchers_auction_ev.csv '{"format": "h2h"}' > dump.json
-python tools/auction_calculator/sgp_check.py hitters_auction_ev.csv pitchers_auction_ev.csv dump.json   # dump '{"lock": "weekly"}' to check a lock
+node tools/auction_calculator/sgp_dump.mjs hitters_auction_ev.csv pitchers_auction_ev.csv '{"format": "h2h"}' position_eligibility.csv > dump.json
+python tools/auction_calculator/sgp_check.py hitters_auction_ev.csv pitchers_auction_ev.csv dump.json position_eligibility.csv   # dump '{"lock": "weekly"}' to check a lock
 node tools/auction_calculator/sgp_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
-node tools/auction_calculator/invariants.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
-node tools/auction_calculator/locks_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
+node tools/auction_calculator/eligibility_checks.mjs position_eligibility.csv hitters_auction_ev.csv pitchers_auction_ev.csv
+node tools/auction_calculator/invariants.mjs hitters_auction_ev.csv pitchers_auction_ev.csv position_eligibility.csv   # and without it
+node tools/auction_calculator/locks_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv position_eligibility.csv
 node tools/auction_calculator/risk_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv hitters_risk_ev.bin pitchers_risk_ev.bin
 ```
 
 To update the projections, upload new `hitters_auction_ev.csv` / `pitchers_auction_ev.csv` to the
 bucket's `projections/` folder with the same columns (`Name`, `MLBAMID`, `Team`, `Y! Pos`, then
 the stats, and the `<stat>_p10` / `<stat>_p90` percentiles the season's luck is read from). The page shows how many players each default file has, not where
-it comes from. The page revalidates them on every load (a 304 when they haven't changed), so a new
+it comes from. `position_eligibility.csv` is one row per player with `Name`, `MLBAMID`, `Team`,
+`Y! Pos`, `Season` and `<pos> G` / `<pos> GS` for C, 1B, 2B, 3B, SS, LF, CF, RF, OF, DH and P (the
+page reads OF, games at any outfield spot, not LF / CF / RF); upload a new one each season. The page revalidates all three on every load (a 304 when they haven't changed), so a new
 upload shows on the next one; if the zone ever caches them, purge their URLs. After
 any change to the JavaScript, bump the `?v=` on the script tag in `index.html` and on `app.js`'s
 imports of `calc.js` and `risk.js` (`risk.js` imports nothing: `app.js` hands it `calc.js`).
