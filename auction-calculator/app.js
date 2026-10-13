@@ -1,7 +1,7 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket.
 
-import * as C from "./calc.js?v=13";
+import * as C from "./calc.js?v=14";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -272,6 +272,7 @@ function restore() {
   try { form = JSON.parse(localStorage.getItem(STORE)); } catch { return; }
   if (!form) return;
   for (const id of NUM_INPUTS) if (form[id] !== undefined) $(id).value = form[id];
+  if (form.twoway === "daily" || form.twoway === "weekly") form.twoway = "oneslot";   // one slot now switches at the lineup lock
   for (const id of SELECTS) if (form[id] && [...$(id).options].some((o) => o.value === form[id])) $(id).value = form[id];
   for (const id of CHECKS) if (typeof form[id] === "boolean") $(id).checked = form[id];
   const r = document.querySelector(`input[name="style"][value="${form.style}"]`);
@@ -435,11 +436,12 @@ function posTip(p) {
   if (p.lockShare < 1) tips.push(`${p.lockTier[0].toUpperCase()}${p.lockTier.slice(1)}-tier SP under this lineup lock: keeps ${pct(p.lockShare)} of his value above replacement`);
   const t = p.twoWay;
   if (t && t.mode === "simultaneous") tips.push("Two-way, simultaneous: in a hitter and a pitcher spot at once; his hitting and pitching dollars added");
-  if (t && t.mode === "daily") tips.push(t.pitch > 0 ? `Two-way, one slot chosen daily: pitches his ${Math.round(t.starts)} starts and hits the other days (${pct(t.hit)} of his hitting), his pitching at the pitchers' price`
-    : "Two-way, one slot chosen daily: his starts are worth less than a day's hitting, so he only hits");
-  if (t && t.mode === "weekly") tips.push(t.pitch >= 0.005
-    ? `Two-way, one slot chosen weekly: ${pct(t.hit)} of his hitting and ${pct(t.pitch)} of his pitching, taking each week as whichever is worth more, his pitching at the pitchers' price`
-    : "Two-way, one slot chosen weekly: no week's starts are worth more than a week of his hitting (his pitching at the pitchers' price), so he only hits");
+  if (t && t.mode === "oneslot") {
+    const at = { daily: "each day", split: "each Monday and Friday", weekly: "each week" }[t.lock] || "each day";
+    tips.push(t.pitch < 0.005 ? `Two-way, one slot switched ${at}: his starts are never worth more than the hitting they'd cost (his pitching at the pitchers' price), so he only hits`
+      : t.lock === "daily" ? `Two-way, one slot switched each day: pitches his ${Math.round(t.starts)} starts and hits the other days (${pct(t.hit)} of his hitting), his pitching at the pitchers' price`
+        : `Two-way, one slot switched ${at}: ${pct(t.hit)} of his hitting and ${pct(t.pitch)} of his pitching, taking each lineup as whichever is worth more, his pitching at the pitchers' price`);
+  }
   return tips.join(". ");
 }
 

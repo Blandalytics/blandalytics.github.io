@@ -996,8 +996,8 @@ any of them makes it Custom); lineup slots per team for C, 1B, 2B, 3B, SS, CI, M
 SP, RP and P; **Bench spots**, **Minimize bench value**; **League type** (Categories or Points),
 **Teams**, **Min bid**, **Team budget**, **Categories format** (Roto, Head-to-head or H2H all-play,
 with **Weeks** for the H2H formats), **Player pool** (All, NL-Only, AL-Only), **Lineup lock** (Daily,
-Bi-weekly on Mondays and Fridays, or Weekly; below), **Two-way players** (Split, Simultaneous, One slot
-daily or One slot weekly; below), the **Hitter split
+Bi-weekly on Mondays and Fridays, or Weekly; below), **Two-way players** (Split, Simultaneous or One
+slot; below), the **Hitter split
 (%)** (65 in categories and 50 in points, as the script has it, or **From the values**, which shows
 the split the values make in the box) and **Include free agents**; the scoring, as category
 toggles (5x5 roto by default) or editable points tables; and two collapsed sections:
@@ -1159,19 +1159,24 @@ the league on the page, and an SP's position tooltip his tier and share.
 (Shohei Ohtani) is valued by how the league uses him. **Split**, the default, lists him as two
 players, as Yahoo does. **Simultaneous** (one player in a hitter spot and a pitcher spot, both lines
 counting) values both rows on their own sides and shows him as one row, at both rows' dollars.
-**One slot, daily**: he pitches his start days when a start is worth more than a day's hitting, so
-he's his hitting less those days (`H × (1 − starts/162)`, about 12% for Ohtani's 19 starts) plus all
-his pitching; **one slot, weekly**: each week, its hitting or its starts, whichever is worth more,
-with the weeks' games and starts from the spec's schedule simulation in closed form (a turn every 6
-team games, or 5 past 27 starts, in a 182-day season with 20 off days, turns skipped to his projected
-starts: about 6% of weeks have 2 starts). In a one-slot league he's in the hitter pool at that
+**One slot**: one player in one spot, hitter or pitcher, switched whenever lineups lock (the
+**Lineup lock**), each lock window taken as whichever it's worth more as, its hitting or its starts.
+Daily, that's the spec's one-slot daily rule: he pitches his start days when a start is worth more
+than a day's hitting, so he's his hitting less those days (`H × (1 − starts/162)`, about 12% for
+Ohtani's 19 starts) plus all his pitching. Weekly, it's the spec's one-slot weekly rule, and
+Monday/Friday switches at each 4- and 3-day half. A window's games and his starts in it come from
+the spec's schedule simulation in closed form (a turn every 6 team games, or 5 past 27 starts, in a
+182-day season with 20 off days, turns skipped to his projected starts: about 6% of weeks have 2
+starts); a 1-day window gives the daily rule exactly, and a below-replacement hitter sits rather
+than hits. The more often lineups lock, the more he's worth. In a one-slot league he's in the hitter pool at that
 combined value and his pitcher row leaves the pitcher pool, so each side still drafts its spots and
 spends its dollars; his pitching counts at the pitchers' dollars per SGP, since the hitter split can
-make a pitcher's SGP cheaper than a hitter's, and his days or weeks are chosen in those units, so he's
+make a pitcher's SGP cheaper than a hitter's, and his windows are chosen in those units, so he's
 never worth less than his hitting alone. The roster spot he frees (the spec's `b`) adds nothing: its
 best bench use is a replacement player, 0 above replacement here. In the default league he's $54.96
-as a hitter and $20.69 as a pitcher split; $75.66 simultaneous; $69.39 one slot daily; and $54.97
-one slot weekly, where no week's starts beat a week of his hitting at the pitchers' price.
+as a hitter and $20.69 as a pitcher split; $75.66 simultaneous; and one slot, $69.39 under daily
+locks, $56.74 under Monday/Friday ones, and $54.97 under weekly ones, where no week's starts beat a
+week of his hitting at the pitchers' price.
 
 **Replacement by lineup slot.** Each side's slots (`teams ×` each slot, plus `teams × bench/2` more
 UT or P when the bench isn't minimized) are filled for the most total value: players in order of
@@ -1223,7 +1228,7 @@ league standings.
 | `tools/auction_calculator/compare.mjs` | scores the same CSVs and settings with `calc.js` and checks every player's start value against the script's |
 | `tools/auction_calculator/sgp_dump.mjs`, `sgp_check.py` | dumps one league's last pass and recomputes it independently in Python (numpy, scipy): pool rates and rate-stat counts from the raw CSVs, tier variance, noise, G, SGP, the specialist curve with the procedure's reference code, and the drafted pool against `linear_sum_assignment`; under a lineup lock, the chance the SP spots bind by scipy's binomial, each SP's capture factor from Table 9.2, and the lock's weights on the pool rates, the draft variance, the noise and SGP above replacement |
 | `tools/auction_calculator/sgp_checks.mjs` | the procedure's own validation: the 2√π / (N − 1) constant against simulated standings (within 2%), the tier variance against 3000 simulated snake drafts with ADP noise (within 5%), and a report of players who moved more than 20 places against the z-scores, with why |
-| `tools/auction_calculator/locks_checks.mjs` | the lineup-locks spec's own validation (Task 7): the binding chances against its Table 9.1 (within 0.03) and its 0.118 example, the q values, the two-way values against its Table 9.6 (daily and simultaneous exact, weekly within 0.12), simultaneous ≥ max(H, P) and daily and weekly ≥ H over a grid, daily locks changing no value, weekly locks not shrinking the pitchers' share, and the default league's two-way values in order |
+| `tools/auction_calculator/locks_checks.mjs` | the lineup-locks spec's own validation (Task 7): the binding chances against its Table 9.1 (within 0.03) and its 0.118 example, the q values, the two-way values against its Table 9.6 (one slot under daily locks and simultaneous exact, under weekly ones within 0.12), simultaneous ≥ max(H, P) and one slot daily ≥ Monday/Friday ≥ weekly ≥ H over a grid, daily locks changing no value, weekly locks not shrinking the pitchers' share, and the default league's two-way values in order under each lock |
 | `tools/auction_calculator/invariants.mjs` | over 190 leagues (every format; bench on and off, Points, roto / H2H / all-play, AL/NL-only, min bids, spans, fill and specialists off, hitter splits from 0 to 100% and the values' own, dollar curves, lineup locks, two-way modes, other categories), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget (less a minimized bench's min bids), that the hitters get exactly their split, that every value breakdown adds up, and that the values settled |
 
 To check the model after a change (pandas, Pillow, numpy and scipy for the Python side):

@@ -31,8 +31,9 @@ const variants = [
   { curve: 1.2, hitterShare: 0.5, style: "Points", hitterPoints: C.DEFAULT_HITTER_POINTS, pitcherPoints: C.DEFAULT_PITCHER_POINTS },
   { lock: "split" }, { lock: "weekly" }, { lock: "weekly", minimizeBench: false, bench: 7 }, { lock: "weekly", hitterShare: 0.65, curve: 1.05 },
   { lock: "weekly", style: "Points", hitterPoints: C.DEFAULT_HITTER_POINTS, pitcherPoints: C.DEFAULT_PITCHER_POINTS },
-  { twoWay: "simultaneous" }, { twoWay: "simultaneous", hitterShare: 0.65, minimizeBench: false }, { twoWay: "daily" },
-  { twoWay: "daily", hitterShare: 0.65, curve: 1.05 }, { twoWay: "weekly", lock: "weekly" }, { twoWay: "weekly", hitterShare: 0.65, lock: "weekly" },
+  { twoWay: "simultaneous" }, { twoWay: "simultaneous", hitterShare: 0.65, minimizeBench: false }, { twoWay: "oneslot" },
+  { twoWay: "oneslot", hitterShare: 0.65, curve: 1.05 }, { twoWay: "oneslot", lock: "split" }, { twoWay: "oneslot", lock: "weekly" },
+  { twoWay: "oneslot", hitterShare: 0.65, lock: "weekly" },
 ];
 let fails = 0, runs = 0;
 for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (const v of variants) {
