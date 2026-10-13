@@ -140,6 +140,8 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
 .values td.muted{color:var(--muted)}
 .values td.val{font-weight:600; color:var(--good)}
 .values td.val.neg{color:var(--faint); font-weight:400}
+.values td.risk{font-weight:600; color:var(--accent)}
+.values td.risk.neg{color:var(--faint); font-weight:400}
 .values td.up{color:var(--good)} .values td.down{color:var(--bad)} .values td.nil{color:var(--faint)}
 .bar fieldset.view{flex:0 0 auto}
 /* the stat shading's key: the surface (median) to the Auction $ green (top 5%), as app.js mixes it */
@@ -257,6 +259,20 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
           <label><span class="lab"><b>Playing-time CV</b><button type="button" class="tip" data-tip="A season's luck in playing time, as a share of a player's PA or IP, where the projections have no PA/IP percentiles. A placeholder until fit to projection errors">i</button></span><input id="pt_cv" type="number" min="0" max="1" step="0.01" value="0.15" required></label>
         </div>
       </details>
+      <details class="adv" id="risk_box">
+        <summary>Risk (beta)</summary>
+        <label class="check"><input id="risk_on" type="checkbox"><span>Risk-aware $</span><button type="button" class="tip" data-tip="A second dollar column from each player's range of outcomes in the projections' simulation (50 draws, each valued as the calculator values his projection). A team can drop a bust for a free agent, so a cheap player with a wide range is worth more (the option value); a league that pays only the top rewards upside (the payout's value of variance). The column spends the same budget on the same number of roster spots. A beta: the spread, the bust delay and the free-agent floor are placeholders until they are fit to past seasons">i</button></label>
+        <div id="risk_fields" hidden>
+          <div class="pair">
+            <label><span class="lab"><b>Payout</b><button type="button" class="tip" data-tip="Winner take all: the target is the expected total of the first-place team, in standings points (roto) or category wins (head-to-head). Playoffs: the total of the last team in. The further above an average team the target is, the more a player's variance is worth">i</button></span><select id="risk_payout">
+              <option value="winner">Winner take all</option><option value="playoffs">Playoffs</option></select></label>
+            <label id="risk_playoffs_field"><span class="lab"><b>Playoff teams</b><button type="button" class="tip" data-tip="How many teams make the playoffs (or are paid), by record in head-to-head and by standings points in roto">i</button></span><input id="risk_playoffs" type="number" min="1" max="29" step="1" value="4"></label>
+            <label><span class="lab"><b>Transactions</b><button type="button" class="tip" data-tip="How fast a team can swap a bust for a free agent: the swap waits about 2 days (daily free agents), 5 (weekly waivers or FAAB) or 14 (limited moves), and slower leagues get less of the in-season free agents' premium">i</button></span><select id="risk_txn">
+              <option value="daily">Daily free agents</option><option value="weekly">Weekly waivers (FAAB)</option><option value="limited">Limited moves</option></select></label>
+            <label><span class="lab"><b>IL slots</b><button type="button" class="tip" data-tip="Injured-list slots per team. When they're all taken, a player out for a quarter of the season or more holds a roster spot instead: his value loses a bench spot's price (the min bid) for that time">i</button></span><input id="risk_il" type="number" min="0" max="10" step="1" value="2"></label>
+          </div>
+        </div>
+      </details>
       <button type="button" class="link" id="reset">Reset all settings</button>
       </div>
     </form>
@@ -287,6 +303,6 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
   </div>
 </main>
 <div id="tip" role="tooltip" hidden></div>
-<script type="module" src="app.js?v=22"></script>
+<script type="module" src="app.js?v=23"></script>
 </body>
 </html>
