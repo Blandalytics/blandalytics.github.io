@@ -118,8 +118,8 @@ svg text{{font-family:"DM Sans",sans-serif}}
 .key i{{display:inline-block}}
 .note{{position:absolute; left:90px; bottom:24px; font-size:15px; color:#9aa0b8; line-height:1.35}}
 </style></head><body><div class="wrap">
-<h1>MLB wOBA Factor, by Week</h1>
-<div class="sub">{first}&ndash;{last}</div>
+<h1>MLB wOBA Factor</h1>
+<div class="sub">{first}&ndash;{last}, by Week</div>
 <img class="logo" src="{logo}">
 </div>
 <svg width="900" height="900" viewBox="0 0 900 900">{svg}</svg>

@@ -246,7 +246,7 @@ function tileStep(range) {
   for (const s of [1, 2, 4, 5, 10, 20, 25, 50]) if (range / s <= 5) return s;
   return 100;
 }
-// the image's title: "<level> <metric> Factor, by Week"
+// the image's title "<level> <metric> Factor" over "<years>, by Week"
 const TITLE_NAMES = {R: "Run"};
 const yearLabel = ys => (state.year === ALL ? `${ys[ys.length - 1]}–${ys[0]}` : yearShown() === 2027 ? "2027 Schedule" : String(yearShown()));
 const fileName = () => `league_calendar_${state.level.replace("+", "plus")}_${state.year === ALL ? "all_years" : yearShown()}_${state.stat}.png`;
@@ -283,10 +283,10 @@ async function tileBlob() {
   // title, subtitle, wordmark
   g.font = '700 36px "DM Sans"';
   g.fillStyle = TILE.cyan;
-  g.fillText(`${state.level} ${TITLE_NAMES[state.stat] || state.stat} Factor, by Week`, 90, 64);
+  g.fillText(`${state.level} ${TITLE_NAMES[state.stat] || state.stat} Factor`, 90, 64);
   g.font = '400 21px "DM Sans"';
   g.fillStyle = TILE.sub;
-  g.fillText(yearLabel(ys.length ? ys : [yearShown()]), 90, 100);
+  g.fillText(`${yearLabel(ys.length ? ys : [yearShown()])}, by Week`, 90, 100);
   g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
   // the grid, 100 brighter, and the months
   g.font = '400 17px "DM Sans"';
