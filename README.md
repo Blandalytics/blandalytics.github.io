@@ -889,11 +889,15 @@ produced. 100 is the level's season average. It covers MLB 2015–2027 (2027 on 
 AAA, AA, A+ and A 2021–2026. A level, a year (or All years), a stat and the week slider pick the
 view: a chart of that stat (the model line, the actual weeks as dots sized by plate appearances,
 and in All years their average by date) and a table of every stat by week (Model or Actual,
-colored as on Park Factors).
+colored as on Park Factors). **Share image** copies or downloads the chart on screen as a
+900 × 900 PNG in the homepage tile's style (title, Pitcher List Stats wordmark, key and
+"100 = <level> Season Average"), drawn on a canvas in the browser. Where the browser refuses
+the clipboard, Copy image downloads the PNG instead.
 
 | file | role |
 |---|---|
-| `league-calendar/index.html`, `app.js` | the page; it loads `data.json` and the fonts only |
+| `league-calendar/index.html`, `app.js` | the page; it loads `data.json` and the fonts only (and `logo.png` for Share image) |
+| `league-calendar/logo.png` | the Pitcher List Stats wordmark for the shared image, a copy of `tools/park_factors/tile_logo.png` |
 | `league-calendar/data.json` | per level and year: the weeks, the model's indexes and (past years) the actual indexes, games and PAs of each week, as 10 × the index (150 kB) |
 | `tools/park_factors/park_factors_calendar_observed.csv` | the actual weeks, from the park model's `parks.calendar_observed` (every level, season and week: that week's PAs against the season's, unadjusted) |
 | `tools/park_factors/build_calendar.py` | writes `data.json` from the Seasonal view's files and that CSV. It fails if the two disagree on a level-season's weeks |
