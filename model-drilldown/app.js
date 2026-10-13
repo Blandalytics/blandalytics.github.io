@@ -883,7 +883,8 @@ el.dlCsv.addEventListener('click', () => {
     const u = view.units.get(t);
     if (u) lines.push(cols.map((c) => u[c]).join(','));
   }
-  save(new Blob([`${lines.join('\n')}\n`], { type: 'text/csv' }), `shap_${fileStem().replace(/_[a-z_]+$/, '')}.csv`);
+  // a BOM, so Excel reads the CSV as UTF-8 (accented names)
+  save(new Blob([`\uFEFF${lines.join('\n')}\n`], { type: 'text/csv;charset=utf-8' }), `shap_${fileStem().replace(/_[a-z_]+$/, '')}.csv`);
 });
 
 // ---- the link hash ---------------------------------------------------------------------------
