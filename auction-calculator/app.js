@@ -1,7 +1,8 @@
 // The MLB Auction Calculator page: settings in the sidebar, the priced player table
-// beside it. The model is calc.js; the default projections are two CSVs in the bucket.
+// beside it. The model is calc.js; the default projections are two CSVs in the bucket, and the
+// positions come from a third, last season's games by position.
 
-import * as C from "./calc.js?v=15";
+import * as C from "./calc.js?v=16";
 import * as R from "./risk.js?v=1";
 
 const $ = (id) => document.getElementById(id);
@@ -11,6 +12,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const params = new URLSearchParams(location.search);
 const DATA = new URL(params.get("data") || "https://data.blandalytics.com/projections/", location.href).href;
 const FILES = { h: "hitters_auction_ev.csv", p: "pitchers_auction_ev.csv" };
+const ELIG_FILE = "position_eligibility.csv";   // last season's games by position
 // The risk files (each player's simulation draws, for the risk-aware $) sit beside the projections,
 // one per side and basis; ?riskdata=<base> reads them from somewhere else (a local folder's server)
 const RISK_DATA = new URL(params.get("riskdata") || DATA, location.href).href.replace(/\/?$/, "/");
@@ -21,6 +23,9 @@ const VIEW_STORE = "auction-calculator:view";
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
 const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
 const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "span", "curve", "weeks", "phi", "pt_cv", ...SLOT_IDS, ...PSLOT_IDS];
+// The eligibility thresholds: hitter starts and games at a position, SP starts, RP relief games.
+// A blank one skips that test
+const ELIG_INPUTS = ["elig_gs", "elig_g", "elig_sp", "elig_rp"];
 // The checkboxes and selects saved with the settings
 const CHECKS = ["min_bench", "include_fa", "fill_pt", "specialists", "split_auto"];
 const SELECTS = ["pool", "format", "lock", "twoway"];
@@ -30,6 +35,7 @@ const total = (slots) => Object.values(slots).reduce((a, b) => a + b, 0);
 const defaults = { h: null, p: null };   // the bucket's projections, parsed
 const uploads = { h: null, p: null };    // { name, table } from the file inputs
 let loadError = null;
+let eligibility = null, eligError = null;   // the bucket's eligibility file, parsed
 let cats = { h: [...C.DEFAULT_HITTER_CATS], p: [...C.DEFAULT_PITCHER_CATS] };
 let points = { h: C.DEFAULT_HITTER_POINTS.map((r) => r.slice()), p: C.DEFAULT_PITCHER_POINTS.map((r) => r.slice()) };
 let options = { h: [], p: [] };          // the categories the current projections can score
@@ -62,18 +68,22 @@ function status(msg, kind = "") {
 // ---- projections -----------------------------------------------------------------
 
 async function loadDefaults() {
+  // revalidated every load (a 304 when unchanged), so a new upload shows on the next one
+  const get = async (file, what) => {
+    const r = await fetch(DATA + file, { cache: "no-cache" });
+    if (!r.ok) throw new Error(`${what}: HTTP ${r.status}`);
+    return C.readProjections(await r.text());
+  };
+  // without the eligibility file, positions are the projections' own
+  const elig = get(ELIG_FILE, "eligibility").then((e) => { eligibility = e; }, (e) => { eligError = e.message || String(e); });
   try {
-    const [h, p] = await Promise.all(["h", "p"].map(async (k) => {
-      // revalidated every load (a 304 when unchanged), so a new upload shows on the next one
-      const r = await fetch(DATA + FILES[k], { cache: "no-cache" });
-      if (!r.ok) throw new Error(`${k === "h" ? "hitters" : "pitchers"}: HTTP ${r.status}`);
-      return C.readProjections(await r.text());
-    }));
-    defaults.h = h; defaults.p = p;
+    [defaults.h, defaults.p] = await Promise.all([get(FILES.h, "hitters"), get(FILES.p, "pitchers")]);
   } catch (e) {
     loadError = e.message || String(e);
     $("proj").open = true;   // the uploads are the way on from here
   }
+  await elig;
+  showEligibility();
   renderSources();
   update();
 }
@@ -260,12 +270,31 @@ function showSplit() {
 $("split").addEventListener("input", () => { if (!autoSplit()) manualSplit = $("split").value; });
 $("split_auto").addEventListener("change", showSplit);
 
+// ---- position eligibility ----------------------------------------------------------------
+
+const eligSeason = () => (eligibility && eligibility.data.Season ? eligibility.data.Season.find(Number.isFinite) ?? null : null);
+// The thresholds as the inputs have them: a blank one skips its test (and an invalid one too,
+// though readSettings stops the pricing over it)
+function eligRules() {
+  const v = (id) => ($(id).value === "" || !$(id).checkValidity() ? null : Number($(id).value));
+  return { gs: v("elig_gs"), g: v("elig_g"), sp: v("elig_sp"), rp: v("elig_rp") };
+}
+const eligOf = () => (eligibility ? { table: eligibility, rules: eligRules() } : null);
+// The legend says whose games the positions come from
+function showEligibility() {
+  $("elig_hint").textContent = eligibility ? `from ${eligSeason() ?? "last season's"} games` : eligError ? "the projections' positions" : "";
+}
+
 // ---- settings ----------------------------------------------------------------------
 
 function readSettings() {
-  const bad = [...NUM_INPUTS, ...(autoSplit() ? [] : ["split"])].filter((id) => !$(id).checkValidity() || $(id).value === "");
+  const bad = [...NUM_INPUTS, ...(autoSplit() ? [] : ["split"])].filter((id) => !$(id).checkValidity() || $(id).value === "")
+    .concat(ELIG_INPUTS.filter((id) => !$(id).checkValidity()));
   if (bad.length) {
-    const names = bad.map((id) => (id.includes("slot_") ? "the " : "") + $(id).closest("label").querySelector("b").textContent + (id.includes("slot_") ? " slots" : ""));
+    const names = bad.map((id) => {
+      const b = $(id).closest("label").querySelector("b").textContent;
+      return id.includes("slot_") ? `the ${b} slots` : id.startsWith("elig_") ? `the ${b} eligibility threshold` : b;
+    });
     return { error: `Check ${names.join(", ")}: ${bad.map((id) => $(id).validationMessage).filter(Boolean)[0] || "a number is needed"}` };
   }
   const n = (id) => Number($(id).value);
@@ -312,7 +341,7 @@ function readRiskSettings(teams) {
 
 function save() {
   const form = { style: style(), cats, points, split: manualSplit };
-  for (const id of [...NUM_INPUTS, ...SELECTS]) form[id] = $(id).value;
+  for (const id of [...NUM_INPUTS, ...ELIG_INPUTS, ...SELECTS]) form[id] = $(id).value;
   for (const id of CHECKS) form[id] = $(id).checked;
   form.risk = { on: riskOn(), ...Object.fromEntries(RISK_INPUTS.map((id) => [id, $(id).value])) };
   try { localStorage.setItem(STORE, JSON.stringify(form)); } catch { /* private mode */ }
@@ -322,7 +351,7 @@ function restore() {
   let form;
   try { form = JSON.parse(localStorage.getItem(STORE)); } catch { return; }
   if (!form) return;
-  for (const id of NUM_INPUTS) if (form[id] !== undefined) $(id).value = form[id];
+  for (const id of [...NUM_INPUTS, ...ELIG_INPUTS]) if (form[id] !== undefined) $(id).value = form[id];
   if (form.twoway === "daily" || form.twoway === "weekly") form.twoway = "oneslot";   // one slot now switches at the lineup lock
   for (const id of SELECTS) if (form[id] && [...$(id).options].some((o) => o.value === form[id])) $(id).value = form[id];
   for (const id of CHECKS) if (typeof form[id] === "boolean") $(id).checked = form[id];
@@ -439,8 +468,8 @@ function update() {
   }
   const missing = C.missingColumns(raw("h"), raw("p"));
   if (missing.length) return fail(`The projections are missing required columns: ${missing.join(", ")}`);
-  const H = C.prepHitters(raw("h"), $("pool").value, $("include_fa").checked);
-  const P = C.prepPitchers(raw("p"), $("pool").value, $("include_fa").checked);
+  const H = C.prepHitters(raw("h"), $("pool").value, $("include_fa").checked, eligOf());
+  const P = C.prepPitchers(raw("p"), $("pool").value, $("include_fa").checked, eligOf());
   syncOptions(H, P);   // first, so the scoring controls are there even while a setting is invalid
 
   const s = readSettings();
@@ -465,6 +494,7 @@ function update() {
     warnings.push("Projections without a Team column can't be filtered to AL/NL-Only; that side is priced over every player.");
   }
   if (!result.converged) warnings.push("The values didn't settle in 20 passes; these use the mean of the last two.");
+  if (eligError) warnings.push(`The position eligibility file didn't load (${eligError}), so positions are the projections' own.`);
   if (useRisk) {
     try {
       result.risk = R.applyRisk(C, result, H, P, s, risk.files, rs);
@@ -508,10 +538,21 @@ function showLock() {
 // A row's stats and stat dollars on one side: its own, or a two-way player's pitching
 const statsOf = (p, side) => (p.type === side ? p.stats : side === "p" && p.twoWay ? p.twoWay.stats : null);
 const stat$Of = (p, side) => (!p.breakdown ? null : p.type === side ? p.breakdown.stats : side === "p" ? p.breakdown.pstats || null : null);
-// What a row's position tooltip says: where he's priced, a locked SP's share, a two-way player's use
+// What a row's position tooltip says: the games his positions come from, where he's priced, a
+// locked SP's share, a two-way player's use
 const pct = (x) => `${Math.round(100 * x)}%`;
+const gamesText = (e) => e.games.map((x) => `${x.pos} ${x.g} G${x.gs ? `, ${x.gs} GS` : ""}`).join(" · ");
+function eligTip(e, side) {
+  if (!e) return `No ${eligSeason() ?? "last season's"} games ${side === "p" ? "pitching" : "in the field or at DH"}: positions from the projections`;
+  return e.most ? `Short of every threshold in ${e.season ?? "last season's"} games, so where he played most${e.pos === "UT" ? ", UT for DH" : ""} (${gamesText(e)})`
+    : `Eligible from ${e.season ?? "last season's"} games (${gamesText(e)})`;
+}
 function posTip(p) {
   const tips = [];
+  if (eligibility) {
+    tips.push(eligTip(p.elig, p.type));
+    if (p.twoWay) { const t = eligTip(p.twoWay.elig, "p"); tips.push(`As a pitcher, ${t[0].toLowerCase()}${t.slice(1)}`); }
+  }
   if (p.valuedAt) tips.push(`Priced at ${p.valuedAt}`);
   if (p.lockShare < 1) tips.push(`${p.lockTier[0].toUpperCase()}${p.lockTier.slice(1)}-tier SP under this lineup lock: keeps ${pct(p.lockShare)} of his value above replacement`);
   const t = p.twoWay;

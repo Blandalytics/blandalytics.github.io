@@ -145,15 +145,73 @@ export function filterLeague(table, pool, includeFa) {
   return take(table, keep);
 }
 
-export function prepHitters(table, pool, includeFa) {
-  const t = filterLeague(table, pool, includeFa);
+// ---- position eligibility -------------------------------------------------------
+
+// Yahoo's: a hitter qualifies at a position with 5 starts or 10 games there, a pitcher at SP with 3
+// starts and at RP with 5 relief appearances
+export const YAHOO_ELIGIBILITY = { gs: 5, g: 10, sp: 3, rp: 5 };
+const FIELDING = ["C", "1B", "2B", "3B", "SS", "OF"];
+
+/**
+ * One player's positions from a season's games, as a site counts them. E: the eligibility table
+ * ("<pos> G" and "<pos> GS" for C, 1B, 2B, 3B, SS, OF, DH and P), i: his row, rules: { gs, g, sp,
+ * rp }, any of them null to skip that test. A hitter qualifies at each fielding position where he
+ * has gs starts or g games; a pitcher at SP with sp starts and at RP with rp relief appearances
+ * (games less starts). One who qualifies nowhere goes where he played most: most games, then
+ * starts (UT for a DH; SP or RP by which he did more of). Returns { pos, games, most, season },
+ * games the positions he played, most games first; null when he didn't play on that side.
+ */
+export function eligibilityOf(E, i, side, rules) {
+  const num = (col) => (E.data[col] && Number.isFinite(E.data[col][i]) ? E.data[col][i] : 0);
+  const meets = (min, n) => min !== null && min !== undefined && n >= min;
+  const season = num("Season") || null;
+  if (side === "p") {
+    const gs = num("P GS"), relief = Math.max(0, num("P G") - gs);
+    if (gs + relief === 0) return null;
+    const pos = [...(meets(rules.sp, gs) ? ["SP"] : []), ...(meets(rules.rp, relief) ? ["RP"] : [])];
+    return { pos: pos.length ? pos.join(",") : gs >= relief ? "SP" : "RP", games: [{ pos: "P", g: gs + relief, gs }], most: !pos.length, season };
+  }
+  const games = [...FIELDING, "DH"].map((p) => ({ pos: p, g: num(`${p} G`), gs: num(`${p} GS`) }))
+    .filter((x) => x.g > 0 || x.gs > 0).sort((a, b) => b.g - a.g || b.gs - a.gs);
+  if (!games.length) return null;
+  const pos = FIELDING.filter((p) => games.some((x) => x.pos === p && (meets(rules.g, x.g) || meets(rules.gs, x.gs))));
+  if (pos.length) return { pos: pos.join(","), games, most: false, season };
+  const most = games.filter((x) => x.g === games[0].g && x.gs === games[0].gs).map((x) => (x.pos === "DH" ? "UT" : x.pos));
+  return { pos: (most.length > 1 ? most.filter((p) => p !== "UT") : most).join(","), games, most: true, season };
+}
+
+/**
+ * The table with each player's positions from a season's games where the eligibility table has
+ * him (by MLBAM id) and he played on that side, and the projections' own otherwise. Adds an
+ * Eligibility column: what eligibilityOf found, or null. The table passed in is left as it is.
+ */
+export function withEligibility(T, E, side, rules) {
+  const key = (v) => (v === null || v === undefined || Number.isNaN(v) || String(v).trim() === "" ? null : String(v).trim());
+  const rowOf = new Map();
+  if (E.data.MLBAMID) E.data.MLBAMID.forEach((v, j) => { if (key(v) !== null) rowOf.set(key(v), j); });
+  const t = { columns: T.columns.slice(), n: T.n, data: { ...T.data } };
+  const own = t.data["Y! Pos"] || new Array(t.n).fill(null);
+  const found = (t.data.MLBAMID || new Array(t.n).fill(null)).map((v) => {
+    const j = key(v) === null ? undefined : rowOf.get(key(v));
+    return j === undefined ? null : eligibilityOf(E, j, side, rules);
+  });
+  addColumn(t, "Y! Pos", found.map((f, i) => (f ? f.pos : own[i])));
+  addColumn(t, "Eligibility", found);
+  return t;
+}
+
+// elig (optional): { table, rules }, the positions from a season's games (withEligibility)
+export function prepHitters(table, pool, includeFa, elig = null) {
+  let t = filterLeague(table, pool, includeFa);
+  if (elig) t = withEligibility(t, elig.table, "h", elig.rules);
   const pos = t.data["Y! Pos"] || new Array(t.n).fill(null);
   addColumn(t, "Y! Pos", pos.map((p) => p ?? "UT"));
   return t;
 }
 
-export function prepPitchers(table, pool, includeFa) {
-  const t = filterLeague(table, pool, includeFa);
+export function prepPitchers(table, pool, includeFa, elig = null) {
+  let t = filterLeague(table, pool, includeFa);
+  if (elig) t = withEligibility(t, elig.table, "p", elig.rules);
   const d = t.data;
   if (isNumeric(t, "W") && isNumeric(t, "QS")) addColumn(t, "W+QS", d.W.map((w, i) => w + d.QS[i]));
   if (isNumeric(t, "K") && isNumeric(t, "BB")) {
@@ -1020,6 +1078,7 @@ export function auctionValues(H, P, s) {
       players.push({
         type, name: T.data.Name[i] ?? "", mlbamid: T.data.MLBAMID[i], team: T.data.Team[i] ?? "",
         pos: T.data["Y! Pos"] ? (T.data["Y! Pos"][i] ?? (type === "p" ? "P" : "UT")) : "P",
+        elig: T.data.Eligibility ? T.data.Eligibility[i] : null,
         start: start.total[i], points: points ? start.total[i] : NaN, sgp: side.score[i], sgpar: side.sgpar[i],
         value: v,
         drafted: slot[i] !== null, slot: slot[i], valuedAt: side.byPos.valuedAt[i], stats, breakdown: partsOf[i],
@@ -1041,7 +1100,7 @@ export function auctionValues(H, P, s) {
   };
   for (const t of pairs) {
     const hp = rows.h[t.ih], pp = rows.p[t.ip];
-    hp.twoWay = { mode: twoWay, lock: s.lock ?? "daily", pos: pp.pos, stats: pp.stats, H: t.H, P: t.P, starts: t.starts, hit: t.hit ?? 1, pitch: t.pitch ?? 0, priceRatio: ratio,
+    hp.twoWay = { mode: twoWay, lock: s.lock ?? "daily", pos: pp.pos, elig: pp.elig, stats: pp.stats, H: t.H, P: t.P, starts: t.starts, hit: t.hit ?? 1, pitch: t.pitch ?? 0, priceRatio: ratio,
       hPos: hp.pos, hValue: hp.value, hDrafted: hp.drafted, pDrafted: false, value: 0 };
     hp.pos = `${hp.pos},${pp.pos}`;
     if (twoWay === "simultaneous" && pp.drafted) {

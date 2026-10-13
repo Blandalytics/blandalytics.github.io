@@ -1,14 +1,16 @@
 """Recompute the SGP workings of one league independently and compare with calc.js.
 
-    node sgp_dump.mjs hitters.csv pitchers.csv '<settings>' > dump.json
-    python sgp_check.py hitters.csv pitchers.csv dump.json
+    node sgp_dump.mjs hitters.csv pitchers.csv '<settings>' [position_eligibility.csv] > dump.json
+    python sgp_check.py hitters.csv pitchers.csv dump.json [position_eligibility.csv]
 
 From the raw CSVs and calc.js's drafted pool: the pool rates and marginal rate stats (Task 3),
 the counting stats; then, with calc.js's draft order and contributions, the tier draft variance
 (Task 5), the noise (Task 6: the procedure's placeholder, or the projections' percentiles), the
 standings gain per unit (Task 7), SGP (Task 8) and the specialist correction (Task 9); and the
-drafted pool against scipy's linear_sum_assignment over player × slot (Task 4). The functions
-under "reference code" are the procedure's own.
+drafted pool against scipy's linear_sum_assignment over player × slot (Task 4). With an
+eligibility file, each player's positions from last season's games come first, by the dump's
+thresholds, checked against the positions calc.js priced. The functions under "reference code"
+are the procedure's own.
 """
 import json
 import sys
@@ -86,6 +88,44 @@ def check(label, mine, theirs, tol=1e-9):
     ok &= bool(good)
     print(f"  {'ok ' if good else 'BAD'} {label}: max rel diff {err:.1e}")
 
+
+# Position eligibility: a hitter at each fielding position with the starts or the games there, a
+# pitcher at SP with the starts and RP with the relief appearances; short of all of them, where he
+# played most (games, then starts; DH as UT). Players the file doesn't have keep the CSV's Y! Pos
+if len(sys.argv) > 4:
+    E = pd.read_csv(sys.argv[4], encoding="utf-8-sig").drop_duplicates("MLBAMID").set_index("MLBAMID")
+    R = S["eligibility"]
+    FIELD = ["C", "1B", "2B", "3B", "SS", "OF"]
+
+    def at_least(n, m):
+        return m is not None and n >= m
+
+    def hitter_pos(e):
+        played = {p: (e[f"{p} G"], e[f"{p} GS"]) for p in FIELD + ["DH"] if e[f"{p} G"] > 0 or e[f"{p} GS"] > 0}
+        if not played:
+            return None
+        qual = [p for p in FIELD if p in played and (at_least(played[p][0], R["g"]) or at_least(played[p][1], R["gs"]))]
+        if qual:
+            return ",".join(qual)
+        top = max(played.values())
+        most = ["UT" if p == "DH" else p for p, v in played.items() if v == top]
+        return ",".join([p for p in most if p != "UT"] or most)
+
+    def pitcher_pos(e):
+        gs, relief = e["P GS"], max(0, e["P G"] - e["P GS"])
+        if gs + relief == 0:
+            return None
+        qual = (["SP"] if at_least(gs, R["sp"]) else []) + (["RP"] if at_least(relief, R["rp"]) else [])
+        return ",".join(qual) or ("SP" if gs >= relief else "RP")
+
+    for side, D, pos_of in (("h", H, hitter_pos), ("p", P, pitcher_pos)):
+        found = [pos_of(E.loc[int(i)]) if pd.notna(i) and int(i) in E.index else None for i in D["MLBAMID"]]
+        D["Y! Pos"] = [f if f is not None else own for f, own in zip(found, D["Y! Pos"])]
+        mine = list(D["Y! Pos"].fillna("UT" if side == "h" else "P"))
+        same = mine == dump[side]["pos"]
+        ok &= same
+        print(f"  {'ok ' if same else 'BAD'} {side} positions from {sum(f is not None for f in found)} players' games, "
+              f"{sum(a != b for a, b in zip(mine, dump[side]['pos']))} differing")
 
 # The lineup lock (lineup-locks spec, Tasks 2-3): the chance the SP spots bind, by scipy's binomial,
 # and each SP's share from Table 9.2 by its tier and the bench depth

@@ -103,7 +103,9 @@ label.block{margin-bottom:12px}
 .slots label{gap:2px; align-items:stretch}
 .slots label b{text-align:center; font-size:12px; color:var(--muted)}
 .slots input{padding:5px 4px; text-align:center}
-#slots_ui legend .hint{font-weight:400; margin-left:6px}
+#slots_ui legend .hint,#elig_ui legend .hint{font-weight:400; margin-left:6px}
+#elig_ui legend .lab{gap:0}
+#elig_ui legend button.tip{margin-left:6px}
 .scarcity{display:flex; flex-wrap:wrap; gap:6px 8px; align-items:baseline; margin:-2px 0 12px; font-size:13px; color:var(--muted)}
 .scarcity .side{color:var(--faint); font-size:12px; margin-left:6px}
 .scarcity .prem{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:12.5px; background:var(--raise); border:1px solid var(--rule); border-radius:999px; padding:1px 9px; color:var(--faint)}
@@ -199,6 +201,14 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
           <label data-tip="Any pitcher"><b>P</b><input id="pslot_P" type="number" min="0" max="15" step="1" value="4" required></label>
         </div>
       </fieldset>
+      <fieldset id="elig_ui"><legend><span class="lab">Position eligibility <span id="elig_hint" class="hint"></span><button type="button" class="tip" data-tip="The games a player needs at a position to play it, from last season's games; Yahoo's rules by default. A hitter qualifies wherever he has the starts (GS) or the games (G); a pitcher at SP with the starts and at RP with the relief appearances. One short everywhere goes where he played most (UT for a DH). A player without last season's games keeps the projections' positions. Leave a box blank to skip that test">i</button></span></legend>
+        <div class="slots">
+          <label data-tip="A hitter's starts at a position to qualify there (Yahoo: 5)"><b>GS</b><input id="elig_gs" type="number" min="1" max="162" step="1" value="5"></label>
+          <label data-tip="A hitter's games at a position to qualify there (Yahoo: 10)"><b>G</b><input id="elig_g" type="number" min="1" max="162" step="1" value="10"></label>
+          <label data-tip="A pitcher's starts to qualify at SP (Yahoo: 3)"><b>SP GS</b><input id="elig_sp" type="number" min="1" max="40" step="1" value="3"></label>
+          <label data-tip="A pitcher's relief appearances to qualify at RP (Yahoo: 5)"><b>RP G</b><input id="elig_rp" type="number" min="1" max="100" step="1" value="5"></label>
+        </div>
+      </fieldset>
       <div class="pair">
         <label><b>Bench spots</b><input id="bench" type="number" min="0" max="20" step="1" value="5" required></label>
       </div>
@@ -243,9 +253,9 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
       </div>
       <details class="adv" id="proj">
         <summary>Projections</summary>
-        <label><span class="lab"><b>Hitter projections (CSV)</b><button type="button" class="tip" data-tip="Leave empty for the default projections. Needs Name and PA; Team and Y! Pos are used when present">i</button></span><input id="up_h" type="file" accept=".csv,text/csv"></label>
+        <label><span class="lab"><b>Hitter projections (CSV)</b><button type="button" class="tip" data-tip="Leave empty for the default projections. Needs Name and PA; Team, MLBAMID and Y! Pos are used when present (Y! Pos for players without last season's games, matched by MLBAMID)">i</button></span><input id="up_h" type="file" accept=".csv,text/csv"></label>
         <p class="src" id="src_h"></p>
-        <label><span class="lab"><b>Pitcher projections (CSV)</b><button type="button" class="tip" data-tip="Leave empty for the default projections. Needs Name and IP; Team and Y! Pos are used when present">i</button></span><input id="up_p" type="file" accept=".csv,text/csv"></label>
+        <label><span class="lab"><b>Pitcher projections (CSV)</b><button type="button" class="tip" data-tip="Leave empty for the default projections. Needs Name and IP; Team, MLBAMID and Y! Pos are used when present (Y! Pos for players without last season's games, matched by MLBAMID)">i</button></span><input id="up_p" type="file" accept=".csv,text/csv"></label>
         <p class="src" id="src_p"></p>
       </details>
       <details class="adv" id="adv">
@@ -303,6 +313,6 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
   </div>
 </main>
 <div id="tip" role="tooltip" hidden></div>
-<script type="module" src="app.js?v=23"></script>
+<script type="module" src="app.js?v=24"></script>
 </body>
 </html>
