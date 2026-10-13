@@ -64,7 +64,8 @@ function status(msg, kind = "") {
 async function loadDefaults() {
   try {
     const [h, p] = await Promise.all(["h", "p"].map(async (k) => {
-      const r = await fetch(DATA + FILES[k], { cache: "default" });
+      // revalidated every load (a 304 when unchanged), so a new upload shows on the next one
+      const r = await fetch(DATA + FILES[k], { cache: "no-cache" });
       if (!r.ok) throw new Error(`${k === "h" ? "hitters" : "pitchers"}: HTTP ${r.status}`);
       return C.readProjections(await r.text());
     }));

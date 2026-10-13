@@ -1130,10 +1130,10 @@ start, then in passes until it settles:
 
 The passes stop when the pool doesn't change and no denominator moves 1%; a pool that only swaps
 marginal players back and forth with weights within 3% has settled on the mean of its states; after
-20 passes, the mean of the last two (the page says so). On the 2027 projections (as of October 12)
-the Yahoo format settles in 3 passes for hitters and 5 for pitchers, in about 0.2 s. Its
-denominators: R 22.1, HR 9.9, RBI 23.6, SB 11.2, AVG 13.4 hits; W 3.8, SV 9.2, K 54.2, ERA 9.3
-earned runs, WHIP 14.5 walks + hits.
+20 passes, the mean of the last two (the page says so). On the 2027 projections (as of October 13)
+the Yahoo format settles in 4 passes for hitters and 3 for pitchers, in about 0.2 s. Its
+denominators: R 22.6, HR 10.1, RBI 23.9, SB 11.3, AVG 13.4 hits; W 4.3, SV 9.7, K 59.4, ERA 10.9
+earned runs, WHIP 16.9 walks + hits.
 
 **Dollars.** The drafted players are the ones that fill every team's legal roster: each side's
 lineup slots, plus half the bench each (as BN slots anyone fits) unless **Minimize bench value** is
@@ -1153,11 +1153,11 @@ keeps the player order, and the last drafted player on each side still gets the 
 values** puts both sides on one curve instead, so the split is the values' own. A player no legal
 roster has room for (a 13th catcher when nothing else takes him, say) stays under the min bid; a
 player below the last drafted one is priced at his side's average dollars per SGP, since the curve
-starts at him. On the 2027 projections (as of October 12) the Yahoo format (bench minimized)
+starts at him. On the 2027 projections (as of October 13) the Yahoo format (bench minimized)
 prices its 216 lineup players for $3,060 (12 × $260, less 60 bench spots at $1). At the default
-65/35 and γ = 1.05, Pete Crow-Armstrong is first at $67.78 ($64.63 on a straight line) and Tarik
-Skubal the first pitcher at $58.80, at an average $13.77 per SGP for hitters and $9.53 for pitchers.
-The values make it 56/44 (Skubal first at $73.43); without the playing time fill, 67/33. The fill moves value to part-timers with good
+65/35 and γ = 1.05, Pete Crow-Armstrong is first at $75.87 ($71.94 on a straight line) and Tarik
+Skubal the first pitcher at $53.80, at an average $13.88 per SGP for hitters and $8.92 for pitchers.
+The values make it 54/46 (Skubal first at $69.82); without the playing time fill, 63/37. The fill moves value to part-timers with good
 rates (Byron Buxton, Luis Robert Jr., closers) and away from full-time players near replacement
 rates (Bo Bichette, Luis Arraez, back-end starters).
 
@@ -1188,8 +1188,9 @@ with three; Monday/Friday 0.93 to 1.00. The league's pitching shrinks with it: e
 at his share in the pool rates, the draft's spread and a season's luck, so the SGP denominators move
 too (weekly locks cut team innings about 14% in the spec's simulations), which raises pitchers
 against hitters when the split comes from the values. The shares are set once, from the side valued
-without the lock, and held. The Yahoo format rosters 7 SPs for 6 spots: weekly, they bind in 70% of
-weeks and SPs keep 88–97%; Monday/Friday, 3%, so nothing changes. The lock's ⓘ says what it does in
+without the lock, and held. On the October 13 projections the Yahoo format rosters 8 SPs for 6
+spots: weekly, they bind in 94% of weeks and SPs keep 78–94%; Monday/Friday, in 12% of windows, and
+SPs keep 97–99%. The lock's ⓘ says what it does in
 the league on the page, and an SP's position tooltip his tier and share.
 
 **Two-way players** (the same spec, Task 6). A player in both projection files under one MLBAM id
@@ -1199,8 +1200,8 @@ counting) values both rows on their own sides and shows him as one row, at both 
 **One slot**: one player in one spot, hitter or pitcher, switched whenever lineups lock (the
 **Lineup lock**), each lock window taken as whichever it's worth more as, its hitting or its starts.
 Daily, that's the spec's one-slot daily rule: he pitches his start days when a start is worth more
-than a day's hitting, so he's his hitting less those days (`H × (1 − starts/162)`, about 12% for
-Ohtani's 19 starts) plus all his pitching. Weekly, it's the spec's one-slot weekly rule, and
+than a day's hitting, so he's his hitting less those days (`H × (1 − starts/162)`, about 13% for
+Ohtani's 21 starts) plus all his pitching. Weekly, it's the spec's one-slot weekly rule, and
 Monday/Friday switches at each 4- and 3-day half. A window's games and his starts in it come from
 the spec's schedule simulation in closed form (a turn every 6 team games, or 5 past 27 starts, in a
 182-day season with 20 off days, turns skipped to his projected starts: about 6% of weeks have 2
@@ -1210,10 +1211,11 @@ combined value and his pitcher row leaves the pitcher pool, so each side still d
 spends its dollars; his pitching counts at the pitchers' dollars per SGP, since the hitter split can
 make a pitcher's SGP cheaper than a hitter's, and his windows are chosen in those units, so he's
 never worth less than his hitting alone. The roster spot he frees (the spec's `b`) adds nothing: its
-best bench use is a replacement player, 0 above replacement here. In the default league he's $54.96
-as a hitter and $20.69 as a pitcher split; $75.66 simultaneous; and one slot, $69.39 under daily
-locks, $56.74 under Monday/Friday ones, and $54.97 under weekly ones, where no week's starts beat a
-week of his hitting at the pitchers' price.
+best bench use is a replacement player, 0 above replacement here. In the default league (October 13
+projections) he's $55.84 as a hitter and $24.06 as a pitcher, $79.90 simultaneous; one slot, $72.68
+under daily locks, $58.16 under Monday/Friday ones (78% of his hitting, 60% of his pitching), and
+$55.87 under weekly ones, where he pitches only the weeks his starts are worth more than his hitting
+(11% of his pitching).
 
 **Replacement by lineup slot.** Each side's slots (`teams ×` each slot, plus `teams × bench/2` more
 UT or P when the bench isn't minimized) are filled for the most total value: players in order of
@@ -1228,9 +1230,9 @@ non-starters it could add, so one player's projection doesn't set a position's p
 span is 3; 0 is the single last starter). A player is priced against the lowest replacement level
 among the slots he fits; one no slot takes (a DH when there's no UT) is worth a bench spot at most.
 A position whose starters spill into UT, P or a flex slot is exactly as deep as it. On the 2027
-projections the Yahoo format prices C at +$8.02 and everything else level; CBS (one UT, 5 SP and 2
-RP, no P) has C +$9.94, SP +$1.43, 2B / 3B +$0.48, SS +$0.27; five OF, no UT, 6 SP and 3 RP goes C
-+$8.32, SP +$1.65, 2B / 3B / OF +$0.93, SS +$0.42. Without any position info in the projections,
+projections (as of October 13) the Yahoo format prices C at +$12.36 and everything else level; CBS
+(one UT, 5 SP and 2 RP, no P) has C +$18.17, 2B / 3B +$1.13, SS +$0.99, 1B +$0.53; five OF, no UT,
+6 SP and 3 RP goes C +$14.08, 2B / 3B / OF +$1.42, SS +$0.92. Without any position info in the projections,
 every slot takes anyone.
 
 The league formats set teams, hitter slots and pitcher slots only; budget ($260), bench and scoring
@@ -1323,7 +1325,8 @@ node tools/auction_calculator/risk_checks.mjs hitters_auction_ev.csv pitchers_au
 To update the projections, upload new `hitters_auction_ev.csv` / `pitchers_auction_ev.csv` to the
 bucket's `projections/` folder with the same columns (`Name`, `MLBAMID`, `Team`, `Y! Pos`, then
 the stats, and the `<stat>_p10` / `<stat>_p90` percentiles the season's luck is read from). The page shows how many players each default file has, not where
-it comes from. The zone caches them for four hours; purge their URLs to show them sooner. After
+it comes from. The page revalidates them on every load (a 304 when they haven't changed), so a new
+upload shows on the next one; if the zone ever caches them, purge their URLs. After
 any change to the JavaScript, bump the `?v=` on the script tag in `index.html` and on `app.js`'s
 imports of `calc.js` and `risk.js` (`risk.js` imports nothing: `app.js` hands it `calc.js`).
 
