@@ -503,6 +503,124 @@ function categorySpec(T, side, cat, points) {
   return { cat, kind: "rate", sign, num, den, unit: spec.unit, prop: !!spec.prop, sd };
 }
 
+// ---- lineup locks (lineup-locks spec, Tasks 1-4) ---------------------------------------------
+
+// How often a league sets its lineups: every day, twice a week (Monday-Thursday, then
+// Friday-Sunday) or once a week. A lock window's SPs can't be swapped out mid-window, so when a
+// team rosters more SPs than it has SP spots, some of their starts sit on its bench
+export const LOCKS = { daily: [1], split: [4, 3], weekly: [7] };   // window lengths, in days
+// Table 9.2: the share of an SP's value above replacement that a team can use, by bench depth
+// (rostered SPs beyond its SP spots, 1-3) and tier (ace, good, mid, low); daily locks keep it all
+export const KAPPA = {
+  split: { 1: [1.00, 1.00, 0.99, 0.99], 2: [0.99, 0.98, 0.98, 0.97], 3: [0.98, 0.97, 0.96, 0.93] },
+  weekly: { 1: [0.97, 0.95, 0.92, 0.88], 2: [0.94, 0.91, 0.85, 0.78], 3: [0.91, 0.87, 0.81, 0.69] },
+};
+export const SP_TIERS = ["ace", "good", "mid", "low"];
+const TIER_CUTS = [0.15, 0.40, 0.70];   // ace: the top 15% of drafted SPs by value per start; good, the next 25%; mid, 30%
+const choose = (n, k) => { let c = 1; for (let j = 1; j <= k; j++) c = (c * (n - k + j)) / j; return c; };
+/** The chance one SP has a start in a window of `days` (5-man rotation, 6% of turns skipped) */
+export function qWindow(days, rotation = 5, skip = 0.06) {
+  const rate = ((162 / 182) / rotation) * (1 - skip);
+  return days < rotation ? Math.min(1, rate * days) : 0.95;
+}
+/** The chance more of a team's nSP starters pitch in a window than it has S spots for: P(K > S) */
+export function pBind(nSP, S, q) {
+  let p = 0;
+  for (let k = S + 1; k <= nSP; k++) p += choose(nSP, k) * q ** k * (1 - q) ** (nSP - k);
+  return p;
+}
+/** The same, averaged over a lock's windows (twice weekly: a 4-day and a 3-day one) */
+export const pBindLock = (lock, nSP, S) => LOCKS[lock].reduce((a, d) => a + pBind(nSP, S, qWindow(d)), 0) / LOCKS[lock].length;
+
+// Task 1: a typical team's SPs, from the side valued without the lock: S, the SPs in its lineup
+// (SP spots and the P spots SPs take), and nSP, those plus the SPs on its bench (the pitchers'
+// half of the bench, minimized or not: it's rostered either way). Task 3: if the slots bind in
+// under 5% of windows the lock changes nothing. Task 2 (capture factors): each SP's tier by his
+// value per start among the drafted SPs (undrafted ones are low), and its share from Table 9.2
+function lockSpecOf(c, bare) {
+  const roles = rolesOf(c.T, "p");
+  const { slot } = positionReplacement(bare.score, c.pos, { ...c.lineupCaps, BN: c.benchFull }, { ...c.types, BN: null }, 0);
+  const rostered = [];
+  let active = 0;
+  slot.forEach((t, i) => { if (t !== null && roles[i] === "SP") { rostered.push(i); if (t !== "BN") active++; } });
+  const S = Math.round(active / c.N), nSP = Math.round(rostered.length / c.N), depth = nSP - S;
+  const info = { lock: c.lock, S, nSP, depth, pBind: pBindLock(c.lock, nSP, S), kappa: null, tier: null };
+  if (c.lock === "daily" || info.pBind < 0.05 || depth < 1) return info;
+  const gs = isNumeric(c.T, "GS") ? c.T.data.GS : null, ip = c.T.data.IP;
+  const perStart = (i) => bare.score[i] / (gs && gs[i] > 0 ? gs[i] : Math.max(1, ip[i] / 5.5));
+  rostered.sort((a, b) => perStart(b) - perStart(a));
+  const tier = roles.map((r) => (r === "SP" ? 3 : null));
+  rostered.forEach((i, j) => { const q = j / rostered.length; tier[i] = TIER_CUTS.findIndex((cut) => q < cut); if (tier[i] < 0) tier[i] = 3; });
+  const shares = KAPPA[c.lock][Math.min(3, depth)];
+  return { ...info, tier, kappa: tier.map((t) => (t === null ? 1 : shares[t])) };
+}
+
+// ---- two-way players (lineup-locks spec, Task 6) ----------------------------------------------
+
+// How a league lists a player who hits and pitches (by MLBAM id, a row in each file): as two
+// players (split); as one who fills a hitter and a pitcher spot at once, both lines counting
+// (simultaneous); or as one in one spot, hitter or pitcher chosen each day or each week
+export const TWO_WAY_MODES = ["split", "simultaneous", "daily", "weekly"];
+const SEASON_DAYS = 182, OFF_DAYS = 20, GAMES = 162, WEEKS = 26;
+// A week's team games: 7 days of a 182-day season with 20 off days
+const WEEK_GAMES = Array.from({ length: 8 }, (_, k) => (choose(GAMES, k) * choose(OFF_DAYS, 7 - k)) / choose(SEASON_DAYS, 7));
+// A starter's weeks, as [chance, team games, his starts]: a turn every 6 team games (5 when he
+// projects for more than 27 starts) from a random start, with turns skipped (rest, innings
+// limits) so the season comes to his projected starts. The spec's schedule simulation, in closed
+// form: about 6% of weeks have 2 starts in a 6-man rotation
+function startWeeks(starts) {
+  const r = starts <= GAMES / 6 ? 6 : 5, keep = Math.min(1, (starts * r) / GAMES);
+  const weeks = [];
+  WEEK_GAMES.forEach((pg, g) => {
+    const base = Math.floor(g / r), frac = g / r - base;
+    for (const [turns, pt] of [[base, 1 - frac], [base + 1, frac]]) {
+      if (pt <= 0) continue;
+      for (let n = 0; n <= turns; n++) weeks.push([pg * pt * choose(turns, n) * keep ** n * (1 - keep) ** (turns - n), g, n]);
+    }
+  });
+  return weeks;
+}
+/**
+ * A two-way player's SGP above replacement from his hitting (H) and his pitching (P, each above
+ * its own replacement) and his projected starts, as his league uses him: both lines at once; one
+ * spot, chosen daily (he pitches his start days when a start beats a day's hitting, and loses
+ * those days' hitting, about 15%); or chosen weekly (each week, its hitting or its starts,
+ * whichever is worth more). The roster spot he saves (b) adds nothing: a spot's best bench use
+ * is a replacement player, 0 above replacement here. Split leagues value two players (NaN)
+ */
+export function twoWayValue(H, P, mode, starts) {
+  if (mode === "split") return NaN;
+  const { hit, pitch } = twoWayShares(H, P, mode, starts);
+  return hit * H + pitch * P;
+}
+/** The same as the shares of his season hitting and pitching he's used for (value = hit·H + pitch·P) */
+export function twoWayShares(H, P, mode, starts) {
+  if (mode === "simultaneous") return H > 0 || P > 0 ? { hit: H > 0 ? 1 : 0, pitch: P > 0 ? 1 : 0 } : H >= P ? { hit: 1, pitch: 0 } : { hit: 0, pitch: 1 };
+  if (!(starts > 0) || (mode !== "daily" && mode !== "weekly")) return { hit: 1, pitch: 0 };
+  if (mode === "daily") return P / starts > H / GAMES ? { hit: 1 - starts / GAMES, pitch: 1 } : { hit: 1, pitch: 0 };
+  const weeks = startWeeks(starts);
+  const En = weeks.reduce((a, [q, , n]) => a + q * n, 0), perStart = P / (WEEKS * En);
+  let hit = 0, pitch = 0;
+  for (const [q, g, n] of weeks) {
+    if ((H * g) / GAMES >= n * perStart) hit += (WEEKS * q * g) / GAMES;
+    else pitch += (q * n) / En;
+  }
+  return { hit, pitch };
+}
+// The hitter and pitcher rows of each two-way player (one MLBAM id, playing time in both files)
+function twoWayPairs(H, P) {
+  const id = (T, i) => (T.data.MLBAMID ? T.data.MLBAMID[i] : null);
+  const hitters = new Map();
+  for (let i = 0; i < H.n; i++) if (id(H, i) !== null && id(H, i) !== "" && H.data.PA[i] > 0) hitters.set(String(id(H, i)), i);
+  const pairs = [];
+  for (let i = 0; i < P.n; i++) {
+    const ih = id(P, i) !== null ? hitters.get(String(id(P, i))) : undefined;
+    if (ih !== undefined && P.data.IP[i] > 0) pairs.push({ ih, ip: i });
+  }
+  return pairs;
+}
+const startsOf = (P, i) => (isNumeric(P, "GS") && P.data.GS[i] > 0 ? P.data.GS[i] : P.data.IP[i] / 5.5);
+
 /** Each player's role, for filling his missing playing time: C or H; SP or RP (or P) */
 function rolesOf(T, side) {
   if (side === "h") return T.data["Y! Pos"].map((p) => (tokensOf(p).includes("C") ? "C" : "H"));
@@ -528,9 +646,16 @@ function rolesOf(T, side) {
  * free agent supplies over a season, and the pool and the fill chase each other.)
  */
 function valueSide(c) {
-  if (!c.fillPT) return valueSideWith(c, null);
+  const locked = c.side === "p" && !!c.lock && c.lock !== "daily";
+  if (!c.fillPT && !locked) return valueSideWith(c, null, null);
   // (the bare run only has to settle the pool and each player's own value: no span refills)
-  const bare = valueSideWith({ ...c, span: 0, specialists: false }, null);
+  const bare = valueSideWith({ ...c, span: 0, specialists: false }, null, null);
+  const lockSpec = locked ? lockSpecOf(c, bare) : null;
+  const fillSpec = c.fillPT ? fillSpecOf(c, bare) : null;
+  return { ...valueSideWith(c, fillSpec, lockSpec), lock: lockSpec };
+}
+
+function fillSpecOf(c, bare) {
   const roles = rolesOf(c.T, c.side);
   const vol = c.T.data[c.side === "h" ? "PA" : "IP"].map((v) => (Number.isNaN(v) ? 0 : v));
   const pool = [];
@@ -552,10 +677,10 @@ function valueSide(c) {
       perUnit: c.specs.map((sp) => (sp.kind === "count" ? { count: per(sp.raw) } : { num: per(sp.num), den: per(sp.den) })),
     };
   }
-  return valueSideWith(c, fillSpec);
+  return fillSpec;
 }
 
-function valueSideWith(c, fillSpec) {
+function valueSideWith(c, fillSpec, lockSpec) {
   const n = c.T.n, K = c.specs.length, N = c.N;
   const volCol = c.side === "h" ? "PA" : "IP";
   const vol = c.T.data[volCol].map((v) => (Number.isNaN(v) ? 0 : v));
@@ -567,6 +692,9 @@ function valueSideWith(c, fillSpec) {
     : c.format === "allplay" ? [c.weeks * (N - 1), c.weeks] : [N - 1, 1];
   const catcherGroup = c.side === "h" && (c.caps.C || 0) > 0;
   const typeIndex = (byPos) => new Map(byPos.levels.map((l, k) => [l.slot, k]));
+  // Task 4: a lock cuts the pitching a team can use, so the league's team totals (its pool
+  // rates, the draft's spread, a season's luck) count each SP at his share of his line
+  const w = lockSpec && lockSpec.kappa ? lockSpec.kappa : null;
 
   let value = c.start.slice();   // draft order: start values, then (linear) SGP above replacement
   let byPos = positionReplacement(c.start, c.pos, c.caps, c.types, 0);
@@ -583,7 +711,7 @@ function valueSideWith(c, fillSpec) {
     const own = c.specs.map((sp, k) => {
       if (sp.kind === "count") return sp.raw.map((v) => sp.sign * v);
       let sn = 0, sd = 0;
-      for (const i of pool) { sn += sp.num[i]; sd += sp.den[i]; }
+      for (const i of pool) { const wi = w ? w[i] : 1; sn += wi * sp.num[i]; sd += wi * sp.den[i]; }
       const r = sd > 0 ? sn / sd : 0;
       rates[k] = r;
       return sp.num.map((v, i) => sp.sign * (v - r * sp.den[i]));
@@ -605,7 +733,8 @@ function valueSideWith(c, fillSpec) {
         // Task 5: the draft's spread of team totals, tier by tier in draft order
         const groups = catcherGroup
           ? [pool.filter((i) => byPos.slot[i] === "C"), pool.filter((i) => byPos.slot[i] !== "C")] : [pool];
-        sigmaDraft = x.map((xk) => {
+        const xT = w ? x.map((xk) => xk.map((v, i) => v * w[i])) : x;
+        sigmaDraft = xT.map((xk) => {
           let total = 0;
           for (const g of groups) {
             const ordered = g.slice().sort((a, b) => value[b] - value[a]);
@@ -624,15 +753,15 @@ function valueSideWith(c, fillSpec) {
         nu = c.specs.map((sp, k) => {
           let total = 0;
           for (const i of pool) {
-            const xi = own[k][i];
+            const wi = w ? w[i] : 1, xi = wi * own[k][i];
             if (sp.kind === "count") {
-              total += sp.sd && Number.isFinite(sp.sd[i]) ? sp.sd[i] ** 2 : c.phi * Math.abs(sp.raw[i]) + (cv[i] * xi) ** 2;
+              total += sp.sd && Number.isFinite(sp.sd[i]) ? (wi * sp.sd[i]) ** 2 : c.phi * wi * Math.abs(sp.raw[i]) + (cv[i] * xi) ** 2;
             } else if (sp.sd && Number.isFinite(sp.sd[i]) && sp.den[i] > 0) {
               const rate = sp.num[i] / sp.den[i];
-              total += (sp.den[i] * sp.sd[i]) ** 2 + ((rate - rates[k]) * sp.den[i] * cv[i]) ** 2;
+              total += (wi * sp.den[i] * sp.sd[i]) ** 2 + ((rate - rates[k]) * wi * sp.den[i] * cv[i]) ** 2;
             } else {
               const count = sp.prop && sp.den[i] > 0 ? sp.num[i] * (1 - sp.num[i] / sp.den[i]) : Math.abs(sp.num[i]);
-              total += c.phi * Math.max(0, count) + (cv[i] * xi) ** 2;
+              total += c.phi * wi * Math.max(0, count) + (cv[i] * xi) ** 2;
             }
           }
           return total / N;
@@ -666,10 +795,13 @@ function valueSideWith(c, fillSpec) {
       // a player no slot takes (a DH with no UT) is worth a bench spot at most
       sgpar[i] = bp.valuedAt[i] === null ? Math.min(0, lin[i] + specAdj[i]) : lin[i] + specAdj[i];
     }
+    // Task 2: under a binding lock an SP keeps his tier's share of his value above replacement
+    const lockAdj = w ? sgpar.map((v, i) => (v > 0 && w[i] < 1 ? (w[i] - 1) * v : 0)) : null;
+    if (lockAdj) for (let i = 0; i < n; i++) sgpar[i] += lockAdj[i];
     const ownScore = new Array(n).fill(0);
     for (let k = 0; k < K; k++) for (let i = 0; i < n; i++) ownScore[i] += G[k] * own[k][i];
     return {
-      G, sigmaDraft, nu, rates, own, fill, x, targets: fillSpec, score, ownScore, byPos: bp, lin, specAdj, sgpar, deepLevel, deepVec,
+      G, sigmaDraft, nu, rates, own, fill, x, targets: fillSpec, score, ownScore, byPos: bp, lin, specAdj, lockAdj, sgpar, deepLevel, deepVec,
       inPool, poolSlot: byPos.slot, order: value, sigma, caps: c.caps,
     };
   }
@@ -724,7 +856,8 @@ function draftPool(value, posStrings, caps, types, benchSlots) {
  *   style ("Categories" | "Points"), format ("roto" | "h2h" | "allplay"), weeks,
  *   minBid, budget, hitterShare (0-1: the hitters' share of the dollars above the min bids;
  *   null for the split the values make), curve (1 or more: the dollar curve's exponent, 1 for
- *   a straight line),
+ *   a straight line), lock ("daily" | "split" | "weekly": how often lineups are set),
+ *   twoWay ("split" | "simultaneous" | "daily" | "weekly": how two-way players are used),
  *   phi, ptCV (noise where the projections have no percentiles), fillPT, specialists,
  *   hitterCats, pitcherCats (Categories), hitterPoints, pitcherPoints ([[cat, pts]], Points)
  * Exactly the players on legal rosters (lineups, plus the bench unless it's minimized) are
@@ -733,8 +866,9 @@ function draftPool(value, posStrings, caps, types, benchSlots) {
  * by the hitter share, or with no share at one $/SGP across both sides, so the values set the
  * split.
  * Returns { players, hitterCols, pitcherCols, positions, valueCols, weights, split (the values'
- * own), hitterShare (the one used), perSGP ({ h, p }: each side's average), curve, iterations,
- * converged }, players sorted by value.
+ * own), hitterShare (the one used), perSGP ({ h, p }: each side's average), curve, lock (the
+ * typical roster and whether its SP spots bind), twoWay, iterations, converged }, players sorted
+ * by value.
  */
 export function auctionValues(H, P, s) {
   const bench = s.minimizeBench ? 0 : s.bench;
@@ -771,6 +905,7 @@ export function auctionValues(H, P, s) {
   });
   const p = valueSide({
     ...opts, T: P, side: "p", pos: pPos, caps: withAny(pCaps, "P", benchOf(pitchers)), types: PITCHER_SLOT_TYPES, start: pStart.total,
+    lock: s.lock ?? "daily", lineupCaps: pCaps, benchFull: s.teams * s.bench - Math.floor((s.teams * s.bench) / 2),
     specs: points ? pPoints.map(([c, w]) => categorySpec(P, "p", c, w)) : pitcherCats.map((c) => categorySpec(P, "p", c)),
   });
 
@@ -784,25 +919,52 @@ export function auctionValues(H, P, s) {
   // γ = 1 is a straight line; above it a star costs more than lesser players with the same SGP
   // between them. The last drafted player still gets the min bid and each side its dollars
   const benchH = Math.floor((s.teams * bench) / 2);
-  const hSlot = draftPool(h.sgpar, hPos, hCaps, SLOT_TYPES, benchH);
-  const pSlot = draftPool(p.sgpar, pPos, pCaps, PITCHER_SLOT_TYPES, s.teams * bench - benchH);
   const spare = s.teams * s.budget - s.teams * (hitters + pitchers + s.bench) * s.minBid;
   const baseOf = (v, slot) => Math.min(...v.filter((_, i) => slot[i] !== null));
-  const hBase = baseOf(h.sgpar, hSlot), pBase = baseOf(p.sgpar, pSlot);
   const over = (v, slot, base) => v.reduce((a, x, i) => (slot[i] !== null ? a + x - base : a), 0);
   const gamma = Math.max(1, s.curve ?? 1);
   const curved = (v, slot, base) => v.reduce((a, x, i) => (slot[i] !== null ? a + Math.max(0, x - base) ** gamma : a), 0);
-  const hOver = over(h.sgpar, hSlot, hBase), pOver = over(p.sgpar, pSlot, pBase);
-  const hCurve = curved(h.sgpar, hSlot, hBase), pCurve = curved(p.sgpar, pSlot, pBase);
-  const hN = hSlot.filter((t) => t !== null).length, pN = pSlot.filter((t) => t !== null).length;
-  // The values' own split: one curve across both sides (by head count when everyone's level)
-  const ownShare = hCurve + pCurve > 0 ? hCurve / (hCurve + pCurve) : hN + pN > 0 ? hN / (hN + pN) : 0.5;
-  const share = s.hitterShare ?? ownShare;
   // A side's curve (k), its average dollars per SGP over its last player, or its dollars split
   // evenly when nobody's above him
   const rateOf = (sgp, curve, n, dollars) => (sgp > 0 ? { k: dollars / curve, perSGP: dollars / sgp, flat: 0 }
     : { k: 0, perSGP: 0, flat: n ? dollars / n : 0 });
-  const hRate = rateOf(hOver, hCurve, hN, share * spare), pRate = rateOf(pOver, pCurve, pN, (1 - share) * spare);
+  // Each side's drafted players and its last one (the base), the split, and each side's curve
+  const price = () => {
+    const hSlot = draftPool(h.sgpar, hPos, hCaps, SLOT_TYPES, benchH);
+    const pSlot = draftPool(p.sgpar, pPos, pCaps, PITCHER_SLOT_TYPES, s.teams * bench - benchH);
+    const hBase = baseOf(h.sgpar, hSlot), pBase = baseOf(p.sgpar, pSlot);
+    const hOver = over(h.sgpar, hSlot, hBase), pOver = over(p.sgpar, pSlot, pBase);
+    const hCurve = curved(h.sgpar, hSlot, hBase), pCurve = curved(p.sgpar, pSlot, pBase);
+    const hN = hSlot.filter((t) => t !== null).length, pN = pSlot.filter((t) => t !== null).length;
+    // The values' own split: one curve across both sides (by head count when everyone's level)
+    const ownShare = hCurve + pCurve > 0 ? hCurve / (hCurve + pCurve) : hN + pN > 0 ? hN / (hN + pN) : 0.5;
+    const share = s.hitterShare ?? ownShare;
+    return { hSlot, pSlot, hBase, pBase, ownShare, share,
+      hRate: rateOf(hOver, hCurve, hN, share * spare), pRate: rateOf(pOver, pCurve, pN, (1 - share) * spare) };
+  };
+
+  // Two-way players: in a one-spot league (chosen daily or weekly) he's in the hitter pool at his
+  // combined value, and his pitcher row leaves the pitcher pool, so each side still drafts its
+  // spots and spends its dollars. His pitching counts at the pitchers' price, since the hitter
+  // split can make a pitcher's SGP cost less than a hitter's. Simultaneous leagues value both
+  // rows on their own sides, then show them as one
+  const twoWay = s.twoWay ?? "split";
+  const pairs = twoWay === "split" ? [] : twoWayPairs(H, P);
+  const oneSpot = twoWay === "daily" || twoWay === "weekly";
+  h.twAdj = new Array(H.n).fill(0);
+  const before = pairs.length && oneSpot ? price() : null;
+  const ratio = before && before.hRate.perSGP > 0 ? before.pRate.perSGP / before.hRate.perSGP : 1;
+  for (const t of pairs) {
+    t.H = h.sgpar[t.ih]; t.P = p.sgpar[t.ip]; t.starts = startsOf(P, t.ip);
+    if (!oneSpot || !Number.isFinite(t.H) || !Number.isFinite(t.P)) continue;
+    // (his days or weeks are chosen in those same units, so he's never worth less than either role)
+    Object.assign(t, twoWayShares(t.H, t.P * ratio, twoWay, t.starts));
+    const V = t.hit * t.H + t.pitch * t.P * ratio;
+    h.twAdj[t.ih] = V - t.H;
+    h.sgpar[t.ih] = V;
+    p.sgpar[t.ip] = NaN;
+  }
+  const { hSlot, pSlot, hBase, pBase, ownShare, share, hRate, pRate } = price();
   // A player's own dollars per SGP, so his dollars are the min bid + rate × (SGP over the last
   // drafted player): the curve's k·u^(γ−1) above him; below him (no curve there) the side's average
   const rateAt = (u, r) => (u > 0 ? r.k * u ** (gamma - 1) : r.perSGP);
@@ -830,10 +992,12 @@ export function auctionValues(H, P, s) {
     const level = t === null ? side.deepLevel : side.byPos.levels.find((l) => l.slot === t).level;
     const position = perSGP * (side.deepLevel - level);
     const specialist = perSGP * side.specAdj[i];
+    const lock = perSGP * (side.lockAdj ? side.lockAdj[i] : 0);
+    const twoWayPart = perSGP * (side.twAdj ? side.twAdj[i] : 0);
     const baseline = -perSGP * base + (slot[i] !== null ? flat : 0);
-    sum += fill + position + specialist + baseline;
+    sum += fill + position + specialist + lock + twoWayPart + baseline;
     const other = value[i] - sum;
-    return { minBid: s.minBid, baseline, position, fill, specialist, stats, other: Math.abs(other) < 1e-9 ? 0 : other };
+    return { minBid: s.minBid, baseline, position, fill, specialist, lock, twoWay: twoWayPart, stats, other: Math.abs(other) < 1e-9 ? 0 : other };
   });
   h.catNames = hitterCats; p.catNames = pitcherCats;
   const hParts = parts(h, hValue, hSlot, hBase, hRate), pParts = parts(p, pValue, pSlot, pBase, pRate);
@@ -841,6 +1005,7 @@ export function auctionValues(H, P, s) {
   const hitterCols = ["PA", ...hitterCats.filter((c) => c !== "PA")];
   const pitcherCols = ["IP", ...pitcherCats.filter((c) => c !== "IP")];
   const players = [];
+  const rows = { h: [], p: [] };
   const add = (T, side, start, value, slot, type, cols, partsOf) => {
     for (let i = 0; i < T.n; i++) {
       const stats = {};
@@ -852,11 +1017,44 @@ export function auctionValues(H, P, s) {
         start: start.total[i], points: points ? start.total[i] : NaN, sgp: side.score[i], sgpar: side.sgpar[i],
         value: v,
         drafted: slot[i] !== null, slot: slot[i], valuedAt: side.byPos.valuedAt[i], stats, breakdown: partsOf[i],
+        lockShare: side.lock && side.lock.kappa ? side.lock.kappa[i] : 1,
+        lockTier: side.lock && side.lock.tier && side.lock.tier[i] !== null ? SP_TIERS[side.lock.tier[i]] : null,
       });
+      rows[type][i] = players[players.length - 1];
     }
   };
   add(H, h, hStart, hValue, hSlot, "h", hitterCols, hParts);
   add(P, p, pStart, pValue, pSlot, "p", pitcherCols, pParts);
+  // A two-way player shows as one row, his hitter row, with his pitching beside it: in a
+  // one-spot league priced into it already; in a simultaneous one his pitcher row's dollars and
+  // parts added on (he's drafted for both spots), so the rows' totals don't change
+  const sumParts = (a, b) => {
+    const out = { stats: a.stats, pstats: b.stats };
+    for (const key of ["minBid", "baseline", "position", "fill", "specialist", "lock", "twoWay", "other"]) out[key] = a[key] + b[key];
+    return out;
+  };
+  for (const t of pairs) {
+    const hp = rows.h[t.ih], pp = rows.p[t.ip];
+    hp.twoWay = { mode: twoWay, pos: pp.pos, stats: pp.stats, H: t.H, P: t.P, starts: t.starts, hit: t.hit ?? 1, pitch: t.pitch ?? 0, priceRatio: ratio,
+      hPos: hp.pos, hValue: hp.value, hDrafted: hp.drafted, pDrafted: false, value: 0 };
+    hp.pos = `${hp.pos},${pp.pos}`;
+    if (twoWay === "simultaneous" && pp.drafted) {
+      if (hp.drafted) {
+        hp.value += pp.value;
+        hp.breakdown = sumParts(hp.breakdown, pp.breakdown);
+        hp.slot = `${hp.slot} + ${pp.slot}`;
+      } else {
+        hp.value = pp.value;
+        hp.breakdown = { ...pp.breakdown, stats: {}, pstats: pp.breakdown.stats };
+        hp.drafted = true;
+        hp.slot = pp.slot;
+      }
+      hp.twoWay.value = pp.value;
+      hp.twoWay.pitch = 1;
+      hp.twoWay.pDrafted = true;
+    }
+    players.splice(players.indexOf(pp), 1);
+  }
   players.sort((a, b) => (Number.isNaN(a.value) ? 1 : Number.isNaN(b.value) ? -1 : b.value - a.value));
   rankDescending(players);
 
@@ -877,7 +1075,8 @@ export function auctionValues(H, P, s) {
   return {
     players, hitterCols, pitcherCols, positions, valueCols: { h: hitterCats, p: pitcherCats },
     weights: { h: weights(h, hSpecs), p: weights(p, pSpecs) }, split: { hitters: ownShare, pitchers: 1 - ownShare }, hitterShare: share,
-    perSGP: { h: hRate.perSGP, p: pRate.perSGP }, curve: gamma,
+    perSGP: { h: hRate.perSGP, p: pRate.perSGP }, curve: gamma, lock: p.lock || null,
+    twoWay: { mode: twoWay, players: pairs.map((t) => rows.h[t.ih].name) },
     iterations: { h: h.iterations, p: p.iterations }, converged: h.converged && p.converged,
     fillTargets: { h: h.targets, p: p.targets },
     // the last pass's workings, for tools/auction_calculator/sgp_check.py

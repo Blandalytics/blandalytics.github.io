@@ -4,7 +4,8 @@
 // legally; that the Slot column agrees with who is drafted; and that each player's value breakdown
 // adds back up to his dollars; that a hitter share gives hitters exactly that share of the dollars
 // above the min bids (with none, the share is the values' own), on a straight or a convex dollar
-// curve; and that the valuation settled.
+// curve, under any lineup lock and two-way mode (a simultaneous two-way row counted as the hitter
+// and the pitcher it merges); and that the valuation settled.
 //
 //   node invariants.mjs hitters.csv pitchers.csv
 import { readFileSync } from "node:fs";
@@ -28,6 +29,10 @@ const variants = [
   { hitterShare: 1 }, { hitterShare: 0 },
   { curve: 1.1 }, { curve: 1.1, hitterShare: 0.65 }, { curve: 1.3, minimizeBench: false }, { curve: 1.5, minBid: 0 },
   { curve: 1.2, hitterShare: 0.5, style: "Points", hitterPoints: C.DEFAULT_HITTER_POINTS, pitcherPoints: C.DEFAULT_PITCHER_POINTS },
+  { lock: "split" }, { lock: "weekly" }, { lock: "weekly", minimizeBench: false, bench: 7 }, { lock: "weekly", hitterShare: 0.65, curve: 1.05 },
+  { lock: "weekly", style: "Points", hitterPoints: C.DEFAULT_HITTER_POINTS, pitcherPoints: C.DEFAULT_PITCHER_POINTS },
+  { twoWay: "simultaneous" }, { twoWay: "simultaneous", hitterShare: 0.65, minimizeBench: false }, { twoWay: "daily" },
+  { twoWay: "daily", hitterShare: 0.65, curve: 1.05 }, { twoWay: "weekly", lock: "weekly" }, { twoWay: "weekly", hitterShare: 0.65, lock: "weekly" },
 ];
 let fails = 0, runs = 0;
 for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (const v of variants) {
@@ -36,19 +41,24 @@ for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (co
     hitterCats: C.DEFAULT_HITTER_CATS, pitcherCats: C.DEFAULT_PITCHER_CATS, pool: "All", includeFa: true, hitterShare: null, ...v };
   const H = C.prepHitters(raw.h, s.pool, s.includeFa), P = C.prepPitchers(raw.p, s.pool, s.includeFa);
   const res = C.auctionValues(H, P, s);
+  // a simultaneous two-way row, back into the hitter and the pitcher it merges
+  const rows = res.players.flatMap((p) => (p.twoWay && p.twoWay.mode === "simultaneous" && p.twoWay.pDrafted
+    ? [{ ...p, value: p.twoWay.hValue, drafted: p.twoWay.hDrafted, pos: p.twoWay.hPos },
+      { type: "p", value: p.twoWay.value, drafted: true, pos: p.twoWay.pos, slot: "P" }]
+    : [p]));
   const effBench = s.minimizeBench ? 0 : s.bench;
   const spots = s.teams * (s.hitters + s.pitchers + effBench);
   // what the priced players cost: the budget, less a minimized bench's min bids (it's drafted at them)
   const budget = s.teams * s.budget - s.teams * (s.bench - effBench) * s.minBid;
-  const atMin = res.players.filter((p) => p.value >= s.minBid - 1e-9);
+  const atMin = rows.filter((p) => p.value >= s.minBid - 1e-9);
   const total = atMin.reduce((a, p) => a + p.value, 0);
-  const drafted = res.players.filter((p) => p.drafted);
+  const drafted = rows.filter((p) => p.drafted);
   const sameSet = atMin.length === drafted.length && atMin.every((p) => p.drafted);
   // legal: each side's drafted players fill its slots (plus its bench share)
   const benchH = Math.floor(s.teams * effBench / 2);
   const legal = ["h", "p"].every((side) => {
     const T = side === "h" ? C.SLOT_TYPES : C.PITCHER_SLOT_TYPES;
-    const ps = res.players.filter((p) => p.type === side && p.drafted);
+    const ps = rows.filter((p) => p.type === side && p.drafted);
     const per = side === "h" ? slots : pitcherSlots;
     const caps = Object.fromEntries(Object.entries(per).map(([t, n]) => [t, s.teams * n]));
     const any = side === "h" ? "UT" : "P";
@@ -62,7 +72,8 @@ for (const [name, [teams, slots, pitcherSlots]] of Object.entries(fmts)) for (co
   const hitterDollars = drafted.filter((p) => p.type === "h").reduce((a, p) => a + p.value - s.minBid, 0);
   const shareOk = res.hitterShare === share && Math.abs(hitterDollars - share * (budget - spots * s.minBid)) < 1e-6;
   // the breakdown adds back up to every player's dollars
-  const parts = (b) => b.minBid + Object.values(b.stats).reduce((a, v) => a + v, 0) + b.baseline + b.position + b.fill + b.specialist + b.other;
+  const statSum = (o) => Object.values(o || {}).reduce((a, v) => a + v, 0);
+  const parts = (b) => b.minBid + statSum(b.stats) + statSum(b.pstats) + b.baseline + b.position + b.fill + b.specialist + b.lock + b.twoWay + b.other;
   const adds = res.players.every((p) => (p.breakdown ? Math.abs(parts(p.breakdown) - p.value) < 1e-6 : Number.isNaN(p.value)));
   const ok = atMin.length === spots && Math.abs(total - budget) < 1e-6 && sameSet && legal && slotsAgree && adds && shareOk && res.converged;
   runs++;

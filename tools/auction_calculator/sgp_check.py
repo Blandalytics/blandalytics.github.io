@@ -17,7 +17,7 @@ from math import pi, sqrt
 import numpy as np
 import pandas as pd
 from scipy.optimize import linear_sum_assignment
-from scipy.stats import norm
+from scipy.stats import binom, norm
 
 Z90 = 1.2815515655446004
 
@@ -87,9 +87,28 @@ def check(label, mine, theirs, tol=1e-9):
     print(f"  {'ok ' if good else 'BAD'} {label}: max rel diff {err:.1e}")
 
 
+# The lineup lock (lineup-locks spec, Tasks 2-3): the chance the SP spots bind, by scipy's binomial,
+# and each SP's share from Table 9.2 by its tier and the bench depth
+L = dump.get("lock")
+KAPPA = {"split": {1: [1.00, 1.00, 0.99, 0.99], 2: [0.99, 0.98, 0.98, 0.97], 3: [0.98, 0.97, 0.96, 0.93]},
+         "weekly": {1: [0.97, 0.95, 0.92, 0.88], 2: [0.94, 0.91, 0.85, 0.78], 3: [0.91, 0.87, 0.81, 0.69]}}
+if L:
+    def q_window(days, rotation=5, skip=0.06):
+        rate = 162 / 182 / rotation * (1 - skip)
+        return min(1.0, rate * days) if days < rotation else 0.95
+    windows = {"daily": [1], "split": [4, 3], "weekly": [7]}[L["lock"]]
+    p_bind = np.mean([binom.sf(L["S"], L["nSP"], q_window(w)) for w in windows])
+    print(f"lock {L['lock']}: {L['nSP']} SPs for {L['S']} spots")
+    check(f"P(bind) {p_bind:.3f} (Task 3)", p_bind, L["pBind"])
+    if L["kappa"]:
+        shares = [1.0 if t is None else KAPPA[L["lock"]][min(3, L["depth"])][t] for t in L["tier"]]
+        check("capture factors by tier and bench depth (Table 9.2)", shares, L["kappa"])
+
 for side, D in (("h", H), ("p", P)):
     d = dump[side]
     pool = np.array(d["pool"])
+    # each SP at his share of his line in the league's totals (Task 4), and of his SGPAR (Task 2)
+    w = np.array(d["kappa"], dtype=float) if d.get("kappa") else np.ones(len(D))
     vol = D["PA" if side == "h" else "IP"].fillna(0).to_numpy()
     vsd = None
     vcol = "PA" if side == "h" else "IP"
@@ -103,7 +122,7 @@ for side, D in (("h", H), ("p", P)):
         if cat in RATES[side]:
             num_f, den_f, lower = RATES[side][cat]
             num, den = num_f(D).fillna(0).to_numpy(), den_f(D).fillna(0).to_numpy()
-            r = num[pool].sum() / den[pool].sum()
+            r = (w * num)[pool].sum() / (w * den)[pool].sum()
             check(f"{cat} pool rate {r:.4f}", r, d["rates"][k])
             own = (r * den - num) if lower else (num - r * den)
         else:
@@ -117,23 +136,23 @@ for side, D in (("h", H), ("p", P)):
         groups = [pool]
         if side == "h" and S["slots"].get("C", 0) > 0:
             groups = [pool[slots[pool] == "C"], pool[slots[pool] != "C"]]
-        vd = sum(draft_variance(values[g], x[g], N) for g in groups)
+        vd = sum(draft_variance(values[g], (w * x)[g], N) for g in groups)
         check(f"{cat} draft variance (Task 5)", vd, d["sigmaDraft"][k])
         # Task 6: the projections' 10th/90th percentiles, else the placeholder
         if f"{cat}_p10" in D:
             sd = ((D[f"{cat}_p90"] - D[f"{cat}_p10"]) / (2 * Z90)).to_numpy()
             if cat in RATES[side]:
                 rate = np.where(den > 0, num / np.where(den > 0, den, 1), 0)
-                var = (den * sd) ** 2 + ((rate - r) * den * cv) ** 2
+                var = (w * den * sd) ** 2 + ((rate - r) * w * den * cv) ** 2
             else:
-                var = sd**2
+                var = (w * sd) ** 2
             nu = var[pool].sum() / N
         elif cat in RATES[side]:
             count = num * (1 - num / np.where(den > 0, den, 1)) if cat in PROPORTION else np.abs(num)
-            nu = (np.maximum(0, count[pool]) + (cv[pool] * own[pool]) ** 2).sum() / N
+            nu = (w[pool] * np.maximum(0, count[pool]) + (cv[pool] * w[pool] * own[pool]) ** 2).sum() / N
         else:
             per_player_cv = np.allclose(cv, 0.15)
-            nu = noise_variance(raw[pool], N) if per_player_cv else (np.abs(raw[pool]) + (cv[pool] * own[pool]) ** 2).sum() / N
+            nu = noise_variance((w * raw)[pool], N) if per_player_cv else (w[pool] * np.abs(raw[pool]) + (cv[pool] * w[pool] * own[pool]) ** 2).sum() / N
         check(f"{cat} noise (Task 6)", nu, d["nu"][k])
         var_draft.append(vd)
         var_noise.append(nu)
@@ -157,7 +176,8 @@ for side, D in (("h", H), ("p", P)):
         if S["format"] == "roto" and S.get("specialists", True) and S["style"] != "Points":
             parts = np.array([specialist_sgp(dl, sg, N) if dl > 0.5 * sg else p for dl, sg, p in zip(delta, sigma, parts)])
         v = parts.sum()
-        sgpar.append(min(0, v) if d["valuedAt"][i] is None else v)
+        v = min(0, v) if d["valuedAt"][i] is None else v
+        sgpar.append(w[i] * v if v > 0 else v)
     # calc.js's normal CDF is Abramowitz & Stegun's, good to 1.5e-7
     check("SGP above replacement, specialists corrected (Tasks 4, 9)", sgpar, d["sgpar"], tol=1e-6)
     # Task 4: the drafted pool is the most valuable assignment of players to every slot

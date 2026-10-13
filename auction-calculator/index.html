@@ -217,6 +217,11 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
           <option value="roto">Roto</option><option value="h2h">Head-to-head</option><option value="allplay">H2H all-play</option></select></label>
         <label id="weeks_field" hidden><span class="lab"><b>Weeks</b><button type="button" class="tip" data-tip="Scoring periods in the season">i</button></span><input id="weeks" type="number" min="1" max="30" step="1" value="23" required></label>
         <label><b>Player pool</b><select id="pool"><option>All</option><option>NL-Only</option><option>AL-Only</option></select></label>
+        <label><span class="lab"><b>Lineup lock</b><button type="button" class="tip" id="lock_tip" data-tip="How often your league sets lineups. With weekly or Monday/Friday locks, a team can't swap a bench SP in for a start, so when its SPs outnumber its SP spots some starts sit on the bench: each SP keeps a share of his value above replacement by tier and bench depth, and the league's pitching totals shrink to match. Daily locks change nothing">i</button></span><select id="lock">
+          <option value="daily">Daily</option><option value="split">Bi-weekly (Mon &amp; Fri)</option><option value="weekly">Weekly</option></select></label>
+        <label><span class="lab"><b>Two-way players</b><button type="button" class="tip" data-tip="How your site lists a player who hits and pitches, like Shohei Ohtani. Split: two players. Simultaneous: one player in a hitter and a pitcher spot, both lines counting. One slot, daily: hitter or pitcher each day; he pitches his start days and loses those days' hitting. One slot, weekly: hitter or pitcher each week, whichever the week is worth more as">i</button></span><select id="twoway">
+          <option value="split">Split</option><option value="simultaneous">Simultaneous</option>
+          <option value="daily">One slot, daily</option><option value="weekly">One slot, weekly</option></select></label>
         <div class="field">
           <label><span class="lab"><b>Hitter split (%)</b><button type="button" class="tip" data-tip="The share of the dollars above the min bids that goes to hitters: 65 in categories and 50 in points, as auction_calc.py has it">i</button></span><input id="split" type="number" min="0" max="100" step="0.1" value="65" required></label>
           <label class="check mini"><input id="split_auto" type="checkbox"><span>From the values</span><button type="button" class="tip" data-tip="One price per SGP across hitters and pitchers; the box shows the hitter share that makes">i</button></label>
@@ -283,6 +288,6 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
   </div>
 </main>
 <div id="tip" role="tooltip" hidden></div>
-<script type="module" src="app.js?v=20"></script>
+<script type="module" src="app.js?v=21"></script>
 </body>
 </html>

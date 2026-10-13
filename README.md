@@ -995,7 +995,9 @@ holds a **League format**, which fills in a site's default teams and lineup slot
 any of them makes it Custom); lineup slots per team for C, 1B, 2B, 3B, SS, CI, MI, OF and UT, and for
 SP, RP and P; **Bench spots**, **Minimize bench value**; **League type** (Categories or Points),
 **Teams**, **Min bid**, **Team budget**, **Categories format** (Roto, Head-to-head or H2H all-play,
-with **Weeks** for the H2H formats), **Player pool** (All, NL-Only, AL-Only), the **Hitter split
+with **Weeks** for the H2H formats), **Player pool** (All, NL-Only, AL-Only), **Lineup lock** (Daily,
+Bi-weekly on Mondays and Fridays, or Weekly; below), **Two-way players** (Split, Simultaneous, One slot
+daily or One slot weekly; below), the **Hitter split
 (%)** (65 in categories and 50 in points, as the script has it, or **From the values**, which shows
 the split the values make in the box) and **Include free agents**; the scoring, as category
 toggles (5x5 roto by default) or editable points tables; and two collapsed sections:
@@ -1045,7 +1047,7 @@ way:
   SP and RP included, from the league's best lineups, so scarcity comes from the projections and
   the roster, not a fixed order.
 - **Default projections from the bucket.** `https://data.blandalytics.com/projections/hitters_auction_ev.csv`
-  and `pitchers_auction.csv`, not the app's Google Sheet; `?data=<base>` reads them from elsewhere.
+  and `pitchers_auction_ev.csv`, not the app's Google Sheet; `?data=<base>` reads them from elsewhere.
 - **Team abbreviations.** The All pool keeps every player whatever their team (the script drops a
   team it doesn't know), and AL/NL-Only also knows `TB`, `SD`, `SF`, `KC`, `WSH`, `CWS` and `AZ`.
   A blank team, `FA` or `- - -` is a free agent.
@@ -1091,10 +1093,10 @@ start, then in passes until it settles:
 
 The passes stop when the pool doesn't change and no denominator moves 1%; a pool that only swaps
 marginal players back and forth with weights within 3% has settled on the mean of its states; after
-20 passes, the mean of the last two (the page says so). On the 2027 projections (as of October 11)
-the Yahoo format settles in 4 passes for hitters and 5 for pitchers, in about 0.2 s. Its
-denominators: R 24.6, HR 10.3, RBI 26.0, SB 10.2, AVG 13.7 hits; W 3.8, SV 11.4, K 44.4, ERA 12.5
-earned runs, WHIP 19.6 walks + hits.
+20 passes, the mean of the last two (the page says so). On the 2027 projections (as of October 12)
+the Yahoo format settles in 3 passes for hitters and 5 for pitchers, in about 0.2 s. Its
+denominators: R 22.1, HR 9.9, RBI 23.6, SB 11.2, AVG 13.4 hits; W 3.8, SV 9.2, K 54.2, ERA 9.3
+earned runs, WHIP 14.5 walks + hits.
 
 **Dollars.** The drafted players are the ones that fill every team's legal roster: each side's
 lineup slots, plus half the bench each (as BN slots anyone fits) unless **Minimize bench value** is
@@ -1114,11 +1116,11 @@ keeps the player order, and the last drafted player on each side still gets the 
 values** puts both sides on one curve instead, so the split is the values' own. A player no legal
 roster has room for (a 13th catcher when nothing else takes him, say) stays under the min bid; a
 player below the last drafted one is priced at his side's average dollars per SGP, since the curve
-starts at him. On the 2027 projections (as of October 11) the Yahoo format (bench minimized)
+starts at him. On the 2027 projections (as of October 12) the Yahoo format (bench minimized)
 prices its 216 lineup players for $3,060 (12 × $260, less 60 bench spots at $1). At the default
-65/35 and γ = 1.05, Elly De La Cruz is first at $77.31 ($73.41 on a straight line) and Tarik Skubal
-the first pitcher at $48.43, at an average $13.88 per SGP for hitters and $7.19 for pitchers. The
-values make it 49/51 (Skubal first at $70.27); without the playing time fill, 60/40. The fill moves value to part-timers with good
+65/35 and γ = 1.05, Pete Crow-Armstrong is first at $67.78 ($64.63 on a straight line) and Tarik
+Skubal the first pitcher at $58.80, at an average $13.77 per SGP for hitters and $9.53 for pitchers.
+The values make it 56/44 (Skubal first at $73.43); without the playing time fill, 67/33. The fill moves value to part-timers with good
 rates (Byron Buxton, Luis Robert Jr., closers) and away from full-time players near replacement
 rates (Bo Bichette, Luis Arraez, back-end starters).
 
@@ -1126,10 +1128,50 @@ rates (Bo Bichette, Luis Arraez, back-end starters).
 drafted player's SGP above replacement); **Position**, his
 position's premium over his side's deepest one; **Playing time**, the replacement production filled
 in for the time he doesn't play; **each stat**, what it adds over the deepest position's replacement
-in his own playing time; **Specialist**, the roto curve's correction; and **No spot**, shown only
-when it isn't zero, what holds a player no legal roster has room for under the min bid. Each part
+in his own playing time; **Specialist**, the roto curve's correction; **Lineup lock**, what a
+binding lock takes from an SP; **Two-way**, a one-slot two-way player's pitching less the hitting he
+gives up for it; and **No spot**, shown only when it isn't zero, what holds a player no legal roster
+has room for under the min bid. Each part
 is at the player's own dollars per SGP along the dollar curve (`k × u^(γ − 1)`), so they add back up
 to the dollars to the cent for every player.
+
+**Lineup locks** (the research bundle's lineup-locks spec, Tasks 1–4, capture-factor method). With
+daily lineups a team starts whichever SPs pitch that day. With weekly ones, or Monday/Friday ones,
+it sets its SPs for the window, and when more of its rostered SPs start in a window than it has SP
+spots, some starts sit on the bench. A typical team's SPs come from the pitchers valued without the
+lock: `S`, the SPs in its lineup (SP spots and the P spots SPs take), and `nSP`, those plus the SPs on
+its half of the bench, minimized or not, since teams roster them either way. The slots bind when
+`K > S` for `K ~ Binomial(nSP, q)`, with `q` the chance one SP starts in the window (0.17 for a day,
+0.50 / 0.67 for the 3- and 4-day halves of a Monday/Friday week, 0.95 for a week, in a 5-man
+rotation). Under 5% of windows, nothing changes; otherwise each SP keeps a share of his value above
+replacement by tier (ace, good, mid, low: the top 15%, next 25%, 30% and 30% of rostered SPs by
+value per start; undrafted SPs are low) and bench depth (`nSP − S`, 1 to 3), from the spec's
+simulations: weekly 0.97 / 0.95 / 0.92 / 0.88 with one bench SP down to 0.91 / 0.87 / 0.81 / 0.69
+with three; Monday/Friday 0.93 to 1.00. The league's pitching shrinks with it: each SP's line counts
+at his share in the pool rates, the draft's spread and a season's luck, so the SGP denominators move
+too (weekly locks cut team innings about 14% in the spec's simulations), which raises pitchers
+against hitters when the split comes from the values. The shares are set once, from the side valued
+without the lock, and held. The Yahoo format rosters 7 SPs for 6 spots: weekly, they bind in 70% of
+weeks and SPs keep 88–97%; Monday/Friday, 3%, so nothing changes. The lock's ⓘ says what it does in
+the league on the page, and an SP's position tooltip his tier and share.
+
+**Two-way players** (the same spec, Task 6). A player in both projection files under one MLBAM id
+(Shohei Ohtani) is valued by how the league uses him. **Split**, the default, lists him as two
+players, as Yahoo does. **Simultaneous** (one player in a hitter spot and a pitcher spot, both lines
+counting) values both rows on their own sides and shows him as one row, at both rows' dollars.
+**One slot, daily**: he pitches his start days when a start is worth more than a day's hitting, so
+he's his hitting less those days (`H × (1 − starts/162)`, about 12% for Ohtani's 19 starts) plus all
+his pitching; **one slot, weekly**: each week, its hitting or its starts, whichever is worth more,
+with the weeks' games and starts from the spec's schedule simulation in closed form (a turn every 6
+team games, or 5 past 27 starts, in a 182-day season with 20 off days, turns skipped to his projected
+starts: about 6% of weeks have 2 starts). In a one-slot league he's in the hitter pool at that
+combined value and his pitcher row leaves the pitcher pool, so each side still drafts its spots and
+spends its dollars; his pitching counts at the pitchers' dollars per SGP, since the hitter split can
+make a pitcher's SGP cheaper than a hitter's, and his days or weeks are chosen in those units, so he's
+never worth less than his hitting alone. The roster spot he frees (the spec's `b`) adds nothing: its
+best bench use is a replacement player, 0 above replacement here. In the default league he's $54.96
+as a hitter and $20.69 as a pitcher split; $75.66 simultaneous; $69.39 one slot daily; and $54.97
+one slot weekly, where no week's starts beat a week of his hitting at the pitchers' price.
 
 **Replacement by lineup slot.** Each side's slots (`teams ×` each slot, plus `teams × bench/2` more
 UT or P when the bench isn't minimized) are filled for the most total value: players in order of
@@ -1163,6 +1205,10 @@ count assumed.
 | Fantrax | 12 | 2 C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT | 9 P |
 | NFBC | 15 | 2 C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT | 9 P |
 
+Not done from the lineup-locks spec: the θ method (Task 2, method A), which needs per-start
+projections and schedules, so the capture factors stand in; a rotation-size setting (the binding
+chances and the capture factors assume 5-man rotations); innings or starts caps, which bind even
+daily; and the optional H2H daily-lock haircut (Task 5.5).
 Not done from the procedure: the draft-state weights (Task 12, re-weighting categories for one
 team during a live draft), risk as an option value, and the history check against real standings
 (Task 13.4). The dollar curve's γ = 1.05 is the handoff's "mildly convex", not fit to auction
@@ -1175,30 +1221,30 @@ league standings.
 | `auction-calculator/index.html`, `app.js` | the page: settings and the league formats (`PRESETS`), uploads (UTF-8 or Windows-1252), the scoring controls, the table, the CSV |
 | `tools/auction_calculator/run_ref.py` | runs `auction_calc.py` headless through a stub `streamlit` (`stub/`), on local CSVs with settings from `ST_OVERRIDES`, and prints every player's score (its `unadjusted_value`) |
 | `tools/auction_calculator/compare.mjs` | scores the same CSVs and settings with `calc.js` and checks every player's start value against the script's |
-| `tools/auction_calculator/sgp_dump.mjs`, `sgp_check.py` | dumps one league's last pass and recomputes it independently in Python (numpy, scipy): pool rates and rate-stat counts from the raw CSVs, tier variance, noise, G, SGP, the specialist curve with the procedure's reference code, and the drafted pool against `linear_sum_assignment` |
+| `tools/auction_calculator/sgp_dump.mjs`, `sgp_check.py` | dumps one league's last pass and recomputes it independently in Python (numpy, scipy): pool rates and rate-stat counts from the raw CSVs, tier variance, noise, G, SGP, the specialist curve with the procedure's reference code, and the drafted pool against `linear_sum_assignment`; under a lineup lock, the chance the SP spots bind by scipy's binomial, each SP's capture factor from Table 9.2, and the lock's weights on the pool rates, the draft variance, the noise and SGP above replacement |
 | `tools/auction_calculator/sgp_checks.mjs` | the procedure's own validation: the 2√π / (N − 1) constant against simulated standings (within 2%), the tier variance against 3000 simulated snake drafts with ADP noise (within 5%), and a report of players who moved more than 20 places against the z-scores, with why |
-| `tools/auction_calculator/invariants.mjs` | over 110 leagues (every format; bench on and off, Points, roto / H2H / all-play, AL/NL-only, min bids, spans, fill and specialists off, hitter splits from 0 to 100% and the values' own, other categories), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget (less a minimized bench's min bids), that the hitters get exactly their split, that every value breakdown adds up, and that the values settled |
+| `tools/auction_calculator/locks_checks.mjs` | the lineup-locks spec's own validation (Task 7): the binding chances against its Table 9.1 (within 0.03) and its 0.118 example, the q values, the two-way values against its Table 9.6 (daily and simultaneous exact, weekly within 0.12), simultaneous ≥ max(H, P) and daily and weekly ≥ H over a grid, daily locks changing no value, weekly locks not shrinking the pitchers' share, and the default league's two-way values in order |
+| `tools/auction_calculator/invariants.mjs` | over 190 leagues (every format; bench on and off, Points, roto / H2H / all-play, AL/NL-only, min bids, spans, fill and specialists off, hitter splits from 0 to 100% and the values' own, dollar curves, lineup locks, two-way modes, other categories), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget (less a minimized bench's min bids), that the hitters get exactly their split, that every value breakdown adds up, and that the values settled |
 
 To check the model after a change (pandas, Pillow, numpy and scipy for the Python side):
 
 ```bash
 curl -sO https://data.blandalytics.com/projections/hitters_auction_ev.csv
-curl -sO https://data.blandalytics.com/projections/pitchers_auction.csv
+curl -sO https://data.blandalytics.com/projections/pitchers_auction_ev.csv
 curl -sO https://raw.githubusercontent.com/blandalytics/plv_viz/main/auction_calc.py
 export ST_OVERRIDES='{"League Type": "Points", "Number of Teams": 15}'   # or {} for the defaults
-python tools/auction_calculator/run_ref.py auction_calc.py hitters_auction_ev.csv pitchers_auction.csv > ref.json
-node tools/auction_calculator/compare.mjs hitters_auction_ev.csv pitchers_auction.csv ref.json
-node tools/auction_calculator/sgp_dump.mjs hitters_auction_ev.csv pitchers_auction.csv '{"format": "h2h"}' > dump.json
-python tools/auction_calculator/sgp_check.py hitters_auction_ev.csv pitchers_auction.csv dump.json
-node tools/auction_calculator/sgp_checks.mjs hitters_auction_ev.csv pitchers_auction.csv
-node tools/auction_calculator/invariants.mjs hitters_auction_ev.csv pitchers_auction.csv
+python tools/auction_calculator/run_ref.py auction_calc.py hitters_auction_ev.csv pitchers_auction_ev.csv > ref.json
+node tools/auction_calculator/compare.mjs hitters_auction_ev.csv pitchers_auction_ev.csv ref.json
+node tools/auction_calculator/sgp_dump.mjs hitters_auction_ev.csv pitchers_auction_ev.csv '{"format": "h2h"}' > dump.json
+python tools/auction_calculator/sgp_check.py hitters_auction_ev.csv pitchers_auction_ev.csv dump.json   # dump '{"lock": "weekly"}' to check a lock
+node tools/auction_calculator/sgp_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
+node tools/auction_calculator/invariants.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
+node tools/auction_calculator/locks_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv
 ```
 
-To update the projections, upload new `hitters_auction_ev.csv` / `pitchers_auction.csv` to the
+To update the projections, upload new `hitters_auction_ev.csv` / `pitchers_auction_ev.csv` to the
 bucket's `projections/` folder with the same columns (`Name`, `MLBAMID`, `Team`, `Y! Pos`, then
-the stats, and the `<stat>_p10` / `<stat>_p90` percentiles the season's luck is read from). The
-pitcher file's counts are full-health projections; its `IP_ev` (injury-discounted innings) and
-`inj_risk` columns aren't read. The page shows how many players each default file has, not where
+the stats, and the `<stat>_p10` / `<stat>_p90` percentiles the season's luck is read from). The page shows how many players each default file has, not where
 it comes from. The zone caches them for four hours; purge their URLs to show them sooner. After
 any change to the JavaScript, bump the `?v=` on the script tag in `index.html` and on `app.js`'s
 import of `calc.js`.

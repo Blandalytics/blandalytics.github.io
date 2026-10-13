@@ -18,8 +18,8 @@ const side = (d, cats) => ({
   cats, pool: d.inPool.flatMap((x, i) => (x ? [i] : [])), poolSlot: d.poolSlot, order: d.order,
   own: d.own, x: d.x, G: d.G, averaged: d.averaged, sigmaDraft: d.sigmaDraft, nu: d.nu, rates: d.rates, score: d.score, sgpar: d.sgpar,
   valuedAt: d.byPos.valuedAt, levels: d.byPos.levels.map((l) => ({ slot: l.slot, level: l.level, vec: l.vec })),
-  caps: d.caps, finalSlot: d.byPos.slot,
+  caps: d.caps, finalSlot: d.byPos.slot, kappa: d.lock && d.lock.kappa ? d.lock.kappa : null,
 });
 process.stdout.write(JSON.stringify({
-  settings: s, h: side(res.debug.h, s.hitterCats), p: side(res.debug.p, s.pitcherCats),
+  settings: s, h: side(res.debug.h, s.hitterCats), p: side(res.debug.p, s.pitcherCats), lock: res.lock,
 }, (k, v) => (typeof v === "number" && !Number.isFinite(v) ? null : v)));
