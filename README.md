@@ -892,8 +892,8 @@ AAA, AA, A+ and A 2021–2026. A level, a year (or All years), a stat and the we
 view: a chart of that stat (the model line, the actual weeks as dots sized by plate appearances,
 and in All years their average by date) and a table of every stat by week (Model or Actual,
 colored as on Park Factors). **Share image** copies or downloads the chart on screen as a
-900 × 900 PNG in the homepage tile's style (the title "<level> <metric> Factor, by Week", the
-years, the Pitcher List Stats wordmark, the key and "100 = <level> Season Average"), drawn on a
+900 × 900 PNG in the homepage tile's style (the title "<level> <metric> Factor" over "<years>, by
+Week", the Pitcher List Stats wordmark, the key and "100 = <level> Season Average"), drawn on a
 canvas in the browser.
 
 | file | role |
