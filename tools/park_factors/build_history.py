@@ -83,7 +83,7 @@ def top(counter):
 def main(src):
     with open(src, newline="", encoding="utf-8-sig") as f:
         hist = list(csv.DictReader(f))
-    with open(BOARD, newline="", encoding="utf-8") as f:
+    with open(BOARD, newline="", encoding="utf-8-sig") as f:
         board = [r for r in csv.DictReader(f) if r["Side"] == "All"]
 
     mlb_abbr = lambda a: MLB_ABBR.get(a, a)
@@ -114,7 +114,7 @@ def main(src):
     diffs = [(r["Level"], r["Venue"], (r["League"], r["Team"], r["Org"]), on_board[(r["Level"], r["Venue"])])
              for r in rows if r["Year"] == 2026 and r["Level"] != "MLB" and (r["Level"], r["Venue"]) in on_board
              and (r["League"], r["Team"], r["Org"]) != on_board[(r["Level"], r["Venue"])]]
-    with open(OUT, "w", newline="", encoding="utf-8") as f:
+    with open(OUT, "w", newline="", encoding="utf-8-sig") as f:  # a BOM: Excel reads the accents (Helú)
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)

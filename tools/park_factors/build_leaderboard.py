@@ -67,7 +67,7 @@ def parse_md(md):
 
 def load(path=CSV):
     """(columns, rows) from the CSV, numbers as ints; the As Of column comes back separately."""
-    with open(path, newline="", encoding="utf-8") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         recs = list(csv.DictReader(f))
     recs = [{**r, "Venue": NAMES_2027.get(r["Venue"], r["Venue"])} if r["Level"] == "MLB" else r for r in recs]
     cols = [c for c in recs[0] if c != "As Of"]
@@ -77,7 +77,7 @@ def load(path=CSV):
 
 def load_history(cols, path=HIST):
     """Seasons before each level's most recent year (all batters), in the page's column order."""
-    with open(path, newline="", encoding="utf-8") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         recs = [r for r in csv.DictReader(f) if int(r["Year"]) < LATEST[r["Level"]]]
     return [[{**r, "Side": "All"}[c] if c in TEXT_COLS else int(r[c]) for c in cols] for r in recs]
 
@@ -133,7 +133,7 @@ def main():
     args = ap.parse_args()
     if args.from_md:
         recs = parse_md(Path(args.from_md).read_text(encoding="utf-8"))
-        with open(CSV, "w", newline="", encoding="utf-8") as f:
+        with open(CSV, "w", newline="", encoding="utf-8-sig") as f:  # a BOM: Excel reads the accents
             w = csv.DictWriter(f, fieldnames=list(recs[0]))
             w.writeheader()
             w.writerows(recs)

@@ -400,7 +400,8 @@
   }, () => sharedProfile.filename());
   el.dlCsv.addEventListener("click", () => {
     if (!profile) return;
-    save(new Blob([Swing.profileCsv(profile)], { type: "text/csv" }), profile.filename("", "csv"));
+    // a BOM, so Excel reads the CSV as UTF-8 (accented names)
+    save(new Blob(["\uFEFF" + Swing.profileCsv(profile)], { type: "text/csv;charset=utf-8" }), profile.filename("", "csv"));
   });
 
   function fromHash() {
