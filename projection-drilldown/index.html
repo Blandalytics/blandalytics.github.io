@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Projection Drilldown · Blandalytics</title>
+    <meta
+      name="description"
+      content="Why a 2027 projection is what it is: each factor's effect on each stat, from a league-average player to his line."
+    />
+    <link rel="modulepreload" href="data.js?v=1" />
+    <link rel="modulepreload" href="app.js?v=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+    />
+    <style>
+      :root {
+        --ground: #0d1117;
+        --surface: #151b23;
+        --card: #292c42;
+        --raise: #30344f;
+        --ink: #e3e9f1;
+        --muted: #8a96a6;
+        --faint: #6b7684;
+        --rule: #242c37;
+        --grid: #3a3e5a;
+        --accent: #6cb4ff;
+        --gold: #f1c647;
+        --teal: #00d4ff;
+        --conn: #b4becc;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--ground);
+        color: var(--ink);
+        font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-size: 15px;
+        line-height: 1.45;
+        -webkit-font-smoothing: antialiased;
+        padding: 24px 16px;
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      a {
+        color: var(--accent);
+      }
+      header h1 {
+        margin: 0;
+        font-size: 26px;
+        letter-spacing: -0.01em;
+      }
+      header p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        max-width: 70ch;
+      }
+      nav.tools {
+        font-size: 13px;
+        color: var(--faint);
+      }
+      nav.tools a {
+        margin-right: 12px;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      .search {
+        position: relative;
+        flex: 1 1 260px;
+        max-width: 420px;
+      }
+      .search input {
+        width: 100%;
+        padding: 9px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--grid);
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+      }
+      .search ul {
+        position: absolute;
+        z-index: 5;
+        left: 0;
+        right: 0;
+        top: 100%;
+        margin: 4px 0 0;
+        padding: 4px;
+        list-style: none;
+        background: var(--surface);
+        border: 1px solid var(--grid);
+        border-radius: 8px;
+        max-height: 320px;
+        overflow-y: auto;
+      }
+      .search li {
+        padding: 6px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .search li small {
+        color: var(--muted);
+      }
+      .search li[aria-selected='true'],
+      .search li:hover {
+        background: var(--raise);
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--grid);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .seg button,
+      .tabs button {
+        font: inherit;
+        font-size: 13px;
+        color: var(--muted);
+        background: var(--surface);
+        border: 0;
+        padding: 7px 12px;
+        cursor: pointer;
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--raise);
+        color: var(--ink);
+      }
+      .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .tabs button {
+        border: 1px solid var(--grid);
+        border-radius: 999px;
+      }
+      .tabs button[aria-selected='true'] {
+        border-color: var(--accent);
+        color: var(--ink);
+        background: var(--raise);
+      }
+      .card {
+        background: var(--card);
+        border-radius: 12px;
+        padding: 18px 20px;
+      }
+      .who {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px 24px;
+      }
+      .who h2 {
+        margin: 0;
+        font-size: 22px;
+      }
+      .who .sub {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .kpis {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+      }
+      .kpi b {
+        display: block;
+        font-size: 20px;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 600;
+      }
+      .kpi span {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+        gap: 16px;
+      }
+      @media (max-width: 860px) {
+        .grid2 {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+      svg.wf {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      svg.wf .toggle {
+        cursor: pointer;
+      }
+      .band .track {
+        position: relative;
+        height: 34px;
+        margin: 10px 0 4px;
+      }
+      .band .line {
+        position: absolute;
+        top: 16px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: var(--grid);
+      }
+      .band .range {
+        position: absolute;
+        top: 10px;
+        height: 14px;
+        border-radius: 7px;
+        background: rgba(108, 180, 255, 0.35);
+        border: 1px solid var(--accent);
+      }
+      .band .tick {
+        position: absolute;
+        top: 4px;
+        width: 2px;
+        height: 26px;
+        background: var(--ink);
+      }
+      .band .scale {
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 12px;
+        font-family: 'JetBrains Mono', monospace;
+      }
+      .shares {
+        display: flex;
+        height: 14px;
+        border-radius: 7px;
+        overflow: hidden;
+        margin: 8px 0 6px;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .legend i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        margin-right: 5px;
+        vertical-align: -1px;
+      }
+      ul.notes {
+        margin: 0;
+        padding-left: 18px;
+      }
+      ul.notes li {
+        margin: 4px 0;
+      }
+      details summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        margin-top: 8px;
+      }
+      td,
+      th {
+        padding: 4px 6px;
+        border-bottom: 1px solid var(--grid);
+        text-align: left;
+      }
+      td.n {
+        text-align: right;
+        font-family: 'JetBrains Mono', monospace;
+      }
+      .foot {
+        color: var(--faint);
+        font-size: 12px;
+      }
+      .err {
+        color: #ff8a80;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav class="tools">
+        <a href="/">Blandalytics</a> · <a id="to-risk" href="../playing-time-risk/">Playing-Time Risk</a> ·
+        <a id="to-promo" href="../promotion-timelines/">Promotion Timelines</a> · <a href="../auction-calculator/">Auction Calculator</a>
+      </nav>
+      <header>
+        <h1>Projection Drilldown</h1>
+        <p>
+          What moves each 2027 projection: from a league-average player to his line, one factor at a time. Gold raises
+          the stat, teal lowers it.
+        </p>
+      </header>
+      <div class="controls">
+        <div class="search">
+          <input id="q" type="search" placeholder="Find a player" autocomplete="off" aria-label="Find a player" />
+          <ul id="hits" role="listbox" hidden></ul>
+        </div>
+        <div class="seg" role="group" aria-label="Playing-time basis">
+          <button type="button" data-b="ev" aria-pressed="true" title="Expected playing time, with the injury risk">
+            Expected
+          </button>
+          <button type="button" data-b="healthy" aria-pressed="false" title="A healthy season in his role">Healthy</button>
+        </div>
+      </div>
+      <section class="card" id="player" aria-live="polite"><p class="foot">Loading…</p></section>
+      <div class="tabs" id="tabs" role="tablist" aria-label="Stat"></div>
+      <div class="grid2">
+        <section class="card">
+          <h3 id="wf-title">Waterfall</h3>
+          <div id="wf"></div>
+          <details>
+            <summary>As a table</summary>
+            <div id="wf-table"></div>
+          </details>
+        </section>
+        <div style="display: flex; flex-direction: column; gap: 16px">
+          <section class="card band" id="band"></section>
+          <section class="card"><h3>In plain words</h3><ul class="notes" id="notes"></ul></section>
+        </div>
+      </div>
+      <p class="foot" id="foot"></p>
+    </main>
+    <script type="module" src="app.js?v=1"></script>
+  </body>
+</html>
