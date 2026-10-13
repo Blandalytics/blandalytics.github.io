@@ -183,9 +183,11 @@ class Engine:
         return w
 
     def user_board(self, w, user):
-        """The user's board leaves out do-not-draft players (rivals may still take them)."""
-        if self.dnd.any():
-            w.boards[user] = [i for i in w.boards[user] if not self.dnd[i]]
+        """The user's own future in a play-out follows the user's policy, not a rival's: the static $
+        board (pool order) and, in an auction, bids at the static $ value with the user's inflation
+        (Draft.user_value_bid).  Do-not-draft players are left off (rivals may still take them)."""
+        w.rows[user] = self.value_list
+        w.boards[user] = [i for i in range(self.n) if not self.dnd[i]]
 
     # ---- picking and buying --------------------------------------------------------------------
 

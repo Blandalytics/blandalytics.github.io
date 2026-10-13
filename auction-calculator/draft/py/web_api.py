@@ -127,7 +127,8 @@ class Session:
                         break
                     d.auto_nominate()
                 j = d.lot[0]
-                if self.mock and (self.pool.value[j] < float(self.cfg["auto_below"]) or not d.legal_for(d.user, j)):
+                no_room = not d.legal_for(d.user, j) or d.max_bid(d.user) < self.lg.min_bid
+                if self.mock and (self.pool.value[j] < float(self.cfg["auto_below"]) or no_room):
                     d.resolve(None)
                     self.between.append(d.log[-1])
                     continue
@@ -203,7 +204,6 @@ class Session:
 
     def auto(self):
         """Take the recommendation: the best option once simulated, else the first one."""
-        d = self.draft
         if not self.opts:
             return json.dumps({"ok": False, "message": "no options"})
         cand = self.result["best"]["cand"] if self.result else self.opts[0][0]
@@ -403,7 +403,7 @@ def _r(v, nd):
     return None if not math.isfinite(v) else round(v, nd)
 
 
-def players_json(table, settings_over=None):
+def players_json(table):
     """The pool for the page's player pickers (the whole table, before the engine trims it)."""
     table = json.loads(table) if isinstance(table, (str, bytes)) else table
     return json.dumps([{"i": k, "name": p["name"], "pos": p["pos"], "type": p["type"], "value": round(p["value"], 1)}

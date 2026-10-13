@@ -1,0 +1,387 @@
+"""Plain-assert tests of the MLB draft engine (no pytest): python tests.py [--quick]
+
+Inputs: the calculator's table (export_players.mjs, Node) and the R1 risk files of the 2027 test
+simulation (PROJ_2027, default the projections repository's data/projections/2027).  Prints the run
+time of each decision type at the first stop.
+"""
+
+import json
+import math
+import os
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "py"))
+
+import numpy as np  # noqa: E402
+from dry_run import load_inputs  # noqa: E402
+from draft import Draft  # noqa: E402
+from engine import GOT, PAID, PTS, SKIP, Engine  # noqa: E402
+from league import CATEGORIES, H2H, League, Scorer, norm_cdf, round_robin  # noqa: E402
+from pool import Pool, decode  # noqa: E402
+from web_api import Session  # noqa: E402
+
+QUICK = "--quick" in sys.argv
+TABLE, RH, RP = load_inputs(None if len(sys.argv) < 2 or sys.argv[1].startswith("--") else sys.argv[1])
+T = json.loads(TABLE)
+LG = League.from_settings(T["settings"])
+POOL = Pool(T, LG, {"h": RH, "p": RP})
+ENG = Engine(POOL, LG, h2h=True)
+PASSED = []
+
+
+def test(fn):
+    t0 = time.time()
+    fn()
+    PASSED.append(fn.__name__)
+    print("ok  %-34s %6.2f s" % (fn.__name__, time.time() - t0))
+    return fn
+
+
+# ---- inputs -------------------------------------------------------------------------------------
+
+
+@test
+def decode_matches_projections_decoder():
+    for buf, side, n in ((RH, "h", 1106), (RP, "p", 1272)):
+        head, mlbam, x = decode(buf)
+        assert head["side"] == side and head["draws"] == 50 and head["players"] == n == len(mlbam)
+        assert all(v.shape == (n, 50) for v in x.values())
+        try:  # the reference decoder of the projections repository, if it can be imported
+            sys.path.insert(0, os.environ.get("PROJ_REPO", r"C:\Users\krbla\claude_sessions\projections"))
+            from src.valuation.risk_draws import decode as ref
+        except Exception:
+            continue
+        h2, m2, x2 = ref(buf)
+        assert h2 == head and (m2 == mlbam).all() and all(np.array_equal(x[k], x2[k]) for k in x)
+
+
+@test
+def pool_fill_and_draws():
+    assert POOL.has_draws.all(), "every kept player has outcome draws"
+    assert POOL.n_draws == 50
+    head, mlbam, x = decode(RH)
+    j = {int(m): k for k, m in enumerate(mlbam)}
+    c_r, c_ab = POOL.comps.index("R"), POOL.comps.index("AB")
+    checked = 0
+    for i in range(POOL.n):
+        if POOL.side[i] != "h":
+            continue
+        k = j[int(POOL.mlbam[i])]
+        for d in range(50):
+            gap = max(0.0, POOL.fill_target[i] - x["PA"][k, d])
+            assert abs(POOL.draws[i, d, c_r] - (x["R"][k, d] + gap * POOL.fill_rate[i, c_r])) < 1e-9
+            assert abs(POOL.draws[i, d, c_ab] - (x["AB"][k, d] + gap * POOL.fill_rate[i, c_ab])) < 1e-9
+        checked += 1
+        if checked > 40:
+            break
+    # a hitter has no pitching components and a pitcher no hitting ones
+    hit = [POOL.comps.index(c) for c in ("R", "HR", "RBI", "SB", "H", "AB")]
+    pit = [POOL.comps.index(c) for c in ("W", "SV", "K", "ER", "IP", "BBH")]
+    assert (POOL.draws[POOL.side == "h"][:, :, pit] == 0).all() and (POOL.draws[POOL.side == "p"][:, :, hit] == 0).all()
+    # the fill targets are calc.js's
+    assert abs(POOL.fill_target[POOL.side == "h"].max() - T["fillTargets"]["h"]["H"]) < 1e-9
+
+
+# ---- scoring ------------------------------------------------------------------------------------
+
+
+@test
+def roto_points_ties_and_inverted_categories():
+    lg = League(teams=3)
+    sc = Scorer(lg)
+    comps = lg.components
+    tot = np.zeros((3, len(comps)))
+    put = lambda t, **kw: [tot.__setitem__((t, comps.index(k)), v) for k, v in kw.items()]  # noqa: E731
+    put(0, R=900, HR=250, RBI=850, SB=100, H=1400, AB=5500, W=80, SV=60, K=1300, ER=550, IP=1300, BBH=1600)
+    put(1, R=900, HR=200, RBI=800, SB=150, H=1450, AB=5500, W=90, SV=40, K=1200, ER=500, IP=1300, BBH=1500)
+    put(2, R=800, HR=220, RBI=900, SB=120, H=1300, AB=5500, W=70, SV=80, K=1250, ER=600, IP=1300, BBH=1700)
+    pts = sc.roto_points(tot)
+    cat = {c: k for k, c in enumerate(lg.cats)}
+    assert list(pts[:, cat["R"]]) == [2.5, 2.5, 1.0]  # a tie shares the points
+    assert list(pts[:, cat["AVG"]]) == [2.0, 3.0, 1.0]
+    assert list(pts[:, cat["ERA"]]) == [2.0, 3.0, 1.0]  # lower ERA is better
+    assert list(pts[:, cat["WHIP"]]) == [2.0, 3.0, 1.0]
+    assert pts.sum() == 3 * len(lg.cats) * 2  # every category hands out 1 + 2 + 3
+    batched = sc.roto_points(np.stack([tot, tot[::-1]]))
+    assert np.array_equal(batched[0], pts) and np.array_equal(batched[1], pts[::-1])
+    assert set(lg.cats) <= set(CATEGORIES)
+
+
+@test
+def normal_cdf_and_schedule():
+    z = np.linspace(-6, 6, 2001)
+    exact = np.array([0.5 * (1 + math.erf(v / math.sqrt(2))) for v in z])
+    assert np.abs(norm_cdf(z) - exact).max() < 2e-7
+    sched = round_robin(12, 11)
+    for wk in sched:
+        assert sorted(wk.ravel().tolist()) == list(range(12))  # everyone plays once a week
+    pairs = {tuple(sorted(p)) for wk in sched for p in wk.tolist()}
+    assert len(pairs) == 66  # every pair meets once in 11 weeks
+
+
+@test
+def h2h_odds_sane():
+    lg = League(format="h2h")
+    sc, h2h = Scorer(lg), H2H(lg, reps=64)
+    rng = np.random.default_rng(5)
+    base = np.array([[900, 240, 880, 120, 1400, 5500, 85, 70, 1350, 560, 1350, 1650]], float)
+    comps = lg.components
+    assert comps == ["R", "HR", "RBI", "SB", "H", "AB", "W", "SV", "K", "ER", "IP", "BBH"]
+    tot = np.repeat(base, 12, axis=0) * (1 + 0.01 * rng.standard_normal((12, len(comps))))
+    p = sc.h2h_p(tot)
+    assert np.allclose(p + p.transpose(1, 0, 2), 1.0)
+    u = h2h.uniforms(rng)
+    made = [h2h.odds(p, u, t)[0] for t in range(12)]
+    assert abs(sum(made) - 6.0) < 1e-9  # exactly six teams make the playoffs in every season
+    strong = tot.copy()
+    strong[0, :4] *= 1.25
+    strong[0, 6:9] *= 1.25
+    strong[0, 4] *= 1.04
+    strong[0, 9] *= 0.85
+    strong[0, 11] *= 0.9
+    playoff, champ, wins = h2h.odds(sc.h2h_p(strong), u, 0)
+    assert playoff > 0.95 and champ > 0.4 and wins > 0.6 * h2h.reg_weeks * len(lg.cats), (playoff, champ, wins)
+
+
+# ---- legality -----------------------------------------------------------------------------------
+
+
+def _brute_best_lineup_value(eng, roster):
+    """An exchange check: no bench player can replace a starter of lower $ and keep the lineup legal."""
+    lu = eng.lineup(roster)
+    best = sum(POOL.value[i] for i in lu)
+    for b in set(roster) - set(lu):
+        for s in lu:
+            if POOL.value[b] > POOL.value[s]:
+                cand = [i for i in lu if i != s] + [b]
+                if _fits(eng, cand):
+                    best = max(best, sum(POOL.value[i] for i in cand))
+    return best
+
+
+def _fits(eng, players):
+    """Hall's condition checked directly on a set of players (each side on its own subsets)."""
+    counts = [0] * eng.n_types
+    for i in players:
+        counts[eng.pc[i]] += 1
+    for side, (hall, cap) in enumerate(eng.side_hall):
+        part = counts[: eng.n_htypes] if side == 0 else counts[eng.n_htypes :]
+        if len(part) and ((hall @ np.array(part, float)) > cap).any():
+            return False
+    return True
+
+
+@test
+def legality_hall_and_lineup():
+    eng = ENG
+    code = {t: k for k, t in enumerate(eng.etypes)}
+    c_only, ut_only = code[("C", "UT")], code.get(("UT",))
+    key = 0
+    seats = []
+    for _ in range(4):  # one C slot and two UT slots: three catchers start, the fourth does not
+        rt = eng.route(key)
+        seats.append(rt[c_only])
+        if rt[c_only]:
+            key += eng.P[c_only]
+    assert seats == [True, True, True, False]
+    if ut_only is not None:
+        assert not eng.route(key)[ut_only]  # the UT slots are full of catchers
+    mi = code[("2B", "SS", "UT")]
+    assert eng.route(key)[mi]  # 2B and SS are open
+    # bench rule: a full lineup can still add bench players, up to the bench
+    full = sum(eng.P[t] * c for t, c in enumerate(eng.counts(key)))
+    assert eng.legal_k(full, 0)[c_only]  # a bench spot is open
+    assert not eng.legal_k(full, LG.bench)[c_only]  # the bench is full
+    # the lineup of a roster is its best legal lineup by $ value
+    d = Draft(eng, 0, np.random.default_rng(1), "snake")
+    while not d.done():
+        d.auto()
+    for t in range(LG.teams):
+        lu = eng.lineup(d.rosters[t])
+        assert len(lu) == LG.starters, (t, len(lu))
+        assert _brute_best_lineup_value(eng, d.rosters[t]) <= sum(POOL.value[i] for i in lu) + 1e-9
+
+
+# ---- play-outs ----------------------------------------------------------------------------------
+
+
+@test
+def snake_playout_completes():
+    d = Draft(ENG, 4, np.random.default_rng(2), "snake")
+    snap = d.snap()
+    w = ENG.draw_world(np.random.default_rng(3))
+    ENG.user_board(w, 4)
+    gone, keys, bench, rosters = bytearray(snap.gone), list(snap.keys), list(snap.bench), [list(r) for r in snap.rosters]
+    ENG.finish_snake(w, gone, keys, bench, rosters, snap.order, 0, ("pick", 0))
+    allp = [i for r in rosters for i in r]
+    assert len(allp) == len(set(allp)) == LG.teams * LG.roster_size
+    assert 0 in rosters[4]
+    assert all(len(ENG.lineup(r)) == LG.starters for r in rosters)
+    assert all(b <= LG.bench for b in bench)
+
+
+@test
+def auction_playout_budgets():
+    d = Draft(ENG, 4, np.random.default_rng(2), "auction")
+    d.auto_nominate()
+    snap = d.snap()
+    for seed in range(5):
+        w = ENG.draw_world(np.random.default_rng(seed))
+        ENG.user_board(w, 4)
+        gone, keys, bench, rosters = bytearray(snap.gone), list(snap.keys), list(snap.bench), [list(r) for r in snap.rosters]
+        budget, spots = list(snap.budget), list(snap.spots)
+        got, paid = ENG.finish_auction(w, gone, keys, bench, rosters, budget, spots, snap.lot, snap.nom, 4, ("bid", 0))
+        assert got == 0.0 and math.isnan(paid)
+        assert min(budget) >= 0 and sum(spots) == 0
+        assert all(len(r) == LG.roster_size for r in rosters)
+        assert all(len(ENG.lineup(r)) == LG.starters for r in rosters)
+        spent = LG.teams * LG.budget - sum(budget)
+        assert spent >= 0.97 * LG.teams * LG.budget, spent  # the inflation spends the money
+
+
+@test
+def live_auction_prices_legal():
+    d = Draft(ENG, 4, np.random.default_rng(9), "auction")
+    while not d.done():
+        if d.lot is None:
+            d.auto_nominate()
+        d.resolve(None)
+    prices = [p for _, _, _, p in d.log]
+    assert len(d.log) == LG.teams * LG.roster_size and min(prices) >= LG.min_bid
+    for t in range(LG.teams):
+        assert sum(d.paid[t]) == LG.budget - d.budget[t] <= LG.budget
+
+
+@test
+def common_random_numbers():
+    d = Draft(ENG, 4, np.random.default_rng(2), "snake")
+    snap = d.snap()
+    cands = [("pick", 0), ("pick", 0), SKIP]
+    a, la = ENG.chunk(snap, cands, 6, np.random.default_rng(11), base=2)
+    b, lb = ENG.chunk(snap, cands, 6, np.random.default_rng(11), base=2)
+    assert np.array_equal(a, b, equal_nan=True) and np.array_equal(la, lb)
+    assert np.array_equal(a[:, 0], a[:, 1], equal_nan=True)  # the same candidate twice: the same futures
+
+
+@test
+def better_player_scores_better():
+    d = Draft(ENG, 4, np.random.default_rng(2), "snake")
+    snap = d.snap()
+    out, _ = ENG.chunk(snap, [("pick", 0), ("pick", 250)], 30, np.random.default_rng(12))
+    diff = out[PTS, 0] - out[PTS, 1]
+    assert diff.mean() > 2 * diff.std(ddof=1) / math.sqrt(len(diff)), diff.mean()
+
+
+@test
+def auction_bids_monotone():
+    d = Draft(ENG, 4, np.random.default_rng(2), "auction")
+    d.auto_nominate()
+    j = d.lot[0]
+    v = POOL.value[j]
+    bids = [0, int(v * 0.8), int(v * 1.1), int(v * 1.4)]
+    out, _ = ENG.chunk(d.snap(), [("bid", b) for b in bids] + [("buy", int(v * 0.6)), ("buy", int(v * 1.4))], 40, np.random.default_rng(13))
+    got = out[GOT, :4].mean(axis=1)
+    assert all(got[k] <= got[k + 1] for k in range(3)) and got[0] == 0.0, got
+    for k, b in enumerate(bids):
+        paid = out[PAID, k][np.isfinite(out[PAID, k])]
+        assert (paid <= max(b, LG.min_bid)).all()
+    cheap, dear = out[PTS, 4], out[PTS, 5]
+    assert cheap.mean() >= dear.mean(), (cheap.mean(), dear.mean())  # the same player for less money
+
+
+# ---- the session (the page's API) ---------------------------------------------------------------
+
+
+@test
+def session_snake_flow_and_undo():
+    s = Session(dict(mode="snake", slot=3, sims=12, chunk=6), TABLE, RH, RP)
+    info = json.loads(s.begin_stop())
+    assert info["kind"] == "pick" and info["overall"] == 3 and len(info["between"]) == 2
+    res = json.loads(s.simulate())
+    assert res["sims"] == 12 and res["options"][-1]["kind"] == "skip"
+    assert set(res["target"]) == {"M", "S", "H"} and res["target"]["H"] >= res["target"]["M"]
+    first = json.loads(s.auto())
+    assert first["ok"] and first["pick"]["you"]
+    info2 = json.loads(s.begin_stop())
+    assert info2["overall"] == 22  # the snake comes back at pick 22 for seat 3
+    assert json.loads(s.undo())["ok"]
+    info3 = json.loads(s.begin_stop())
+    assert info3["overall"] == 3 and not info3["roster"]
+    assert not json.loads(s.take(text="p zzzz nobody"))["ok"]
+
+
+@test
+def session_auction_flow():
+    s = Session(dict(mode="auction", slot=1, sims=10, chunk=5, auto_below=1e9), TABLE, RH, RP)
+    info = json.loads(s.begin_stop())
+    assert info["kind"] == "nominate" and info["budget"] == LG.budget
+    res = json.loads(s.simulate())
+    assert res["kind"] == "nominate" and len(res["options"]) >= 2
+    assert json.loads(s.auto())["ok"]
+    s.cfg["auto_below"] = 0.0
+    info = json.loads(s.begin_stop())
+    assert info["kind"] == "bid" and info["lot"]
+    res = json.loads(s.simulate())
+    be = res["break_even"][s.objective]
+    assert res["best_row"]["amount"] == be["max_bid"] and len(be["prices"]) >= 3
+    r = json.loads(s.bid(res["best_row"]["amount"]))
+    assert r["ok"] and r["result"]["price"] >= LG.min_bid
+    # a real draft's entry
+    s2 = Session(dict(mode="auction", slot=1, sims=10, mock=False), TABLE, RH, RP)
+    assert json.loads(s2.begin_stop())["kind"] == "nominate"
+    i = s2.draft.my_board()[3]
+    assert json.loads(s2.nominate(index=i))["ok"]
+    assert json.loads(s2.record(i, 7, 33))["ok"]
+    assert s2.draft.budget[6] == LG.budget - 33 and i in s2.draft.rosters[6]
+
+
+@test
+def session_final_odds():
+    s = Session(dict(mode="snake", slot=1, sims=10, format="h2h"), TABLE, RH, RP)
+    d = s.draft
+    while not d.done():
+        d.auto()
+    fin = json.loads(s.final(n_sims=40))
+    st = fin["standings"]
+    assert len(st) == LG.teams and 0.9 <= sum(r["win"] for r in st) <= 1.0 + 1e-6  # a tie for first is no win
+    assert abs(sum(r["playoff"] for r in st) - LG.playoff_teams) < 0.01  # (rounded to 3 decimals)
+    assert abs(sum(r["champ"] for r in st) - 1.0) < 0.01
+
+
+# ---- timings and repeatability ------------------------------------------------------------------
+
+
+@test
+def timings_per_decision():
+    n = 50 if QUICK else 200
+    for mode, fmt in (("snake", None), ("auction", None), ("snake", "h2h"), ("auction", "h2h")):
+        s = Session(dict(mode=mode, slot=5, sims=n, chunk=n, format=fmt), TABLE, RH, RP)
+        info = json.loads(s.begin_stop())
+        t0 = time.time()
+        res = json.loads(s.simulate())
+        dt = time.time() - t0
+        print("     %-7s %-4s first %-8s %2d options x %d sims: %5.2f s (%.2f ms per play-out)"
+              % (mode, s.lg.format, info["kind"], len(res["options"]), n, dt, 1000 * dt / (n * len(res["options"]))))
+
+
+@test
+def break_even_repeatability():
+    n, seeds = (40, 3) if QUICK else (200, 4)
+    rows = []
+    for seed in range(seeds):
+        s = Session(dict(mode="auction", slot=5, sims=n, chunk=n, seed=77, auto_below=0.0), TABLE, RH, RP)
+        info = json.loads(s.begin_stop())
+        s.rng = np.random.default_rng(1000 + seed)  # the same lot, other worlds
+        res = json.loads(s.simulate())
+        be = res["break_even"]
+        rows.append((be[s.objective]["p_star"], be["points"]["p_star"]))
+    lot = info["lot"]
+    w, p = np.array([r[0] for r in rows], float), np.array([r[1] for r in rows], float)
+    print("     lot %s ($%.1f): break-even on %s $%s (sd %.1f), on roto points $%s (sd %.1f), %d sims x %d seeds"
+          % (lot["name"], lot["value"], s.objective, np.round(w, 0).tolist(), w.std(ddof=1), np.round(p, 0).tolist(), p.std(ddof=1), n, seeds))
+    assert np.isfinite(p).all()
+
+
+print("%d tests passed" % len(PASSED))
