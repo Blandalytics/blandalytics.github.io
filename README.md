@@ -16,9 +16,10 @@ Cards is hidden from all three for now: its tile and links are commented out in 
 | `index.html` | the page: the definition, a section of tiles per sport (Baseball, then Hockey), the menu grouped the same way, and the footer |
 | `assets/css/main.css`, `assets/js/` | the Phantom template, unchanged |
 | `assets/css/blandalytics.css` | the site's palette and font over the template, the tile scrim, the footer wordmark |
+| `shared/share-image.js` | **Share image**, the one export button of every tool that makes a figure: a menu of Copy image and Download PNG (plus a tool's other downloads, such as Release Angles' GIF). Copy image falls back to a download where the browser refuses the clipboard. Each tool hands it a function that draws the PNG and one that names the file; the menu items get ids (`<button id>_copy`, `<button id>_download`) for `grab_app_pngs.py`. Pages load it as `/shared/share-image.js?v=N`: bump N with each change |
 | `images/tile-*.webp` | the tile pictures, one per tool: `tile-NAME.webp` at 900 px and `tile-NAME-720.webp`, offered through `srcset` |
 | `tools/homepage/grab_app_pngs.py` | runs each tool in headless Chrome and saves the PNG from its own export button (the NHL Draft Tool and the Auction Calculator have none, so it screenshots the options table of a mock draft and the top of the values table) |
-| `tools/homepage/make_tiles.py` | crops those exports into square tiles (a figure whose edges carry text, like Batted Ball Charts and Swing Profiles, is padded out with its background instead); `blandalytics.css` holds every tile at 1:1 |
+| `tools/homepage/make_tiles.py` | crops those exports into square tiles (a figure whose edges carry text, like Batted Ball Charts and Swing Profiles, is padded out with its background instead; Model Drilldown's is the card's header over its waterfall tile, cut from the 16:9 card); `blandalytics.css` holds every tile at 1:1 |
 
 ### Updating the tiles
 
@@ -134,8 +135,9 @@ is the same one the Streamlit app in
 (`pitcher_game_card.py`), rebuilt as a page: the box-score line and game grade, the Stuff /
 Locations / PLV grades, the primary fastball's shape, usage against each side of the plate,
 movement with the arm angle and the comparison season's shaded regions, locations against
-each side, and the per-pitch-type metrics table. **Copy PNG** rasterises the card at 2x with
-the font and logo embedded and puts it on the clipboard (or saves it where the browser won't).
+each side, and the per-pitch-type metrics table. **Share image** rasterises the card at 2x with
+the font and logo embedded, to copy to the clipboard or download (a copy downloads where the
+browser won't).
 
 ### How it works
 
@@ -173,9 +175,12 @@ linked in the picker as `pitcher-cards/#<gamePk>-<pitcherId>`.
 
 While MLB games are on, the live Worker ([`tools/live/`](tools/live/)) builds the cards itself,
 from the same feed it polls every 30 seconds: a pitcher's card is rebuilt whenever his pitch
-count moves, so the picker's **Live** entry is within a minute of the last pitch (it re-reads
-the live index every 20 seconds and redraws the card in place). A game gets one last pass when
-it ends and leaves the live index once the nightly run has written its permanent cards.
+count or his box-score line moves (the box score trails the pitches by a poll or two, and the
+runners he leaves on base can score after he's gone), so the picker's **Live** entry is within
+a minute of the last pitch (it re-reads the live index every 20 seconds and redraws the card
+in place). A game gets one last pass when it ends, at "Game Over" or "Final", whichever the
+poller sees first, and leaves the live index once the nightly run has written its permanent
+cards.
 
 The Worker can't run the Python, so [`tools/live/src/cards/`](tools/live/src/cards/) is a
 JavaScript port of the card's pipeline: `feed.js` reads the feed into the scraper's rows,
@@ -340,7 +345,7 @@ the first band it appears in.
   and the event.
 - On a phone, where there is no hover, a tap pins a tooltip and a second tap (or a tap elsewhere in
   the chart) clears it.
-- **Save PNG** writes a square 2000 × 2000 image: the box-score line, the pitch-type key, the flow
+- **Share image** copies or downloads a square 2000 × 2000 image: the box-score line, the pitch-type key, the flow
   as shown (with the ending nodes and their key if they are on), and the Pitcher List Stats wordmark.
 
 A flow is linkable as `sequencing-flow/#<pitcherId>-<YYYY-MM-DD>`.
@@ -387,13 +392,13 @@ centres Plotly expects and the heights are recomputed on d3-sankey's own scale (
 Each link is one plate appearance's step (value 1) labelled with the plate appearance's id; that is
 what lets a hover trace a whole plate appearance. Tooltips are drawn by the page rather than Plotly
 so they can be placed away from the traced ribbons (sampled along each ribbon's outline plus
-`isPointInFill` probes) and use the page's font. Save PNG rebuilds the layout at the export size,
+`isPointInFill` probes) and use the page's font. The shared image rebuilds the layout at the export size,
 lets Plotly rasterise the sankey, and draws the text and labels on the canvas.
 
 | file | role |
 |---|---|
 | `sequencing-flow/data.js` | manifest, Parquet queries, the live-feed fallback, Stats API lookups, and `buildFlow`: pitches → nodes, links and plate appearances |
-| `sequencing-flow/sankey.js` | the chart: the fixed layout, hover / tap tracing, the tooltips, Save PNG |
+| `sequencing-flow/sankey.js` | the chart: the fixed layout, hover / tap tracing, the tooltips, the PNG for Share image |
 | `sequencing-flow/index.html`, `app.js` | the page and its pitcher / season / date / game controls |
 
 After any change to the JavaScript, bump the `?v=` query on the module imports in `index.html` and
@@ -496,8 +501,8 @@ Isaac Paredes' current season loads on arrival; a chart is linkable as
 `batted-balls/#<season>-<mlbam id>` or `#<season>-<team code>` (the page shows teams by their
 full names, Cleveland and Oakland as they were called that season), with `-left` / `-right` (a
 switch hitter's side), `-self`, `-xwoba` and `-value` suffixes (an old link's `-continuous` is
-ignored). **Copy PNG** copies the figure at 2x to the clipboard (a browser that can't copy an
-image downloads it instead).
+ignored). **Share image** copies the figure at 2x to the clipboard or downloads it (a browser
+that can't copy an image downloads it instead).
 
 It is the chart [batted-ball-charts.streamlit.app](https://batted-ball-charts.streamlit.app/)
 draws ([PLV_viz `batted_ball_charts.py`](https://github.com/Blandalytics/PLV_viz/blob/main/hitter_app/pages/batted_ball_charts.py)),
@@ -607,9 +612,9 @@ angle: one 1-SD covariance ellipse per pitch type, and how much they overlap. Fo
 same chart: the outlines alone, **Overlap count** (how many ellipses cover each spot),
 **Usage-weighted** (the share of the pitcher's pitches whose type covers it) and
 **Concentration** (each exact set of overlapping ellipses — a segment — shaded by the pitches
-that landed in it per square degree). **Play loop** cross-fades through the four. **Copy PNG**
-copies the view shown as a 2320 × 2320 still; **Download GIF** saves the loop, sized for X
-(Twitter); **Download All PNGs + GIF** saves the four stills and the loop as one zip. Pick a
+that landed in it per square degree). **Play loop** cross-fades through the four. **Share image**
+copies or downloads the view shown as a 2320 × 2320 still; its menu also downloads the loop as a
+GIF, sized for X (Twitter), or the four stills and the loop as one zip. Pick a
 season and a pitcher (regular season only, the script's default); *From* / *Through* cut the
 season to a date segment. *Options* sets the ellipse size, the
 fewest pitches a type needs to be drawn, and the smallest segment the concentration scale
@@ -701,7 +706,7 @@ pick from a list, or a change to a select, draws straight away. One card holds b
 the higher seed's series win% at every length from a best of 1 to a best of 15, and, for the
 chosen length, who wins in how many games — then each team's xWin% (with RS/G, RA/G and
 record) and the series win% with its likeliest outcome, the app's summary sentence, and
-**Download Series Win% PNG** / **Download Outcomes PNG** (2x, 400 dpi) and **Swap seeds**.
+**Share image** (either figure at 2x, 400 dpi, to copy or download) and **Swap seeds**.
 Yankees over Red Sox loads on arrival, best of 7; a matchup is linkable as `series-win/#<season>-<higher>-<lower>&games=<n>`, with `&home=1` for
 all home games (teams by MLB abbreviation, e.g. `#2026-LAD-TB&games=7`).
 
@@ -871,10 +876,42 @@ For new seasonal factors:
 2. Run
    `python tools/park_factors/build_seasonal.py path/to/park_factors_seasonal_weekly_2027.csv path/to/park_factors_seasonal_history.csv`.
 3. Rebuild the page, so it lists the years.
+4. Rebuild League Factors (below), which reads the same files.
 
 The handoff markdown and the model's history file stay with the park model; only the CSVs
 built from them are committed. After
 rebuilding the tile, bump its `?v=` in `index.html` so Cloudflare serves the new image.
+
+## League Factors
+
+`league-factors/` charts each level's run environment week by week, from the same park model:
+the model's calendar curve (the Seasonal view's league row: the level's curve with the same
+batters and pitchers all season, plus the parks in use that week) against what each week
+produced. 100 is the level's season average. It covers MLB 2015–2027 (2027 on its schedule) and
+AAA, AA, A+ and A 2021–2026. A level, a year (or All years), a stat and the week slider pick the
+view (**Reset filters** goes back to MLB, All years, Runs and opening week): a chart of that stat (the model line, the actual weeks as dots sized by plate appearances,
+and in All years their average by date) and a table of every stat by week (Model or Actual,
+colored as on Park Factors). **Share image** copies or downloads the chart on screen as a
+900 × 900 PNG in the homepage tile's style (the title "<level> <metric> Factor" over "<years>, by
+Week", the Pitcher List Stats wordmark, the key and "100 = <level> Season Average"), drawn on a
+canvas in the browser.
+
+| file | role |
+|---|---|
+| `league-factors/index.html`, `app.js` | the page; it loads `data.json` and the fonts only (and `logo.png` for Share image) |
+| `league-factors/logo.png` | the Pitcher List Stats wordmark for the shared image, a copy of `tools/park_factors/tile_logo.png` |
+| `league-factors/data.json` | per level and year: the weeks, the model's indexes and (past years) the actual indexes, games and PAs of each week, as 10 × the index (150 kB) |
+| `tools/park_factors/park_factors_calendar_observed.csv` | the actual weeks, from the park model's `parks.calendar_observed` (every level, season and week: that week's PAs against the season's, unadjusted) |
+| `tools/park_factors/build_league_factors.py` | writes `data.json` from the Seasonal view's files and that CSV. It fails if the two disagree on a level-season's weeks |
+| `tools/park_factors/build_league_factors_tile.py` | the homepage tile, from `data.json`: MLB wOBA by week as the page's All years chart draws it (the model curve, the actual weeks of 2015–2026 and their average), in the style of the Park Factors tile, screenshotted at 900 × 900 by headless Edge and saved as `images/tile-league-factors.webp` and `-720.webp` |
+
+To update, after new seasonal factors (`--seasonal-table` also writes
+`park_factors_calendar_observed.csv`):
+
+```
+python tools/park_factors/build_league_factors.py path/to/park_factors_calendar_observed.csv
+python tools/park_factors/build_league_factors_tile.py    # then bump the tile's ?v= in index.html
+```
 
 ## Model Drilldown
 
@@ -921,10 +958,10 @@ Three figures, in the Swing Profiles card colours:
   value. Hover a dot for the pitcher; click it to open them. Changing any input morphs the card
   from one draw to the next. The three numbers below carry Swing Profiles' league KDEs: the value,
   the biggest lift and the biggest drag. On a desktop or laptop the card scales to fit the page's
-  width and the screen's height (less 40 px); **Copy PNG** gives it at 2560 × 1440. On a phone
+  width and the screen's height (less 40 px); **Share image** gives it at 2560 × 1440. On a phone
   (600 px or narrower) the page shows only the waterfall (in the card's style: its navy ground and titled tile, its bars,
   lines and row labels), drawn at the screen's width with static
-  rows, and the three numbers with their KDEs: no league card, beeswarm or Sankey (**Copy PNG**
+  rows, and the three numbers with their KDEs: no league card, beeswarm or Sankey (**Share image**
   still gives the full card).
 The next two are hidden for now (`SHOW_LEAGUE_FIGS` in `app.js`): their cards stay hidden and
 they are not drawn.
@@ -937,8 +974,8 @@ they are not drawn.
 Hovering a row anywhere lights it in all three figures and fades the rest, the way Sequencing
 Flow traces a plate appearance. Hovering a dot names the pitcher, and clicking it opens them.
 *Compare with* sets the league group (same pitch type, same pitch group or every pitch type) and
-*Min. pitches* its floor. **Copy PNG** copies each figure to the clipboard at 2x with the font and
-the wordmark embedded (downloading it where the browser refuses the clipboard); the CSV holds the
+*Min. pitches* its floor. **Share image** copies or downloads each figure at 2x with the font and
+the wordmark embedded (a copy downloads where the browser refuses the clipboard); the CSV holds the
 unit's rows for every target. A view is linkable as
 `model-drilldown/#<season>-<pitcher id>-<pitch type>&model=plv&target=p_swinging_strike&row=velo`
 (`&vs=group|all` for the comparison group).
@@ -976,7 +1013,7 @@ four-hour browser cache.
 | `model-drilldown/index.html`, `app.js` | the page: controls, the linked focus, tooltips, downloads, the link hash |
 | `model-drilldown/card.js` | the page's desktop drilldown, a 16:9 card (`cardSvg(ctx)`, from app.js's `view`): pitch type pills, the waterfall, the selected row against the league, the KPI in the corner; morph keys, and the league dots' hover lookup (`nearestCardPoint`) |
 | `model-drilldown/package.json`, `eslint.config.mjs`, `.prettierrc.json` | the lint and format tooling (the page never loads them) |
-| `model-drilldown/card-demo.html` | a demo of the card from the live Stuff+ tables (Brody Hopkins' 2026 four-seamer by default; linked like the drilldown, `#<season>-<pitcher id>-<pitch type>&model=plv&target=wobacon&row=<row>`, any target split by feature), or from made-up numbers at `#synthetic`; click a row or a tab, **Download PNG** gives it at 3x |
+| `model-drilldown/card-demo.html` | a demo of the card from the live Stuff+ tables (Brody Hopkins' 2026 four-seamer by default; linked like the drilldown, `#<season>-<pitcher id>-<pitch type>&model=plv&target=wobacon&row=<row>`, any target split by feature), or from made-up numbers at `#synthetic`; click a row or a tab, **Share image** gives it at 3x |
 
 Locally, copy the staged tables (`stuff_model/build/shap-values/`) to `model-drilldown/data/shap-values/`
 and open the page with `?data=data/`. After any change to the JavaScript, bump the `?v=` query on the

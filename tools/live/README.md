@@ -27,7 +27,7 @@ speeds, and only games that turn out to be tracked get the full feed.
 | `src/cards/npf.js` | numpy / pandas numerics (float32 steps, group means, rounding, Python's formatting) |
 | `src/cards/bundle.js` | the scorer bundle (`cards/models/scorer.pack`) as what `scorer.js` runs on |
 | `test/card_parity.mjs` | the port against the Python pipeline on real games (inputs from `tools/pitcher_card/parity.py`); the nightly cards workflow runs it before publishing a bundle |
-| `test/live_cards.mjs` | `live.js` on a real game against an in-memory bucket: mid-game builds, no-op ticks, the final pass, the index |
+| `test/live_cards.mjs` | `live.js` on a real game against an in-memory bucket: mid-game builds, no-op ticks, a box-score-only rebuild, the final pass at Game Over, the index |
 | `wrangler.jsonc` | Worker name, cron window (game hours, UTC) and the R2 binding |
 | `cors.json` | bucket CORS policy, for when the bucket is served from its own domain |
 
@@ -54,10 +54,12 @@ until a custom domain is attached to the bucket.
 ## Live pitcher cards
 
 When an MLB game's feed moves, `src/cards/live.js` rebuilds the card of every
-pitcher whose pitch count has changed since his last build: the game's pitches are
-scored by the JS port of the pitch-modeling models and the card dict is built as
-the nightly Python pipeline builds it, so the picker's **Live** entry is within a
-minute of the pitch. A game gets one last pass for every pitcher when it goes final,
+pitcher whose pitch count or box-score line has changed since his last build (the
+box score trails the pitches, and inherited runners can score after a pitcher
+leaves): the game's pitches are scored by the JS port of the pitch-modeling models
+and the card dict is built as the nightly Python pipeline builds it, so the picker's
+**Live** entry is within a minute of the pitch. A game gets one last pass for every
+pitcher when it is over ("Game Over" or "Final", whichever the poller sees first),
 and leaves the live index once `cards/index.json` (the nightly build) has it.
 
 It reads what the nightly cards workflow publishes to the bucket:

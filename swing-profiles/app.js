@@ -12,7 +12,7 @@
     form: $("form"), season: $("season"), player: $("player"), hand: $("hand"), go: $("go"),
     suggest: $("suggest"), status: $("status"),
     out: $("out"), fig: $("fig"), stats: $("stats"), notes: $("notes"),
-    dlPng: $("dl_png"), dlCsv: $("dl_csv"), otherSide: $("other_side"),
+    share: $("share_png"), dlCsv: $("dl_csv"), otherSide: $("other_side"),
     savantLink: $("savant_link"), cardLink: $("card_link"), cardImg: $("card_img"),
   };
 
@@ -391,13 +391,17 @@
   el.otherSide.addEventListener("click", () => {
     if (profile) run(String(profile.mlbam_id), profile.year, el.otherSide.dataset.side);
   });
-  el.dlPng.addEventListener("click", () => {
-    if (!profile) return;
-    el.fig.toBlob((b) => save(b, profile.filename()), "image/png");
-  });
+  // Share image (shared/share-image.js): the figure as drawn, to copy or download
+  let sharedProfile = null;
+  ShareImage.image(el.share, () => {
+    if (!profile) throw new Error("no profile");
+    sharedProfile = profile;
+    return new Promise((res) => el.fig.toBlob(res, "image/png"));
+  }, () => sharedProfile.filename());
   el.dlCsv.addEventListener("click", () => {
     if (!profile) return;
-    save(new Blob([Swing.profileCsv(profile)], { type: "text/csv" }), profile.filename("", "csv"));
+    // a BOM, so Excel reads the CSV as UTF-8 (accented names)
+    save(new Blob(["\uFEFF" + Swing.profileCsv(profile)], { type: "text/csv;charset=utf-8" }), profile.filename("", "csv"));
   });
 
   function fromHash() {

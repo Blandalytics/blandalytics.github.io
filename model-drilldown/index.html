@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="modulepreload" href="app.js?v=104" />
+    <link rel="modulepreload" href="app.js?v=106" />
     <link rel="modulepreload" href="data.js?v=13" />
     <link rel="modulepreload" href="charts.js?v=78" />
     <link rel="modulepreload" href="card.js?v=54" />
@@ -582,7 +582,7 @@
         <div id="stats" class="stats"></div>
         <div id="notes"></div>
         <div class="row actions">
-          <button id="copy_flow" type="button">Copy PNG</button>
+          <button id="share_flow" type="button">Share image ▾</button>
           <button id="dl_csv" type="button">Download SHAP values (CSV)</button>
         </div>
       </section>
@@ -596,7 +596,7 @@
           </p>
         </div>
         <div id="swarm" class="figure"></div>
-        <div class="row actions"><button id="copy_swarm" type="button">Copy PNG</button></div>
+        <div class="row actions"><button id="share_swarm" type="button">Share image ▾</button></div>
       </section>
 
       <section id="sankey-card" class="card" hidden>
@@ -608,7 +608,7 @@
           </p>
         </div>
         <div id="sankey" class="figure"></div>
-        <div class="row actions"><button id="copy_sankey" type="button">Copy PNG</button></div>
+        <div class="row actions"><button id="share_sankey" type="button">Share image ▾</button></div>
       </section>
 
       <section class="card">
@@ -663,6 +663,7 @@
       </section>
     </main>
     <div id="tip" hidden role="tooltip"></div>
-    <script type="module" src="app.js?v=104"></script>
+    <script src="/shared/share-image.js?v=1"></script>
+    <script type="module" src="app.js?v=106"></script>
   </body>
 </html>

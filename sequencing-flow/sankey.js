@@ -407,7 +407,7 @@ function wireHover() {
 }
 
 /**
- * Save the diagram as a square PNG (2000 x 2000): the pitcher's line above, the pitch-type key,
+ * Draw the diagram as a square PNG (2000 x 2000): the pitcher's line above, the pitch-type key,
  * the flow (with the ending nodes if they are shown), and the Pitcher List wordmark. Plotly rasterises the sankey itself; the text is
  * drawn on the canvas so it uses the page's font.
  */
@@ -424,8 +424,8 @@ function loadWordmark() {
   return wordmarkPromise;
 }
 
-export async function savePng(meta) {
-  if (!DATA) return;
+export async function pngBlob(meta) {
+  if (!DATA) throw new Error('no flow');
   const Plotly = await loadPlotly();
   const S = 1000, SCALE = 2, PADX = 44;
   const mark = await loadWordmark();
@@ -531,11 +531,13 @@ export async function savePng(meta) {
     ctx.drawImage(mark, S - PADX - mw, S - 22 - mh, mw, mh);
   }
 
-  const a = document.createElement('a');
+  return new Promise(res => cv.toBlob(res, 'image/png'));
+}
+
+/** The PNG's file name: <pitcher>_<date>[_v<hand>hh]_sequencing_flow.png */
+export function pngName(meta) {
   const slug = `${meta.pitcher}_${meta.date}${meta.hand ? `_v${meta.hand}hh` : ''}`.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-  a.download = `${slug}_sequencing_flow.png`;
-  a.href = cv.toDataURL('image/png');
-  a.click();
+  return `${slug}_sequencing_flow.png`;
 }
 
 /** Draw a flow. Resolves once Plotly has painted it. */

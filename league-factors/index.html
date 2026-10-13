@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>League Factors</title>
+<meta name="description" content="How the run environment of MLB and each minor-league level moves through the season, week by week: the park model's calendar curve against what each week produced, 2015–2027.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
+  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
+  --accent:#6cb4ff; --actual:#ffd166; --other:#8a96a6;
+}
+*{box-sizing:border-box}
+body{margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased; padding:24px 16px}
+main{max-width:1320px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+header{max-width:860px}
+h1{margin:0; font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
+h2{margin:0; font-size:17px; font-weight:600}
+p{margin:0}
+.tag{margin:6px 0 0; color:var(--muted); font-size:14px}
+a{color:var(--accent)}
+.card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
+.controls{display:grid; grid-template-columns:repeat(3,minmax(120px,220px)) 1fr; gap:12px 14px; align-items:end}
+.controls .actions{display:flex; justify-content:flex-end; align-items:flex-end}
+@media (max-width:700px){.controls{grid-template-columns:1fr 1fr} .controls .stat{grid-column:1 / -1} .controls .actions{grid-column:1 / -1; justify-content:flex-start}}
+label,.field{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
+label b,.field b{color:var(--ink); font-weight:500}
+input,select,button{font:inherit; color:var(--ink)}
+select{background:var(--ground); border:1px solid var(--rule); border-radius:6px; padding:7px 9px; width:100%}
+select:focus,button:focus-visible,input:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+.seg{display:inline-flex; align-self:flex-start; border:1px solid var(--rule); border-radius:6px; overflow:hidden; background:var(--ground)}
+.seg button{background:transparent; border:0; padding:6px 13px; cursor:pointer; color:var(--muted); font-size:14px}
+.seg button + button{border-left:1px solid var(--rule)}
+.seg button[aria-pressed=true]{background:var(--accent); color:#0b1320; font-weight:600}
+.seg button:hover:not([aria-pressed=true]):not(:disabled){color:var(--ink); background:var(--raise)}
+.seg button:disabled{opacity:.4; cursor:default}
+.seasonbar{display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px 18px; align-items:center;
+  margin-top:14px; padding-top:14px; border-top:1px solid var(--rule)}
+button.play{width:38px; height:38px; border-radius:50%; border:1px solid var(--rule); background:var(--raise); cursor:pointer;
+  font-size:13px; line-height:1; padding:0}
+button.play:hover{border-color:var(--accent); color:var(--accent)}
+.slider{display:flex; flex-direction:column; gap:2px; min-width:0}
+.slider .now{font-size:13px; color:var(--muted)}
+.slider .now b{color:var(--ink); font-weight:600; font-size:14px}
+.slider input[type=range]{width:100%; margin:6px 0 2px; accent-color:var(--accent); cursor:pointer}
+.months{position:relative; height:15px; font-size:11px; color:var(--faint); margin:0 8px}
+.months span{position:absolute; transform:translateX(-50%); white-space:nowrap}
+
+.chartbar{display:flex; gap:10px 18px; align-items:flex-start; justify-content:space-between}
+.chartbar > button{flex:none}
+.readout{display:flex; flex-wrap:wrap; gap:4px 18px; align-items:baseline; font-size:14px; color:var(--muted)}
+.readout b{color:var(--ink); font-weight:600}
+.readout .m{color:var(--accent); font-family:"JetBrains Mono",monospace; font-weight:600}
+.readout .a{color:var(--actual); font-family:"JetBrains Mono",monospace; font-weight:600}
+#chartbox{margin-top:10px; width:100%; min-width:0}
+#chart{display:block; width:100%; overflow:visible}
+#chart text{font-family:"DM Sans",system-ui,sans-serif; fill:var(--faint); font-size:11px}
+#chart .ylab{font-family:"JetBrains Mono",monospace}
+.key{display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:8px; font-size:12px; color:var(--muted)}
+.key span{display:inline-flex; align-items:center; gap:6px}
+.key i{display:inline-block}
+.key .ln{width:18px; height:3px; border-radius:2px; background:var(--accent)}
+.key .dt{width:9px; height:9px; border-radius:50%; background:var(--actual)}
+.key .dt.o{background:var(--other); opacity:.6}
+
+.row{display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; justify-content:space-between}
+.legend{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px}
+.legend .bar{width:160px; height:10px; border-radius:3px; border:1px solid var(--rule)}
+button.reset{background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:5px 10px; cursor:pointer; font-size:13px}
+button.reset:hover{border-color:var(--faint)}
+.status{color:var(--muted); font-size:13px}
+
+.tablewrap{overflow:auto; border:1px solid var(--rule); border-radius:8px; background:var(--surface)}
+table{border-collapse:separate; border-spacing:0; font-size:12.5px}
+th,td{padding:5px 4px; border-bottom:1px solid var(--rule); white-space:nowrap}
+thead th{position:sticky; top:0; z-index:2; background:var(--raise); color:var(--muted); font-weight:600; font-size:11px;
+  text-align:center; cursor:pointer; min-width:34px}
+thead th:hover{color:var(--ink)}
+td{text-align:center; font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; cursor:pointer; color:var(--ink)}
+th.name,td.name{position:sticky; left:0; z-index:1; background:var(--surface); border-right:1px solid var(--rule);
+  text-align:left; font-family:inherit; padding:5px 10px; min-width:118px}
+thead th.name{z-index:3; background:var(--raise); cursor:default}
+td.name{color:var(--muted)}
+tr.on td.name{color:var(--ink); font-weight:600; box-shadow:inset 3px 0 0 var(--accent)}
+td.na{color:var(--faint)}
+td.thin{opacity:.5}
+th.sel{color:var(--accent)}
+td.sel{box-shadow:inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent)}
+tr.on td:not(.name){font-weight:600}
+tbody tr:last-child td.sel{box-shadow:inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent), inset 0 -2px 0 var(--accent)}
+
+details summary{cursor:pointer; color:var(--ink); font-weight:600}
+.method{display:flex; flex-direction:column; gap:10px; margin-top:12px; color:var(--muted); font-size:14px; max-width:980px}
+.method b{color:var(--ink); font-weight:600}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>League Factors</h1>
+    <p class="tag">How each level's run environment moves through the season. 100 is that level's season average, and a week above 100 had more of that result per plate appearance. The line is the model's calendar curve, with the same batters and pitchers all season. The dots are what each week actually produced. For each park's own pattern, see the Seasonal view of <a href="/park-factors/#view=seasonal">Park Factors</a>.</p>
+  </header>
+
+  <section class="card">
+    <div class="controls">
+      <label><b>Level</b><select id="level"></select></label>
+      <label><b>Year</b><select id="year"></select></label>
+      <label class="stat"><b>Stat</b><select id="stat"></select></label>
+      <div class="actions"><button id="reset" class="reset" type="button" title="Back to MLB, All years, Runs, opening week">Reset filters</button></div>
+    </div>
+    <div class="seasonbar">
+      <button type="button" id="play" class="play" aria-label="Play through the season" title="Play through the season">▶</button>
+      <div class="slider">
+        <div class="now"><b id="wk_label"></b></div>
+        <input type="range" id="week" min="0" step="1" value="0" aria-label="Week of the season">
+        <div class="months" id="months" aria-hidden="true"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="chartbar">
+      <div class="readout" id="readout"></div>
+      <button id="share" class="reset" type="button">Share image ▾</button>
+    </div>
+    <div id="chartbox"><svg id="chart" role="img" aria-labelledby="chart_title"><title id="chart_title"></title></svg></div>
+    <div class="key" id="key"></div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <h2>Every stat, week by week</h2>
+      <div class="row" style="gap:14px">
+        <div class="seg" id="grid_src" role="group" aria-label="Values in the table">
+          <button type="button" data-v="model" aria-pressed="true" title="The model's calendar curve">Model</button>
+          <button type="button" data-v="actual" aria-pressed="false" title="What each week produced">Actual</button>
+        </div>
+        <div class="legend" aria-hidden="true">
+          <span>Pitcher-Friendly</span><span class="bar" id="legend_bar"></span><span>Hitter-Friendly</span>
+        </div>
+        <button id="copy" class="reset" type="button">Copy link</button>
+      </div>
+    </div>
+    <p class="status" id="grid_note" style="margin:8px 0 10px"></p>
+    <div class="tablewrap">
+      <table id="grid">
+        <thead><tr id="grid_head"></tr></thead>
+        <tbody id="grid_body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>How it works</summary>
+      <div class="method">
+        <p><b>Scale:</b> 100 is the level's average over that season, and each week is indexed to it. A week at 92 in home runs had 8% fewer home runs per plate appearance than the season as a whole. <b>wOBA</b> is per plate appearance and <b>R</b> is runs (<a href="https://en.wikipedia.org/wiki/Base_runs">BaseRuns</a>) per plate appearance. <b>AVG</b> is hits per plate appearance, and <b>1B</b> through <b>HBP</b> are each result per plate appearance. <b>BACON</b> is batting average on contact (home runs included) and <b>wOBACon</b> is wOBA on contact.</p>
+        <p><b>The line (model):</b> the calendar curve of the <a href="/park-factors/">Park Factors</a> model's seasonal fit, which also gives the Seasonal view's "average" row there. The fit covers every plate appearance of MLB 2015–2026 and of AAA, AA, A+ and A 2021–2026. It has one curve per level, piecewise linear between points every two weeks from March 22 to October 4, with one shape for all seasons. Because the fit also has a term for each batter and each pitcher, the curve shows the environment with the same players all season: cold April air, summer heat and anything else that moves with the date for everybody. It also carries the mix of parks in use that week. Past years show the curve on that year's games and rates; 2027 shows it on the 2027 schedule.</p>
+        <p><b>The dots (actual):</b> every plate appearance at the level that week, against the season, with no adjustment. They carry that year's weather and who played: September call-ups, injuries, promotions and demotions. A bigger dot has more plate appearances. A typical week has about 7,000, so chance alone moves home runs by about ±7 points and triples by about ±20. Opening weeks with a few games (the Tokyo and Seoul series) are small and noisy. Where the dots and the line part late in the season, the players changed, not the weather.</p>
+        <p><b>All years:</b> the line is the newest year's (2027 for MLB, 2026 for the minors). The dots are every past season's weeks, and the table's <b>Actual</b> is their plate-appearance-weighted average, by date. Seasons without an April are left out, because their 100 is a summer-only average: MLB 2020 (60 games from late July) and the minors' 2021 season, which began in May. Pick the year to see them.</p>
+        <p><b>Colors:</b> as on Park Factors, centered on 100 and saturated at 90 and 110. Red helps hitters and blue hurts them, so for <b>K</b> the scale is flipped. The table shows whole numbers; hold the pointer on a cell or a dot for one decimal.</p>
+        <p id="generated"></p>
+      </div>
+    </details>
+  </section>
+</main>
+<script src="/shared/share-image.js?v=1"></script>
+<script src="app.js?v=8"></script>
+</body>
+</html>

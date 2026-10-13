@@ -67,7 +67,7 @@ def parse_md(md):
 
 def load(path=CSV):
     """(columns, rows) from the CSV, numbers as ints; the As Of column comes back separately."""
-    with open(path, newline="", encoding="utf-8") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         recs = list(csv.DictReader(f))
     recs = [{**r, "Venue": NAMES_2027.get(r["Venue"], r["Venue"])} if r["Level"] == "MLB" else r for r in recs]
     cols = [c for c in recs[0] if c != "As Of"]
@@ -77,7 +77,7 @@ def load(path=CSV):
 
 def load_history(cols, path=HIST):
     """Seasons before each level's most recent year (all batters), in the page's column order."""
-    with open(path, newline="", encoding="utf-8") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         recs = [r for r in csv.DictReader(f) if int(r["Year"]) < LATEST[r["Level"]]]
     return [[{**r, "Side": "All"}[c] if c in TEXT_COLS else int(r[c]) for c in cols] for r in recs]
 
@@ -133,7 +133,7 @@ def main():
     args = ap.parse_args()
     if args.from_md:
         recs = parse_md(Path(args.from_md).read_text(encoding="utf-8"))
-        with open(CSV, "w", newline="", encoding="utf-8") as f:
+        with open(CSV, "w", newline="", encoding="utf-8-sig") as f:  # a BOM: Excel reads the accents
             w = csv.DictWriter(f, fieldnames=list(recs[0]))
             w.writeheader()
             w.writerows(recs)
@@ -326,7 +326,7 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
         <p><b>Model:</b> one joint Bayesian fit of every plate appearance (MLB 2015–26; AAA, AA, A+ and A 2021–26) with batter, pitcher, league-season, home-field and platoon terms, a per-venue factor that drifts across seasons (with breaks for known dimension changes) and a per-venue left/right split. If a park is used across multiple leagues (Ex: Sutter Health Park has hosted both AAA and MLB games), the data from all leagues informs that park factor.</p>
         <p><b>Neutral sites:</b> a park with fewer games at a level that season than a tenth of a home schedule is no club's home (London Stadium, Tokyo Dome, Estadio Alfredo Harp Helú, Field of Dreams, Rickwood Field, the Little League Classic in Williamsport, …), so its Team and Org show League instead. Pick League as the Team or Org to list them. With so few games, they are hidden while Qualified parks is on.</p>
         <p><b>Games:</b> MLB 2027 rows use the 2027 schedule (games at the venue that season, neutral sites included); every other year counts the venue's completed regular-season games that season. <b>Qualified parks</b> hides venues with 50 or fewer games, pro-rated to each level's home schedule, so shortened seasons scale down: <span id="thresholds"></span>. <b>PA</b> is the venue's plate appearances at that level in the data: that season's for past years, and every season's for each level's most recent year.</p>
-        <p><b>Seasonal:</b> each level and year's parks week by week: MLB 2015–2027 (2027 on its schedule, the earlier seasons from the games played) and AAA, AA, A+ and A 2021–2026. They come from a second fit of the same model with two curves by date added: each level's own calendar (every park together: cold April air, summer heat, September call-ups) and each park's deviation from it (a curve for its roof type plus its own), one shape per park across all its seasons. Drag the slider or press ▶ to move through the season; switching the year keeps the same point in the calendar. <b>Compared to Season average</b> sets 100 at the level's average park over the whole season, so the factors carry the calendar too (MLB home runs run about 8% below average in early April): how the park played or will play that week. <b>Same week</b> sets 100 at that week's average park, which leaves only the park's own pattern (roofed parks such as American Family Field play relatively better in April, before the summer lift elsewhere). The <b>average</b> row is the league that week against its season average. Past seasons are all batters; each level's most recent year has the LHB/RHB split. Most parks move only a point or two over a season, home runs the most, so this view shows one decimal. A park's seasonal factors average out to about its Full season factor (the two fits can differ by a point).</p>
+        <p><b>Seasonal:</b> each level and year's parks week by week: MLB 2015–2027 (2027 on its schedule, the earlier seasons from the games played) and AAA, AA, A+ and A 2021–2026. They come from a second fit of the same model with two curves by date added: each level's own calendar (every park together: cold April air, summer heat, September call-ups) and each park's deviation from it (a curve for its roof type plus its own), one shape per park across all its seasons. Drag the slider or press ▶ to move through the season; switching the year keeps the same point in the calendar. <b>Compared to Season average</b> sets 100 at the level's average park over the whole season, so the factors carry the calendar too (MLB home runs run about 8% below average in early April): how the park played or will play that week. <b>Same week</b> sets 100 at that week's average park, which leaves only the park's own pattern (roofed parks such as American Family Field play relatively better in April, before the summer lift elsewhere). The <b>average</b> row is the league that week against its season average. The <a href="/league-factors/">League Factors</a> page charts it for every stat, next to what each week produced. Past seasons are all batters; each level's most recent year has the LHB/RHB split. Most parks move only a point or two over a season, home runs the most, so this view shows one decimal. A park's seasonal factors average out to about its Full season factor (the two fits can differ by a point).</p>
         <p><b>All levels:</b> every row is still indexed to its own level's average, so a 105 in AA and a 105 in MLB are each 5% above their level, not equal environments. Picking an <b>Org</b> switches to All levels to show the whole system; pick a level after that to narrow it.</p>
         <p><b>Years:</b> each level opens on its most recent year: 2027 for MLB, built on the 2027 schedule, and 2026 for the minors. Earlier seasons (MLB from 2015, the minors from 2021) come from the same fit, indexed to that season's average park at that level, for all batters; the LHB/RHB split covers each level's most recent year. Venue names, teams, leagues and orgs are as they were that season, from MLB's StatsAPI, with 2021's interim minor-league names shown as the leagues' current ones (Triple-A East as IL, and so on). <b>All years</b> lists every season at once, one row per park and season; with a Team or Org picked, it follows a park through the years.</p>
         <p>Factors as of __GENERATED__.</p>

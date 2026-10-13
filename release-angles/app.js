@@ -14,7 +14,7 @@ const el = {
   form: $("form"), season: $("season"), player: $("player"), suggest: $("suggest"),
   from: $("from"), to: $("to"), clearDates: $("clear_dates"), status: $("status"), through: $("through"),
   out: $("out"), fig: $("fig"), note: $("note"), views: $("views"), play: $("play"),
-  copyPng: $("copy_png"), dlGif: $("dl_gif"), dlAll: $("dl_all"), dlStatus: $("dl_status"),
+  share: $("share_png"), dlStatus: $("dl_status"),
   nStd: $("n_std"), minRows: $("min_rows"), minSeg: $("min_seg"), numbers: $("numbers"),
 };
 
@@ -336,42 +336,31 @@ function gifOf(m) {
   }
   return gifs.get(m);
 }
-// The ClipboardItem is made in the click itself, around the promise of the image, so the copy
-// keeps the click's permission while the image is drawn (Safari insists on it).
-function copyImage(type, blobPromise) {
-  return navigator.clipboard.write([new ClipboardItem({ [type]: blobPromise })]);
+// Share image (shared/share-image.js): the view shown as a PNG (copy or download), the loop as
+// a GIF, or the four stills and the loop as one zip
+let sharedPng = null;  // [model, view] of the last still, for its file name
+function stillBlob() {
+  if (!model) throw new Error("no chart");
+  sharedPng = [model, loop ? 0 : view];
+  return pngOf(...sharedPng);
 }
-el.copyPng.addEventListener("click", async () => {
-  if (!model) return;
-  const m = model, i = loop ? 0 : view;
-  try {
-    await copyImage("image/png", pngOf(m, i));
-    dlStatus(`copied the ${["pitch types", "overlap count", "usage share", "concentration"][i]} PNG`);
-  } catch (e) {
-    console.error(e);
-    save(await pngOf(m, i), `${RA.stem(m)}_${RA.TAGS[i]}.png`);
-    dlStatus("couldn't copy to the clipboard here, so the PNG was downloaded", "warn");
-  }
-});
-el.dlGif.addEventListener("click", async () => {
-  if (!model) return;
+const stillName = () => `${RA.stem(sharedPng[0])}_${RA.TAGS[sharedPng[1]]}.png`;
+async function downloadGif() {
+  if (!model) throw new Error("no chart");
   const m = model;
-  el.dlGif.disabled = true;
   try {
     const blob = await gifOf(m);
     save(blob, `${RA.stem(m)}.gif`);
     dlStatus(`downloaded the GIF (${(blob.size / 1e6).toFixed(1)} MB)`);
+    return "Downloaded";
   } catch (e) {
-    console.error(e);
     dlStatus(`GIF failed: ${e.message}`, "err");
-  } finally {
-    el.dlGif.disabled = false;
+    throw e;
   }
-});
-el.dlAll.addEventListener("click", async () => {
-  if (!model) return;
+}
+async function downloadAll() {
+  if (!model) throw new Error("no chart");
   const m = model, stem = RA.stem(m);
-  el.dlAll.disabled = true;
   try {
     const { zipSync } = await import("https://cdn.jsdelivr.net/npm/fflate@0.8.2/+esm");
     const files = {};
@@ -380,13 +369,18 @@ el.dlAll.addEventListener("click", async () => {
     // PNG and GIF are compressed already: stored, not deflated
     save(new Blob([zipSync(files, { level: 0 })], { type: "application/zip" }), `${stem}.zip`);
     dlStatus("downloaded the four PNGs and the GIF");
+    return "Downloaded";
   } catch (e) {
-    console.error(e);
     dlStatus(`download failed: ${e.message}`, "err");
-  } finally {
-    el.dlAll.disabled = false;
+    throw e;
   }
-});
+}
+ShareImage.attach(el.share, [
+  { copy: stillBlob, name: stillName },
+  { download: stillBlob, name: stillName },
+  { label: "Download GIF", id: "share_gif", run: downloadGif },
+  { label: "Download all PNGs + GIF", id: "share_all", run: downloadAll },
+]);
 
 // ---- wiring ----------------------------------------------------------------------------------
 async function switchSeason(year, keepId = chosen?.id) {
