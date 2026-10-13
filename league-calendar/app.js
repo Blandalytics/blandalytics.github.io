@@ -231,6 +231,193 @@ function renderGrid(s, wi) {
     : `Model: the calendar curve for ${state.level} ${yearShown()}${yearShown() === 2027 ? " on the 2027 schedule" : ""}. Click a cell to chart that stat and week.`;
 }
 
+// the tile image: the chart on screen, drawn as the homepage tile is (900 x 900, the Pitcher List
+// Stats colors and wordmark, tools/park_factors/build_calendar_tile.py), to copy or download
+const TILE = {W: 900, L: 118, R: 862, T: 176, B: 742, bg: "rgb(41,44,66)", cyan: "rgb(4,209,249)",
+  gold: "rgb(255,209,102)", dot: "#9aa0b8", sub: "#9aa0b8", axis: "#c0c4d3"};
+let logoImg = null;
+const loadLogo = () => logoImg || (logoImg = new Promise((res, rej) => {
+  const im = new Image();
+  im.onload = () => res(im);
+  im.onerror = rej;
+  im.src = "logo.png";
+}));
+function tileStep(range) {
+  for (const s of [1, 2, 4, 5, 10, 20, 25, 50]) if (range / s <= 5) return s;
+  return 100;
+}
+const yearLabel = ys => (state.year === ALL ? `${ys[ys.length - 1]}–${ys[0]}` : yearShown() === 2027 ? "2027 Schedule" : String(yearShown()));
+const fileName = () => `league_calendar_${state.level.replace("+", "plus")}_${state.year === ALL ? "all_years" : yearShown()}_${state.stat}.png`;
+
+async function tileBlob() {
+  const s = cur(), c = si(), all = state.year === ALL, name = NAMES[state.stat] || state.stat;
+  await Promise.all(["700 36px", "700 19px", "400 21px", "400 17px", "400 16px", "400 15px"].map(f => document.fonts.load(`${f} "DM Sans"`)));
+  const logo = await loadLogo();
+  const {W, L, R, T, B} = TILE;
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = W;
+  const g = cv.getContext("2d");
+  g.fillStyle = TILE.bg;
+  g.fillRect(0, 0, W, W);
+  // the data, as the chart on the page has it
+  const ys = all ? pooled() : s.obs ? [yearShown()] : [];
+  const dots = [];
+  for (const y of ys) {
+    const z = series(y);
+    z.weeks.forEach((w, j) => { if (z.obs[j]) dots.push([mid(w), z.obs[j][c] / 10, z.pa[j]]); });
+  }
+  const line = s.weeks.map((w, i) => [mid(w), s.model[i][c] / 10]);
+  const avg = all ? pooledActual(c).map((a, i) => (a ? [mid(s.weeks[i]), a.v / 10] : null)).filter(Boolean) : [];
+  const xs = [...line, ...dots].map(q => q[0]);
+  const x0 = Math.min(...xs) - 3, x1 = Math.max(...xs) + 3;
+  const ov = dots.filter(d => d[2] >= 1500).map(d => d[1]).sort((a, b) => a - b);
+  let lo = Math.min(100, ...line.map(q => q[1])), hi = Math.max(100, ...line.map(q => q[1]));
+  if (ov.length) { lo = Math.min(lo, quantile(ov, 0.02)); hi = Math.max(hi, quantile(ov, 0.98)); }
+  const pad = Math.max(0.5, (hi - lo) * 0.06);
+  const step = tileStep(hi - lo + 2 * pad);
+  lo = Math.floor((lo - pad) / step) * step; hi = Math.ceil((hi + pad) / step) * step;
+  const X = x => L + ((x - x0) / (x1 - x0)) * (R - L);
+  const Y = v => T + ((hi - Math.min(hi, Math.max(lo, v))) / (hi - lo)) * (B - T);
+  // title, subtitle, wordmark
+  g.font = '700 36px "DM Sans"';
+  g.fillStyle = TILE.cyan;
+  g.fillText(`${state.level} League Calendar`, 90, 64);
+  g.font = '400 21px "DM Sans"';
+  g.fillStyle = TILE.sub;
+  g.fillText(`${name} by Week, ${yearLabel(ys.length ? ys : [yearShown()])}`, 90, 100);
+  g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
+  // the grid, 100 brighter, and the months
+  g.font = '400 17px "DM Sans"';
+  for (let v = lo; v <= hi + 1e-9; v += step) {
+    g.strokeStyle = v === 100 ? "#6d7290" : "#3a3e5a";
+    g.lineWidth = v === 100 ? 2 : 1;
+    g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(R, Y(v)); g.stroke();
+    g.fillStyle = TILE.axis;
+    g.textAlign = "right";
+    g.fillText(String(v), L - 14, Y(v) + 6);
+  }
+  g.textAlign = "left";
+  for (let mo = 3; mo <= 9; mo++) {
+    const d = (Date.UTC(2023, mo, 1) - DAY0) / 864e5;
+    if (d < x0 || d > x1) continue;
+    g.strokeStyle = "#33374f";
+    g.lineWidth = 1;
+    g.beginPath(); g.moveTo(X(d), T); g.lineTo(X(d), B); g.stroke();
+    g.fillStyle = TILE.axis;
+    g.fillText(MON[mo], X(d) + 7, B + 30);
+  }
+  // the actual weeks (sized by PA), their average, the model curve
+  for (const [x, v, pa] of dots) {
+    g.globalAlpha = all ? (pa >= 1500 ? 0.42 : 0.22) : pa >= 1500 ? 0.85 : 0.4;
+    g.fillStyle = all ? TILE.dot : TILE.gold;
+    g.beginPath(); g.arc(X(x), Y(v), Math.max(2.5, Math.min(7, 7 * Math.sqrt(pa / 7000))), 0, 2 * Math.PI); g.fill();
+  }
+  g.globalAlpha = 1;
+  g.lineJoin = "round";
+  const poly = pts => {
+    g.beginPath();
+    pts.forEach(([x, v], i) => (i ? g.lineTo(X(x), Y(v)) : g.moveTo(X(x), Y(v))));
+    g.stroke();
+  };
+  if (avg.length > 1) {
+    g.strokeStyle = TILE.gold; g.lineWidth = 3.5; g.setLineDash([11, 8]); poly(avg); g.setLineDash([]);
+  }
+  g.strokeStyle = TILE.cyan; g.lineWidth = 6; g.lineCap = "round"; poly(line); g.lineCap = "butt";
+  // the curve's low and high, labeled
+  const low = line.reduce((a, q) => (q[1] < a[1] ? q : a)), high = line.reduce((a, q) => (q[1] > a[1] ? q : a));
+  g.font = '700 19px "DM Sans"';
+  g.textAlign = "center";
+  for (const [[x, v], below] of [[low, true], [high, false]]) {
+    const y = Y(v), under = below ? y + 34 < B - 4 : y - 20 < T + 18;
+    g.beginPath(); g.arc(X(x), y, 8, 0, 2 * Math.PI);
+    g.fillStyle = TILE.cyan; g.fill();
+    g.lineWidth = 3; g.strokeStyle = TILE.bg; g.stroke();
+    g.fillStyle = "#fff";
+    g.fillText(v.toFixed(1), Math.max(L + 24, Math.min(R - 24, X(x))), under ? y + 34 : y - 20);
+  }
+  // the key and the note
+  g.font = '400 16px "DM Sans"';
+  g.textAlign = "left";
+  g.textBaseline = "middle";
+  let kx = 90;
+  const ky = 804;
+  const item = (draw, w, text) => {
+    draw(kx);
+    kx += w + 9;
+    g.fillStyle = TILE.axis;
+    g.fillText(text, kx, ky);
+    kx += g.measureText(text).width + 26;
+  };
+  item(x => { g.fillStyle = TILE.cyan; g.fillRect(x, ky - 3, 30, 6); }, 30, "Model curve");
+  if (dots.length) {
+    item(x => {
+      g.globalAlpha = 0.7; g.fillStyle = all ? TILE.dot : TILE.gold;
+      g.beginPath(); g.arc(x + 6, ky, 6, 0, 2 * Math.PI); g.fill(); g.globalAlpha = 1;
+    }, 12, "Actual weeks");
+  }
+  if (avg.length > 1) item(x => { g.fillStyle = TILE.gold; g.fillRect(x, ky - 2, 11, 4); g.fillRect(x + 19, ky - 2, 11, 4); }, 30, "Their average");
+  g.textBaseline = "alphabetic";
+  g.font = '400 15px "DM Sans"';
+  g.fillStyle = TILE.sub;
+  g.fillText(`100 = ${state.level} Season Average`, 90, 871);
+  return new Promise(res => cv.toBlob(res, "image/png"));
+}
+function save(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+// Share image: a menu of Copy image and Download PNG. The ClipboardItem is made in the click
+// itself, around the promise of the image, so the copy keeps the click's permission while the
+// image is drawn (Safari insists on it); where the clipboard is refused, the PNG downloads.
+const menu = $("share_menu"), SHARE = "Share image ▾";
+function closeMenu() {
+  menu.hidden = true;
+  $("share").setAttribute("aria-expanded", "false");
+}
+$("share").addEventListener("click", () => {
+  const open = menu.hidden;
+  menu.hidden = !open;
+  $("share").setAttribute("aria-expanded", String(open));
+  if (open) menu.querySelector("button").focus();
+});
+document.addEventListener("click", e => { if (!menu.hidden && !e.target.closest(".share")) closeMenu(); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !menu.hidden) { closeMenu(); $("share").focus(); }
+});
+menu.addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]");
+  if (!b || !D) return;
+  const btn = $("share"), blob = tileBlob();
+  closeMenu();
+  btn.disabled = true;
+  try {
+    if (b.dataset.act === "copy") {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+        btn.textContent = "Copied";
+      } catch (err) {
+        console.error(err);
+        save(await blob, fileName());
+        btn.textContent = "Downloaded (no clipboard here)";
+      }
+    } else {
+      save(await blob, fileName());
+      btn.textContent = "Downloaded";
+    }
+  } catch (err) {
+    console.error(err);
+    btn.textContent = "Could not make the image";
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = SHARE; }, 1600);
+  }
+});
+
 // events
 $("level").addEventListener("change", e => { state.level = e.target.value; refreshOptions(); render(); });
 $("year").addEventListener("change", e => { state.year = e.target.value; refreshOptions(); render(); });
