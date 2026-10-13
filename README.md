@@ -897,12 +897,14 @@ colored as on Park Factors).
 | `league-calendar/data.json` | per level and year: the weeks, the model's indexes and (past years) the actual indexes, games and PAs of each week, as 10 × the index (150 kB) |
 | `tools/park_factors/park_factors_calendar_observed.csv` | the actual weeks, from the park model's `parks.calendar_observed` (every level, season and week: that week's PAs against the season's, unadjusted) |
 | `tools/park_factors/build_calendar.py` | writes `data.json` from the Seasonal view's files and that CSV. It fails if the two disagree on a level-season's weeks |
+| `tools/park_factors/build_calendar_tile.py` | the homepage tile, from `data.json`: MLB wOBA by week as the page's All years chart draws it (the model curve, the actual weeks of 2015–2026 and their average), in the style of the Park Factors tile, screenshotted at 900 × 900 by headless Edge and saved as `images/tile-league-calendar.webp` and `-720.webp` |
 
 To update, after new seasonal factors (`--seasonal-table` also writes
 `park_factors_calendar_observed.csv`):
 
 ```
 python tools/park_factors/build_calendar.py path/to/park_factors_calendar_observed.csv
+python tools/park_factors/build_calendar_tile.py    # then bump the tile's ?v= in index.html
 ```
 
 ## Model Drilldown
