@@ -6,7 +6,7 @@ import { esc, fmtDelta, fmtValue, link, load } from '../projection-drilldown/dat
 
 const $ = (s) => document.querySelector(s);
 const q0 = new URLSearchParams(location.search);
-const state = { r: q0.get('r') === 'p' ? 'p' : 'h', b: q0.get('b') === 'hb' ? 'hb' : 'ev', mat: true, q: '', team: '', pos: '',
+const state = { r: q0.get('r') === 'p' ? 'p' : 'h', b: q0.get('b') === 'hb' ? 'hb' : 'ev', mat: true, low: false, q: '', team: '', pos: '',
   sort: 'abs', dir: -1, shown: 80, open: new Set() }; // prettier-ignore
 // the causes, in the order of src/change.CAUSES, with their colours
 const COLOR = {
@@ -44,6 +44,7 @@ async function init() {
   $('#pos').addEventListener('input', (e) => ((state.pos = e.target.value.trim().toUpperCase()), render()));
   $('#team').addEventListener('change', (e) => ((state.team = e.target.value), render()));
   $('#mat').addEventListener('change', (e) => ((state.mat = e.target.checked), render()));
+  $('#low').addEventListener('change', (e) => ((state.low = e.target.checked), render()));
   $('#more').addEventListener('click', () => ((state.shown += 80), render()));
   await show(date);
 }
@@ -117,14 +118,16 @@ function render() {
     .join('');
   let rows = all;
   if (state.mat) rows = rows.filter((x) => x[b][3] === 1);
+  // players worth under $1 before and after (below replacement) only on request
+  if (!state.low) rows = rows.filter((x) => Math.max(x[b][0] ?? -1e9, x[b][1] ?? -1e9) >= 1);
   if (state.q) rows = rows.filter((x) => norm(x.n).includes(norm(state.q)));
   if (state.team) rows = rows.filter((x) => x.t === state.team);
   if (state.pos) rows = rows.filter((x) => (x.pos ?? '').toUpperCase().split(/[,/ ]+/).includes(state.pos));
   const val = (x) => {
     const v = x[b];
-    if (state.sort === 'abs') return Math.abs(v[2] ?? 0);
+    if (state.sort === 'abs') return Math.abs(v[5] ?? v[2] ?? 0);
     if (state.sort === 'n') return x.n;
-    return { before: v[0], after: v[1], change: v[2] }[state.sort] ?? 0;
+    return { before: v[0], after: v[1], change: v[2], news: v[5] }[state.sort] ?? 0;
   };
   rows = [...rows].sort((p, q) => {
     const [x, y] = [val(p), val(q)];
@@ -133,17 +136,21 @@ function render() {
   const shown = rows.slice(0, state.shown);
   const scale = Math.max(0.5, ...shown.map((x) => Object.values(x[b][4]).reduce((s, v) => s + Math.abs(v), 0)));
   const th = (c, l) => `<th data-c="${c}" aria-sort="${state.sort === c ? (state.dir > 0 ? 'ascending' : 'descending') : 'none'}">${esc(l)}</th>`;
-  const head = `<thead><tr>${th('n', 'Player')}${th('before', '$ before')}${th('after', '$ after')}${th('change', 'Change')}${th('abs', 'By cause')}</tr></thead>`;
+  const head =
+    `<thead><tr>${th('n', 'Player')}${th('before', '$ before')}${th('after', '$ after')}${th('change', 'Change')}` +
+    `${th('news', 'News')}${th('abs', 'By cause')}</tr></thead>`;
   const body = shown
     .map((x) => {
-      const [before, after, ch, , parts] = x[b];
+      const [before, after, ch, , parts, news] = x[b];
       const cls = ch > 0 ? 'up' : ch < 0 ? 'down' : '';
+      const ncls = news > 0 ? 'up' : news < 0 ? 'down' : '';
       const open = state.open.has(x.id);
       return (
         `<tr class="row" data-id="${esc(x.id)}" aria-expanded="${open}"><td>${esc(x.n)}<div class="sub">${esc(x.t)} · ${esc(x.pos ?? '')}</div></td>` +
         `<td class="n">${money(before)}</td><td class="n">${money(after)}</td><td class="n ${cls}">${fmtDelta(ch, 'money', 2)}</td>` +
+        `<td class="n ${ncls}">${fmtDelta(news ?? ch, 'money', 2)}</td>` +
         `<td>${bar(parts, scale)}</td></tr>` +
-        (open ? `<tr class="detail"><td colspan="5">${detail(x)}</td></tr>` : '')
+        (open ? `<tr class="detail"><td colspan="6">${detail(x)}</td></tr>` : '')
       );
     })
     .join('');
@@ -173,6 +180,7 @@ function render() {
       ? 'A change is material when it is larger than the change the model makes on a day with no new data (the 95th percentile of a placebo refit, by $ tier). '
       : 'No noise floor is measured yet: every change counts as material. ') +
     `$ is the rest-of-season auction value in each day's calculator frame (${b === 'ev' ? 'expected playing time' : 'a healthy season'}). ` +
-    `"Days played and the league frame": yesterday's projection carried one day forward, against itself. ` +
+    `News: the change without the days played (every rest-of-season line shrinks as the season goes on); the material flag and the order use it. ` +
+    `"Days played and the league frame": the earlier projection carried to this date, against itself. ` +
     `The schedule left: ${(100 * D.frac.base).toFixed(1)}% on ${esc(D.base)}, ${(100 * D.frac.new).toFixed(1)}% on ${esc(D.date)}.`;
 }
