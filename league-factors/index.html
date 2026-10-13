@@ -28,7 +28,8 @@ p{margin:0}
 a{color:var(--accent)}
 .card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
 .controls{display:grid; grid-template-columns:repeat(3,minmax(120px,220px)) 1fr; gap:12px 14px; align-items:end}
-@media (max-width:700px){.controls{grid-template-columns:1fr 1fr} .controls .stat{grid-column:1 / -1} .controls .spacer{display:none}}
+.controls .actions{display:flex; justify-content:flex-end; align-items:flex-end}
+@media (max-width:700px){.controls{grid-template-columns:1fr 1fr} .controls .stat{grid-column:1 / -1} .controls .actions{grid-column:1 / -1; justify-content:flex-start}}
 label,.field{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
 label b,.field b{color:var(--ink); font-weight:500}
 input,select,button{font:inherit; color:var(--ink)}
@@ -112,7 +113,7 @@ details summary{cursor:pointer; color:var(--ink); font-weight:600}
       <label><b>Level</b><select id="level"></select></label>
       <label><b>Year</b><select id="year"></select></label>
       <label class="stat"><b>Stat</b><select id="stat"></select></label>
-      <span class="spacer"></span>
+      <div class="actions"><button id="reset" class="reset" type="button" title="Back to MLB, All years, Runs, opening week">Reset filters</button></div>
     </div>
     <div class="seasonbar">
       <button type="button" id="play" class="play" aria-label="Play through the season" title="Play through the season">▶</button>
@@ -171,6 +172,6 @@ details summary{cursor:pointer; color:var(--ink); font-weight:600}
   </section>
 </main>
 <script src="/shared/share-image.js?v=1"></script>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>

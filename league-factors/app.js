@@ -379,6 +379,8 @@ ShareImage.image($("share"), tileBlob, fileName);
 $("level").addEventListener("change", e => { state.level = e.target.value; refreshOptions(); render(); });
 $("year").addEventListener("change", e => { state.year = e.target.value; refreshOptions(); render(); });
 $("stat").addEventListener("change", e => { state.stat = e.target.value; render(); });
+// Reset filters: the page as it opens (MLB, All years, Runs, opening week, the Model table)
+$("reset").addEventListener("click", () => { stop(); Object.assign(state, DEFAULTS); refreshOptions(); render(); });
 $("week").addEventListener("input", e => { stop(); state.wk = cur().weeks[+e.target.value][0]; render(); });
 $("grid_src").addEventListener("click", e => { const b = e.target.closest("button"); if (b && !b.disabled) { state.grid = b.dataset.v; render(); } });
 $("grid").addEventListener("click", e => {
