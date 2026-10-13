@@ -11,7 +11,7 @@
   const el = {
     form: $("form"), season: $("season"), games: $("games"), home: $("home"), go: $("go"), status: $("status"),
     out: $("out"), figLength: $("fig_length"), figGames: $("fig_games"), stats: $("stats"), summary: $("summary"),
-    dlLength: $("dl_png"), dlGames: $("dl_png_games"), swap: $("swap"),
+    share: $("share_png"), swap: $("swap"),
   };
 
   // Team colours, by MLB team id (the script's team sheet)
@@ -249,24 +249,17 @@
   }
   const hashOf = (sel) => `#${sel.season}-${sel.higher.code}-${sel.lower.code}&games=${sel.games}` + (sel.allHome ? "&home=1" : "");
 
-  // ---- downloads: the figures at 2x (400 dpi) ------------------------------------------
+  // ---- Share image (shared/share-image.js): either figure at 2x (400 dpi) ----------------
 
-  function save(blob, name) {
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  }
-  async function download(which) {
-    if (!drawn) return;
+  let sharedName = "";  // the last figure's file name
+  async function figureBlob(which) {
+    if (!drawn) throw new Error("no figure");
     const d = drawn, c = document.createElement("canvas");
     await S.render(which, c, which === "length" ? d.line : d.res, d.figOpts, 2, STYLE);
     const stem = `${d.sel.season}_${d.sel.higher.code}_${d.sel.lower.code}`.toLowerCase();
     const name = which === "length" ? `series_win_${stem}` : `series_outcomes_${stem}_bo${d.sel.games}`;
-    c.toBlob((b) => save(b, `${name}${d.sel.allHome ? "_all_home" : ""}.png`), "image/png");
+    sharedName = `${name}${d.sel.allHome ? "_all_home" : ""}.png`;
+    return new Promise((res) => c.toBlob(res, "image/png"));
   }
 
   // ---- wiring ------------------------------------------------------------------------
@@ -287,8 +280,14 @@
     higher.set(lower.team); lower.set(h);
     run();
   });
-  el.dlLength.addEventListener("click", () => download("length"));
-  el.dlGames.addEventListener("click", () => download("games"));
+  ShareImage.attach(el.share, [
+    { heading: "Series Win%" },
+    { copy: () => figureBlob("length"), name: () => sharedName, id: "share_length_copy" },
+    { download: () => figureBlob("length"), name: () => sharedName, id: "share_length_download" },
+    { heading: "Outcomes" },
+    { copy: () => figureBlob("games"), name: () => sharedName, id: "share_games_copy" },
+    { download: () => figureBlob("games"), name: () => sharedName, id: "share_games_download" },
+  ]);
   let resizeTimer = 0;
   window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => drawn && run(), 150); });
   window.addEventListener("hashchange", () => {

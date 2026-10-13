@@ -7,7 +7,7 @@
 // as #<pitcherId>-<YYYY-MM-DD>.
 
 import * as data from './data.js?v=5';
-import * as sankey from './sankey.js?v=17';
+import * as sankey from './sankey.js?v=18';
 
 const $ = id => document.getElementById(id);
 const q = $('q'), hits = $('hits'), seasonSel = $('season'), dateIn = $('date'), gameSel = $('game'), gameLabel = $('gameLabel');
@@ -237,12 +237,13 @@ handSel.addEventListener('change', () => {
   const g = state.game;
   if (g) draw(g.date, g.pitcherId, g.gamePk);
 });
-png.addEventListener('click', async () => {
-  if (!state.meta) return;
-  png.disabled = true;
-  try { await sankey.savePng(state.meta); } catch (e) { console.error(e); }
-  png.disabled = false;
-});
+// Share image (shared/share-image.js): the flow as a square PNG, to copy or download
+let sharedMeta = null;
+ShareImage.image(png, () => {
+  if (!state.meta) throw new Error('no flow');
+  sharedMeta = state.meta;
+  return sankey.pngBlob(sharedMeta);
+}, () => sankey.pngName(sharedMeta));
 // Clear drops every choice and lands back where the page opens with nothing asked for: the
 // longest outing of the most recent day with finished games.
 reset.addEventListener('click', async () => {

@@ -135,8 +135,9 @@ is the same one the Streamlit app in
 (`pitcher_game_card.py`), rebuilt as a page: the box-score line and game grade, the Stuff /
 Locations / PLV grades, the primary fastball's shape, usage against each side of the plate,
 movement with the arm angle and the comparison season's shaded regions, locations against
-each side, and the per-pitch-type metrics table. **Copy PNG** rasterises the card at 2x with
-the font and logo embedded and puts it on the clipboard (or saves it where the browser won't).
+each side, and the per-pitch-type metrics table. **Share image** rasterises the card at 2x with
+the font and logo embedded, to copy to the clipboard or download (a copy downloads where the
+browser won't).
 
 ### How it works
 
@@ -344,7 +345,7 @@ the first band it appears in.
   and the event.
 - On a phone, where there is no hover, a tap pins a tooltip and a second tap (or a tap elsewhere in
   the chart) clears it.
-- **Save PNG** writes a square 2000 × 2000 image: the box-score line, the pitch-type key, the flow
+- **Share image** copies or downloads a square 2000 × 2000 image: the box-score line, the pitch-type key, the flow
   as shown (with the ending nodes and their key if they are on), and the Pitcher List Stats wordmark.
 
 A flow is linkable as `sequencing-flow/#<pitcherId>-<YYYY-MM-DD>`.
@@ -391,13 +392,13 @@ centres Plotly expects and the heights are recomputed on d3-sankey's own scale (
 Each link is one plate appearance's step (value 1) labelled with the plate appearance's id; that is
 what lets a hover trace a whole plate appearance. Tooltips are drawn by the page rather than Plotly
 so they can be placed away from the traced ribbons (sampled along each ribbon's outline plus
-`isPointInFill` probes) and use the page's font. Save PNG rebuilds the layout at the export size,
+`isPointInFill` probes) and use the page's font. The shared image rebuilds the layout at the export size,
 lets Plotly rasterise the sankey, and draws the text and labels on the canvas.
 
 | file | role |
 |---|---|
 | `sequencing-flow/data.js` | manifest, Parquet queries, the live-feed fallback, Stats API lookups, and `buildFlow`: pitches → nodes, links and plate appearances |
-| `sequencing-flow/sankey.js` | the chart: the fixed layout, hover / tap tracing, the tooltips, Save PNG |
+| `sequencing-flow/sankey.js` | the chart: the fixed layout, hover / tap tracing, the tooltips, the PNG for Share image |
 | `sequencing-flow/index.html`, `app.js` | the page and its pitcher / season / date / game controls |
 
 After any change to the JavaScript, bump the `?v=` query on the module imports in `index.html` and
@@ -500,8 +501,8 @@ Isaac Paredes' current season loads on arrival; a chart is linkable as
 `batted-balls/#<season>-<mlbam id>` or `#<season>-<team code>` (the page shows teams by their
 full names, Cleveland and Oakland as they were called that season), with `-left` / `-right` (a
 switch hitter's side), `-self`, `-xwoba` and `-value` suffixes (an old link's `-continuous` is
-ignored). **Copy PNG** copies the figure at 2x to the clipboard (a browser that can't copy an
-image downloads it instead).
+ignored). **Share image** copies the figure at 2x to the clipboard or downloads it (a browser
+that can't copy an image downloads it instead).
 
 It is the chart [batted-ball-charts.streamlit.app](https://batted-ball-charts.streamlit.app/)
 draws ([PLV_viz `batted_ball_charts.py`](https://github.com/Blandalytics/PLV_viz/blob/main/hitter_app/pages/batted_ball_charts.py)),
@@ -611,9 +612,9 @@ angle: one 1-SD covariance ellipse per pitch type, and how much they overlap. Fo
 same chart: the outlines alone, **Overlap count** (how many ellipses cover each spot),
 **Usage-weighted** (the share of the pitcher's pitches whose type covers it) and
 **Concentration** (each exact set of overlapping ellipses — a segment — shaded by the pitches
-that landed in it per square degree). **Play loop** cross-fades through the four. **Copy PNG**
-copies the view shown as a 2320 × 2320 still; **Download GIF** saves the loop, sized for X
-(Twitter); **Download All PNGs + GIF** saves the four stills and the loop as one zip. Pick a
+that landed in it per square degree). **Play loop** cross-fades through the four. **Share image**
+copies or downloads the view shown as a 2320 × 2320 still; its menu also downloads the loop as a
+GIF, sized for X (Twitter), or the four stills and the loop as one zip. Pick a
 season and a pitcher (regular season only, the script's default); *From* / *Through* cut the
 season to a date segment. *Options* sets the ellipse size, the
 fewest pitches a type needs to be drawn, and the smallest segment the concentration scale
@@ -705,7 +706,7 @@ pick from a list, or a change to a select, draws straight away. One card holds b
 the higher seed's series win% at every length from a best of 1 to a best of 15, and, for the
 chosen length, who wins in how many games — then each team's xWin% (with RS/G, RA/G and
 record) and the series win% with its likeliest outcome, the app's summary sentence, and
-**Download Series Win% PNG** / **Download Outcomes PNG** (2x, 400 dpi) and **Swap seeds**.
+**Share image** (either figure at 2x, 400 dpi, to copy or download) and **Swap seeds**.
 Yankees over Red Sox loads on arrival, best of 7; a matchup is linkable as `series-win/#<season>-<higher>-<lower>&games=<n>`, with `&home=1` for
 all home games (teams by MLB abbreviation, e.g. `#2026-LAD-TB&games=7`).
 
@@ -957,10 +958,10 @@ Three figures, in the Swing Profiles card colours:
   value. Hover a dot for the pitcher; click it to open them. Changing any input morphs the card
   from one draw to the next. The three numbers below carry Swing Profiles' league KDEs: the value,
   the biggest lift and the biggest drag. On a desktop or laptop the card scales to fit the page's
-  width and the screen's height (less 40 px); **Copy PNG** gives it at 2560 × 1440. On a phone
+  width and the screen's height (less 40 px); **Share image** gives it at 2560 × 1440. On a phone
   (600 px or narrower) the page shows only the waterfall (in the card's style: its navy ground and titled tile, its bars,
   lines and row labels), drawn at the screen's width with static
-  rows, and the three numbers with their KDEs: no league card, beeswarm or Sankey (**Copy PNG**
+  rows, and the three numbers with their KDEs: no league card, beeswarm or Sankey (**Share image**
   still gives the full card).
 The next two are hidden for now (`SHOW_LEAGUE_FIGS` in `app.js`): their cards stay hidden and
 they are not drawn.
@@ -973,8 +974,8 @@ they are not drawn.
 Hovering a row anywhere lights it in all three figures and fades the rest, the way Sequencing
 Flow traces a plate appearance. Hovering a dot names the pitcher, and clicking it opens them.
 *Compare with* sets the league group (same pitch type, same pitch group or every pitch type) and
-*Min. pitches* its floor. **Copy PNG** copies each figure to the clipboard at 2x with the font and
-the wordmark embedded (downloading it where the browser refuses the clipboard); the CSV holds the
+*Min. pitches* its floor. **Share image** copies or downloads each figure at 2x with the font and
+the wordmark embedded (a copy downloads where the browser refuses the clipboard); the CSV holds the
 unit's rows for every target. A view is linkable as
 `model-drilldown/#<season>-<pitcher id>-<pitch type>&model=plv&target=p_swinging_strike&row=velo`
 (`&vs=group|all` for the comparison group).
@@ -1012,7 +1013,7 @@ four-hour browser cache.
 | `model-drilldown/index.html`, `app.js` | the page: controls, the linked focus, tooltips, downloads, the link hash |
 | `model-drilldown/card.js` | the page's desktop drilldown, a 16:9 card (`cardSvg(ctx)`, from app.js's `view`): pitch type pills, the waterfall, the selected row against the league, the KPI in the corner; morph keys, and the league dots' hover lookup (`nearestCardPoint`) |
 | `model-drilldown/package.json`, `eslint.config.mjs`, `.prettierrc.json` | the lint and format tooling (the page never loads them) |
-| `model-drilldown/card-demo.html` | a demo of the card from the live Stuff+ tables (Brody Hopkins' 2026 four-seamer by default; linked like the drilldown, `#<season>-<pitcher id>-<pitch type>&model=plv&target=wobacon&row=<row>`, any target split by feature), or from made-up numbers at `#synthetic`; click a row or a tab, **Download PNG** gives it at 3x |
+| `model-drilldown/card-demo.html` | a demo of the card from the live Stuff+ tables (Brody Hopkins' 2026 four-seamer by default; linked like the drilldown, `#<season>-<pitcher id>-<pitch type>&model=plv&target=wobacon&row=<row>`, any target split by feature), or from made-up numbers at `#synthetic`; click a row or a tab, **Share image** gives it at 3x |
 
 Locally, copy the staged tables (`stuff_model/build/shap-values/`) to `model-drilldown/data/shap-values/`
 and open the page with `?data=data/`. After any change to the JavaScript, bump the `?v=` query on the

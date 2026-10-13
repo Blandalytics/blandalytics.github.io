@@ -91,9 +91,9 @@ const el = {
   sankeyCard: $('sankey-card'),
   sankey: $('sankey'),
   tip: $('tip'),
-  copyFlow: $('copy_flow'),
-  copySwarm: $('copy_swarm'),
-  copySankey: $('copy_sankey'),
+  shareFlow: $('share_flow'),
+  shareSwarm: $('share_swarm'),
+  shareSankey: $('share_sankey'),
   dlCsv: $('dl_csv'),
 };
 
@@ -855,38 +855,27 @@ function save(blob, name) {
 }
 const fileStem = () =>
   `${view.info.pitcher_name.toLowerCase().replace(/[^a-z]+/g, '_')}_${view.info.pt.toLowerCase()}_${state.season}_${state.model}_${state.target}`;
-// Copy PNG, as Release Angles does: the ClipboardItem is made in the click itself, around the
-// promise of the image, so the copy keeps the click's permission while the image is drawn
-// (Safari insists on it). Where the clipboard is refused, the PNG downloads instead.
-async function copyPng(getSvg, suffix, btn) {
-  const svg = getSvg();
-  if (!svg) return;
-  const label = btn.textContent;
-  const blob = svgToPng(svg);
-  btn.disabled = true;
-  try {
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-    btn.textContent = 'Copied';
-  } catch (e) {
-    console.error(e);
-    save(await blob, `${fileStem()}_${suffix}.png`);
-    btn.textContent = 'Downloaded (no clipboard here)';
-  } finally {
-    btn.disabled = false;
-    setTimeout(() => {
-      btn.textContent = label;
-    }, 1600);
-  }
-}
-// the drilldown's copy is always the 16:9 card (2560 x 1440), even on a phone
+// the drilldown's image is always the 16:9 card (2560 x 1440), even on a phone
 function desktopFlow() {
   const t = document.createElement('template');
   t.innerHTML = cardSvgForExport(view).trim();
   return t.content.firstElementChild;
 }
-el.copyFlow.addEventListener('click', () => view && copyPng(desktopFlow, 'waterfall', el.copyFlow));
-el.copySwarm.addEventListener('click', () => copyPng(() => el.swarm.querySelector('svg'), 'beeswarm', el.copySwarm));
-el.copySankey.addEventListener('click', () => copyPng(() => el.sankey.querySelector('svg'), 'outcomes', el.copySankey));
+// Share image (shared/share-image.js): each figure as a PNG at 2x, to copy or download
+function shareFigure(btn, getSvg, suffix) {
+  ShareImage.image(
+    btn,
+    () => {
+      const svg = getSvg();
+      if (!svg) throw new Error('no figure to share');
+      return svgToPng(svg);
+    },
+    () => `${fileStem()}_${suffix}.png`,
+  );
+}
+shareFigure(el.shareFlow, () => view && desktopFlow(), 'waterfall');
+shareFigure(el.shareSwarm, () => el.swarm.querySelector('svg'), 'beeswarm');
+shareFigure(el.shareSankey, () => el.sankey.querySelector('svg'), 'outcomes');
 el.dlCsv.addEventListener('click', () => {
   const cols = Object.keys(view.unit);
   const lines = [cols.join(',')];
