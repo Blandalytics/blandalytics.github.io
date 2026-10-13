@@ -26,7 +26,8 @@ body{display:flex;justify-content:center;min-height:100vh}
 <body>
 <div id="card" hidden></div>
 <p id="msg">Loading the card…</p>
-<button id="png" type="button" hidden>Copy PNG</button>
+<button id="png" type="button" hidden>Share image ▾</button>
+<script src="/shared/share-image.js?v=1"></script>
 <script src="card.js"></script>
 <script>
 // One card, full size: card.html#<gamePk>-<pitcherId>, optionally &cmp=<year> (0 for no
@@ -74,16 +75,11 @@ body{display:flex;justify-content:center;min-height:100vh}
       el.hidden = false; msg.hidden = true; btn.hidden = false;
     }).catch(function () { msg.textContent = 'Could not find that card.'; });
   }
-  btn.addEventListener('click', function () {
-    if (!svg) return;
-    var label = btn.textContent;
-    btn.disabled = true;
-    var done = function (text) {
-      btn.textContent = text;
-      setTimeout(function () { btn.textContent = label; btn.disabled = false; }, 1500);
-    };
-    PitcherCard.copyPng(svg, PitcherCard.filename(card)).then(done, function () { done('Copy failed'); });
-  });
+  // Share image (shared/share-image.js): the card at 3000 x 4000, to copy or download
+  ShareImage.image(btn, function () {
+    if (!svg) throw new Error('no card');
+    return PitcherCard.png(svg);
+  }, function () { return PitcherCard.filename(card); });
   window.addEventListener('hashchange', show);
   show();
 })();

@@ -1,7 +1,7 @@
 """Capture real PNG output from each blandalytics.com app for the homepage tiles.
 
-Drives headless Chrome over the DevTools protocol. For apps with a Save/Download PNG
-button, it clicks the button and captures the blob the app hands to its download link.
+Drives headless Chrome over the DevTools protocol. For apps with a Share image button, it
+clicks the Download PNG item of its menu and captures the blob handed to the download link.
 The NHL Draft Tool has no export, so it starts a mock draft and screenshots the result;
 the Auction Calculator has none either, so it screenshots its values table.
 """
@@ -42,26 +42,26 @@ HTMLAnchorElement.prototype.click = function () {
 """
 
 APPS = [
-    # name, url, ready condition, button id
+    # name, url, ready condition, the id of the Share image menu's Download PNG item
     # Jacob deGrom, 2026-09-10 (#gamePk-pitcherId)
     ("pitcher-cards", "https://blandalytics.com/pitcher-cards/#823088-594798",
-     "!document.getElementById('png').hidden && document.title.includes('deGrom')", "png"),
+     "!document.getElementById('png').hidden && document.title.includes('deGrom')", "png_download"),
     # Gavin Williams, 2026-09-20 (#pitcherId-date)
     ("sequencing-flow", "https://blandalytics.com/sequencing-flow/#668909-2026-09-20",
-     "!document.getElementById('png').hidden && document.querySelector('.main-svg, canvas') && document.title.includes('Gavin Williams')", "png"),
+     "!document.getElementById('png').hidden && document.querySelector('.main-svg, canvas') && document.title.includes('Gavin Williams')", "png_download"),
     ("swing-profiles", "https://blandalytics.com/swing-profiles/",
-     "document.getElementById('fig') && document.getElementById('fig').width > 0 && document.getElementById('out') && !document.getElementById('out').hidden", "dl_png"),
+     "document.getElementById('fig') && document.getElementById('fig').width > 0 && document.getElementById('out') && !document.getElementById('out').hidden", "share_png_download"),
     ("batted-balls", "https://blandalytics.com/batted-balls/",
-     "document.getElementById('fig') && document.getElementById('fig').width > 0 && document.getElementById('out') && !document.getElementById('out').hidden", "dl_png"),
+     "document.getElementById('fig') && document.getElementById('fig').width > 0 && document.getElementById('out') && !document.getElementById('out').hidden", "share_png_download"),
     # Nolan McLean, 2026, the concentration view
     ("release-angles", "https://blandalytics.com/release-angles/#2026-690997&view=segment",
-     "document.getElementById('out') && !document.getElementById('out').hidden && document.getElementById('note').textContent && document.getElementById('player').value.includes('McLean')", "dl_png"),
+     "document.getElementById('out') && !document.getElementById('out').hidden && document.getElementById('note').textContent && document.getElementById('player').value.includes('McLean')", "share_png_download"),
     # Yankees over Red Sox, 2026, best of 7: the series-outcomes chart
     ("series-win", "https://blandalytics.com/series-win/#2026-NYY-BOS&games=7",
-     "document.getElementById('out') && !document.getElementById('out').hidden && document.getElementById('stats').textContent", "dl_png_games"),
+     "document.getElementById('out') && !document.getElementById('out').hidden && document.getElementById('stats').textContent", "share_games_download"),
     # Jacob Misiorowski's 2026 four-seamer, Stuff+, the Velocity row
     ("model-drilldown", "https://blandalytics.com/model-drilldown/#2026-694819-FF&row=velo",
-     "document.querySelector('#flow svg .panel-hit') && document.title.includes('Misiorowski')", "copy_flow"),
+     "document.querySelector('#flow svg .panel-hit') && document.title.includes('Misiorowski')", "share_flow_download"),
 ]
 
 

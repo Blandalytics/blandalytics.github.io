@@ -116,7 +116,7 @@ select:disabled{opacity:.45; cursor:default}
     <label for="year">Year for comparison</label>
     <select id="year" disabled></select>
   </div>
-  <button class="btn" id="png" type="button" hidden>Copy PNG</button>
+  <button class="btn" id="png" type="button" hidden>Share image ▾</button>
   <a class="open" id="open" href="#" target="_blank" rel="noopener" hidden>Open full page ↗</a>
 </header>
 
@@ -134,6 +134,7 @@ select:disabled{opacity:.45; cursor:default}
   <a href="https://x.com/blandalytics" target="_blank" rel="noopener">Twitter</a>.
 </footer>
 
+<script src="/shared/share-image.js?v=1"></script>
 <script src="card.js"></script>
 <script>
 (function () {
@@ -371,33 +372,23 @@ select:disabled{opacity:.45; cursor:default}
   compare.addEventListener('change', onCompare);
   yearSel.addEventListener('change', onCompare);
 
-  // Copy PNG: drawn here when the card is drawn here. card.js starts the clipboard write
-  // inside the click, as it has to be; an old framed page renders it and hands it back.
-  var pendingPng = null;
-  function framedPng() {
+  // Share image (shared/share-image.js): the card at 3000 x 4000, drawn here when the card is
+  // drawn here; an old framed page renders it and hands it back.
+  var pendingPng = null, framedName = 'card.png', sharedCard = null;
+  function framedBlob() {
     var p = new Promise(function (resolve, reject) {
       pendingPng = resolve;
       setTimeout(function () { reject(new Error('the card did not answer')); }, 15000);
     });
     frame.contentWindow.postMessage({type: 'png'}, '*');
-    var saved = function () {
-      return p.then(function (x) { PitcherCard.download(x.blob, x.filename); return 'Saved PNG'; });
-    };
-    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) return saved();
-    var blob = p.then(function (x) { return x.blob; });
-    return navigator.clipboard.write([new ClipboardItem({'image/png': blob})])
-      .then(function () { return 'Copied'; }, saved);
+    return p.then(function (x) { framedName = x.filename; return x.blob; });
   }
-  png.addEventListener('click', function () {
-    if (!shown) return;
-    var label = png.textContent;
-    png.disabled = true;
-    var done = function (text) {
-      png.textContent = text;
-      setTimeout(function () { png.textContent = label; png.disabled = false; }, 1500);
-    };
-    var job = shown.svg ? PitcherCard.copyPng(shown.svg, PitcherCard.filename(shown.card)) : framedPng();
-    job.then(done, function () { done('Copy failed'); });
+  ShareImage.image(png, function () {
+    if (!shown) throw new Error('no card');
+    sharedCard = shown;
+    return shown.svg ? PitcherCard.png(shown.svg) : framedBlob();
+  }, function () {
+    return sharedCard && sharedCard.svg ? PitcherCard.filename(sharedCard.card) : framedName;
   });
   window.addEventListener('message', function (e) {
     var d = e.data || {};

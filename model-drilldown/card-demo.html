@@ -96,10 +96,11 @@
       </header>
       <div id="card"></div>
       <div class="row-actions">
-        <button id="dl" type="button">Download PNG</button
+        <button id="share" type="button">Share image ▾</button
         ><span id="msg" style="color: var(--muted); font-size: 13px">loading the SHAP tables…</span>
       </div>
     </main>
+    <script src="/shared/share-image.js?v=1"></script>
     <script type="module">
       import {
         PITCH_NAMES,
@@ -483,15 +484,12 @@
         readHash();
         draw();
       });
-      document.getElementById('dl').addEventListener('click', async () => {
-        const blob = await svgToPng(box.querySelector('svg'), 3);
-        const a = Object.assign(document.createElement('a'), {
-          href: URL.createObjectURL(blob),
-          download: `drilldown-card-${state.pitcher || 'demo'}-${state.pt}-${state.row}.png`,
-        });
-        a.click();
-        URL.revokeObjectURL(a.href);
-      });
+      // Share image (shared/share-image.js): the card at 3x, to copy or download
+      ShareImage.image(
+        document.getElementById('share'),
+        () => svgToPng(box.querySelector('svg'), 3),
+        () => `drilldown-card-${state.pitcher || 'demo'}-${state.pt}-${state.row}.png`,
+      );
       await document.fonts.load('700 20px "DM Sans"');
       await document.fonts.load('400 20px "DM Sans"');
       readHash();
