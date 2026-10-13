@@ -889,7 +889,7 @@ the model's calendar curve (the Seasonal view's league row: the level's curve wi
 batters and pitchers all season, plus the parks in use that week) against what each week
 produced. 100 is the level's season average. It covers MLB 2015–2027 (2027 on its schedule) and
 AAA, AA, A+ and A 2021–2026. A level, a year (or All years), a stat and the week slider pick the
-view: a chart of that stat (the model line, the actual weeks as dots sized by plate appearances,
+view (**Reset filters** goes back to MLB, All years, Runs and opening week): a chart of that stat (the model line, the actual weeks as dots sized by plate appearances,
 and in All years their average by date) and a table of every stat by week (Model or Actual,
 colored as on Park Factors). **Share image** copies or downloads the chart on screen as a
 900 × 900 PNG in the homepage tile's style (the title "<level> <metric> Factor" over "<years>, by
