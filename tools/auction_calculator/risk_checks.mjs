@@ -334,7 +334,7 @@ for (const [label, s, rs] of [
 }
 
 // ---- 7. the models ------------------------------------------------------------------------------
-console.log('7. The models: "draws" (the default; risk.js before PLAN rows 13-14), "fixes" and "upgrade"');
+console.log('7. The models: "fixes" (the default), "draws" (risk.js before PLAN rows 13-14) and "upgrade"');
 {
   // a premium table in R4's shape (about its 12-team values), so that the floor and its month matter
   const PREM = {};

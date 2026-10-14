@@ -74,9 +74,9 @@ export const INFO_K = { h: 0.502, p: 0.403 };
  * rs.teamVar override a model's):
  *   upgrade  PLAN row 14 with row 13's two fixes: the option on the projection m at λ
  *            (INFO_K), the floor read at the replacement, the CE term's variance in standings points
- *   fixes    row 13's two fixes only (k and c²), the floor read at the month of the valuation
- *   draws    the default (the risk-aware value is held, 2026-10-14; R10's rooms: upgrade loses to it
- *            in head-to-head): risk.js before them: the option on the season's draws themselves (k = 1), the floor read
+ *   fixes    the default (the user, 2026-10-14; R10's rooms, roto auction: +3.5 (SE 1.4) points over
+ *            draws): row 13's two fixes only (k and c²), the floor read at the month of the valuation
+ *   draws    risk.js before them: the option on the season's draws themselves (k = 1), the floor read
  *            at the month of the valuation, the CE term on the SGP variance
  */
 export const RISK_MODELS = {
@@ -103,7 +103,7 @@ export const SEASON_DAYS = 182;
  */
 export const IL_RULE = { extended: 0.25 };
 
-export const DEFAULT_RISK = { payout: "winner", playoffTeams: 4, transactions: "daily", ilSlots: 2, month: 0, model: "draws" };
+export const DEFAULT_RISK = { payout: "winner", playoffTeams: 4, transactions: "daily", ilSlots: 2, month: 0, model: "fixes" };
 
 // ---- the normal distribution -------------------------------------------------------------------
 
