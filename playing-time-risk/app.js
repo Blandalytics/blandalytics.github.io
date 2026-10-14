@@ -1,6 +1,7 @@
 // Playing-Time Risk: the playing-time part of the factor ledger (src/ledger.py, the PT sticks of the
 // missed-time component model), one row per player: PA or batters faced lost per cause against a full
-// season (capacity), and the auction value that it costs.
+// season (capacity), and the auction value of his playing time against a regular's (the calculator's
+// full-time target for his role).
 
 import { CAUSES, esc, fmtDelta, link, load } from '../projection-drilldown/data.js?v=1';
 
@@ -110,5 +111,7 @@ function render() {
   $('#foot').innerHTML =
     `${rows.length.toLocaleString()} ${r === 'h' ? 'hitters' : 'pitchers'}. Expected: the projection's playing time with the injury risk; ` +
     `healthy: a healthy season in his role; capacity: a full season. Injury risk: 1 − expected / healthy. ` +
+    `$ cost: the auction value of his expected playing time against a regular's, the calculator's full-time target for his role; ` +
+    `below it, the calculator fills the missing time with replacement-level production. ` +
     `Data of ${esc(META.generated.replace('T', ' '))}${META.tag ? ' (test runs)' : ''}; the missed-time component model.`;
 }

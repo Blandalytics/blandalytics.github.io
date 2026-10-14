@@ -1,7 +1,9 @@
-// Projection Drilldown: one player's projection, stat by stat, as a waterfall from a league-average
-// player to his line (the factor ledger of the projections repository: src/ledger.py, exported by
-// src/site_export.py). Rates are exact Shapley values over the factors; counting stats and $ come
-// from simulations with each factor removed, and a last row holds the factors' interaction.
+// Projection Drilldown: one player's projection, stat by stat, as a waterfall from the league average
+// to his line (the factor ledger of the projections repository: src/ledger.py, exported by
+// src/site_export.py). Rates start at the league average, playing time at a regular's (the
+// calculator's full-time target for his role), counting stats and $ at a league-average regular.
+// Rates are exact Shapley values over the factors; counting stats and $ come from simulations with
+// each factor removed, and a last row holds the factors' interaction.
 
 import { CAUSES, esc, fmtDelta, fmtValue, link, load } from './data.js?v=1';
 
@@ -16,6 +18,8 @@ const SHORT = {
   detail: 'Sim details (IBB, SF, chance)',
   residual: 'Interaction of the factors',
   talent: 'Talent',
+  speed: 'Speed',
+  season: "Full season vs a regular's",
   reversion: 'Reversion',
   regression: 'Pull toward the average',
   environment: 'League environment',
@@ -90,12 +94,25 @@ function render() {
   history.replaceState(null, '', `?${q}`);
   const m = META;
   const chk = m.check?.[entry.r === 'h' ? 'hitting' : 'pitching'];
+  // a regular's playing time: the calculator's fill target per role, on this basis
+  const ROLE = { H: 'hitters', C: 'catchers', SP: 'starters', RP: 'relievers' };
+  const reg = m.regular?.[state.basis]?.[entry.r];
+  const regTxt = reg
+    ? Object.entries(reg)
+        .map(([k, v]) => `${ROLE[k] ?? k} ${Math.round(v)} ${entry.r === 'h' ? 'PA' : 'IP'}`)
+        .join(', ')
+    : '';
   $('#foot').innerHTML =
     `Projections for ${m.season}, data of ${esc(m.generated.replace('T', ' '))}` +
     (m.tag ? ` (test runs ${esc(m.runs.hitting)} / ${esc(m.runs.pitching)})` : '') +
     `. Rates: exact Shapley values over the factors. Counting stats and $: simulations with each factor removed` +
     (chk ? `; the interaction row is at most ${(100 * chk.residual_share_max).toFixed(1)}% of the change (for $, over the players worth $1 or more)` : '') +
-    `. $: the Auction Calculator's values (12 teams, 5x5), ${state.basis === 'ev' ? 'expected' : 'healthy-season'} playing time.`;
+    `. $: the Auction Calculator's values (12 teams, 5x5), ${state.basis === 'ev' ? 'expected' : 'healthy-season'} playing time.` +
+    (regTxt
+      ? ` Playing time, counting stats and $ start at a regular's playing time: the calculator's full-time target for his role ` +
+        `(${regTxt}). Below it, the calculator fills the missing time with replacement-level production; above it, each ` +
+        `${entry.r === 'h' ? 'plate appearance' : 'inning'} counts in full. The playing-time causes split his playing time against a regular's.`
+      : '');
 }
 
 function renderPlayer() {
@@ -159,15 +176,31 @@ function model() {
   return { bk, base, items, value: e.v, s };
 }
 
+// the baseline row: rates, the league average; playing time, a regular's; counts and $, a
+// league-average regular (data before the regular baseline: a full season, capacity)
 function baseLabel(bk, kind) {
+  if (bk === 'regular') return "A regular's playing time (the calculator's full-time target for his role)";
   if (bk === 'capacity') return 'A full season (capacity)';
-  return kind === 'rate' || kind === 'pct' ? 'League average' : 'League-average player, full season';
+  if (kind === 'rate' || kind === 'pct') return 'League average';
+  return META.regular ? "League-average regular (league-average rates and speed at a regular's playing time)" : 'League-average player, full season';
+}
+
+function baseShort(bk, kind) {
+  if (bk === 'regular') return "A regular's playing time";
+  if (bk === 'capacity') return 'A full season';
+  return kind === 'rate' || kind === 'pct' || !META.regular ? 'League average' : 'League-average regular';
+}
+
+function baseFrom(bk, kind) {
+  if (bk === 'regular') return "a regular's playing time";
+  if (bk === 'capacity') return 'a full season';
+  return kind === 'rate' || kind === 'pct' || !META.regular ? 'the league average' : 'a league-average regular';
 }
 
 function renderWaterfall() {
   const m = model();
   const s = statInfo();
-  $('#wf-title').innerHTML = `${keepCase(s.label)}: from the league average to the projection`;
+  $('#wf-title').innerHTML = `${keepCase(s.label)}: from ${m ? baseFrom(m.bk, s.kind) : 'the league average'} to the projection`;
   if (!m) {
     $('#wf').innerHTML = '<p class="foot">No ledger for this stat.</p>';
     $('#wf-table').innerHTML = '';
@@ -214,7 +247,7 @@ function renderWaterfall() {
   let y = top;
   // the baseline
   parts.push(`<g><title>${esc(baseLabel(m.bk, s.kind))}</title>`);
-  parts.push(text(8, y + RH / 2 + 4, m.bk === 'capacity' ? 'A full season' : 'League average', `font-size="13" fill="${C.ink}"`));
+  parts.push(text(8, y + RH / 2 + 4, baseShort(m.bk, s.kind), `font-size="13" fill="${C.ink}"`));
   parts.push('</g>');
   parts.push(bar(origin, m.base, y, C.base));
   parts.push(text(W - 6, y + RH / 2 + 4, fmtValue(m.base, s.kind, dp), `font-size="12.5" fill="${C.muted}" text-anchor="end" font-family="JetBrains Mono, monospace"`));
