@@ -117,7 +117,10 @@ class Pool:
             return np.array([_num((p.get("risk") or {}).get(key)) for p in kept], float)
 
         self.risk_value, self.risk_ce, self.risk_bid = rcol("value"), rcol("ce"), rcol("bid")
-        self.risk_eff, self.risk_var = rcol("eff"), rcol("varEff")
+        # risk_var: the variance risk.js's CE term prices (varCE: Var_eff x c² in roto, PLAN row 13); a
+        # table from a risk.js before rows 13-14 has only varEff
+        self.risk_eff, var_eff, var_ce = rcol("eff"), rcol("varEff"), rcol("varCE")
+        self.risk_var = np.where(np.isfinite(var_ce), var_ce, var_eff)
         self.own = np.where(np.isfinite(self.risk_value), self.risk_value, self.value)
         self.risk_meta = table.get("risk") or None  # {objective, pricing, settings} of risk.js
 

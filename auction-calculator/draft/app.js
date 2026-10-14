@@ -3,10 +3,10 @@
 // calculator's saved settings (setup.js); the projections and the risk files load as the calculator
 // loads them (?data=<base>, ?riskdata=<base>).
 import * as C from "../calc.js?v=17";
-import * as R from "../risk.js?v=1";
-import { STORE, buildTable, draftRisk, riskSettingsFrom, sessionConfig, settingsFrom, unsupported } from "./setup.js?v=2";
+import * as R from "../risk.js?v=2";
+import { STORE, buildTable, draftRisk, riskSettingsFrom, sessionConfig, settingsFrom, unsupported } from "./setup.js?v=3";
 
-const VERSION = "2";   // bump with every deploy: it busts the cache on the worker and the Python files
+const VERSION = "3";   // bump with every deploy: it busts the cache on the worker and the Python files
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);

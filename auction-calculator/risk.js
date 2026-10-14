@@ -9,14 +9,25 @@
 // replacement in each draw. Then, with r the in-season free-agent floor (L1) and λ the share of the
 // season played before a bust shows (P7):
 //
-//   option increment  Δ = E[max(V, r)] − E[V], over the draws (spec 6.1)
+//   the projection    m = E[V] + k·(V − E[V]): what the team knows of the draw when it decides at λ
+//                     (the in-season projection, whose spread is k × the draws'; INFO_K by side)
+//   option increment  Δ = E[max(m, r)] − E[m], over the draws (spec 6.1 on m: the upgrade rule, a
+//                     team replaces a player only by a free agent it projects higher). r is r_pos read
+//                     at the replacement: the share of the season played at λ (R4's section 7)
 //   effective value   EffValue = μ + (1 − λ)·Δ − IL cost (spec 6.2 as an increment over the
 //                     calculator's own value μ: the draws' mean V is above μ by the convexity of the
 //                     playing-time fill, not by risk, so E[V] = μ is not assumed)
-//   effective var.    Var_eff = (λ·σ)² + (1 − λ)²·Var[max(V, r)] (spec 6.3; σ from the draws; no
-//                     covariance with the rest of the roster: P8 = 0)
-//   certainty equiv.  CE = EffValue − (z / 2S)·Var_eff, z = (M − H) / S (spec 6.4), or the certain
-//                     value with the exact probability gain when √Var_eff > 0.4·S (spec section 9)
+//   effective var.    Var_eff = (λ·σ)² + (1 − λ)²·(Var[max(m, r)] + (1 − k²)·Var[V]·P(m ≥ r)) (spec
+//                     6.3 with the part of the season m does not see kept in the kept draws; σ from the
+//                     draws; no covariance with the rest of the roster: P8 = 0)
+//   certainty equiv.  CE = EffValue − (z / 2S)·c²·Var_eff, z = (M − H) / S (spec 6.4), or the certain
+//                     value with the exact probability gain when √(c²·Var_eff) > 0.4·S (spec section 9).
+//                     c² (roto only) puts a side's variance in standings points: calc.js's G prices
+//                     a unit with its own luck model ν, the draws carry more luck per team, so a unit
+//                     of a draw's spread buys fewer points: c² = (D + L_calc) / (D + L_draws)
+//
+// The model "draws" (rs.model) is risk.js before these three changes (PLAN rows 13-14): k = 1, r read
+// at the month of the valuation, c² = 1. It stays for comparison.
 //
 // The risk-aware $ is CE priced as calc.js prices SGP above replacement: the drafted players chosen
 // by CE over the same slots and bench, the same budget, hitter split and dollar curve. No DOM here;
@@ -47,6 +58,33 @@ export const LAMBDA = { h: { time: 0.25, role: 0.25, skill: 0.25 }, p: { time: 0
  */
 export const R_PREMIUM = {};
 
+/** The share of the season played at months 0-6 (the mean over 2023-26; R4's report section 7) */
+export const MONTH_SHARE = [0, 0.10, 0.19, 0.36, 0.53, 0.68, 0.85];
+
+/**
+ * k (PLAN row 13, measured): the spread of the in-season projection's change over the spread of the
+ * player's draws, the calculator's drafted players of 2023-26, at the check date nearest each side's
+ * λ (hitters 06-01, pitchers 05-01; projections repository, data/backtest/risk/tilt/info_k.json). A
+ * team drops on that projection, not on the season it will have.
+ */
+export const INFO_K = { h: 0.502, p: 0.403 };
+
+/**
+ * The models of the option and the CE term (rs.model; the single settings rs.infoK, rs.floorAt and
+ * rs.teamVar override a model's):
+ *   upgrade  PLAN row 14 with row 13's two fixes: the option on the projection m at λ
+ *            (INFO_K), the floor read at the replacement, the CE term's variance in standings points
+ *   fixes    row 13's two fixes only (k and c²), the floor read at the month of the valuation
+ *   draws    the default (the risk-aware value is held, 2026-10-14; R10's rooms: upgrade loses to it
+ *            in head-to-head): risk.js before them: the option on the season's draws themselves (k = 1), the floor read
+ *            at the month of the valuation, the CE term on the SGP variance
+ */
+export const RISK_MODELS = {
+  upgrade: { infoK: INFO_K, floorAt: "replacement", teamVar: true, label: "Upgrade on the projection" },
+  fixes: { infoK: INFO_K, floorAt: "valuation", teamVar: true, label: "Row 13's fixes (k, c²)" },
+  draws: { infoK: null, floorAt: "valuation", teamVar: false, label: "The draws (before rows 13-14)" },
+};
+
 /**
  * The transaction speed (L2): how long a visible bust stays in the lineup (days added to λ) and the
  * share of the in-season premium a team gets (others claim the best free agents first).
@@ -65,7 +103,7 @@ export const SEASON_DAYS = 182;
  */
 export const IL_RULE = { extended: 0.25 };
 
-export const DEFAULT_RISK = { payout: "winner", playoffTeams: 4, transactions: "daily", ilSlots: 2, month: 0 };
+export const DEFAULT_RISK = { payout: "winner", playoffTeams: 4, transactions: "daily", ilSlots: 2, month: 0, model: "draws" };
 
 // ---- the normal distribution -------------------------------------------------------------------
 
@@ -152,12 +190,12 @@ export function exactCertainty(mu, v, M, S, H) {
   return S * (PhiInv(p) - z);
 }
 
-/** Over equally weighted draws v: E[V], Var[V], E[max(V, r)], Var[max(V, r)] */
+/** Over equally weighted draws v: E[V], Var[V], E[max(V, r)], Var[max(V, r)]; r a number or one per draw */
 export function drawMoments(v, r) {
-  const n = v.length;
+  const n = v.length, each = typeof r !== "number";
   let s = 0, s2 = 0, m = 0, m2 = 0;
   for (let j = 0; j < n; j++) {
-    const x = v[j], y = x > r ? x : r;
+    const x = v[j], rj = each ? r[j] : r, y = x > rj ? x : rj;
     s += x; s2 += x * x; m += y; m2 += y * y;
   }
   const mean = s / n, opt = m / n;
@@ -379,6 +417,22 @@ export function rPos(slot, teams, month = 0, table = R_PREMIUM) {
   return 0;
 }
 
+/**
+ * r_pos at a share of the season played (R4's section 7): the table's months placed at MONTH_SHARE,
+ * linear between them (the last month beyond its share)
+ */
+export function rPosAt(slot, teams, share, table = R_PREMIUM) {
+  const S = MONTH_SHARE;
+  if (!(share > S[0])) return rPos(slot, teams, 0, table);
+  for (let j = 1; j < S.length; j++) {
+    if (share <= S[j]) {
+      const a = rPos(slot, teams, j - 1, table), b = rPos(slot, teams, j, table);
+      return a + ((share - S[j - 1]) / (S[j] - S[j - 1])) * (b - a);
+    }
+  }
+  return rPos(slot, teams, S.length - 1, table);
+}
+
 // ---- the objective (O1-O3): the target H, the mean M and the spread S of an average team ---------
 
 function uniforms(seed) {   // mulberry32
@@ -518,13 +572,20 @@ function poissonAtLeast(m, k) {
  * The risk-aware value of every player with draws, priced in a finished calculator run. result:
  * calc.js auctionValues(H, P, { ...s, debug: true }); H, P: the tables it priced; s: its settings;
  * files: { h, p } from parseRiskFile; rs: the risk settings (DEFAULT_RISK: payout "winner" or
- * "playoffs", playoffTeams, transactions "daily" | "weekly" | "limited", ilSlots, month; and the
- * tables lambda, spread, premium to replace the placeholders). Sets player.risk on result.players
- * and returns the league's summary.
+ * "playoffs", playoffTeams, transactions "daily" | "weekly" | "limited", ilSlots, month; model
+ * "upgrade" | "fixes" | "draws" (RISK_MODELS) and its single settings infoK ({ h, p } or null for k = 1),
+ * floorAt "replacement" | "valuation", teamVar; and the tables lambda, spread, premium to replace the
+ * placeholders). Sets player.risk on result.players and returns the league's summary.
  */
 export function applyRisk(C, result, H, P, s, files, rs = {}) {
   const t0 = Date.now();
   rs = { ...DEFAULT_RISK, ...rs };
+  const model = RISK_MODELS[rs.model];
+  if (!model) throw new Error(`unknown risk model "${rs.model}"`);
+  const infoK = rs.infoK !== undefined ? rs.infoK : model.infoK;
+  const floorAt = rs.floorAt ?? model.floorAt, teamVar = rs.teamVar ?? model.teamVar;
+  if (floorAt !== "replacement" && floorAt !== "valuation") throw new Error(`unknown floor "${floorAt}"`);
+  const month = Math.min(Math.max(0, Math.round(rs.month ?? 0)), MONTH_SHARE.length - 1), share0 = MONTH_SHARE[month];
   const dbg = result.debug;
   if (!dbg || !dbg.pricing) throw new Error("the calculator's workings are missing (run it with debug)");
   const points = s.style === "Points";
@@ -570,7 +631,9 @@ export function applyRisk(C, result, H, P, s, files, rs = {}) {
 
     const pt = file.stats[side === "h" ? "PA" : "IP"], sv = file.stats.SV, gs = file.stats.GS;
     const lam = lambdaTable[side];
+    const k = infoK && Number.isFinite(infoK[side]) ? infoK[side] : 1;
     const Vp = new Float64Array(N), lamN = new Float64Array(N), missed = new Float64Array(N);
+    const rN = floorAt === "replacement" ? new Float64Array(N) : null;
     for (let m = 0; m < file.players; m++) {
       const i = rowOfPlayer[m];
       if (i < 0) continue;
@@ -602,19 +665,41 @@ export function applyRisk(C, result, H, P, s, files, rs = {}) {
         if (time) ext += missed[n];
       }
       ext /= N;
-      // the floor, and the option over the draws
+      // the floor: r_pos at the month of the valuation, or at the replacement (each draw's λ of the
+      // season left after that month; a draw's λ takes one of a few values, so they are cached)
       const slot = d.byPos.valuedAt[i];
-      const r = rPos(slot, teams, rs.month, premium) * txn.rScale;
+      let r;
+      if (rN) {
+        const at = new Map();
+        r = 0;
+        for (let n = 0; n < N; n++) {
+          let v = at.get(lamN[n]);
+          if (v === undefined) { v = rPosAt(slot, teams, share0 + lamN[n] * (1 - share0), premium) * txn.rScale; at.set(lamN[n], v); }
+          rN[n] = v;
+          r += v;
+        }
+        r /= N;
+      } else r = rPos(slot, teams, rs.month, premium) * txn.rScale;
+      // the option over the draws, on what the team knows at λ: m = mean + k (V − mean)
       const mo = drawMoments(Vp, r);
-      let opt = 0;
-      for (let n = 0; n < N; n++) opt += (1 - lamN[n]) * (Math.max(Vp[n], r) - Vp[n]);
+      const Vm = k === 1 ? Vp : Vp.map((x) => mo.mean + k * (x - mo.mean));
+      const mi = k === 1 && !rN ? mo : drawMoments(Vm, rN || r);
+      let opt = 0, keep = 0, below = 0;
+      for (let n = 0; n < N; n++) {
+        const rn = rN ? rN[n] : r;
+        opt += (1 - lamN[n]) * (Math.max(Vm[n], rn) - Vm[n]);
+        if (Vm[n] >= rn) keep++;
+        else below++;
+      }
       opt /= N;
-      const delta = mo.option - mo.mean;
+      const delta = mi.option - mi.mean;
       // one λ for the variance: the draws' λ weighted by how far each is below the floor
       const lambda = delta > 1e-12 ? 1 - opt / delta : Math.min(1, lam.skill + lag);
+      // the kept draws keep the part of the season's variance m does not see, (1 − k²) Var[V]
+      const unseen = k === 1 ? 0 : (1 - k * k) * mo.var * (keep / N);
       info[i] = {
-        mu, mean: mo.mean, median: med, sd: Math.sqrt(mo.var), optSd: Math.sqrt(mo.optVar), f, r, lambda, delta, option: opt, ext,
-        varEff: (lambda * Math.sqrt(mo.var)) ** 2 + (1 - lambda) ** 2 * mo.optVar, tier, role: roles[i], draws: N,
+        mu, mean: mo.mean, median: med, sd: Math.sqrt(mo.var), optSd: Math.sqrt(mi.optVar), f, r, k, below: below / N, lambda, delta, option: opt, ext,
+        varEff: (lambda * Math.sqrt(mo.var)) ** 2 + (1 - lambda) ** 2 * (mi.optVar + unseen), tier, role: roles[i], draws: N,
       };
     }
   }
@@ -632,6 +717,23 @@ export function applyRisk(C, result, H, P, s, files, rs = {}) {
   const ilSlots = Math.max(0, Math.round(rs.ilSlots ?? 0));
   const pFull = poissonAtLeast(load, ilSlots);
   const bench$ = minBid > 0 ? minBid : 1;
+
+  // the CE term's variance in standings points (roto): calc.js's G (points per unit) comes from its
+  // luck model ν; the draws give each side more luck per team (L_draws: the drafted players' draw
+  // variance a team), and under it a unit buys fewer points: G' = c·G, c² = (D + L_calc) / (D +
+  // L_draws), D = Σ G²σ²_draft, L_calc = Σ G²ν. μ's scale does not matter (each side's dollars are
+  // fixed) and the option scales with μ, so only the CE term's variance takes c²
+  const teamC2 = { h: 1, p: 1 };
+  if (teamVar && !points && (s.format ?? "roto") === "roto") {
+    for (const side of ["h", "p"]) {
+      const { info, pr, d } = sides[side];
+      let Ld = 0, D = 0, Lc = 0;
+      info.forEach((x, i) => { if (x && pr.slot[i] !== null) Ld += x.sd ** 2; });
+      Ld /= teams;
+      d.G.forEach((g, k) => { D += g * g * d.sigmaDraft[k]; Lc += g * g * d.nu[k]; });
+      if (Ld > 0 && D + Lc > 0) teamC2[side] = (D + Lc) / (D + Ld);
+    }
+  }
 
   // O1-O3: an average team before the draft
   let obj = null;
@@ -652,9 +754,11 @@ export function applyRisk(C, result, H, P, s, files, rs = {}) {
       x.il = pFull * x.ext * (perSGP > 0 ? bench$ / perSGP : 0);
       x.eff = x.mu + x.option - x.il;
       x.exact = false;
+      x.teamC2 = teamC2[side];
+      x.varCE = x.varEff * teamC2[side];   // the variance the CE term prices (standings points²)
       if (obj) {
-        if (Math.sqrt(x.varEff) > 0.4 * obj.S) { x.ce = exactCertainty(x.eff, x.varEff, obj.M, obj.S, obj.H); x.exact = true; }
-        else x.ce = certaintyEquivalent(x.eff, x.varEff, obj.M, obj.S, obj.H);
+        if (Math.sqrt(x.varCE) > 0.4 * obj.S) { x.ce = exactCertainty(x.eff, x.varCE, obj.M, obj.S, obj.H); x.exact = true; }
+        else x.ce = certaintyEquivalent(x.eff, x.varCE, obj.M, obj.S, obj.H);
       } else x.ce = x.eff;
       x.payout = x.ce - x.eff;
       ce[i] = x.ce;
@@ -684,6 +788,7 @@ export function applyRisk(C, result, H, P, s, files, rs = {}) {
   }
   return {
     objective: obj, il: { slots: ilSlots, load, pFull, bench$ }, transactions: { ...txn, key: rs.transactions, lag },
+    model: { key: rs.model, label: model.label, infoK, floorAt, teamVar, teamC2 },
     sides: { h: { matched: sides.h.matched, players: sides.h.players, pricing: sides.h.pricing }, p: { matched: sides.p.matched, players: sides.p.players, pricing: sides.p.pricing } },
     settings: rs, warnings, ms: Date.now() - t0,
   };

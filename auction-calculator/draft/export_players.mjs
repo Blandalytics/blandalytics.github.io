@@ -14,7 +14,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import * as C from "../calc.js?v=17";
 import * as R from "../risk.js?v=1";
-import { buildTable, draftRisk, riskSettingsFrom, sessionConfig, settingsFrom } from "./setup.js?v=2";
+import { buildTable, draftRisk, riskSettingsFrom, sessionConfig, settingsFrom } from "./setup.js?v=3";
 
 const argv = process.argv.slice(2);
 const opt = (name, n = 1) => {

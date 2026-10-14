@@ -3,7 +3,7 @@
 // positions come from a third, last season's games by position.
 
 import * as C from "./calc.js?v=17";
-import * as R from "./risk.js?v=1";
+import * as R from "./risk.js?v=2";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
