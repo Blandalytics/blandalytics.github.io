@@ -11,11 +11,16 @@
 //      --baseline <calc.js>, the same as that calc.js's;
 //   5. the risk files: they parse, match the CSVs' players, and carry their playing time;
 //   6. the end-to-end run in the page's default league: the objective, the 15 largest moves between
-//      the risk-aware $ and the calculator's $, and Δ by $ tier; then other payouts and settings.
+//      the risk-aware $ and the calculator's $, and Δ by $ tier; then other payouts and settings;
+//   7. the models (PLAN rows 13-14): "draws" gives risk.js before them exactly (with --old <that
+//      risk.js>), with the placeholder tables and with a premium table; "upgrade" against "draws":
+//      c² by side, k, the floor at the replacement, and the drafted pitchers and closers.
+//   Part 1 also checks the model "upgrade"'s math: the option on m = mean + k (V − mean) against the
+//   normal formula at k·σ; Var_eff's invariance in k when no draw is under the floor; rPosAt.
 //
 //   node risk_checks.mjs                                    (1 and 2 only)
 //   node risk_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv hitters_risk_ev.bin pitchers_risk_ev.bin
-//        [--ref risk_reference.py] [--baseline old/calc.js] [--csv out.csv] [--python python]
+//        [--ref risk_reference.py] [--baseline old/calc.js] [--old old/risk.js] [--csv out.csv] [--python python]
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -24,7 +29,7 @@ import * as R from "../../auction-calculator/risk.js";
 
 const argv = process.argv.slice(2);
 const opt = (name) => { const i = argv.indexOf(name); if (i < 0) return null; const v = argv[i + 1]; argv.splice(i, 2); return v; };
-const refPath = opt("--ref"), baseline = opt("--baseline"), csvOut = opt("--csv"), python = opt("--python") || process.env.PYTHON || "python";
+const refPath = opt("--ref"), baseline = opt("--baseline"), oldRisk = opt("--old"), csvOut = opt("--csv"), python = opt("--python") || process.env.PYTHON || "python";
 const [hcsv, pcsv, hbin, pbin] = argv;
 
 let fails = 0;
@@ -57,6 +62,24 @@ console.log("1. The specification's section 7");
     const c = R.exactCertainty(mu, sigma ** 2, M, S, H);
     const back = R.Phi((M + c - H) / S) - R.Phi((M - H) / S);
     check(Math.abs(back - exact) < 1e-12, `   its certain equivalent ${f4(c)} SGP gives the same gain (${back.toExponential(3)})`);
+  }
+  // the model "upgrade": the option on what the team knows at λ, m = mean + k (V − mean), is the
+  // option of a normal of SD k·σ; with no draw under the floor Var_eff does not depend on k
+  for (const k of [1, 0.502, 0.403]) {
+    const n = 10000, v = Float64Array.from({ length: n }, (_, j) => 0.5 + 3 * R.PhiInv((j + 0.5) / n));
+    const m = R.drawMoments(v.map((x) => 0.5 + k * (x - 0.5)), 0);
+    check(Math.abs(m.option - R.optionValue(0.5, 3 * k, 0)) < 2e-3 && Math.abs(m.optVar - R.truncatedVariance(0.5, 3 * k, 0)) < 1e-2,
+      `k ${k}: E[max(m, 0)] and Var[max(m, 0)] over the draws ${f4(m.option)}, ${f4(m.optVar)}; normal at k·σ ${f4(R.optionValue(0.5, 3 * k, 0))}, ${f4(R.truncatedVariance(0.5, 3 * k, 0))}`);
+    const lo = R.drawMoments(v.map((x) => 0.5 + k * (x - 0.5)), -1e9), all = R.drawMoments(v, -1e9);
+    const varEff = lo.optVar + (1 - k * k) * all.var;   // every draw kept: P(m ≥ r) = 1
+    check(Math.abs(varEff - all.var) < 1e-9 * all.var, `   no draw under the floor: Var[max(m, r)] + (1 − k²) Var[V] = Var[V] (${f4(varEff)} = ${f4(all.var)})`);
+  }
+  {
+    const tab = { SP: { 10: [0, 1, 2, 3, 4, 5, 6], 12: [-0.1, 1.0, 0.4, 0.5, 0.3, 0, 0] } };
+    const atMonths = R.MONTH_SHARE.every((sh, m) => Math.abs(R.rPosAt("SP", 12, sh, tab) - R.rPos("SP", 12, m, tab)) < 1e-12);
+    const mid = R.rPosAt("SP", 12, (R.MONTH_SHARE[1] + R.MONTH_SHARE[2]) / 2, tab), beyond = R.rPosAt("SP", 12, 0.99, tab);
+    check(atMonths && Math.abs(mid - 0.7) < 1e-12 && beyond === 0 && R.rPosAt("C", 12, 0.3, tab) === 0 && Math.abs(R.rPosAt("SP", 11, R.MONTH_SHARE[2], tab) - 1.2) < 1e-12,
+      `rPosAt: the table's months at MONTH_SHARE, linear between (${f3(mid)} halfway between months 1 and 2), the last month beyond, 0 off the table, linear in league size`);
   }
   check(Math.abs(R.Phi(-5) - 2.866515718791939e-7) < 1e-20 && Math.abs(R.Phi(1.96) - 0.9750021048517795) < 1e-15
     && Math.abs(R.PhiInv(0.975) - 1.959963984540054) < 1e-12, "Φ and Φ⁻¹ to double precision");
@@ -157,17 +180,19 @@ console.log("3. risk.js values each projection line as calc.js does");
       }
     }
     if (files && s.pool === "All") {
-      // the risk-aware $ spends what the calculator spends, on exactly as many roster spots
-      R.applyRisk(C, res, H, P, s, files, {});
-      const a = res.players.filter((p) => p.drafted).reduce((t, p) => t + p.value, 0);
-      const mine = res.players.filter((p) => p.risk && p.risk.drafted), b = mine.reduce((t, p) => t + p.risk.value, 0);
-      const minOk = res.players.every((p) => !p.risk || !Number.isFinite(p.risk.value) || (p.risk.drafted ? p.risk.value >= s.minBid - 1e-9 : p.risk.value < s.minBid));
-      worstBudget = Math.max(worstBudget, minOk && res.players.every((p) => p.risk) ? Math.abs(a - b) : Infinity);
+      // the risk-aware $ spends what the calculator spends, on exactly as many roster spots (both models)
+      for (const model of Object.keys(R.RISK_MODELS)) {
+        R.applyRisk(C, res, H, P, s, files, { model });
+        const a = res.players.filter((p) => p.drafted).reduce((t, p) => t + p.value, 0);
+        const mine = res.players.filter((p) => p.risk && p.risk.drafted), b = mine.reduce((t, p) => t + p.risk.value, 0);
+        const minOk = res.players.every((p) => !p.risk || !Number.isFinite(p.risk.value) || (p.risk.drafted ? p.risk.value >= s.minBid - 1e-9 : p.risk.value < s.minBid));
+        worstBudget = Math.max(worstBudget, minOk && res.players.every((p) => p.risk) ? Math.abs(a - b) : Infinity);
+      }
     }
   }
   check(worstV < 1e-9, `${lines} projection lines in ${leagues.length} leagues: SGP above replacement, max |risk.js − calc.js| ${worstV.toExponential(2)}${worstV ? ` (${where})` : ""}`);
   check(worst$ < 1e-9, `the same leagues: the drafted players, the pricing and the $ rebuilt from the values, max |diff| ${worst$.toExponential(2)}${worst$ > 1e-9 ? ` (${where})` : ""}`);
-  if (files) check(worstBudget < 1e-6, `the risk-aware $: its drafted players at the min bid or more, the rest under it, spending the calculator's dollars (${leagues.filter((l) => l.s.pool === "All").length} leagues): max |diff| $${worstBudget.toExponential(2)}`);
+  if (files) check(worstBudget < 1e-6, `the risk-aware $: its drafted players at the min bid or more, the rest under it, spending the calculator's dollars (${leagues.filter((l) => l.s.pool === "All").length} leagues, models ${Object.keys(R.RISK_MODELS).join(" and ")}): max |diff| $${worstBudget.toExponential(2)}`);
 }
 
 // ---- 4. the calculator's output does not change -------------------------------------------------
@@ -306,6 +331,67 @@ for (const [label, s, rs] of [
   const top = [...dr].sort((a, b) => Math.abs(b.risk.value - b.value) - Math.abs(a.risk.value - a.value))[0];
   console.log(`     ${label.padEnd(32)} mean |move| $${f2(mv)}; largest ${top.name} ${signed(top.risk.value - top.value)}; ${describe(sm)}; IL taken ${(100 * sm.il.pFull).toFixed(0)}%; ${sm.ms} ms`);
   if (label.startsWith("roto, λ = 1")) check(dr.every((p) => !p.risk.draws || Math.abs(p.risk.option) < 1e-12), "λ = 1: no option value");
+}
+
+// ---- 7. the models ------------------------------------------------------------------------------
+console.log('7. The models: "fixes" (the default), "draws" (risk.js before PLAN rows 13-14) and "upgrade"');
+{
+  // a premium table in R4's shape (about its 12-team values), so that the floor and its month matter
+  const PREM = {};
+  for (const [slot, row] of Object.entries({ C: [-0.1, 0.1, 0.1, 0.1, 0, -0.1, -0.1], "1B": [-0.2, 0.2, 0, 0, 0, -0.1, -0.1], "2B": [-0.1, 0.4, 0.1, 0.2, 0, 0, 0],
+    "3B": [-0.1, 0.2, 0.1, 0.3, 0.1, 0, 0], SS: [-0.2, 0.2, 0, 0.2, -0.2, -0.2, -0.2], OF: [-0.1, 0.6, 0.7, 0.7, 0.7, 0.4, 0.4], UT: [-0.1, 0.7, 0.8, 0.7, 0.7, 0.4, 0.4],
+    SP: [-0.1, 1.0, 0.4, 0.5, 0.3, 0, 0], RP: [-0.1, 1.3, 0.7, 0.5, 0.5, 0.4, 0.4], P: [-0.1, 1.4, 0.9, 0.7, 0.7, 0.2, 0.2] })) PREM[slot] = { 10: row, 12: row, 15: row };
+  const LAM = { h: { time: 0.27, role: 0.41, skill: 0.41 }, p: { time: 0.18, role: 0.17, skill: 0.18 } };
+  const KEYS = ["value", "ce", "eff", "varEff", "delta", "option", "lambda", "r", "il", "bid"];
+  if (oldRisk) {
+    const O = await import(pathToFileURL(oldRisk).href);
+    const filesO = { h: O.parseRiskFile(readFileSync(hbin)), p: O.parseRiskFile(readFileSync(pbin)) };
+    let worst = 0, n = 0, where = "";
+    const all = leagues.filter((l) => l.s.pool === "All");
+    for (const { name, v, s } of all) {
+      for (const extra of [{}, { premium: PREM, lambda: LAM }, { premium: PREM, month: 2, transactions: "weekly" }]) {
+        const { H, P } = prep(s);
+        const a = C.auctionValues(H, P, { ...s, debug: true }), b = C.auctionValues(H, P, { ...s, debug: true });
+        R.applyRisk(C, a, H, P, s, files, { model: "draws", ...extra });
+        O.applyRisk(C, b, H, P, s, filesO, extra);
+        a.players.forEach((p, i) => {
+          const x = p.risk, y = b.players[i].risk;
+          if (!x || !y) { if (x !== y) { worst = Infinity; where = `${name} ${p.name}: risk on one side only`; } return; }
+          for (const key of KEYS) {
+            const xa = x[key], ya = y[key];
+            const same = xa === ya || (Number.isNaN(xa) && Number.isNaN(ya));
+            const d = same ? 0 : Math.abs(xa - ya);
+            if (!(d <= worst)) { worst = Number.isNaN(d) ? Infinity : d; where = `${name} ${JSON.stringify(v)} ${JSON.stringify(Object.keys(extra))} ${p.name} ${key}`; }
+          }
+          n++;
+        });
+      }
+    }
+    check(worst === 0, `model "draws" against ${oldRisk.split(/[\\/]/).pop()} (${oldRisk}): ${n} players in ${all.length} leagues × 3 risk settings, max |diff| ${worst.toExponential(2)}${worst ? ` (${where})` : ""}`);
+  } else console.log('   (give --old <risk.js before rows 13-14> for the parity of the model "draws")');
+  const sideRows = [];
+  for (const [label, s] of [["roto", PAGE], ["h2h", { ...PAGE, format: "h2h" }]]) {
+    for (const model of ["draws", "upgrade"]) {
+      const { res: r, summary: sm } = run(s, { model, premium: PREM, lambda: LAM, ...(label === "h2h" ? { payout: "playoffs", playoffTeams: 6 } : {}) });
+      const dp = r.players.filter((p) => p.type === "p" && p.risk && p.risk.drafted);
+      const closers = dp.filter((p) => p.risk.role === "RP" && p.value >= 5).length, sp = dp.filter((p) => p.risk.role === "SP").length;
+      const sp515 = r.players.filter((p) => p.type === "p" && p.risk && p.risk.role === "SP" && p.value >= 5 && p.value < 15);
+      const cl = r.players.filter((p) => p.type === "p" && p.risk && p.risk.role === "RP" && p.value >= 15 && p.value < 30);
+      const mv = (ps) => (ps.length ? ps.reduce((a, p) => a + p.risk.value - p.value, 0) / ps.length : NaN);
+      sideRows.push({ label, model, sm, dp: dp.length, sp, closers, sp515: mv(sp515), cl: mv(cl) });
+      console.log(`   ${label.padEnd(4)} ${model.padEnd(8)} c² h ${f3(sm.model.teamC2.h)} p ${f3(sm.model.teamC2.p)}; k ${sm.model.infoK ? `h ${sm.model.infoK.h} p ${sm.model.infoK.p}` : "1"}; floor at the ${sm.model.floorAt}; `
+        + `drafted pitchers ${dp.length} (SP ${sp}, RP $5+ ${closers}); risk $ − $: SP $5-15 ${signed(mv(sp515))}, RP $15-30 ${signed(mv(cl))}`);
+    }
+  }
+  const rotoU = sideRows.find((x) => x.label === "roto" && x.model === "upgrade"), h2hU = sideRows.find((x) => x.label === "h2h" && x.model === "upgrade");
+  check(rotoU.sm.model.teamC2.p < 1 && rotoU.sm.model.teamC2.h < 1 && h2hU.sm.model.teamC2.p === 1 && h2hU.sm.model.teamC2.h === 1,
+    "c² < 1 for both sides in roto (the draws carry more luck than calc.js's ν), and 1 outside roto");
+  // the floor at the replacement is read later in the season than month 0
+  const { res: rr } = run(PAGE, { model: "upgrade", premium: PREM, lambda: LAM });
+  const ps = rr.players.filter((p) => p.type === "p" && p.risk && p.risk.draws && p.valuedAt);
+  check(ps.every((p) => p.risk.r > R.rPos(p.valuedAt, 12, 0, PREM) - 1e-12), `the floor at the replacement is above the month-0 floor for all ${ps.length} pitchers with draws and a slot`);
+  const { res: r0 } = run(PAGE, { model: "upgrade" });
+  check(r0.players.every((p) => !p.risk || !p.risk.draws || p.risk.r === 0), "with the placeholder premium (empty), r = 0 at any month");
 }
 
 if (csvOut) {

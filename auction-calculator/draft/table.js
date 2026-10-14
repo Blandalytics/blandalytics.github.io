@@ -15,8 +15,9 @@
 //
 // With the risk-aware $ (result.risk from risk.js applyRisk, on a run with debug: true) each player
 // also carries risk: { value (the risk-aware $), ce, bid (CE at the calculator's prices), eff
-// (EffValue), varEff, sd } in SGP above replacement, and the table carries risk: { objective (M, S,
-// H of an average team before the draft), pricing ({ gamma, h, p: { base, k, perSGP, flat } }, as
+// (EffValue), varEff, varCE (the variance its CE term prices: varEff × c² in roto), sd } in SGP
+// above replacement, and the table carries risk: { objective (M, S, H of an average team before the
+// draft), pricing ({ gamma, h, p: { base, k, perSGP, flat } }, as
 // risk.js dollarsOf takes it), settings }. The engine recomputes CE with its own M, S, H (py/ce.py).
 
 export const PROJ_COLS = {
@@ -63,7 +64,7 @@ export function draftTable(result, H, P, s) {
     players.push({
       type, name: x.name, mlbamid: id, team: x.team ?? "", pos: (x.twoWay ? x.twoWay.hPos : x.pos) ?? (type === "p" ? "P" : "UT"),
       value: x.value, sgpar: finite(x.sgpar), drafted: !!x.drafted, valuedAt: x.valuedAt ?? null, proj: projOf(T, i, type),
-      ...(rk ? { risk: { value: finite(rk.value), ce: finite(rk.ce), bid: finite(rk.bid), eff: finite(rk.eff), varEff: finite(rk.varEff), sd: finite(rk.sd) } } : {}),
+      ...(rk ? { risk: { value: finite(rk.value), ce: finite(rk.ce), bid: finite(rk.bid), eff: finite(rk.eff), varEff: finite(rk.varEff), varCE: finite(rk.varCE), sd: finite(rk.sd) } } : {}),
     });
   }
   const targets = (t) => (t ? Object.fromEntries(Object.entries(t).map(([role, f]) => [role, finite(f.target)])) : null);

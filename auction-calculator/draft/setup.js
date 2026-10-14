@@ -11,7 +11,7 @@
 //   sessionConfig(choices, s, rs)   the cfg the worker gives py/web_api.Session
 //
 // C is calc.js and R is risk.js, passed in so the page and Node use one copy of each.
-import { draftTable } from "./table.js?v=1";
+import { draftTable } from "./table.js?v=2";
 
 export const STORE = "auction-calculator:v1";
 
