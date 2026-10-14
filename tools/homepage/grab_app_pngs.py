@@ -153,6 +153,41 @@ def grab_auction_calculator():
     print(f"auction-calculator: screenshot of #tbl {rect['width']:.0f}x{rect['height']:.0f}")
 
 
+# The projection pages have no export either: a screenshot of their elements (the box around
+# them), at a width where the whole element shows, cut to at most a square from its top so a long
+# table does not make a huge capture.
+PAGES = [
+    # name, url, ready condition, the elements (a JS expression giving an array), the page width
+    # Pete Crow-Armstrong's 2027 auction value: his card over the waterfall from a league-average player
+    ("projection-drilldown", "https://blandalytics.com/projection-drilldown/?p=h:691718&s=$&b=ev",
+     "document.querySelector('#wf svg') && document.querySelector('#player h2')",
+     "[document.getElementById('player'), document.getElementById('wf').closest('.card')]", 600),
+    ("playing-time-risk", "https://blandalytics.com/playing-time-risk/",
+     "document.querySelector('#t tbody tr')", "[document.getElementById('t')]", 1100),
+    ("promotion-timelines", "https://blandalytics.com/promotion-timelines/",
+     "document.querySelector('#t tbody tr')", "[document.getElementById('t')]", 1100),
+]
+
+
+def grab_element(name, url, ready, elements, width):
+    tab = new_tab()
+    tab.call("Emulation.setDeviceMetricsOverride", width=width, height=1600, deviceScaleFactor=3 if width < 800 else 2,
+             mobile=False)
+    tab.call("Page.navigate", url=url)
+    tab.wait_for(ready, 60, f"{name} to render")
+    time.sleep(2)  # let fonts settle
+    rect = tab.eval(
+        f"(() => {{ const rs = ({elements}).map((e) => e.getBoundingClientRect());"
+        " const x = Math.min(...rs.map((r) => r.left)), y = Math.min(...rs.map((r) => r.top));"
+        " const w = Math.max(...rs.map((r) => r.right)) - x, h = Math.max(...rs.map((r) => r.bottom)) - y;"
+        " return {x: x + scrollX, y: y + scrollY, width: w, height: Math.min(h, w)}; })()"
+    )
+    shot = tab.call("Page.captureScreenshot", format="png", captureBeyondViewport=True,
+                    clip={**rect, "scale": 1})
+    (OUT / f"{name}.png").write_bytes(base64.b64decode(shot["data"]))
+    print(f"{name}: screenshot {rect['width']:.0f}x{rect['height']:.0f}")
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     profile = tempfile.mkdtemp(prefix="bland-chrome-")
@@ -179,6 +214,12 @@ def main():
                 grab_auction_calculator()
             except Exception as e:
                 print(f"auction-calculator: FAILED {e}")
+        for page in PAGES:
+            if not only or page[0] in only:
+                try:
+                    grab_element(*page)
+                except Exception as e:
+                    print(f"{page[0]}: FAILED {e}")
         if not only or "nhl-draft" in only:
             try:
                 grab_nhl_draft()
