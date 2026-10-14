@@ -506,12 +506,17 @@ function kdeSvg(values, x, color, fmt) {
   return `${s}</svg>`;
 }
 
+// the stat tiles' KDEs and percentiles: pitch types thrown KDE_MIN+ times (or the Min. pitches
+// setting, if higher), plus the selected pitch type whatever its count
+const KDE_MIN = 100;
+
 function renderStats() {
   const { unit, info, rows, pool, target, model } = view;
   const f = formats(target);
   const good = targetGood(target);
   const label = targetName(model, target);
-  const others = pool.filter((p) => !(p.info.pitcher === info.pitcher && p.info.pt === info.pt));
+  const kdePool = pool.filter((p) => p.info.n >= KDE_MIN || (p.info.pitcher === info.pitcher && p.info.pt === info.pt));
+  const poolWhat = `${view.poolWhat} (${Math.max(KDE_MIN, view.minN)}+ pitches)`;
   // lift and drag come from the pitch's own traits: not Other, Pitch Group & Matchup or Handedness
   const feat = rows.filter((r) => !['Other', 'baseline', 'lefty'].includes(r.k));
   const lift = feat.filter((r) => good * r.v > 0).sort((a, b) => good * (b.v - a.v))[0];
@@ -523,11 +528,11 @@ function renderStats() {
       value: f.v(unit.exact),
       sub: `${f.d(unit.exact - unit.league)} vs lg avg pitch; ${ord(
         pctile(
-          others.map((p) => p.unit.exact),
+          kdePool.map((p) => p.unit.exact),
           unit.exact,
         ),
-      )} percentile for ${view.poolWhat}`,
-      values: others.map((p) => p.unit.exact),
+      )} percentile for ${poolWhat}`,
+      values: kdePool.map((p) => p.unit.exact),
       x: unit.exact,
       color: good * (unit.exact - unit.league) >= 0 ? C.gold : C.teal,
       fmt: f.tick,
@@ -538,7 +543,7 @@ function renderStats() {
     [drag, 'Biggest drag', C.teal],
   ]) {
     if (!r) continue;
-    const vals = others
+    const vals = kdePool
       .map((p) => (view.rowValueOf ? view.rowValueOf(r.k, p) : rowValue(r.k, p.unit)))
       .filter(Number.isFinite);
     const signed = (v) => (Math.abs(v) < 1e-9 ? '0' : `${v > 0 ? '+' : '−'}${f.tick(Math.abs(v))}`);
@@ -546,7 +551,7 @@ function renderStats() {
       k: r.k,
       head: `${word}: ${r.label}`,
       value: `${f.d(r.v)} ${f.unit}`,
-      sub: `${r.detail && !['Location', 'Count', 'leverage'].includes(r.k) ? `${r.detail}; ` : ''}${ord(pctile(vals, r.v))} percentile for ${view.poolWhat}`,
+      sub: `${r.detail && !['Location', 'Count', 'leverage'].includes(r.k) ? `${r.detail}; ` : ''}${ord(pctile(vals, r.v))} percentile for ${poolWhat}`,
       values: vals,
       x: r.v,
       color,
