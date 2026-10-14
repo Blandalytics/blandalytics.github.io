@@ -11,8 +11,11 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@600;700&display=swap">
 <style>
 html,body{margin:0;background:#292C42;color:#8D96B3;font:15px "DM Sans",system-ui,sans-serif}
-body{display:flex;justify-content:center;min-height:100vh}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}
 #card{width:100%;max-width:1500px}
+#prov{margin:6px 0 10px;padding:0 20px;font-size:13px;text-align:center}
+#prov b{color:#fff;font-weight:600}
+#prov[hidden]{display:none}
 #card svg{display:block;width:100%;height:auto}
 #msg{align-self:center;padding:0 20px;text-align:center}
 #msg[hidden],#card[hidden]{display:none}
@@ -25,6 +28,7 @@ body{display:flex;justify-content:center;min-height:100vh}
 </head>
 <body>
 <div id="card" hidden></div>
+<p id="prov" hidden><b>PLV and Location are provisional below MLB</b> (the models aren't yet calibrated to minor-league strike zones and parks).</p>
 <p id="msg">Loading the card…</p>
 <button id="png" type="button" hidden>Share image ▾</button>
 <script src="/shared/share-image.js?v=1"></script>
@@ -48,13 +52,15 @@ body{display:flex;justify-content:center;min-height:100vh}
     var m = /^#(\d+)-(\d+)(?:&cmp=(-?\d+))?$/.exec(location.hash);
     return m ? {pk: m[1], pid: m[2], cmp: m[3]} : null;
   }
-  // a game the nightly build has written is in its day's data; one in progress, in the
-  // live index with a file of its own
+  // a game the nightly build has written is in its level's day's data (level_games: an index
+  // from before the levels has MLB's games alone, at data/); one in progress, in the live
+  // index with a file of its own
   function find(want) {
     var key = want.pk + '-' + want.pid;
     return getJson(INDEX).then(function (index) {
-      var date = (index.games || {})[want.pk];
-      if (date) return getJson(new URL('data/' + date + '.json', INDEX).href).then(function (d) { return d[key]; });
+      var at = (index.level_games || {})[want.pk];
+      var path = at ? at[0] + '/data/' + at[1] : index.games && index.games[want.pk] ? 'data/' + index.games[want.pk] : null;
+      if (path) return getJson(new URL(path + '.json', INDEX).href).then(function (d) { return d[key]; });
       return getJson(LIVE).then(function (live) {
         var g = (live.games || {})[want.pk];
         var p = g && g.pitchers.filter(function (x) { return String(x.id) === want.pid; })[0];
@@ -73,6 +79,7 @@ body{display:flex;justify-content:center;min-height:100vh}
       document.title = card.name + ' — ' + card.date + ' ' + (card.home ? 'vs' : '@') + ' ' + card.opp
         + ' — PLV Pitcher Game Card';
       el.hidden = false; msg.hidden = true; btn.hidden = false;
+      document.getElementById('prov').hidden = !(card.provisional && card.provisional.length);
     }).catch(function () { msg.textContent = 'Could not find that card.'; });
   }
   // Share image (shared/share-image.js): the card at 3000 x 4000, to copy or download
