@@ -42,6 +42,9 @@ CROPS = {
     "model-drilldown": "waterfall",  # the card's header over its waterfall tile (waterfall_tile)
     "auction-calculator": (0.0, 0.0),  # top of the values table: names, dollars, the first stats
     "nhl-draft": (0.0, 0.0),         # top of the options table
+    "projection-drilldown": None,        # padded: the player's card over the whole waterfall card
+    "playing-time-risk": (0.0, 0.0),     # top of the leaderboard
+    "promotion-timelines": (0.0, 0.0),   # top of the leaderboard
 }
 
 
