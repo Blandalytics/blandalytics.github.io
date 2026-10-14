@@ -286,8 +286,9 @@ winter leagues aren't tracked), `rok`, `bbc` (college), `int`, `hsb`. Every leve
 tracked games in the data files' manifest gets cards, built the same way, with these
 differences below MLB:
 
-- **Graded against MLB.** The pitch models are MLB's and every grade is on the MLB scale;
-  the card says so (`graded_vs: "mlb"`).
+- **Graded against MLB.** The pitch models are MLB's and every grade is on the MLB scale,
+  by design: a grade measures the pitch against MLB quality, so a minor leaguer's usually
+  reads lower (`graded_vs: "mlb"` in the dict; the card shows no label for it).
 - **Pitching (PLV) and Location are provisional** (`provisional: ["plv", "loc"]`): the
   scorer isn't calibrated to the minors' strike zones (their ABS zones are fixed per batter,
   the models were fit on MLB's pose-tracked ones) or their parks' elevations. Stuff, which is
