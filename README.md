@@ -128,8 +128,10 @@ the Worker on any push that touches `tools/live/`. Setup and local testing are i
 ## PLV Pitcher Game Cards
 
 [blandalytics.com/pitcher-cards/](https://blandalytics.com/pitcher-cards/) — the Pitcher List
-Stats game card for every pitcher in every MLB game. Pick a date, a game (or every game that
-day) and a pitcher; toggle the comparison to an earlier season and choose which one. The card
+Stats game card for every pitcher in every game with Statcast tracking: MLB, Triple-A, the
+Florida State League's Hawk-Eye parks, the Arizona Fall League's MLB-park games and the rest
+(see *Levels*). Pick a level, a date, a game (or every game that day) and a pitcher; toggle
+the comparison to an earlier season (MLB only) and choose which one. The card
 is the same one the Streamlit app in
 [Blandalytics/player_cards](https://github.com/Blandalytics/player_cards) draws
 (`pitcher_game_card.py`), rebuilt as a page: the box-score line and game grade, the Stuff /
@@ -152,7 +154,10 @@ bump N in `index.html` and `card.html` with each change.
 The picker in [`pitcher-cards/index.html`](pitcher-cards/index.html) draws the card in the
 page, and [`pitcher-cards/card.html`](pitcher-cards/card.html)`#<gamePk>-<pitcherId>` shows
 one full size (`&cmp=<year>` picks the comparison season, `&cmp=0` none). A card can be
-linked in the picker as `pitcher-cards/#<gamePk>-<pitcherId>`.
+linked in the picker as `pitcher-cards/#<gamePk>-<pitcherId>`, at any level (the index's
+`level_games` finds it); `?level=<code>` opens the picker on a level, MLB otherwise. Below MLB
+both pages note that PLV and Location are provisional. Either page reads an index from before
+the levels as MLB's alone.
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones
@@ -286,8 +291,9 @@ winter leagues aren't tracked), `rok`, `bbc` (college), `int`, `hsb`. Every leve
 tracked games in the data files' manifest gets cards, built the same way, with these
 differences below MLB:
 
-- **Graded against MLB.** The pitch models are MLB's and every grade is on the MLB scale;
-  the card says so (`graded_vs: "mlb"`).
+- **Graded against MLB.** The pitch models are MLB's and every grade is on the MLB scale,
+  by design: a grade measures the pitch against MLB quality, so a minor leaguer's usually
+  reads lower (`graded_vs: "mlb"` in the dict; the card shows no label for it).
 - **Pitching (PLV) and Location are provisional** (`provisional: ["plv", "loc"]`): the
   scorer isn't calibrated to the minors' strike zones (their ABS zones are fixed per batter,
   the models were fit on MLB's pose-tracked ones) or their parks' elevations. Stuff, which is
