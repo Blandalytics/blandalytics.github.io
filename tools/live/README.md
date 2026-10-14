@@ -13,7 +13,8 @@ speeds, and only games that turn out to be tracked get the full feed.
 
 | file | role |
 |---|---|
-| `src/index.js` | `scheduled()` polls and writes; `fetch()` serves `live/` read-only |
+| `src/index.js` | `scheduled()` polls and writes; `fetch()` serves `live/` and `data/` read-only |
+| `test/poll.mjs` | `npm test`, offline: `poll()` against a stubbed Stats API — a failing or malformed feed costs no other writes, a failed write is retried, a finished game's last write waits for its feed, the arm angles are re-checked |
 | `test/harness.mjs` | `npm test`: one cron pass against an in-memory bucket, plus the probe on games with known answers |
 | `src/cards/pack.js` | reads a model pack (written by `tools/pitcher_card/model_pack.py`, layout there) as zero-copy typed arrays |
 | `src/cards/trees.js` | LightGBM and XGBoost tree ensembles evaluated from a pack, matching the Python libraries bit for bit on raw scores / margins |
@@ -28,7 +29,7 @@ speeds, and only games that turn out to be tracked get the full feed.
 | `src/cards/bundle.js` | the scorer bundle (`cards/models/scorer.pack`) as what `scorer.js` runs on |
 | `test/card_parity.mjs` | the port against the Python pipeline on real games (inputs from `tools/pitcher_card/parity.py`); the nightly cards workflow runs it before publishing a bundle |
 | `test/live_cards.mjs` | `live.js` on a real game against an in-memory bucket: mid-game builds, no-op ticks, a box-score-only rebuild, the final pass at Game Over, the index |
-| `wrangler.jsonc` | Worker name, cron window (game hours, UTC) and the R2 binding |
+| `wrangler.jsonc` | Worker name, cron (every minute, all day) and the R2 binding |
 | `cors.json` | bucket CORS policy, for when the bucket is served from its own domain |
 
 Objects written:
@@ -48,8 +49,22 @@ minutes. Seven tracked games cost about 50 ms CPU per cron tick; an in-season
 evening with MLB and Triple-A both going is a few hundred, which needs the Workers
 Paid plan (the free plan's 10 ms limit is enforced on consistent overage).
 
-Read it from the site at `https://blandalytics-live.blandalytics.workers.dev/live/...`
-until a custom domain is attached to the bucket.
+The cron runs every minute of the day: the leagues on the schedule start as early
+as 10:00 UTC (a Tokyo or Seoul series) and through the 15:00 UTC hour (matinees,
+minor-league school-day games), and a long West Coast game can end after 07:00 UTC.
+A tick with nothing live is one poll: two small Stats API calls and two writes.
+
+Each game is handled on its own: a feed that fails or comes back malformed is
+logged and skipped, and `today.json`, the state and the card index are still
+written. A game's file is recorded as held only once it is written, so a failed
+write is retried on the next poll. A tracked game's last write repeats each poll
+until its own feed says Final and (for MLB) the cards have had their last pass —
+the schedule can call a game over a poll before the feed does — and gives up after
+ten polls.
+
+The site reads the bucket's own domain, `https://data.blandalytics.com/live/...`.
+`fetch()` serves the same keys at `https://blandalytics-live.blandalytics.workers.dev/`
+for `wrangler dev` and as a fallback.
 
 ## Live pitcher cards
 
@@ -65,7 +80,7 @@ and leaves the live index once `cards/index.json` (the nightly build) has it.
 It reads what the nightly cards workflow publishes to the bucket:
 `cards/models/scorer.pack` (the models, ~17 MB, reloaded within ten minutes of a new
 one), `cards/pitchers/<id>.json` (each pitcher's comparison seasons) and
-`cards/arms/<season>.json`. Until the first of those exists the card builds log
+`cards/arms/<season>.json` (also re-checked every ten minutes). Until the first of those exists the card builds log
 `scorer.pack is missing` and skip; the poller itself is unaffected, as it is by any
 card that fails.
 

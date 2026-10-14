@@ -42,6 +42,7 @@ const STATE_KEY = "state/games.json";
 const MLB = 1;
 const UNTRACKED_AFTER = 20;        // pitches with no speed before a game is written off
 const REPROBE_MS = 10 * 60_000;    // ...and how often to give it another look
+const FINAL_TRIES = 10;            // polls a finished game's last write may take to stick
 
 // The hydrated schedule is ~5 KB a game; this keeps it to what today.json needs.
 const SCHEDULE_FIELDS = [
@@ -131,12 +132,18 @@ async function poll(env) {
   const live = games.filter((g) => g.status.abstract === "Live");
   const final = games.filter((g) => g.status.abstract === "Final");
 
-  await Promise.all([
-    ...live.map((g) => followGame(env, state, g, now, cards)),
+  const jobs = [
+    ...live.map((g) => [g, followGame(env, state, g, now, cards)]),
     // a tracked game we were following needs one last write after its final pitch
     ...final.filter((g) => state[g.gamePk]?.tracked && !state[g.gamePk].final)
-      .map((g) => writeGame(env, state, g, FINAL_CACHE, cards).then(() => { state[g.gamePk].final = true; })),
-  ]);
+      .map((g) => [g, finishGame(env, state, g, cards)]),
+  ];
+  // each game on its own: a feed that fails or comes back malformed must not cost the
+  // other games their writes, or today.json, the state and the card index theirs
+  const results = await Promise.allSettled(jobs.map(([, job]) => job));
+  results.forEach((r, i) => {
+    if (r.status === "rejected") console.log(`game ${jobs[i][0].gamePk} failed: ${r.reason?.stack ?? r.reason}`);
+  });
 
   for (const g of games) g.tracked = state[g.gamePk]?.tracked ?? null;
   await Promise.all([
@@ -181,6 +188,22 @@ async function probe(gamePk) {
   return { pitches, tracked };
 }
 
+/** The last write of a tracked game, repeated each poll until the game's own feed says
+ * it is over and the cards have had their last pass: the schedule can call a game Final
+ * a poll before the feed does, and a card pass can fail. After FINAL_TRIES polls the
+ * game is let go regardless. */
+async function finishGame(env, state, game, cards) {
+  const s = state[game.gamePk];
+  s.finalTries = (s.finalTries ?? 0) + 1;
+  try {
+    if (await writeGame(env, state, game, FINAL_CACHE, cards)) s.final = true;
+  } finally {
+    if (s.finalTries >= FINAL_TRIES) s.final = true;
+  }
+}
+
+/** Write a game's file (and its cards) if its feed has moved. Returns true once the feed
+ * says the game is over and, for MLB, the cards' pass over it has run. */
 async function writeGame(env, state, game, cacheControl, cards) {
   const gamePk = game.gamePk;
   const feed = await getJson(`${FEED.replace("%d", gamePk)}?fields=${FEED_FIELDS}`);
@@ -189,15 +212,20 @@ async function writeGame(env, state, game, cacheControl, cards) {
 
   // the feed carries a timestamp of its last change; nothing to do if we
   // already hold that version and aren't changing its cache lifetime
-  if (s.stamp === stamp && cacheControl === LIVE_CACHE) return;
-  s.stamp = stamp;
+  if (s.stamp === stamp && cacheControl === LIVE_CACHE) return false;
 
   await putJson(env, `live/games/${gamePk}.json`, shapeGame(feed), cacheControl);
+  s.stamp = stamp;   // only once written, so a failed write is retried next poll
   // the cards are MLB only (the models and the comparison seasons are); a failure
   // there is logged and never costs the game file
+  let cardsDone = true;
   if (game.sport.id === MLB && cards) {
-    await cards.game(feed).catch((err) => console.log(`cards ${gamePk} failed: ${err.stack ?? err}`));
+    cardsDone = await cards.game(feed).then((n) => n !== null, (err) => {
+      console.log(`cards ${gamePk} failed: ${err.stack ?? err}`);
+      return false;
+    });
   }
+  return feed.gameData?.status?.abstractGameState === "Final" && cardsDone;
 }
 
 /** Every league's games for yesterday and today (Eastern), flattened and trimmed. */
@@ -245,23 +273,26 @@ const side = (t) => ({
   score: t.score ?? null,
 });
 
-/** Trim the live feed to what a scorecard needs. Counts are *after* the pitch. */
+/** Trim the live feed to what a scorecard needs. Counts are *after* the pitch. A field
+ * the feed leaves out (it happens mid-play, and in the lower minors) comes out null. */
 function shapeGame(feed) {
   const g = feed.gameData;
-  const l = feed.liveData;
+  const l = feed.liveData ?? {};
   const players = g.players ?? {};
   const name = (id) => players[`ID${id}`]?.fullName ?? String(id);
 
   const plays = [];
   const pitches = [];
   for (const play of l.plays?.allPlays ?? []) {
-    const { about, matchup: m, result } = play;
+    const about = play.about ?? {};
+    const m = play.matchup ?? {};
+    const result = play.result ?? {};
     plays.push({
       atBat: about.atBatIndex,
       inning: about.inning,
       half: about.halfInning,
-      batter: m.batter.id,
-      pitcher: m.pitcher.id,
+      batter: m.batter?.id ?? null,
+      pitcher: m.pitcher?.id ?? null,
       event: result.eventType ?? null,
       rbi: result.rbi ?? 0,
       description: result.description ?? null,
@@ -272,21 +303,23 @@ function shapeGame(feed) {
       if (!ev.isPitch) continue;
       const pd = ev.pitchData ?? {};
       const hd = ev.hitData;
+      const count = ev.count ?? {};
+      const det = ev.details ?? {};
       last = {
         atBat: about.atBatIndex,
         inning: about.inning,
         half: about.halfInning,
         n: ev.pitchNumber,
-        batter: m.batter.id,
-        pitcher: m.pitcher.id,
+        batter: m.batter?.id ?? null,
+        pitcher: m.pitcher?.id ?? null,
         stand: m.batSide?.code ?? null,
         throws: m.pitchHand?.code ?? null,
-        balls: ev.count.balls,
-        strikes: ev.count.strikes,
-        outs: ev.count.outs,
-        type: ev.details.type?.code ?? null,      // FF, SL, CH ...
-        call: ev.details.call?.code ?? null,      // C S B X F ...
-        description: ev.details.description,
+        balls: count.balls ?? null,
+        strikes: count.strikes ?? null,
+        outs: count.outs ?? null,
+        type: det.type?.code ?? null,      // FF, SL, CH ...
+        call: det.call?.code ?? null,      // C S B X F ...
+        description: det.description ?? null,
         velo: pd.startSpeed ?? null,
         px: pd.coordinates?.pX ?? null,
         pz: pd.coordinates?.pZ ?? null,
@@ -304,7 +337,7 @@ function shapeGame(feed) {
   }
 
   const ls = l.linescore ?? {};
-  const ids = new Set([...plays.map((p) => p.batter), ...plays.map((p) => p.pitcher)]);
+  const ids = new Set([...plays.map((p) => p.batter), ...plays.map((p) => p.pitcher)].filter((id) => id != null));
   return {
     gamePk: g.game.pk,
     updated: feed.metaData?.timeStamp ?? null,
@@ -350,4 +383,4 @@ function easternDate(d) {
 }
 
 // exposed for tests
-export { probe, schedule, shapeGame, FEED_FIELDS };
+export { poll, probe, schedule, shapeGame, FEED_FIELDS, FINAL_TRIES };
