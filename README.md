@@ -146,7 +146,9 @@ of numbers into the same R2 bucket as the data files (a season is ~22,000 cards,
 GitHub Pages site may hold), and [`pitcher-cards/card.js`](pitcher-cards/card.js) draws it:
 one SVG in the original figure's 1500 × 2000 coordinate system, so every panel keeps the
 matplotlib layout, with every format and colour decided there. So a change to how the card
-looks is a commit to `card.js` and needs no rebuild; only a change to the data does.
+looks is a commit to `card.js` and needs no rebuild; only a change to the data does. Both
+pages load it as `card.js?v=N` (Cloudflare holds scripts for hours under their exact URL):
+bump N in `index.html` and `card.html` with each change.
 The picker in [`pitcher-cards/index.html`](pitcher-cards/index.html) draws the card in the
 page, and [`pitcher-cards/card.html`](pitcher-cards/card.html)`#<gamePk>-<pitcherId>` shows
 one full size (`&cmp=<year>` picks the comparison season, `&cmp=0` none). A card can be
@@ -279,7 +281,8 @@ complexity limit of 5 per function.
 
 Run the workflow by hand from the **Actions** tab (*Build pitcher cards → Run workflow*)
 with a `start` and `end` date; tick `force` to rebuild cards that already exist, which is
-what you want after changing the data or the models (a change to `card.js` needs nothing).
+what you want after changing the data or the models (a change to `card.js` needs only its
+`?v=` bump).
 A day of games is roughly 150 cards at about half a second each; a whole season runs as one
 job per month, four at a time, in under an hour. Cards already in a day's manifest are
 skipped, so an interrupted backfill resumes where it stopped. The first run also downloads
