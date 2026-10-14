@@ -201,7 +201,7 @@ class Draft:
             if filled >= self.n_board:
                 break
             if (i not in seen and self.legal_for(self.user_team, i)
-                    and self.eng.dedicated_open(counts, slots.iat[i])):
+                    and self.eng.dedicated_open(counts, slots[i])):
                 out.append((i, "board"))
                 seen.add(i)
                 filled += 1
