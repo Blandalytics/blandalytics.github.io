@@ -18,6 +18,8 @@ const SHORT = {
   detail: 'Sim details (IBB, SF, chance)',
   residual: 'Interaction of the factors',
   talent: 'Talent',
+  speed: 'Speed',
+  season: "Full season vs a regular's",
   reversion: 'Reversion',
   regression: 'Pull toward the average',
   environment: 'League environment',
@@ -180,7 +182,7 @@ function baseLabel(bk, kind) {
   if (bk === 'regular') return "A regular's playing time (the calculator's full-time target for his role)";
   if (bk === 'capacity') return 'A full season (capacity)';
   if (kind === 'rate' || kind === 'pct') return 'League average';
-  return META.regular ? "League-average regular (league-average rates at a regular's playing time)" : 'League-average player, full season';
+  return META.regular ? "League-average regular (league-average rates and speed at a regular's playing time)" : 'League-average player, full season';
 }
 
 function baseShort(bk, kind) {
