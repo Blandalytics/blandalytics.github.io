@@ -35,9 +35,10 @@ def _locate(name: str) -> str:
 
 
 # the scraper and the model files are cloned rather than installed; this folder goes on
-# the path too so the sibling modules import whether run from here or from the repo root
+# the path too so the sibling modules import whether run from here or from the repo root,
+# as does tools/data, whose pull finds any level's games
 SCRAPER = _locate("statcast_scraper")
-for _path in (SCRAPER, HERE):
+for _path in (SCRAPER, HERE, os.path.join(ROOT, "tools", "data")):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 MODELS_DIR = os.environ.get("PLAYER_CARDS_DIR") or _locate("player_cards")
@@ -52,6 +53,7 @@ import pitch_model  # noqa: E402
 from models import Models  # noqa: E402
 
 GAME_TYPES = "R,P"  # regular season and postseason
+MLB = ("mlb", 1, "Major League Baseball")  # a level: (sport code, sportId, name)
 _pitch_model: pitch_model.PitchModel | None = None
 SCHEDULE = "https://statsapi.mlb.com/api/v1/schedule"
 _models: Models | None = None
@@ -76,20 +78,30 @@ def pitch_values(session, store) -> pitch_model.PitchModel:
     return _pitch_model
 
 
-def game_values(df: pd.DataFrame, session, store) -> pd.DataFrame:
+def game_values(df: pd.DataFrame, session, store, level=MLB) -> pd.DataFrame:
     """The card's model columns for a whole game's pitches, keyed by pitch_model.KEYS.
-    Score whole outings: the scorer reads each pitcher's arsenal off what it is given."""
+    Score whole outings: the scorer reads each pitcher's arsenal off what it is given.
+    Every level is scored by the MLB models onto the MLB scale; the 2026 ABS adjustment,
+    fit on MLB zones and calls, only for MLB."""
     pm = pitch_values(session, store)
-    return pm.columns(pm.score(df))
+    return pm.columns(pm.score(df, abs_env=level[1] == MLB[1]))
 
 
-def day_pitches(date: dt.date, session, store=None, game_type: str = GAME_TYPES) -> pd.DataFrame:
-    """Every tracked pitch on a date: from the data files once the date has settled,
-    otherwise scraped in one pull."""
+def day_pitches(
+    date: dt.date, session, store=None, game_type: str = GAME_TYPES, level=MLB
+) -> pd.DataFrame:
+    """Every tracked pitch at a level on a date: from the data files once the date has
+    settled, otherwise scraped in one pull (MLB through statfast, any other level through
+    the data files' own pull, which finds its games by sportId)."""
     stored = store.day(date) if store is not None else None
     if stored is not None:
         return stored
-    return statfast.mlb_day(date, game_type=game_type, session=session)
+    if level[1] == MLB[1]:
+        return statfast.mlb_day(date, game_type=game_type, session=session)
+    import backfill
+
+    games = backfill.schedule(session, level[1], date.isoformat(), date.isoformat())
+    return backfill.pull(session, level[1], games, 4)
 
 
 def game_pitches(game_pk: int, session) -> pd.DataFrame:
@@ -124,25 +136,26 @@ def pitcher_order(feed: dict) -> list[int]:
     return [*home[:1], *away[:1], *home[1:], *away[1:]]
 
 
-def build_card(game_pk, pitcher_id, feed, df, session, store, logo=None, values=None):
+def build_card(game_pk, pitcher_id, feed, df, session, store, logo=None, values=None, level=MLB):
     """(html, card dict) for one pitcher whose feed and pitches are in hand. ``logo`` is
     the Pitcher List mark's URL as the page will see it, when not card.js's own;
     ``values`` the game's model columns, scored here for this pitcher alone when a
-    caller has none in hand."""
+    caller has none in hand. Only an MLB card has comparison seasons; Savant's arm
+    angles are MLB's, so a minor leaguer's are usually absent (the card draws none)."""
     date = dt.date.fromisoformat(feed["gameData"]["datetime"]["officialDate"])
     game_type = feed["gameData"]["game"]["type"]
     arm = fetch.arm_angles(session, date, game_type=game_type).get(pitcher_id, {})
-    seasons = seasons_for(pitcher_id, date, store)
+    seasons = seasons_for(pitcher_id, date, store) if level[1] == MLB[1] else {}
     if values is None:
-        values = game_values(df, session, store)
-    card = build_data.build(game_pk, pitcher_id, feed, df, seasons, arm, models(), values)
+        values = game_values(df, session, store, level)
+    card = build_data.build(game_pk, pitcher_id, feed, df, seasons, arm, models(), values, level)
     return render.render_html(card, logo=logo), card
 
 
-def _try_card(game_pk, pid, feed, pitches, session, store, strict, logo, values):
+def _try_card(game_pk, pid, feed, pitches, session, store, strict, logo, values, level=MLB):
     """build_card, or None with the failure logged when ``strict`` is off."""
     try:
-        return build_card(game_pk, pid, feed, pitches, session, store, logo, values)
+        return build_card(game_pk, pid, feed, pitches, session, store, logo, values, level)
     except Exception:  # noqa: BLE001 - a site build carries on past one bad card
         if strict:
             raise
@@ -152,32 +165,35 @@ def _try_card(game_pk, pid, feed, pitches, session, store, strict, logo, values)
 
 
 def cards_for_game(
-    game_pk, feed, df, session, store, strict=True, skip=None, logo=None
+    game_pk, feed, df, session, store, strict=True, skip=None, logo=None, level=MLB
 ) -> Iterator:
     """Yields (pitcher id, html, card) for every pitcher with tracked pitches in a game.
     With ``strict`` off a pitcher whose card fails is logged and skipped; ``skip(game_pk,
     pitcher_id)`` can decline a card before it is built."""
-    values = game_values(df, session, store)  # once for the game, keyed per pitch
+    values = game_values(df, session, store, level)  # once for the game, keyed per pitch
     for pid in pitcher_order(feed):
         pitches = df[df["pitcher"] == pid]
         if pitches.empty or (skip is not None and skip(game_pk, pid)):
             continue
-        built = _try_card(game_pk, pid, feed, pitches, session, store, strict, logo, values)
+        built = _try_card(game_pk, pid, feed, pitches, session, store, strict, logo, values, level)
         if built is not None:
             yield pid, *built
 
 
-def cards_for_date(date, session=None, store=None, strict=True, skip=None, logo=None) -> Iterator:
-    """Every completed game on a date, scraped once: yields (game_pk, pitcher id, html,
-    card). Games with no tracked pitches are skipped; see cards_for_game for ``skip``."""
+def cards_for_date(
+    date, session=None, store=None, strict=True, skip=None, logo=None, level=MLB
+) -> Iterator:
+    """Every completed game at a level on a date, scraped once: yields (game_pk, pitcher
+    id, html, card). Games with no tracked pitches are skipped; see cards_for_game for
+    ``skip``. ``store`` is that level's DataStore."""
     date = dt.date.fromisoformat(str(date))
     s = session or fetch.session()
-    store = store or fetch.DataStore(DEFAULT_CACHE, s)
-    df_all = day_pitches(date, s, store)
+    store = store or fetch.DataStore(DEFAULT_CACHE, s, sport=level[0])
+    df_all = day_pitches(date, s, store, level=level)
     for pk in sorted(int(x) for x in df_all["game_pk"].unique()):
         feed = fetch.feed(s, pk)
         game = df_all[df_all["game_pk"] == pk]
-        for pid, html, card in cards_for_game(pk, feed, game, s, store, strict, skip, logo):
+        for pid, html, card in cards_for_game(pk, feed, game, s, store, strict, skip, logo, level):
             yield pk, pid, html, card
 
 

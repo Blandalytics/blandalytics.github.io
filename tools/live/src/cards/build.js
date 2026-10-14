@@ -4,7 +4,7 @@
  * Takes the game's feed (box score, bio, teams), its rows (feed.js), the scorer's
  * per-pitch values (scorer.js), the xSLG model, the pitcher's arm angles and his pack
  * of comparison seasons (written nightly by the Python pipeline), and returns the same
- * dict build_data.build returns (version 3: numbers, formatted by the renderer). The
+ * dict build_data.build returns (version 4: numbers, formatted by the renderer). The
  * per-pitch metrics follow prep.py, keeping its float32 arithmetic where the scraper's
  * float32 columns carry it (see npf.js).
  *
@@ -71,7 +71,7 @@ export const CARD_FIELDS = [
   "status", "abstractGameState", "codedGameState", "detailedState", "players", "fullName",
   "currentAge", "height", "boxscore", "pitchers", "stats", "pitching", "inningsPitched",
   "earnedRuns", "hits", "homeRuns", "baseOnBalls", "strikeOuts", "numberOfPitches",
-  "gamesStarted", "outs", "battersFaced",
+  "gamesStarted", "outs", "battersFaced", "league",
 ];
 // what a card reads from the pitcher's box-score line (the game line and the game grade)
 export const CARD_BOX = [
@@ -103,6 +103,7 @@ export function gameInfo(feed, pid) {
     date: gd.datetime.officialDate,
     game_type: gd.game.type,
     label: GAME_TYPE_LABEL[gd.game.type] ?? "Box Score",
+    league: gd.teams[side].league?.name ?? null,
     starter: box.teams[side].pitchers[0] === pid,
     box: box.teams[side].players[`ID${pid}`].stats.pitching,
   };
@@ -448,7 +449,7 @@ export function build({ feed, pitcherId, rows, values, scale, xslg, arm, pack })
   const at = info.home ? "vs" : "@";
   const sum = (c) => seriesSum(p.map((r) => r[c]));
   return {
-    version: 3,
+    version: 4,
     game_pk: rows[0].game_pk,
     pitcher_id: pitcherId,
     name: info.name, hand: info.hand, age: info.age, team: info.team, opp: info.opp,
@@ -468,6 +469,10 @@ export function build({ feed, pitcherId, rows, values, scale, xslg, arm, pack })
     pitches: plotPoints(p),
     missing_data: p.some((r) => TRACKING.some((c) => missing(r[c]))),
     comparisons: comparisons(p, table, pack),
+    // the live cards are MLB's: graded on the MLB scale, nothing provisional
+    level: { code: "mlb", id: 1, name: "Major League Baseball", league: info.league },
+    graded_vs: "mlb",
+    provisional: [],
   };
 }
 

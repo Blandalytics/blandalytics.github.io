@@ -19,7 +19,7 @@ from grades import GAME_TYPE_LABEL, TEAM_ABBR, game_grade, run_diff_bucket
 from models import Models
 from pitch_model import GRADE_COLUMNS
 
-VERSION = 3  # the card dict's shape
+VERSION = 4  # the card dict's shape (4: the level, its league, and how it is graded)
 MIN_GAMES = 3  # a season needs this many appearances to be offered as a comparison
 TABLE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
 # the primary fastball panel: its shape, plus its break as acceleration (unrounded), which
@@ -47,25 +47,31 @@ def parse_height(text: str | None) -> float:
 
 
 # ---- the feed -----------------------------------------------------------------------
-def game_info(feed: dict, pitcher_id: int) -> dict:
-    """Who, where and the box-score line, from the live feed."""
+def game_info(feed: dict, pitcher_id: int, mlb: bool = True) -> dict:
+    """Who, where and the box-score line, from the live feed. The MLB club abbreviations
+    and the World Series label are MLB's alone: below it a club keeps its own
+    abbreviation, and every postseason round is the playoffs."""
     gd, box = feed["gameData"], feed["liveData"]["boxscore"]
     side = next(s for s in ("home", "away") if pitcher_id in box["teams"][s]["pitchers"])
     opp = "away" if side == "home" else "home"
     player = gd["players"][f"ID{pitcher_id}"]
     abbr = {s: gd["teams"][s]["abbreviation"] for s in (side, opp)}
+    if mlb:
+        abbr = {s: TEAM_ABBR.get(a, a) for s, a in abbr.items()}
     game_type = gd["game"]["type"]
+    label = GAME_TYPE_LABEL.get(game_type, "Box Score")
     return {
         "name": player["fullName"],
         "hand": player["pitchHand"]["code"],
         "age": player["currentAge"],
         "height": parse_height(player.get("height")),
-        "team": TEAM_ABBR.get(abbr[side], abbr[side]),
-        "opp": TEAM_ABBR.get(abbr[opp], abbr[opp]),
+        "team": abbr[side],
+        "opp": abbr[opp],
         "home": side == "home",
         "date": gd["datetime"]["officialDate"],
         "game_type": game_type,
-        "label": GAME_TYPE_LABEL.get(game_type, "Box Score"),
+        "label": label if mlb or game_type != "W" else GAME_TYPE_LABEL["F"],
+        "league": (gd["teams"][side].get("league") or {}).get("name"),
         "starter": box["teams"][side]["pitchers"][0] == pitcher_id,
         "box": box["teams"][side]["players"][f"ID{pitcher_id}"]["stats"]["pitching"],
     }
@@ -222,12 +228,16 @@ def build(
     arm_angles: dict[str, float],
     models: Models,
     values: pd.DataFrame,
+    level: tuple[str, int, str] = ("mlb", 1, "Major League Baseball"),
 ) -> dict:
     """The card dict for one pitcher's game. ``df`` is that pitcher's pitches from
     statfast, ``values`` their Stuff / Locations / Pitching columns from pitch_model, and
     ``seasons`` maps year -> the same pitcher's regular-season pitches from before this
-    game."""
-    info = game_info(feed, pitcher_id)
+    game. ``level`` is the game's (sport code, sportId, name). Every level is graded on
+    the MLB scale; below MLB the Pitching and Location grades are provisional, the scorer
+    not yet calibrated to the minors' strike zones and parks."""
+    mlb = level[1] == 1
+    info = game_info(feed, pitcher_id, mlb)
     p = scored_pitches(df, info, arm_angles, models, values)
     table = prep.game_table(p)
     date = dt.date.fromisoformat(info["date"])
@@ -252,4 +262,7 @@ def build(
         "pitches": plot_points(p),
         "missing_data": bool(p[list(prep.TRACKING)].isna().any(axis=1).any()),
         "comparisons": comparisons(p, table, seasons),
+        "level": {"code": level[0], "id": level[1], "name": level[2], "league": info["league"]},
+        "graded_vs": "mlb",
+        "provisional": [] if mlb else ["plv", "loc"],
     }

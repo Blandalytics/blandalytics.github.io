@@ -12,7 +12,7 @@ season; the manifest says which files exist and what each covers.
 | `data/<sport>/<YYYY>/days/<YYYY-MM-DD>.parquet` | a settled day of the current month (~0.8 MB) |
 
 `<sport>` is the Stats API code: `mlb`, `aaa`, `afx` (Single-A), `rok`, `win`
-(Arizona Fall League), `int` (WBC), `bbc` (college) and so on. The schema is `statfast.COLUMNS` plus `sport_id` and
+(the winter leagues; only the Arizona Fall League's MLB-park games are tracked), `int` (WBC), `bbc` (college) and so on. The schema is `statfast.COLUMNS` plus `sport_id` and
 `game_type`, identical across sports and seasons; sorted by game, at-bat, pitch;
 zstd-compressed with 100k-row groups, so a Parquet reader can range-request one
 game or one pitcher out of a season file.
