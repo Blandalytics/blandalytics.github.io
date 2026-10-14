@@ -16,6 +16,7 @@ from engine import SKIP, Snap
 ORDINAL = {1: "top", 2: "2nd", 3: "3rd"}
 POSITIONS = ("C", "1B", "2B", "3B", "SS", "OF", "SP", "RP")
 BID_STEPS = (0.6, 0.8, 1.0, 1.2, 1.4)  # forced-buy prices, x the expected price
+DRAIN_MARGIN = 2  # $: a drain is worth at least this much less to the user than to the room (whole-dollar rounding is not a drain)
 
 
 class Draft:
@@ -116,8 +117,10 @@ class Draft:
                 return t
         return None
 
-    def nominate(self, j):
-        t = self.nominator()
+    def nominate(self, j, team=None):
+        """Put player j on the block, nominated by `team` (default: the team whose turn it is; a live
+        draft may enter another team, and the turn then passes from that team)."""
+        t = self.nominator() if team is None else int(team)
         self.lot = (j, t)
         self.nom = (t + 1) % self.lg.teams
         return t
@@ -152,13 +155,53 @@ class Draft:
             self._acquire(team, j, int(price))
             self.lot = None
 
-    def user_value_bid(self, j):
-        """The user's bid without a simulation: the static $ value with the user's own inflation."""
+    def user_value_bid(self, j, value=None):
+        """The user's bid without a simulation: the static $ value (or `value`) with the user's own
+        inflation, at the bench share for a player who would not start; whole dollars."""
         mb = self.lg.min_bid
-        b = mb + (self.pool.value[j] - mb) * self.inflation(self.user)
+        v = self.pool.value[j] if value is None else value
+        b = mb + (v - mb) * self.inflation(self.user)
         if not self.fills_a_slot(self.user, j):
             b = mb + (b - mb) * self.eng.bench_share
         return max(0, min(math.floor(b), self.max_bid(self.user)))
+
+    def own_price(self, j):
+        """What player j is worth to the user (the nomination rule's U): his own $ (the risk-aware $
+        from the table, else the calculator's $) priced as user_value_bid prices the static $."""
+        return self.user_value_bid(j, float(self.pool.own[j]))
+
+    def expected_price(self, j):
+        """The room's expected price of player j (the nomination rule's E): the calculator's $ above
+        the min bid at the room's inflation, whole dollars (bid_grid's centre)."""
+        mb = self.lg.min_bid
+        return math.floor(mb + max(0.0, self.pool.value[j] - mb) * self.inflation())
+
+    def nominees(self, n_drain=5, n_target=2):
+        """Auction: the user's nomination candidates by the drain rule, the rule's choice first.
+
+        E = the room's expected price, U = the user's own price (own_price).  A *drain* is a player
+        with U <= E - DRAIN_MARGIN: at his market price a rival buys him, and the money leaves the
+        rivals' budgets for a player the user does not want at that price.  The rule nominates the dearest drain (largest
+        E; ties to the larger E - U).  With no drain it nominates the dearest player (a target: the
+        user is a likely buyer at the market price).  The list adds the next drains and the best
+        targets (the highest $ who would start for the user) for the engine to price.
+        Returns [(("pick", i), why), ...]."""
+        rows = []
+        for i in self.my_board():
+            if not self.legal_for(self.user, i):
+                continue
+            e, u = self.expected_price(i), self.own_price(i)
+            rows.append((e, e - u, i))
+        if not rows:
+            return []
+        drains = sorted((r for r in rows if r[1] >= DRAIN_MARGIN), key=lambda r: (-r[0], -r[1], r[2]))
+        out = [(("pick", i), "drain: $%d to you, ~$%d to the room" % (e - g, e)) for e, g, i in drains[:n_drain]]
+        seen = {c[1] for c, _ in out}
+        targets = [r for r in sorted(rows, key=lambda r: (-r[0], r[2])) if r[2] not in seen and self.fills_a_slot(self.user, r[2])]
+        if not out:  # nothing to drain: the dearest player, as a target
+            targets = targets or sorted(rows, key=lambda r: (-r[0], r[2]))
+        out += [(("pick", i), "target: ~$%d" % e) for e, _, i in targets[: (n_target if out else n_target + 1)]]
+        return out
 
     # ---- the engine's view ------------------------------------------------------------------------
 

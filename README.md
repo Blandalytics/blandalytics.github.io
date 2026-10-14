@@ -1314,8 +1314,8 @@ dollars on exactly as many roster spots. Points leagues get the option value onl
 league on the 2027 test simulation the largest moves are about ±$5: high-variance SPs gain
 (Misiorowski +$4.25), low-variance closers lose (their draws carry no preseason role risk yet).
 Not done: the spread factor, λ and the in-season premium are placeholders (all 1, the spec's
-values, and 0) until the backtests fit them; no correlation between players; no keeper horizon;
-no draft mode (a separate step). Turned off, the page's values are byte-for-byte what they were.
+values, and 0) until the backtests fit them; no correlation between players; no keeper horizon.
+The draft mode is its own page, `auction-calculator/draft/` (beta; its `DESIGN.md`), linked from the calculator's header. Turned off, the page's values are byte-for-byte what they were.
 
 | file | role |
 |---|---|

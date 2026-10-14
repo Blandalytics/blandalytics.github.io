@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>MLB Draft Mode · Blandalytics</title>
+<meta name="description" content="A snake or auction draft from your seat, with each option priced by simulating the rest of the draft and the season: win%, playoff%, roto points and the maximum bid.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://data.blandalytics.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
+  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
+  --accent:#6cb4ff; --good:#7bd88f; --bad:#ff8a80; --warn:#ffd166;
+}
+*{box-sizing:border-box}
+body{margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased; padding:24px 16px}
+main{max-width:1280px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1{margin:0; font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
+h2{margin:0 0 10px; font-size:17px; font-weight:600}
+h3{margin:14px 0 6px; font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em}
+.tag{margin:6px 0 0; color:var(--muted); font-size:14px; max-width:880px}
+a{color:var(--accent)}
+a.home{color:var(--muted); text-decoration:none; font-size:14px}
+a.home:hover{color:var(--ink)}
+.card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px; min-width:0}
+.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px 16px}
+label{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
+label b{color:var(--ink); font-weight:500}
+label small{color:var(--faint); font-size:12px}
+input,select,button{font:inherit; color:var(--ink)}
+input[type=text],input[type=number],select{background:var(--ground); border:1px solid var(--rule); border-radius:6px; padding:7px 9px; width:100%}
+input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
+button{background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:7px 12px; cursor:pointer}
+button:hover:not(:disabled){border-color:var(--faint); background:#222b36}
+button:disabled{opacity:.45; cursor:default}
+button.primary{background:var(--accent); color:#0b1320; border-color:var(--accent); font-weight:600}
+button.primary:hover:not(:disabled){background:#8cc6ff}
+button.take{padding:3px 9px; font-size:12px}
+.row{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+.row input[type=text]{flex:1 1 260px; width:auto}
+.row input[type=number]{width:96px}
+.row select{width:auto}
+.status{color:var(--muted); font-size:13px}
+.status.err{color:var(--bad)}
+.status.warn{color:var(--warn)}
+.league{font-size:13.5px; color:var(--muted); margin:0 0 12px}
+.league b{color:var(--ink); font-weight:500}
+.clock{display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; align-items:baseline}
+.clock .pick{font-size:20px; font-weight:600}
+.clock .who{font-size:15px; color:var(--muted)}
+.clock .who.mine{color:var(--good); font-weight:600}
+.facts{display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:8px; font-size:13.5px; color:var(--muted)}
+.facts b{color:var(--ink); font-weight:600}
+.facts span[data-tip]{cursor:help; border-bottom:1px dotted var(--faint)}
+.tbl{overflow-x:auto; margin-top:6px}
+table{border-collapse:collapse; width:100%; font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; white-space:nowrap}
+th,td{padding:4px 7px; text-align:right; border-bottom:1px solid var(--rule)}
+th{color:var(--muted); font-weight:500; position:sticky; top:0; background:var(--surface)}
+th[title]{cursor:help}
+td.l,th.l{text-align:left}
+tr.you td{background:#17242f}
+tr.best td{color:var(--good)}
+td.dim,span.dim{color:var(--muted)}
+td.neg{color:var(--bad)} td.posv{color:var(--good)} td.zero{color:var(--faint)}
+td.ce{color:var(--accent)}
+.baseline td{color:var(--warn)}
+.lot{display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px 14px; margin:4px 0 12px}
+.lot div{background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:8px 10px}
+.lot div span{display:block; font-size:12px; color:var(--muted)}
+.lot div b{font-size:18px; font-weight:600}
+.lot div.key{border-color:var(--good)}
+.lot div.key b{color:var(--good)}
+.lot div.ce b{color:var(--accent)}
+.act{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:10px 0 0; padding:10px 12px; background:var(--raise); border:1px solid var(--rule); border-radius:6px}
+.act b{font-weight:600}
+.picks{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:12.5px; color:var(--muted); white-space:pre-wrap; margin:6px 0 0; max-height:220px; overflow-y:auto}
+.note{color:var(--faint); font-size:12.5px; margin-top:8px}
+.note.flag{color:var(--warn)}
+#draft{display:flex; flex-direction:column; gap:18px}
+[hidden]{display:none!important}
+details summary{cursor:pointer; font-size:17px; font-weight:600; list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary span{color:var(--muted); font-weight:400; font-size:13px; margin-left:10px}
+details[open] summary{margin-bottom:10px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <a class="home" href="../">← MLB Auction Calculator</a>
+    <h1>MLB Draft Mode <span style="font-size:15px;color:var(--warn);font-weight:600;vertical-align:middle">beta</span></h1>
+    <p class="tag">Sit in one seat of your league's snake or auction draft. Each option is priced by finishing the draft many times and playing the season on the projections' simulated outcomes: your win% (or playoff%), roto points, and in an auction the most you should bid. Your league comes from the calculator's settings. Runs in your browser.</p>
+  </header>
+
+  <section id="setup" class="card">
+    <details id="setup_details" open>
+    <summary><b>Draft settings</b></summary>
+    <p id="league" class="league"></p>
+    <div class="grid">
+      <label><b>Draft</b><select id="mode"><option value="snake">Snake</option><option value="auction">Auction</option></select></label>
+      <label><b>Your seat</b><input id="slot" type="number" min="1" max="30" value="1"><small>Snake: your draft slot. Auction: your place in the nomination order</small></label>
+      <label><b>Rivals</b><select id="mock"><option value="1">Mock draft: the rivals draft themselves</option><option value="0">Live draft: you enter every pick or sale</option></select></label>
+      <label><b>Payout</b><select id="payout"><option value="winner">Winner take all</option><option value="playoffs">Playoffs</option></select><small id="payout_note"></small></label>
+      <label id="playoffs_field"><b>Playoff teams</b><input id="playoffs" type="number" min="1" max="29" value="4"><small>Head-to-head: by record; roto: by standings points</small></label>
+      <label><b>Rank options by</b><select id="objective"><option value="payout">The payout (win% or playoff%)</option><option value="points">Mean roto points</option></select><small>Also sets the auction's maximum bid</small></label>
+      <label><b>Simulated drafts per option</b><input id="sims" type="number" min="10" max="2000" value="100"><small>More is sharper and slower; the tables refine as they run</small></label>
+      <label id="auto_field"><b>Lots that skip you</b><input id="auto_below" type="number" min="0" max="100" step="1" value="3"><small>Mock auction: lots worth less than this $ go by value, unpriced</small></label>
+      <label><b>Seed</b><input id="seed" type="number" value="20270401"><small>The same settings and seed repeat a mock draft</small></label>
+      <label><b>Do not draft</b><input id="dnd" type="text" placeholder="names, comma-separated"><small>Kept off your options; rivals may still take them</small></label>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button id="start" class="primary" disabled>Start draft</button>
+      <span id="status" class="status">starting the Python runtime…</span>
+    </div>
+    </details>
+  </section>
+
+  <section id="draft" hidden>
+    <div id="clock" class="card"></div>
+    <div class="card"><div id="options"></div><div id="action"></div></div>
+    <div id="cats" class="card"></div>
+    <div id="standings" class="card"></div>
+    <div id="commands" class="card">
+      <h2>Commands</h2>
+      <div class="row">
+        <input id="who" type="text" list="avail" placeholder="a player's name">
+        <button id="enter_pick" title="Snake: the team on the clock takes him (at a rival's stop of a live draft: enter his pick)">Take</button>
+        <button id="resim">Re-simulate</button>
+        <button id="undo">Undo</button>
+        <button id="auto">Take the recommendation</button>
+        <button id="show_board">Best available</button>
+        <button id="show_rosters">Rosters</button>
+      </div>
+      <datalist id="avail"></datalist>
+      <p class="note">Take an option with its button. In a live snake draft, enter each rival's pick here when it is made; your options are priced at your own picks (Re-simulate prices any stop). Undo goes back one stop.</p>
+      <div id="panel"></div>
+      <div id="msg" class="status"></div>
+    </div>
+  </section>
+
+  <section id="final" class="card" hidden></section>
+</main>
+<script type="module" src="app.js?v=1"></script>
+</body>
+</html>

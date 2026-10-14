@@ -22,13 +22,17 @@ Candidates:
                            the world's rival bids (B = 0: no bid, the baseline)
              ("buy", p)    the user's team is forced to buy the player on the block at price p
 
-After the play-out, each team's lineup is its best legal lineup by $ value (the bench does not
-count), and the league is scored on the world's outcome draws.
+In a play-out the rivals act on the world's valuations; the user's own later picks and bids follow
+the user's policy (the static $ board and value bids, `user_board`).  After the play-out, each team's
+lineup is its best legal lineup by $ value (the bench does not count), and the league is scored on
+the world's outcome draws.
 
 Measures per candidate and simulation (rows of a result): roto points, finish (1 = first, ties
 averaged), win (finish 1), team $ (the roster's summed $ value), head-to-head playoff share, title
 share and regular-season category wins, and for an auction whether the user got the lot and at what
-price; then the user's roto points in each category.
+price; then the user's roto points in each category.  In a roto league (no head-to-head model) the
+playoff share is the share of seasons in the top `playoff_teams` by roto points (a roto league that
+pays places, as risk.js's "playoffs" payout) and the title share is the win share.
 """
 
 import math
@@ -362,28 +366,37 @@ class Engine:
         onehot[tid, np.arange(len(idx))] = 1.0
         return onehot @ X[:, idx, :]
 
-    def score(self, w, rosters, user):
+    def score(self, w, rosters, user, all_wins=False):
         """(measures of the user's team, averaged over the world's outcomes; every team's roto points by
-        category in the first outcome, [teams, cats])."""
+        category in the first outcome, [teams, cats]; with all_wins in a head-to-head league, every
+        team's regular-season category wins in each of the world's seasons, [reps, teams], else None)."""
         tot = self.totals(w.X, rosters)  # [R, T, C]
         cp = self.scorer.roto_points(tot)  # [R, T, K]
         total = cp.sum(axis=2)  # [R, T]
         mine = total[:, user]
         place = ((total > mine[:, None]).sum(axis=1) + (total >= mine[:, None]).sum(axis=1) + 1) / 2.0
-        m = [float(mine.mean()), float(place.mean()), float((place == 1.0).mean()), sum(self.value_list[i] for i in rosters[user]),
-             math.nan, math.nan, math.nan]  # fmt: skip
+        win = float((place == 1.0).mean())
+        m = [float(mine.mean()), float(place.mean()), win, sum(self.value_list[i] for i in rosters[user]), math.nan, math.nan, math.nan]
+        wins = None
         if self.h2h is not None and w.u is not None:
-            m[PLAYOFF], m[CHAMP], m[HWINS] = self.h2h.odds(self.scorer.h2h_p(tot), w.u, user)
-        return m, cp[0]
+            res = self.h2h.odds(self.scorer.h2h_p(tot), w.u, user, all_wins)
+            m[PLAYOFF], m[CHAMP], m[HWINS] = res[:3]
+            wins = res[3] if all_wins else None
+        else:  # roto: the paid places by roto points, and the title is the win
+            m[PLAYOFF], m[CHAMP] = float((place <= self.lg.playoff_teams).mean()), win
+        return m, cp[0], wins
 
     # ---- evaluating candidates -----------------------------------------------------------------
 
-    def chunk(self, snap, candidates, n_sims, rng, base=0):
+    def chunk(self, snap, candidates, n_sims, rng, base=0, with_wins=False):
         """Every measure for every candidate over n_sims shared worlds, [CAT0 + cats, candidates, sims],
-        and every team's roto points by category for candidate `base` (the baseline), [teams, cats, sims]."""
+        and every team's roto points by category for candidate `base` (the baseline), [teams, cats, sims].
+        with_wins adds a third array: every team's head-to-head category wins in each season of the
+        baseline, [teams, reps, sims] (None in a roto league)."""
         K = len(self.lg.cats)
         out = np.full((CAT0 + K, len(candidates), n_sims), np.nan)
         league = np.full((self.T, K, n_sims), np.nan)
+        hw = np.full((self.T, self.h2h.reps, n_sims), np.nan) if (with_wins and self.h2h is not None) else None
         me = snap.user
         for s in range(n_sims):
             w = self.draw_world(rng)
@@ -405,13 +418,15 @@ class Engine:
                 else:
                     got, paid = self.finish_auction(w, gone, keys, bench, rosters, list(snap.budget), list(snap.spots),
                                                     snap.lot, snap.nom, me, cand)  # fmt: skip
-                m, cp = self.score(w, rosters, me)
+                m, cp, wins = self.score(w, rosters, me, all_wins=hw is not None and k == base)
                 out[:GOT, k, s] = m
                 out[GOT, k, s], out[PAID, k, s] = got, paid
                 out[CAT0:, k, s] = cp[me]  # (the first outcome's)
                 if k == base:
                     league[:, :, s] = cp
-        return out, league
+                    if wins is not None:
+                        hw[:, :, s] = wins.T
+        return (out, league, hw) if with_wins else (out, league)
 
     def evaluate(self, snap, candidates, n_sims, rng, base=0):
         """The whole decision, split by simulation into N_CHUNKS pieces (never by candidate, so the
@@ -437,4 +452,6 @@ class Engine:
                 u, p = self.h2h.uniforms(rng), self.scorer.h2h_p(tot)
                 for t in range(self.T):
                     res[t, PLAYOFF, s], res[t, CHAMP, s], res[t, HWINS, s] = self.h2h.odds(p, u, t)
+            else:  # roto: the paid places by roto points; the title is the win
+                res[:, PLAYOFF, s], res[:, CHAMP, s] = place <= self.lg.playoff_teams, place == 1.0
         return res
