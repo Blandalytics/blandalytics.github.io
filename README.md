@@ -130,7 +130,8 @@ the Worker on any push that touches `tools/live/`. Setup and local testing are i
 [blandalytics.com/pitcher-cards/](https://blandalytics.com/pitcher-cards/) — the Pitcher List
 Stats game card for every pitcher in every game with Statcast tracking: MLB, Triple-A, the
 Florida State League's Hawk-Eye parks, the Arizona Fall League's MLB-park games and the rest
-(see *Levels*). Pick a level, a date, a game (or every game that day) and a pitcher; toggle
+(see *Levels*). Pick a date, then a level (those with cards that day), a game (or every game
+that day) and a pitcher; toggle
 the comparison to an earlier season (MLB only) and choose which one. The card
 is the same one the Streamlit app in
 [Blandalytics/player_cards](https://github.com/Blandalytics/player_cards) draws

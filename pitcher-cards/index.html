@@ -106,12 +106,12 @@ select:disabled{opacity:.45; cursor:default}
     </div>
   </div>
   <div class="field">
-    <label for="level">Level</label>
-    <select id="level" disabled></select>
-  </div>
-  <div class="field">
     <label for="date">Game date</label>
     <select id="date" disabled></select>
+  </div>
+  <div class="field">
+    <label for="level">Level</label>
+    <select id="level" disabled></select>
   </div>
   <div class="field">
     <label for="game">Game</label>
@@ -209,9 +209,21 @@ select:disabled{opacity:.45; cursor:default}
   function levelKey(kind, date) {       // a day's manifest or card data at the chosen level
     return new URL((index.levels ? level + '/' : '') + kind + '/' + date + '.json', INDEX).href;
   }
-  function levelDays() {
-    if (!index.levels) return level === MLB ? index.days || {} : {};
-    return (index.levels[level] || {}).days || {};
+  function levelDays(code) {
+    if (!index.levels) return code === MLB ? index.days || {} : {};
+    return (index.levels[code] || {}).days || {};
+  }
+  // every level in the index, in LEVELS order (any other after, by code)
+  function allLevels() {
+    var have = index.levels ? Object.keys(index.levels) : [MLB];
+    var order = LEVELS.map(function (l) { return l[0]; });
+    return order.filter(function (c) { return have.indexOf(c) >= 0; })
+      .concat(have.filter(function (c) { return order.indexOf(c) < 0; }).sort());
+  }
+  // the levels with cards on a date; the games in progress are MLB's
+  function levelsOn(date) {
+    if (date === LIVE_KEY) return [MLB];
+    return allLevels().filter(function (c) { return levelDays(c)[date]; });
   }
   // a level with one league is named for it (the Arizona Fall League, for the winter leagues)
   function levelLabel(code) {
@@ -401,28 +413,30 @@ select:disabled{opacity:.45; cursor:default}
     }, LIVE_POLL_MS);
   }
 
-  // the dates at the chosen level, most recent first, with the live entry at MLB's head
+  // every date with cards at any level, most recent first, with the live entry at the head
   function fillDates() {
-    var days = levelDays();
-    var dates = Object.keys(days).sort().reverse();
+    var levels = allLevels(), seen = {}, n = 0;
+    levels.forEach(function (c) {
+      var days = levelDays(c);
+      Object.keys(days).forEach(function (d) { seen[d] = 1; n += days[d]; });
+    });
+    var dates = Object.keys(seen).sort().reverse();
     var items = dates.map(function (d) { return [d, niceDate(d)]; });
-    if (level === MLB && liveCount()) items.unshift([LIVE_KEY, liveLabel()]);
+    if (liveCount()) items.unshift([LIVE_KEY, liveLabel()]);
     fill(dateSel, items);
-    var n = 0; dates.forEach(function (d) { n += days[d]; });
-    status.textContent = n + ' ' + levelLabel(level) + ' card' + (n === 1 ? '' : 's') + ' across '
-      + dates.length + ' date' + (dates.length === 1 ? '' : 's')
+    status.textContent = n + ' card' + (n === 1 ? '' : 's') + ' across ' + dates.length + ' date'
+      + (dates.length === 1 ? '' : 's') + (levels.length > 1 ? ' and ' + levels.length + ' levels' : '')
       + (index.built ? ' · updated ' + index.built.slice(0, 10) : '')
-      + (level === MLB && liveCount() ? ' · ' + liveCount() + ' live' : '');
+      + (liveCount() ? ' · ' + liveCount() + ' live' : '');
     return items;
   }
+  // the levels with cards on the chosen date: the current one if it has some, else MLB, else
+  // the first
   function fillLevels() {
-    var have = index.levels ? Object.keys(index.levels) : [MLB];
-    var order = LEVELS.map(function (l) { return l[0]; });
-    var codes = order.filter(function (c) { return have.indexOf(c) >= 0; })
-      .concat(have.filter(function (c) { return order.indexOf(c) < 0; }).sort());
-    if (codes.indexOf(level) < 0) level = codes.indexOf(MLB) >= 0 ? MLB : codes[0] || MLB;
+    var codes = levelsOn(dateSel.value);
+    var pick = codes.indexOf(level) >= 0 ? level : codes.indexOf(MLB) >= 0 ? MLB : codes[0] || MLB;
     fill(levelSel, codes.map(function (c) { return [c, levelLabel(c)]; }));
-    levelSel.value = level;
+    setLevel(pick);
   }
   function setLevel(code) {
     level = code;
@@ -433,15 +447,8 @@ select:disabled{opacity:.45; cursor:default}
     history.replaceState(null, '', location.pathname + (s ? '?' + s : '') + location.hash);
   }
 
-  levelSel.addEventListener('change', function () {
-    setLevel(levelSel.value);
-    gameSel.value = '';
-    var items = fillDates();
-    if (!items.length) { day = {}; fillGames(); fillPitchers(); return; }
-    dateSel.value = items[0][0];
-    onDate();
-  });
-  dateSel.addEventListener('change', function () { gameSel.value = ''; onDate(); });
+  levelSel.addEventListener('change', function () { setLevel(levelSel.value); gameSel.value = ''; onDate(); });
+  dateSel.addEventListener('change', function () { gameSel.value = ''; fillLevels(); onDate(); });
   gameSel.addEventListener('change', fillPitchers);
   pitcherSel.addEventListener('change', onPitcher);
   compare.addEventListener('change', onCompare);
@@ -479,9 +486,9 @@ select:disabled{opacity:.45; cursor:default}
     var at = (index.level_games || {})[m[1]];
     var date = at ? at[1] : index.games[m[1]] || (live.games && live.games[m[1]] ? LIVE_KEY : null);
     if (!date) return false;
-    var code = at ? at[0] : MLB;
-    if (code !== level) { setLevel(code); fillDates(); }
+    level = at ? at[0] : MLB;
     dateSel.value = date;
+    fillLevels();
     loadDay(date).then(function (d) {
       day = d;
       prov.hidden = level === MLB;
@@ -499,11 +506,16 @@ select:disabled{opacity:.45; cursor:default}
   Promise.all([getJson(INDEX), loadLive().catch(function () { return {}; })])
     .then(function (both) {
       index = both[0];
-      fillLevels();
       var items = fillDates();
       if (!items.length && !location.hash) { empty.textContent = 'No cards built yet.'; return; }
-      // land on the games in progress if there are any, else the most recent day
-      if (!selectFromHash()) { dateSel.value = items[0][0]; onDate(); }
+      if (selectFromHash()) return;
+      // land on the games in progress if there are any, else the most recent day; a ?level=
+      // link, on that level's most recent day
+      var days = level !== MLB ? levelDays(level) : null;
+      var first = days ? items.filter(function (it) { return days[it[0]]; })[0] : null;
+      dateSel.value = (first || items[0])[0];
+      fillLevels();
+      onDate();
     })
     .catch(function () {
       status.textContent = 'Could not load the card index';
