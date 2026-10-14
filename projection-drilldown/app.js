@@ -26,6 +26,8 @@ const SHORT = {
   calibration: 'Playing-time calibration',
 };
 const label = (f) => META.factors[f]?.label ?? CAUSES[f]?.[0] ?? SHORT[f] ?? f;
+// escaped text for a label that the page writes in capitals: wRC+ keeps its own case
+const keepCase = (t) => esc(t).replace(/wRC\+/g, '<span class="kc">wRC+</span>');
 const short = (f) => SHORT[f] ?? CAUSES[f]?.[0] ?? label(f);
 
 init().catch((e) => {
@@ -104,7 +106,7 @@ function renderPlayer() {
     .map((k) => {
       const s = stats.find((x) => x.key === k);
       const e = player.s[k]?.[basis];
-      return e ? `<div class="kpi"><b>${fmtValue(e.v, s.kind, s.kind === 'pt' ? 0 : s.dp)}</b><span>${esc(k)}</span></div>` : '';
+      return e ? `<div class="kpi"><b>${fmtValue(e.v, s.kind, s.kind === 'pt' ? 0 : s.dp)}</b><span>${keepCase(k)}</span></div>` : '';
     })
     .join('');
   const sub = [entry.t === 'FA' ? 'Free agent' : entry.t, entry.pos, entry.age ? `age ${Math.floor(entry.age)}` : null]
@@ -165,7 +167,7 @@ function baseLabel(bk, kind) {
 function renderWaterfall() {
   const m = model();
   const s = statInfo();
-  $('#wf-title').textContent = `${s.label}: from the league average to the projection`;
+  $('#wf-title').innerHTML = `${keepCase(s.label)}: from the league average to the projection`;
   if (!m) {
     $('#wf').innerHTML = '<p class="foot">No ledger for this stat.</p>';
     $('#wf-table').innerHTML = '';
