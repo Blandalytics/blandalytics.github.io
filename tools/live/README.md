@@ -15,6 +15,7 @@ speeds, and only games that turn out to be tracked get the full feed.
 |---|---|
 | `src/index.js` | `scheduled()` polls and writes; `fetch()` serves `live/` and `data/` read-only |
 | `test/poll.mjs` | `npm test`, offline: `poll()` against a stubbed Stats API — a failing or malformed feed costs no other writes, a failed write is retried, a finished game's last write waits for its feed, the arm angles are re-checked |
+| `test/dev_entry.js` | the module `npm run dev` runs: the handlers alone |
 | `test/harness.mjs` | `npm test`: one cron pass against an in-memory bucket, plus the probe on games with known answers |
 | `src/cards/pack.js` | reads a model pack (written by `tools/pitcher_card/model_pack.py`, layout there) as zero-copy typed arrays |
 | `src/cards/trees.js` | LightGBM and XGBoost tree ensembles evaluated from a pack, matching the Python libraries bit for bit on raw scores / margins |
@@ -64,7 +65,9 @@ ten polls.
 
 The site reads the bucket's own domain, `https://data.blandalytics.com/live/...`.
 `fetch()` serves the same keys at `https://blandalytics-live.blandalytics.workers.dev/`
-for `wrangler dev` and as a fallback.
+for `wrangler dev` and as a fallback, as HTTP expects: one byte range is a `206` with
+`Content-Range` (a multi-range request gets the whole object, a range past the end a
+`416`), a matching `If-None-Match` is a `304`, a failed `If-Match` a `412`.
 
 ## Live pitcher cards
 
@@ -135,4 +138,6 @@ curl.exe "http://127.0.0.1:8787/__scheduled"       # fire the cron handler once
 curl.exe  http://127.0.0.1:8787/live/today.json    # read what it wrote
 ```
 
-Add `--remote` to `wrangler dev` to run against the real bucket instead.
+`npm run dev` starts from `test/dev_entry.js`, which re-exports only the handlers: workerd
+refuses the constants `src/index.js` exports for the tests. Add `--remote` to `wrangler dev`
+to run against the real bucket instead.

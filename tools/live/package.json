@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --test-scheduled",
+    "dev": "wrangler dev test/dev_entry.js --test-scheduled",
     "deploy": "wrangler deploy",
     "tail": "wrangler tail",
     "test": "node test/trees.mjs && node test/poll.mjs && node test/harness.mjs"

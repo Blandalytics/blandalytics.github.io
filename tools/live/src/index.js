@@ -94,20 +94,57 @@ export default {
       return new Response("not found", { status: 404, headers: CORS });
     }
 
-    const obj = await env.BUCKET.get(key, {
-      onlyIf: request.headers,   // honours If-None-Match -> 304
-      range: request.headers,
-    });
+    // one byte range is served as a 206 (hyparquet reads Parquet footers this way); a
+    // multi-range request gets the whole object, which HTTP allows
+    const h = request.headers;
+    const range = h.has("range") && !h.get("range").includes(",") ? h : undefined;
+    let obj;
+    try {
+      obj = await env.BUCKET.get(key, { onlyIf: h, range });
+    } catch (err) {
+      // a range that starts past the end of the object: R2 may reject it here...
+      const head = range && (await env.BUCKET.head(key));
+      if (!head) throw err;
+      return new Response(null, { status: 416, headers: { ...CORS, "Content-Range": `bytes */${head.size}` } });
+    }
     if (!obj) return new Response("not found", { status: 404, headers: CORS });
 
     const headers = new Headers(CORS);
     obj.writeHttpMetadata(headers);
     headers.set("ETag", obj.httpEtag);
-    headers.set("Content-Length", String(obj.size));
-    if (!("body" in obj)) return new Response(null, { status: 304, headers });
-    return new Response(request.method === "HEAD" ? null : obj.body, { headers });
+    headers.set("Accept-Ranges", "bytes");
+    if (!("body" in obj)) return new Response(null, { status: failedPrecondition(h, obj), headers });
+    // ...and the local simulator returns the whole object instead, so check the start here too
+    const first = range ? /^bytes=(\d+)-/.exec(h.get("range"))?.[1] : undefined;
+    if (first != null && Number(first) >= obj.size) {
+      await obj.body.cancel();
+      return new Response(null, { status: 416, headers: { ...CORS, "Content-Range": `bytes */${obj.size}` } });
+    }
+    const span = range ? byteSpan(obj.range, obj.size) : null;
+    if (span) headers.set("Content-Range", `bytes ${span.start}-${span.end}/${obj.size}`);
+    headers.set("Content-Length", String(span ? span.end - span.start + 1 : obj.size));
+    return new Response(request.method === "HEAD" ? null : obj.body, { status: span ? 206 : 200, headers });
   },
 };
+
+/** The bytes R2 returned for a ranged read, as an inclusive [start, end]. */
+function byteSpan(r, size) {
+  if (!r) return null;
+  const start = r.suffix != null ? Math.max(size - r.suffix, 0) : (r.offset ?? 0);
+  const end = r.suffix != null ? size - 1 : Math.min(start + (r.length ?? size - start), size) - 1;
+  return end >= start ? { start, end } : null;
+}
+
+/** Which condition stopped a get: a failed If-Match or If-Unmodified-Since is 412; a failed
+ * If-None-Match or If-Modified-Since (a cache revalidating) is 304. */
+function failedPrecondition(h, obj) {
+  const ifMatch = h.get("if-match");
+  const tags = ifMatch?.split(",").map((t) => t.trim().replace(/^W\//, ""));
+  if (tags && !tags.includes("*") && !tags.includes(obj.httpEtag)) return 412;
+  const since = Date.parse(h.get("if-unmodified-since") ?? "");
+  if (since && Math.floor(obj.uploaded.getTime() / 1000) * 1000 > since) return 412;
+  return 304;
+}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
