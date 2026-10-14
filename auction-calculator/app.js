@@ -2,7 +2,7 @@
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket, and the
 // positions come from a third, last season's games by position.
 
-import * as C from "./calc.js?v=16";
+import * as C from "./calc.js?v=17";
 import * as R from "./risk.js?v=1";
 
 const $ = (id) => document.getElementById(id);
@@ -20,6 +20,7 @@ const RISK_FILES = { h: FILES.h.replace("_auction", "_risk").replace(/\.csv$/, "
 const RISK_BASIS = FILES.h.includes("_ev") ? "ev" : "healthy";
 const STORE = "auction-calculator:v1";
 const VIEW_STORE = "auction-calculator:view";
+const IMPACT_STORE = "auction-calculator:impact";
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
 const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
 const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "span", "curve", "weeks", "phi", "pt_cv", ...SLOT_IDS, ...PSLOT_IDS];
@@ -535,8 +536,11 @@ function showLock() {
   $("lock_tip").setAttribute("aria-label", tip);
 }
 
-// A row's stats and stat dollars on one side: its own, or a two-way player's pitching
-const statsOf = (p, side) => (p.type === side ? p.stats : side === "p" && p.twoWay ? p.twoWay.stats : null);
+// A row's stats and stat dollars on one side: its own, or a two-way player's pitching. With
+// Roster impact on, the stats are his line with the time he doesn't play filled at replacement
+const impact = () => $("impact").checked && !$("impact").disabled && view() === "stats";
+const lineOf = (r) => (impact() && r.full ? r.full : r.stats);
+const statsOf = (p, side) => (p.type === side ? lineOf(p) : side === "p" && p.twoWay ? lineOf(p.twoWay) : null);
 const stat$Of = (p, side) => (!p.breakdown ? null : p.type === side ? p.breakdown.stats : side === "p" ? p.breakdown.pstats || null : null);
 // What a row's position tooltip says: the games his positions come from, where he's priced, a
 // locked SP's share, a two-way player's use
@@ -632,6 +636,9 @@ function breakdownColumns() {
   return [...base, ...result.valueCols.h.map((c, i) => stat("h", c, i)), ...result.valueCols.p.map((c, i) => stat("p", c, i))];
 }
 const GROUPS = { h: "Hitting", p: "Pitching", v: "Value", h$: "Hitting $", p$: "Pitching $" };
+const groupLabel = (g) => GROUPS[g] + (impact() && (g === "h" || g === "p") ? " · roster impact" : "");
+// The playing-time cell's note under Roster impact: how much of it is replacement
+const filledTip = (s, cat) => (s && s.filled > 0.05 ? `Includes ${fmt(cat, s.filled)} ${cat} of replacement production` : "");
 
 function columns() {
   // The dollars sit by the name, so they're on screen on a phone too
@@ -641,6 +648,7 @@ function columns() {
     key: `${type}:${cat}`, label: cat, group: type, first,
     get: (p) => (statsOf(p, type) ? statsOf(p, type)[cat] : NaN), cell: (p) => (statsOf(p, type) ? fmt(cat, statsOf(p, type)[cat]) : ""),
     ...(result.valueCols[type].includes(cat) ? heatOf(type, cat) : {}),
+    ...(first && impact() ? { tip: (p) => filledTip(statsOf(p, type), cat) } : {}),
   });
   if (view() === "value" && result.valueCols) return [...info, ...breakdownColumns()];
   return [
@@ -695,6 +703,7 @@ function matchesPos(p, pos) {
 }
 
 function render() {
+  $("impact").disabled = view() !== "stats" || !result.players.some((p) => p.full);
   const cols = columns();
   const col = cols.find((c) => c.key === sort.key) || (sort = { key: "value", dir: -1 }, VALUE_COL);
   const q = fold($("search").value.trim());
@@ -717,7 +726,7 @@ function render() {
     if (last && last.group === c.group) last.n++;
     else runs.push({ group: c.group, n: 1 });
   }
-  const head = `<thead><tr>${runs.map((r) => (r.group ? `<th colspan="${r.n}" class="gp">${GROUPS[r.group]}</th>` : `<th colspan="${r.n}"></th>`)).join("")}</tr><tr>`
+  const head = `<thead><tr>${runs.map((r) => (r.group ? `<th colspan="${r.n}" class="gp">${groupLabel(r.group)}</th>` : `<th colspan="${r.n}"></th>`)).join("")}</tr><tr>`
     + cols.map((c) => {
       const cls = [c.text ? "l" : "", c.key === "name" ? "name" : "", c.frozen ? "frz" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
       const aria = c.key === sort.key ? ` aria-sort="${sort.dir < 0 ? "descending" : "ascending"}"` : "";
@@ -767,6 +776,11 @@ $("table").addEventListener("click", (e) => {
 let searchTimer = 0;
 $("search").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => result && render(), 100); });
 $("pos").addEventListener("change", () => result && render());
+$("impact").addEventListener("change", () => {
+  try { localStorage.setItem(IMPACT_STORE, $("impact").checked ? "1" : ""); } catch { /* private mode */ }
+  if (result) render();
+});
+try { $("impact").checked = localStorage.getItem(IMPACT_STORE) === "1"; } catch { /* private mode */ }
 document.querySelectorAll('input[name="view"]').forEach((r) => r.addEventListener("change", () => {
   try { localStorage.setItem(VIEW_STORE, view()); } catch { /* private mode */ }
   if (result) render();

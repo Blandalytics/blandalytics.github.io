@@ -67,6 +67,7 @@ button.tip{display:inline-grid; place-items:center; flex:none; width:15px; heigh
   color:var(--faint); font:italic 600 10px/1 Georgia,serif; cursor:help}
 button.tip:hover:not(:disabled),button.tip:focus-visible{color:var(--ink); border-color:var(--faint); background:none}
 label.check button.tip{margin-left:-2px}
+label.check.impact{margin:0; align-self:flex-end; padding-bottom:6px}
 #settings label[data-tip],.scarcity [data-tip]{cursor:help}
 #tip{position:fixed; z-index:20; max-width:280px; padding:7px 10px; background:var(--raise); border:1px solid var(--rule); border-radius:6px;
   box-shadow:0 6px 18px rgba(0,0,0,.35); color:var(--ink); font-size:12.5px; line-height:1.45; pointer-events:none}
@@ -300,6 +301,7 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
             <label data-tip="Each player's dollars split into the min bid, the baseline, his position, playing time and each stat"><input type="radio" name="view" value="value">Value breakdown</label>
           </div>
         </fieldset>
+        <label class="check impact" data-tip="Each player's stats with the time he doesn't play filled by replacement production for his role, up to a regular's playing time: what his roster spot gives you over a season. The same fill the dollars price (Fill missing playing time)"><input id="impact" type="checkbox"><span>Roster impact</span></label>
         <button type="button" id="download" disabled>Download CSV</button>
       </div>
       <p id="status" class="status">Loading projections…</p>
@@ -313,6 +315,6 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
   </div>
 </main>
 <div id="tip" role="tooltip" hidden></div>
-<script type="module" src="app.js?v=24"></script>
+<script type="module" src="app.js?v=25"></script>
 </body>
 </html>
