@@ -15,16 +15,20 @@ the page can draw early and sharpen.
               s.rosters(), s.final(), s.pool_json()
 
 cfg keys (all optional): mode ("snake" | "auction"), slot (1-based seat), sims, seed, format
-("roto" | "h2h"), weeks, playoff_teams, payout ("winner" | "playoffs"), objective (None: the payout's;
-"win" | "playoff" | "champ" | "points"), mock, dnd (names), per_pos, board, keep (pool size per side, x
-the drafted count), sigma_market, sigma_team, bench_share, outcomes (seasons per play-out), chunk,
-auto_below ($: lots worth less are bid on by value without a stop), n_drain, n_target (the nomination
-candidates, Draft.nominees).
+("roto" | "h2h"), weeks, playoff_teams, payout ("winner" | "playoffs"), objective (None: the default;
+"payout": the payout's measure; "win" | "playoff" | "champ" | "points"), mock, dnd (names), per_pos,
+board, keep (pool size per side, x the drafted count), sigma_market, sigma_team, bench_share, outcomes
+(seasons per play-out), chunk, auto_below ($: lots worth less are bid on by value without a stop),
+n_drain, n_target (the nomination candidates, Draft.nominees), bid_cap ("value", the default: the
+recommended maximum bid is at most the value bid; "none": the break-even alone).
 
-The objective follows the payout (the user's decision, 2026-10-13): winner-take-all -> win% (in a
-head-to-head league the title), playoffs -> playoff% (head-to-head: the playoff share; roto: the share
-of seasons in the top playoff_teams by roto points).  "points" (mean roto points) is the option.  The
-auction's break-even bid uses the same objective.
+The default objective (the user's decisions, 2026-10-13, after part 3's 952 rooms, DESIGN.md section
+13): in roto, mean roto points; in head-to-head, the payout's measure (playoffs -> playoff%,
+winner-take-all -> title%).  The payout's measure in roto (win%, or the share of seasons in the top
+playoff_teams) is the option "payout".  The auction's break-even bid uses the same objective, and the
+recommended maximum bid is the break-even capped at the value bid (Draft.user_value_bid: the
+calculator's $ at the user's inflation): the uncapped break-even overpaid (it wins the lots whose
+break-even its noise puts too high).
 
 Each result also joins risk.js (the table's `risk` fields): the risk-aware $ before the draft, and CE
 recomputed with the engine's M, S, H of the user's team at this stop (ce.py; the plan's R8 step 2),
@@ -45,12 +49,20 @@ from pool import Pool
 
 DEFAULTS = dict(mode="snake", slot=1, sims=200, seed=20270401, format=None, weeks=None, playoff_teams=6, payout=None, objective=None,
                 mock=True, dnd=[], per_pos=1, board=6, keep=2.0, sigma_market=0.15, sigma_team=0.10, bench_share=0.25, outcomes=8,
-                chunk=20, auto_below=0.0, n_drain=5, n_target=2)  # fmt: skip
+                chunk=20, auto_below=0.0, n_drain=5, n_target=2, bid_cap="value")  # fmt: skip
 OBJECTIVE = {"win": WIN, "playoff": PLAYOFF, "champ": CHAMP, "points": PTS}
 PAYOUTS = ("winner", "playoffs")
-# the objective each payout pays on, by the league's format
+# the measure each payout pays on, by the league's format
 PAYOUT_OBJECTIVE = {("winner", "roto"): "win", ("winner", "h2h"): "champ", ("playoffs", "roto"): "playoff", ("playoffs", "h2h"): "playoff"}
 ENGINE_OVER_RULE = 2.0  # paired standard errors the engine's nomination must gain to replace the rule's
+
+
+def objective_of(objective, payout, fmt):
+    """The objective of a cfg value: None -> the default (roto: mean roto points; head-to-head: the payout's
+    measure), "payout" -> the payout's measure, else the named measure."""
+    if objective is None:
+        return "points" if fmt == "roto" else PAYOUT_OBJECTIVE[(payout, fmt)]
+    return PAYOUT_OBJECTIVE[(payout, fmt)] if objective == "payout" else objective
 
 
 class Session:
@@ -63,9 +75,12 @@ class Session:
         self.payout = c["payout"] or ("playoffs" if self.lg.format == "h2h" else "winner")
         if self.payout not in PAYOUTS:
             raise ValueError("payout is winner or playoffs")
-        self.objective = c["objective"] or PAYOUT_OBJECTIVE[(self.payout, self.lg.format)]
+        self.objective = objective_of(c["objective"], self.payout, self.lg.format)
         if self.objective not in OBJECTIVE:
-            raise ValueError("objective is win, playoff, champ or points")
+            raise ValueError("objective is payout, win, playoff, champ or points")
+        c["bid_cap"] = None if c["bid_cap"] in (None, "none") else c["bid_cap"]
+        if c["bid_cap"] not in (None, "value"):
+            raise ValueError("bid_cap is value or none")
         self.log_fn("reading the outcome draws")
         self.pool = Pool(table, self.lg, {"h": risk_h, "p": risk_p}, keep=float(c["keep"]))
         dnd = [i for nm in c["dnd"] for i in self.pool.by_name(nm)[:1]]
@@ -462,8 +477,14 @@ class Session:
             ce_bid = self.draft.user_value_bid(j, lot_ce["ce_usd"]) if lot_ce["ce_usd"] is not None else None
             res["lot"] = {**self.player(j), **lot_ce, "ce_bid": ce_bid, "expected_price": self.draft.expected_price(j),
                           "own_price": self.draft.own_price(j)}  # fmt: skip
-            res["best"] = {"cand": ("bid", be["max_bid"]), "row": {**self.player(j), "kind": "bid", "amount": be["max_bid"],
-                           "why": "break-even", "p_star": be["p_star"], "win": rows[0]["win"], "roto": rows[0]["roto"]}}  # fmt: skip
+            # the recommended maximum bid: the break-even, capped at the value bid (bid_cap "value")
+            vb = self.draft.user_value_bid(j)
+            amount = min(be["max_bid"], vb) if self.cfg["bid_cap"] == "value" else be["max_bid"]
+            res["bid"] = {"amount": amount, "break_even": be["max_bid"], "value_bid": vb, "capped": amount < be["max_bid"],
+                          "cap": self.cfg["bid_cap"]}  # fmt: skip
+            why = "break-even, capped at the value bid" if amount < be["max_bid"] else "break-even"
+            res["best"] = {"cand": ("bid", amount), "row": {**self.player(j), "kind": "bid", "amount": amount,
+                           "why": why, "p_star": be["p_star"], "win": rows[0]["win"], "roto": rows[0]["roto"]}}  # fmt: skip
         return res
 
     def nomination(self, cands, out, order, rows, obj):

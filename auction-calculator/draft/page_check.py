@@ -22,7 +22,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "py"))
 
 from dry_run import HIT_DIR, PIT_DIR, RISK_FILES  # noqa: E402
-from web_api import Session  # noqa: E402
+from web_api import Session, objective_of  # noqa: E402
 
 # the keys app.js reads
 STOP = {"done", "mode", "kind", "mock", "sims", "payout", "objective", "objective_label", "format", "playoff_teams", "teams", "user_team",
@@ -39,6 +39,7 @@ ROW = {"kind", "why", "roto", "finish", "win", "p10", "p90", "best", "gap", "obj
 PICK_ROW = ROW | PLAYER | {"ce", "ce_usd", "ce0"}
 BID_ROW = ROW | {"amount", "got", "paid"}
 LOT = PLAYER | {"ce", "ce_bid", "ce_usd", "expected_price", "own_price"}
+BID = {"amount", "break_even", "value_bid", "capped", "cap"}
 FINAL = {"roster", "standings", "sims", "cats", "objective", "objective_label", "format", "payout"}
 FINAL_ROW = {"team", "you", "roto", "finish", "win", "playoff", "champ", "team_value", "spent", "cats"}
 
@@ -57,7 +58,7 @@ SCENARIOS = [  # (name, form, the page's choices, priced stops before the draft 
     ("mock auction, Yahoo head-to-head, playoffs", H2H, dict(mode="auction", slot=2, mock=True, payout="playoffs", playoffTeams=6, objective="payout", autoBelow=12), 4),
     ("mock auction, Yahoo roto, mean roto points", YAHOO, dict(mode="auction", slot=7, mock=True, payout="winner", playoffTeams=4, objective="points", autoBelow=15), 3),
     ("live snake, Yahoo roto, playoffs (top 4 paid)", YAHOO, dict(mode="snake", slot=3, mock=False, payout="playoffs", playoffTeams=4, objective="payout"), 0),
-    ("live auction, Yahoo roto, winner take all", YAHOO, dict(mode="auction", slot=1, mock=False, payout="winner", playoffTeams=4, objective="payout"), 0),
+    ("live auction, Yahoo roto, winner take all, the default objective", YAHOO, dict(mode="auction", slot=1, mock=False, payout="winner", playoffTeams=4), 0),
 ]  # fmt: skip
 
 
@@ -104,7 +105,8 @@ def check_result(res, info, progress):
         has(be, {res["objective"], "points"}, "break_even")
         has(be[res["objective"]], {"max_bid", "p_star", "slope"}, "break_even")
         has(res["lot"], LOT, "lot")
-        assert res["best_row"]["amount"] == be[res["objective"]]["max_bid"]
+        has(res["bid"], BID, "bid")
+        assert res["best_row"]["amount"] == res["bid"]["amount"] == min(be[res["objective"]]["max_bid"], res["bid"]["value_bid"])
     return res
 
 
@@ -129,7 +131,8 @@ def run(name, form, choices, priced, sims, tmp, rh, rp, out=print):
     assert json.loads(table)["risk"]["objective"]["payout"] == choices["payout"]
     s = Session(cfg, table, rh, rp)  # as worker.js builds it
     has(json.loads(s.pool_json())[0], PLAYER, "pool row")
-    assert s.payout == choices["payout"] and (s.objective == "points") == (choices["objective"] == "points")
+    assert s.payout == choices["payout"] and s.objective == objective_of(choices.get("objective"), s.payout, s.lg.format)
+    assert s.cfg["bid_cap"] == "value"  # the page's default
     stops = []
     info = check_stop(json.loads(s.begin_stop()))
     if choices["mock"]:
@@ -183,7 +186,7 @@ def run(name, form, choices, priced, sims, tmp, rh, rp, out=print):
         progress = []
         res = check_result(json.loads(s.simulate(progress=lambda j: progress.append(json.loads(j)))), info, progress)
         stops.append(("bid", res))
-        r = ok(s.record(team=1, price=res["break_even"][res["objective"]]["max_bid"] or 1), "record your purchase")
+        r = ok(s.record(team=1, price=res["bid"]["amount"] or 1), "record your purchase")
         assert r["mine"]
         info = check_stop(json.loads(s.begin_stop()))
         assert len(info["roster"]) == 1 and info["budget"] < 260

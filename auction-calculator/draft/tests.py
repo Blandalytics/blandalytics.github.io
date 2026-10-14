@@ -327,7 +327,7 @@ def session_auction_flow():
     assert info["kind"] == "bid" and info["lot"]
     res = json.loads(s.simulate())
     be = res["break_even"][s.objective]
-    assert res["best_row"]["amount"] == be["max_bid"] and len(be["prices"]) >= 3
+    assert res["best_row"]["amount"] == res["bid"]["amount"] == min(be["max_bid"], res["bid"]["value_bid"]) and len(be["prices"]) >= 3
     r = json.loads(s.bid(res["best_row"]["amount"]))
     assert r["ok"] and r["result"]["price"] >= LG.min_bid
     # a real draft's entry
@@ -381,19 +381,24 @@ def ce_port_matches_risk_js():
 
 
 @test
-def objective_follows_payout():
+def objective_defaults_and_payout():
+    """The default objective (the user, 2026-10-13, after part 3): roto -> mean roto points, head-to-head -> the
+    payout's measure; "payout" gives the payout's measure in roto too."""
+
     def make(**kw):
         return Session(dict(sims=8, chunk=8, **kw), TABLE, RH, RP)
 
-    cases = [({}, "winner", "win", "win%"), (dict(payout="playoffs", playoff_teams=4), "playoffs", "playoff", "top-4%"),
+    cases = [({}, "winner", "points", "roto pts"), (dict(payout="playoffs", playoff_teams=4), "playoffs", "points", "roto pts"),
+             (dict(objective="payout"), "winner", "win", "win%"),
+             (dict(objective="payout", payout="playoffs", playoff_teams=4), "playoffs", "playoff", "top-4%"),
              (dict(format="h2h"), "playoffs", "playoff", "playoff%"), (dict(format="h2h", payout="winner"), "winner", "champ", "title%"),
-             (dict(objective="points"), "winner", "points", "roto pts")]  # fmt: skip
+             (dict(format="h2h", objective="points"), "playoffs", "points", "roto pts")]  # fmt: skip
     for kw, payout, objective, label in cases:
         s = make(**kw)
         assert (s.payout, s.objective, s.objective_label()) == (payout, objective, label), (kw, s.payout, s.objective)
         assert (s.eng.h2h is not None) == (s.lg.format == "h2h")
     # roto with a playoffs payout: the top-4 share of the roto standings, not the head-to-head model
-    s = make(payout="playoffs", playoff_teams=4, slot=4)
+    s = make(payout="playoffs", playoff_teams=4, slot=4, objective="payout")
     json.loads(s.begin_stop())
     res = json.loads(s.simulate())
     assert res["objective"] == "playoff" and res["target"]["place"] == 4 and res["target"]["unit"] == "roto points"
@@ -472,7 +477,7 @@ def live_auction_entries():
     info = json.loads(s.begin_stop())
     assert info["kind"] == "bid" and info["lot"]["i"] == i and info["nominator"] == 3
     res = json.loads(s.simulate())
-    assert res["lot"]["i"] == i and res["lot"]["ce_bid"] is not None and res["break_even"]["win"]["max_bid"] >= 0
+    assert res["lot"]["i"] == i and res["lot"]["ce_bid"] is not None and res["break_even"][s.objective]["max_bid"] >= 0
     assert not json.loads(s.record(team=3, price=500))["ok"]  # more than team 3 can pay
     assert not json.loads(s.record(index=j, team=3, price=40))["ok"]  # not the player on the block
     r = json.loads(s.record(team=3, price=40))
@@ -487,6 +492,24 @@ def live_auction_entries():
     assert json.loads(s.undo())["ok"]
     info = json.loads(s.begin_stop())
     assert info["kind"] == "bid" and s.draft.budget[0] == LG.budget  # back to the lot on the block
+
+
+@test
+def bid_cap_at_value_bid():
+    """The recommended maximum bid is the break-even capped at the value bid (bid_cap "value", the default since
+    part 3), or the break-even alone (bid_cap "none"); the cap leaves the break-even as it is (the same worlds)."""
+    got = {}
+    for cap in ("value", "none"):
+        s = Session(dict(mode="auction", slot=5, sims=12, chunk=12, seed=77, auto_below=0.0, bid_cap=cap), TABLE, RH, RP)
+        assert json.loads(s.begin_stop())["kind"] == "bid"
+        res = json.loads(s.simulate())
+        be, b = res["break_even"][s.objective]["max_bid"], res["bid"]
+        vb = s.draft.user_value_bid(s.draft.lot[0])
+        want = min(be, vb) if cap == "value" else be
+        assert (b["break_even"], b["value_bid"], b["amount"], res["best_row"]["amount"], b["capped"]) == (be, vb, want, want, want < be), (cap, b)
+        assert json.loads(s.auto())["ok"]
+        got[cap] = be
+    assert got["value"] == got["none"]
 
 
 @test
@@ -531,7 +554,7 @@ def break_even_repeatability():
     n, seeds = (40, 3) if QUICK else (200, 4)
     rows = []
     for seed in range(seeds):
-        s = Session(dict(mode="auction", slot=5, sims=n, chunk=n, seed=77, auto_below=0.0), TABLE, RH, RP)
+        s = Session(dict(mode="auction", slot=5, sims=n, chunk=n, seed=77, auto_below=0.0, objective="payout"), TABLE, RH, RP)
         info = json.loads(s.begin_stop())
         s.rng = np.random.default_rng(1000 + seed)  # the same lot, other worlds
         res = json.loads(s.simulate())

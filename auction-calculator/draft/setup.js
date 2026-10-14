@@ -99,7 +99,8 @@ export function buildTable(C, R, H, P, s, files, rs) {
 
 /**
  * The worker's cfg for web_api.Session. choices: { mode, slot, mock, sims, seed, objective ("payout"
- * | "points"), payout ("winner" | "playoffs"), playoffTeams, autoBelow, dnd }. The format follows
+ * | "points"; anything else: the engine's default, roto points in roto and the payout in
+ * head-to-head), payout ("winner" | "playoffs"), playoffTeams, autoBelow, dnd }. The format follows
  * the calculator (all-play is played as head-to-head).
  */
 export function sessionConfig(choices, s, rs) {
@@ -117,7 +118,7 @@ export function sessionConfig(choices, s, rs) {
     weeks: s.weeks,
     payout,
     playoff_teams: Math.round(Number(choices.playoffTeams ?? rs.playoffTeams) || 4),
-    objective: choices.objective === "points" ? "points" : null,
+    objective: choices.objective === "points" || choices.objective === "payout" ? choices.objective : null,
     auto_below: Math.max(0, Number(choices.autoBelow) || 0),
     dnd: Array.isArray(choices.dnd) ? choices.dnd : [],
   };

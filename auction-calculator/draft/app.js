@@ -2,11 +2,11 @@
 // console driven by the worker (worker.js -> py/web_api.py). The league and the payout come from the
 // calculator's saved settings (setup.js); the projections and the risk files load as the calculator
 // loads them (?data=<base>, ?riskdata=<base>).
-import * as C from "../calc.js?v=15";
+import * as C from "../calc.js?v=16";
 import * as R from "../risk.js?v=1";
-import { STORE, buildTable, draftRisk, riskSettingsFrom, sessionConfig, settingsFrom, unsupported } from "./setup.js?v=1";
+import { STORE, buildTable, draftRisk, riskSettingsFrom, sessionConfig, settingsFrom, unsupported } from "./setup.js?v=2";
 
-const VERSION = "1";   // bump with every deploy: it busts the cache on the worker and the Python files
+const VERSION = "2";   // bump with every deploy: it busts the cache on the worker and the Python files
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
@@ -71,6 +71,8 @@ function renderLeague() {
   $("playoffs").max = Math.max(1, S.teams - 1);
   $("payout").value = RS.payout;
   $("playoffs").value = Math.min(RS.playoffTeams, S.teams - 1);
+  // the default objective (R8 part 3, 952 mock drafts): roto points in roto, the payout in head-to-head
+  $("objective").value = S.format === "h2h" || S.format === "allplay" ? "payout" : "points";
   showFields();
 }
 function showFields() {
@@ -78,8 +80,8 @@ function showFields() {
   $("auto_field").hidden = $("mode").value !== "auction" || $("mock").value !== "1";
   const h2h = S.format === "h2h" || S.format === "allplay";
   $("payout_note").textContent = $("payout").value === "winner"
-    ? (h2h ? "Ranks by title% (the head-to-head winner)" : "Ranks by win%: first place in the roto standings")
-    : (h2h ? "Ranks by playoff%" : "Ranks by the share of seasons in the paid places");
+    ? (h2h ? "Pays on title% (the head-to-head winner)" : "Pays on win%: first place in the roto standings")
+    : (h2h ? "Pays on playoff%" : "Pays on the share of seasons in the paid places");
 }
 for (const id of ["payout", "mode", "mock"]) $(id).addEventListener("change", showFields);
 
@@ -291,13 +293,16 @@ function wireButtons(root) {
 }
 
 function renderLot(res) {
-  const lot = res.lot, be = res.break_even || {};
+  const lot = res.lot, be = res.break_even || {}, bid = res.bid || {};
   const main = be[res.objective] || {}, pts = res.objective !== "points" ? be.points : null;
   const label = res.objective === "points" ? "roto points" : res.objective_label;
   const cols = measureCols(res);
+  const capNote = bid.cap === "value" ? " The break-even is noisy, and a bidder wins the lots it overrates, so the maximum bid is capped at the value bid (it paid off in 952 mock drafts)." : "";
   let html = `<h2>The maximum bid${progressText(res)}</h2><div class="lot">`
-    + `<div class="key" title="The break-even price on ${esc(label)}: buying him at this price is as good as passing (forced buys at five prices, each paired with the pass in the same worlds; the line through their gains crosses zero here). p* ${f1(main.p_star)}"><span>max bid on ${esc(label)}</span><b>${whole(main.max_bid)}</b></div>`
-    + (pts ? `<div title="The same break-even on mean roto points. p* ${f1(pts.p_star)}"><span>max bid on roto points</span><b>${whole(pts.max_bid)}</b></div>` : "")
+    + `<div class="key" title="The most to bid: the break-even on ${esc(label)}${bid.cap === "value" ? ", capped at the value bid" : ""}.${capNote}"><span>max bid${bid.capped ? " (capped)" : ""}</span><b>${whole(bid.amount ?? main.max_bid)}</b></div>`
+    + `<div title="The break-even price on ${esc(label)}: buying him at this price is as good as passing (forced buys at five prices, each paired with the pass in the same worlds; the line through their gains crosses zero here). p* ${f1(main.p_star)}"><span>break-even on ${esc(label)}</span><b>${whole(main.max_bid)}</b></div>`
+    + (pts ? `<div title="The same break-even on mean roto points. p* ${f1(pts.p_star)}"><span>break-even on roto points</span><b>${whole(pts.max_bid)}</b></div>` : "")
+    + (bid.value_bid !== undefined ? `<div title="The calculator's $ at your inflation (the bench share if he would not start)"><span>value bid</span><b>${whole(bid.value_bid)}</b></div>` : "")
     + `<div class="ce" title="The specification's maximum bid (6.5): CE now (risk.js's EffValue and Var_eff with your team's M, S, H; ${f2(lot.ce)} SGP) in the calculator's $, at your inflation, the bench share if he would not start"><span>CE max bid</span><b>${whole(lot.ce_bid)}</b></div>`
     + `<div title="The calculator's $"><span>calculator $</span><b>${usd(lot.value)}</b></div>`
     + `<div title="risk.js's risk-aware $ before the draft"><span>risk-aware $</span><b>${usd(lot.risk)}</b></div>`
@@ -311,7 +316,7 @@ function renderLot(res) {
     html += `<tr class="${o.kind === "bid" ? "baseline" : ""}"><td class="l">${esc(name)}</td><td>${pct(o.got)}</td><td>${usd(o.paid)}</td>`
       + cols.map(([key]) => measureCell(key, o[key])).join("") + `<td>${f1(o.p10)}</td><td>${f1(o.p90)}</td><td>${f2(o.finish)}</td>${gapCell(res, o.gap)}</tr>`;
   }
-  html += `</tbody></table></div><p class="note">Each buy forces you to buy him at that price; the rest of the auction then plays out against the rivals' simulated bids. The maximum bid is where buying stops beating passing${isNum(main.slope) ? ` (the gain falls ${gapText(res, -main.slope)} per $1)` : ""}.</p>`;
+  html += `</tbody></table></div><p class="note">Each buy forces you to buy him at that price; the rest of the auction then plays out against the rivals' simulated bids. The break-even is where buying stops beating passing${isNum(main.slope) ? ` (the gain falls ${gapText(res, -main.slope)} per $1)` : ""}${bid.cap === "value" ? "; the maximum bid is the lower of the break-even and the value bid" : ""}.</p>`;
   $("options").innerHTML = html;
 }
 

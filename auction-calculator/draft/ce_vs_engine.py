@@ -4,8 +4,8 @@
    objective (the full Monte Carlo method of the specification, section 8) against their order by CE
    now (risk.js's EffValue and Var_eff with the engine's M, S, H of the user's team: section 6.4, the
    approximation).  A disagreement on the top option is reported with its paired standard error.
-2. Auction: at each priced lot of a mock auction, the break-even maximum bid on the objective (win%
-   by default) and on mean roto points, against the CE maximum bid (section 6.5), the calculator's $
+2. Auction: at each priced lot of a mock auction, the break-even maximum bid on the objective (the
+   payout's measure: win% in roto winner-take-all) and on mean roto points, against the CE maximum bid (section 6.5), the calculator's $
    and the risk-aware $.  Then the same room drafted by each objective (one room each: indicative
    only; part 3 runs many rooms).
 
@@ -52,7 +52,7 @@ def spearman(a, b):
 
 
 def snake(inputs, fmt, slot, stops, sims, seed, rows, out):
-    s = Session(dict(mode="snake", slot=slot, sims=sims, chunk=sims, seed=seed, format=fmt), *inputs)
+    s = Session(dict(mode="snake", slot=slot, sims=sims, chunk=sims, seed=seed, format=fmt, objective="payout"), *inputs)
     out("\nsnake, %s, seat %d, objective %s (%s), %d drafts per option" % (s.lg.format, slot, s.objective_label(), s.payout, sims))
     out("  %-5s %-26s %-26s %4s %6s  %s" % ("pick", "engine's top", "CE now's top", "rho", "z", "the CE top against the engine's (objective, pp)"))
     agree = 0
@@ -79,7 +79,7 @@ def snake(inputs, fmt, slot, stops, sims, seed, rows, out):
     out("  the top option agrees at %d of %d stops" % (agree, stops))
 
 
-def auction(inputs, slot, lots, sims, seed, auto_below, rows, out, objective=None, quiet=False):
+def auction(inputs, slot, lots, sims, seed, auto_below, rows, out, objective="payout", quiet=False):
     s = Session(dict(mode="auction", slot=slot, sims=sims, chunk=sims, seed=seed, auto_below=auto_below, objective=objective), *inputs)
     if not quiet:
         out("\nauction, seat %d, objective %s (%s), %d drafts per option, lots under $%g unpriced" % (slot, s.objective_label(), s.payout, sims, auto_below))
@@ -145,7 +145,7 @@ def main(argv=None):
             print("  the objective's max bid is above the points' at %d of %d lots, below at %d" % ((w > p).sum(), len(w), (w < p).sum()))
     if "rooms" not in a.skip:  # the same room (seed) drafted by each objective, with the rule's nominations
         print("\nthe same mock auction room, drafted on each objective (all lots priced down to $%g)" % a.auto_below)
-        for objective in (None, "points"):
+        for objective in ("payout", "points"):
             auction(inputs, a.slot, 10**6, 60, a.seed, a.auto_below, [], print, objective=objective, quiet=True)
     if a.csv:
         with open(a.csv, "w", encoding="utf-8-sig", newline="") as f:  # UTF-8 with a BOM, for Excel

@@ -108,7 +108,7 @@ details[open] summary{margin-bottom:10px}
       <label><b>Rivals</b><select id="mock"><option value="1">Mock draft: the rivals draft themselves</option><option value="0">Live draft: you enter every pick or sale</option></select></label>
       <label><b>Payout</b><select id="payout"><option value="winner">Winner take all</option><option value="playoffs">Playoffs</option></select><small id="payout_note"></small></label>
       <label id="playoffs_field"><b>Playoff teams</b><input id="playoffs" type="number" min="1" max="29" value="4"><small>Head-to-head: by record; roto: by standings points</small></label>
-      <label><b>Rank options by</b><select id="objective"><option value="payout">The payout (win% or playoff%)</option><option value="points">Mean roto points</option></select><small>Also sets the auction's maximum bid</small></label>
+      <label><b>Rank options by</b><select id="objective"><option value="points">Mean roto points</option><option value="payout">The payout (win%, playoff% or title%)</option></select><small>Default: roto points in roto, the payout in head-to-head (they did best in 952 mock drafts). Also sets the auction's maximum bid</small></label>
       <label><b>Simulated drafts per option</b><input id="sims" type="number" min="10" max="2000" value="100"><small>More is sharper and slower; the tables refine as they run</small></label>
       <label id="auto_field"><b>Lots that skip you</b><input id="auto_below" type="number" min="0" max="100" step="1" value="3"><small>Mock auction: lots worth less than this $ go by value, unpriced</small></label>
       <label><b>Seed</b><input id="seed" type="number" value="20270401"><small>The same settings and seed repeat a mock draft</small></label>
@@ -146,6 +146,6 @@ details[open] summary{margin-bottom:10px}
 
   <section id="final" class="card" hidden></section>
 </main>
-<script type="module" src="app.js?v=1"></script>
+<script type="module" src="app.js?v=2"></script>
 </body>
 </html>
