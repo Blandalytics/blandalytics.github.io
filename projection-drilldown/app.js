@@ -16,6 +16,7 @@ const SHORT = {
   detail: 'Sim details (IBB, SF, chance)',
   residual: 'Interaction of the factors',
   talent: 'Talent',
+  reversion: 'Reversion',
   regression: 'Pull toward the average',
   environment: 'League environment',
   list: 'Lists',
@@ -91,7 +92,7 @@ function render() {
     `Projections for ${m.season}, data of ${esc(m.generated.replace('T', ' '))}` +
     (m.tag ? ` (test runs ${esc(m.runs.hitting)} / ${esc(m.runs.pitching)})` : '') +
     `. Rates: exact Shapley values over the factors. Counting stats and $: simulations with each factor removed` +
-    (chk ? `; the interaction row averages ${(100 * chk.residual_share_max).toFixed(1)}% of the change at most` : '') +
+    (chk ? `; the interaction row is at most ${(100 * chk.residual_share_max).toFixed(1)}% of the change (for $, over the players worth $1 or more)` : '') +
     `. $: the Auction Calculator's values (12 teams, 5x5), ${state.basis === 'ev' ? 'expected' : 'healthy-season'} playing time.`;
 }
 
