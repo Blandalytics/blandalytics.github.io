@@ -33,10 +33,10 @@ const PERMANENT = "cards/index.json";
 const DATA_URL = "https://data.blandalytics.com";
 const CARD_CACHE = "public, max-age=60";
 const INDEX_CACHE = "public, max-age=15";
-const RECHECK_MS = 10 * 60_000; // how often a warm isolate looks for newer models
+const RECHECK_MS = 10 * 60_000; // how often a warm isolate looks for newer models and arm angles
 const MAX_PACKS = 400; // a full slate has fewer pitchers; the cap keeps memory in bounds
 
-// what a warm isolate keeps between ticks
+// what a warm isolate keeps between ticks (arms: year -> { boards, etag, checked })
 const cache = { bundle: null, etag: null, checked: 0, arms: new Map(), packs: new Map() };
 
 async function getJson(env, key) {
@@ -59,13 +59,21 @@ async function bundle(env, now) {
 }
 
 /** The season's arm angles for a game type, falling back to the regular season's board
- * as fetch.arm_angles does when Savant has not published the round. */
-async function arms(env, date, gameType) {
+ * as fetch.arm_angles does when Savant has not published the round. The nightly build
+ * rewrites the file (and a new season's appears), so a warm isolate looks again every
+ * RECHECK_MS and reloads it when its etag has changed. */
+async function arms(env, date, gameType, now) {
   const [y, m, d] = date.split("-").map(Number);
   const year = m < 3 || (m === 3 && d <= 25) ? y - 1 : y;
-  if (!cache.arms.has(year)) cache.arms.set(year, (await getJson(env, `cards/arms/${year}.json`)) ?? {});
-  const boards = cache.arms.get(year);
-  return boards[gameType] ?? boards.R ?? {};
+  let have = cache.arms.get(year);
+  if (!have || now - have.checked >= RECHECK_MS) {
+    const key = `cards/arms/${year}.json`;
+    const etag = (await env.BUCKET.head(key))?.etag ?? null;
+    if (!have || etag !== have.etag) have = { boards: (etag && (await getJson(env, key))) ?? {}, etag };
+    have.checked = now;
+    cache.arms.set(year, have);
+  }
+  return have.boards[gameType] ?? have.boards.R ?? {};
 }
 
 /** A pitcher's pack, kept for the day it was built for. */
@@ -129,9 +137,10 @@ export class LiveCards {
     }
   }
 
-  /** Rebuild the cards a game needs after its feed moved; returns how many were written. */
+  /** Rebuild the cards a game needs after its feed moved; returns how many were written,
+   * or null when the cards sit this poll out (so the poller retries a game's final pass). */
   async game(feed) {
-    if (!this.index) return 0;
+    if (!this.index) return null;
     const pk = feed.gameData.game.pk;
     const rows = gameRows(feed);
     if (!rows.length) return 0;
@@ -157,7 +166,7 @@ export class LiveCards {
     const pk = feed.gameData.game.pk;
     const date = feed.gameData.datetime.officialDate;
     const b = await bundle(this.env, this.now);
-    const arm = await arms(this.env, date, feed.gameData.game.type);
+    const arm = await arms(this.env, date, feed.gameData.game.type, this.now);
     const heights = new Map(Object.values(feed.gameData.players).map((p) => [p.id, heightFeet(p.height)]));
     const values = score(rows, b, { heights, only: new Set(todo) });
     let n = 0;
@@ -208,3 +217,6 @@ export class LiveCards {
     });
   }
 }
+
+// exposed for tests
+export { arms };

@@ -96,7 +96,7 @@ html = scorecard(824638)
 [blandalytics.com/live/](https://blandalytics.com/live/) — every game in progress,
 pitch by pitch. The scorecards are built the morning after; for games in progress
 a Cloudflare Worker in [`tools/live/`](tools/live/) polls the Stats API live feed
-every ~30s during game hours and writes trimmed JSON to an R2 bucket served at
+every ~30s while games are live and writes trimmed JSON to an R2 bucket served at
 `https://data.blandalytics.com`, which [`live/index.html`](live/index.html) reads
 directly (no build step; it re-fetches every 30s while the tab is visible). The
 Worker watches every league the API carries and probes each game for pitch
