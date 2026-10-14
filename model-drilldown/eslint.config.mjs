@@ -7,6 +7,11 @@ export default [
   js.configs.recommended,
   {
     files: ['**/*.js', '**/*.mjs'],
-    languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: globals.browser },
+    // ShareImage: /shared/share-image.js, loaded by a classic script tag before the modules
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.browser, ShareImage: 'readonly' },
+    },
   },
 ];
