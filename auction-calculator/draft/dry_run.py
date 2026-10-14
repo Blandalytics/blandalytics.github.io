@@ -88,9 +88,10 @@ def run(mode, table, rh, rp, slot=5, sims=100, seed=20270401, fmt=None, auto_bel
             got = "WON at $%d" % res_row["price"] if r["mine"] else "team %d at $%d" % (res_row["team"], res_row["price"])
             be = res.get("break_even") or {}
             pts = (be.get("points") or {}).get("p_star")
-            out("  lot %3d  %-24s %-8s $%5.1f  max bid $%-3d (on points $%s) -> %-17s pass: win %s roto %5.1f  (%d options, %.2f s)"
-                % (len(s.draft.log), lot["name"], lot["pos"], lot["value"], best["amount"], "-" if pts is None else "%.0f" % pts, got,
-                   pct(best["win"]), best["roto"], n_opt, dt))
+            bid = res.get("bid") or {}
+            out("  lot %3d  %-24s %-8s $%5.1f  max bid $%-3d (break-even $%s, value bid $%s, on points $%s) -> %-17s pass: win %s roto %5.1f  (%d options, %.2f s)"
+                % (len(s.draft.log), lot["name"], lot["pos"], lot["value"], best["amount"], bid.get("break_even", "-"), bid.get("value_bid", "-"),
+                   "-" if pts is None else "%.0f" % pts, got, pct(best["win"]), best["roto"], n_opt, dt))  # fmt: skip
         else:
             out("  nominate %-24s %-8s $%5.1f  (%d options, %.2f s)" % (best["name"], best["pos"], best["value"], n_opt, dt))
     t2 = time.time()

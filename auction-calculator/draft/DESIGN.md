@@ -101,7 +101,7 @@ At a rival's snake stop, the stop is priced as if the user were on the clock now
 **The decision.**
 
 * Snake: the options are ranked by the objective (section 12.2; ties go to roto points). The skip baseline is shown and is never recommended.
-* Auction: the maximum bid is the break-even price. The engine prices forced buys at 0.6, 0.8, 1.0, 1.2 and 1.4 × the expected price, paired with the pass in each world. It fits the mean gain over the pass as a line in the price, weighted by the standard error. The root of the line is the maximum bid. The argmax of noisy bid candidates is not used: it favors the noisiest (the highest) bids. The break-even is given for the objective and for roto points.
+* Auction: the maximum bid is the break-even price. The engine prices forced buys at 0.6, 0.8, 1.0, 1.2 and 1.4 × the expected price, paired with the pass in each world. It fits the mean gain over the pass as a line in the price, weighted by the standard error. The root of the line is the break-even. The argmax of noisy bid candidates is not used: it favors the noisiest (the highest) bids. The break-even is given for the objective and for roto points. Since part 4 the recommended maximum bid is the break-even capped at the value bid (section 13).
 * The baseline's play-outs also give O1–O3 of the user's team (section 12.3).
 
 ## 6. Head-to-head (the assumption)
@@ -188,21 +188,21 @@ The calculator's header links to the page ("Draft mode (beta)").
 | snake, the user's pick | priced; "take" | priced; "take" |
 | snake, a rival's pick | none (the rivals pick) | the user enters the pick; "Re-simulate" prices the stop |
 | auction, the user's nomination | priced (section 12.4); "nominate" | priced; "nominate", or the user enters a rival's nomination |
-| auction, a lot on the block | priced; the user's maximum bid (the break-even by default) against the mock room | priced; the user enters the winner and the price |
+| auction, a lot on the block | priced; the user's maximum bid (by default the break-even, capped at the value bid) against the mock room | priced; the user enters the winner and the price |
 | auction, a rival's nomination | none | the user enters the player and the nominator |
 
 A priced stop shows the options table (the calculator's $, the risk-aware $, CE now in $ and its rank, the objective, mean roto points, p10, p90, finish, the gap to the best, the share of worlds where the option is best); in an auction the lot (the break-even on the objective and on roto points, the CE maximum bid, the calculator's $, the risk-aware $, the room's expected price) and the forced buys; the expected category points (the baseline, then what each option adds, as `nhl_draft`'s second table); and the league's course by category. The header shows the user's roster, the budget and the maximum bid, the room's inflation, and the engine's M, S, H and z. At the end the page shows every team's odds over 200 seasons. Undo goes back one stop.
 
 ### 12.2 The objective
 
-The objective follows the payout (the user's decision of 2026-10-13; the user confirmed win% as the default, also for the break-even bid):
+Part 2 made the payout's measure the default objective (the user's decision of 2026-10-13). After part 3 the user changed the default (2026-10-13, section 13): mean roto points in roto, the payout's measure in head-to-head. The payout's measure stays an option in roto. The payout's measures:
 
 | Payout | Roto | Head-to-head |
 |---|---|---|
 | winner take all | win%: first in the roto standings | title%: the winner of the playoffs |
 | playoffs | top-P%: in the top P by roto points (risk.js's "playoffs") | playoff% |
 
-Mean roto points is the option. The auction's break-even uses the same measure; the page also shows the break-even on roto points.
+The auction's break-even uses the objective; the page also shows the break-even on roto points and the value bid. The recommended maximum bid is the lower of the break-even and the value bid (section 13).
 
 What the default does to the bids (`ce_vs_engine.py`, one mock auction room, seat 5, roto, 200 simulations, the first 20 lots of $5 or more): the break-even on win% is 0.90 × the calculator's $ (the median of the lots), on roto points 0.84 ×. Win% gives the higher maximum bid at 12 of the 20 lots and the lower at 7. Part 1's lot (Rice: $26 on win%, $9 on roto points) is an extreme case. In this room the rivals paid 1.1–1.3 × the value for the first lots (the winner's curse of section 4), so at either objective's bids the user bought only 2 of the 20 lots.
 
@@ -238,6 +238,32 @@ With the calculator's $ alone, E = U for every starter at the start, so the rule
 
 ### 12.5 Checks
 
-* `tests.py`: 24 tests. Part 2 adds: CE against risk.js, the objective of each payout, the head-to-head target and CE now, the nomination rule, the entries of a live auction and a live snake, the page's contract. `python tests.py --quick` takes about 35 s.
+* `tests.py`: 25 tests (part 4 adds the bid cap). Part 2 adds: CE against risk.js, the objective of each payout, the head-to-head target and CE now, the nomination rule, the entries of a live auction and a live snake, the page's contract. `python tests.py --quick` takes about 35 s.
 * `page_check.py`: 5 scenarios (a mock snake in an ESPN-like OBP roto league, a mock auction in a Yahoo head-to-head league with the playoffs payout, a mock auction on roto points, a live snake, a live auction). The page's JSON comes from `setup.js` under Node; each stop, result, action and final answer has every key that the page reads; the mock drafts play to the end. About 9 s.
 * The page in a browser (the desktop app's Browser pane, a local static server on port 8790 with the 2027 test files): the settings carry over from the calculator (a 10-team head-to-head league with the playoffs payout); a mock snake to the end; a mock auction (bids, a nomination, undo); a live auction (the user's nomination and its sale, a rival's nomination, the user's purchase). No console errors; no requests other than to the local server and Pyodide; no horizontal page scroll at 375 px.
+
+## 13. Parts 3 and 4: many rooms, and the defaults
+
+Part 3 (`part3_check.py`; the method, the assumptions and every table are in `part3/report.md`) drafted 952 rooms: 12 teams, the calculator's default Yahoo 5x5 league, the 2027 test files, each room scored on 500 seasons of the outcome draws. Each drafter played the same room in the same seat. The table gives each drafter minus the median-value drafter V in the same room, in points of the objective (the standard error in brackets):
+
+| Drafter | Snake, roto win% (48 rooms) | Snake, head-to-head playoff% (48) | Auction, roto win% (14) | Auction, head-to-head playoff% (14) |
+|---|---|---|---|---|
+| V, the calculator's $ board (its mean) | 13.4 | 58.3 | 14.5 | 60.9 |
+| The engine on the payout's measure | +5.4 (0.6) | +16.8 (1.5) | −5.8 (1.9) | +9.2 (2.5) |
+| The engine on mean roto points | +8.0 (0.8) | +4.4 (1.4) | +1.2 (2.0) | −5.6 (1.9) |
+| R, the risk-aware $ board | +1.2 (0.7) | +5.6 (1.2) | +2.8 (1.9) | +6.0 (1.3) |
+| C, CE now | +1.4 (0.7) | −8.2 (1.3) | −0.3 (1.8) | −8.0 (1.7) |
+
+1. Head-to-head: playoff% beats mean roto points (snake +12.4 (0.8), auction +14.8 (1.6)).
+2. Roto, winner take all: mean roto points beat win%, also on win% (snake +2.6 (0.7), auction +7.1 (1.1)).
+3. The auction's break-even on win% overpays. Its average is not higher (0.59 × the calculator's $, against 0.62 × on roto points), but it is noisier, and the engine wins mostly the lots that it overestimates: for players of $10 or more in the first third of the lots it paid 1.07 × the $ (V: 0.83 ×), and its roster was worth $239 (V: $310). 200 simulations helped (+8.2 (3.6), 4 rooms). The cap at the value bid gave +5.8 (1.3) over V in roto (8 rooms), and was neutral in head-to-head (−0.9 (2.7) against the uncapped engine, 4 rooms).
+4. The nomination rule: no evidence against it (4 rooms; the best player −2.3 (1.6), a random one −1.1 (1.7)).
+5. More simulations in a snake gain less than the change to roto points (roto: 200 +1.7 (1.0), 400 +0.6 (0.7)).
+6. Rivals that are not the engine's model (snake, 16 rooms): the engine still gains on V (market log-SD 0.30: roto +8.1 (2.2), head-to-head +8.4 (1.1); the calculator's $ alone: +6.2 (0.8), +20.1 (2.2)).
+7. C loses in head-to-head because it prices CE at the calculator's prices and takes fewer closers (1.9 RP against R's 2.3).
+
+Part 4 (the user's decisions of 2026-10-13):
+
+* The default objective in roto is mean roto points; head-to-head keeps the payout's measure (`web_api.objective_of`). The page's selector starts on the default and keeps the payout's measure as an option.
+* The recommended maximum bid in an auction is the break-even, capped at the value bid (`Draft.user_value_bid`: the calculator's $ at the user's inflation, the bench share for a bench player). The cfg key `bid_cap` ("value" by default, "none" for the break-even alone) sets it. The result's `bid` gives the amount, the break-even, the value bid and whether the cap applied.
+* `part3_check.py run --plan part4_auction part4_rivals` checks the new defaults in all 14 main auction rooms and against the other rival models (6 rooms each); `part3/report.md` section 4.6 has the results. `part3_check.py replay` runs stored jobs again: the change leaves part 3's rows as they were.
