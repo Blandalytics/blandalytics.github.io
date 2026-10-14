@@ -99,7 +99,7 @@ function render() {
 function renderPlayer() {
   const { entry, player, basis } = state;
   const stats = META.stats[entry.r];
-  const pick = entry.r === 'h' ? ['$', 'PA', 'HR', 'R', 'RBI', 'SB', 'AVG'] : ['$', 'IP', 'K', 'W', 'SV', 'ERA', 'WHIP'];
+  const pick = entry.r === 'h' ? ['$', 'PA', 'HR', 'R', 'RBI', 'SB', 'AVG', 'wRC+'] : ['$', 'IP', 'K', 'W', 'SV', 'ERA', 'WHIP'];
   const kpis = pick
     .map((k) => {
       const s = stats.find((x) => x.key === k);
@@ -297,6 +297,10 @@ function renderBand() {
       `</div>`;
   } else if (stat === '$') {
     html += `<p class="foot">Each simulated season priced in the calculator's frame.</p>`;
+  } else if (stat === 'wRC+') {
+    html +=
+      `<p class="foot">The range of his talent (no season luck). wRC+ here is context-neutral: no park, and his ` +
+      `splits against left- and right-handed pitchers at the league's mix for his batting side. 100 is the league average.</p>`;
   }
   el.innerHTML = html;
 }
@@ -318,7 +322,9 @@ function renderNotes() {
   $('#notes').innerHTML = rows
     .slice(0, 5)
     .map((r) => {
-      const t = META.factors[r.f].note.replace('{d}', fmtD(r.d)).replace('{stat}', statWord).replace('{opp}', opp);
+      // wRC+ weighs his splits by the league's mix of pitcher hands, not by the mix he faces
+      const note = s.key === 'wRC+' && r.f === 'platoon' ? "His splits against left- and right-handed pitchers, at the league's mix: {d} {stat}." : META.factors[r.f].note;
+      const t = note.replace('{d}', fmtD(r.d)).replace('{stat}', statWord).replace('{opp}', opp);
       return `<li>${esc(t.replace(/\s+\./g, '.'))}</li>`;
     })
     .join('');
