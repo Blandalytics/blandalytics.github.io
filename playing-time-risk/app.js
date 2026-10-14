@@ -6,7 +6,10 @@
 import { CAUSES, esc, fmtDelta, link, load } from '../projection-drilldown/data.js?v=1';
 
 const $ = (s) => document.querySelector(s);
-const state = { r: 'h', sort: 'usd', dir: 1, shown: 60, q: '', team: '', pos: '' };
+// min: the least healthy-season playing time listed (PA or batters faced), so the page opens on
+// players with a real role rather than every fringe name in the pool
+const MIN_HEALTHY = 100;
+const state = { r: 'h', sort: 'usd', dir: 1, shown: 60, q: '', team: '', pos: '', min: MIN_HEALTHY };
 let DATA;
 let META;
 
@@ -33,6 +36,8 @@ async function init() {
   $('#to-promo').href = link('../promotion-timelines/');
   const q = new URLSearchParams(location.search);
   if (q.get('r') === 'p') state.r = 'p';
+  if (q.has('min') && Number.isFinite(Number(q.get('min')))) state.min = Math.max(0, Number(q.get('min')));
+  $('#min').value = state.min;
   for (const b of document.querySelectorAll('.seg button')) {
     b.addEventListener('click', () => {
       state.r = b.dataset.r;
@@ -43,6 +48,11 @@ async function init() {
   $('#q').addEventListener('input', (e) => ((state.q = e.target.value.trim().toLowerCase()), render()));
   $('#pos').addEventListener('input', (e) => ((state.pos = e.target.value.trim().toUpperCase()), render()));
   $('#team').addEventListener('change', (e) => ((state.team = e.target.value), render()));
+  $('#min').addEventListener('input', (e) => {
+    state.min = Math.max(0, Number(e.target.value) || 0);
+    state.shown = 60;
+    render();
+  });
   $('#more').addEventListener('click', () => ((state.shown += 60), render()));
   render();
 }
@@ -55,6 +65,7 @@ function render() {
   const r = state.r;
   for (const b of document.querySelectorAll('.seg button')) b.setAttribute('aria-pressed', String(b.dataset.r === r));
   const unit = DATA.unit[r];
+  $('#min-unit').textContent = unit;
   const causes = causesOf(r);
   // the team list of this role
   const teams = [...new Set(DATA.rows[r].map((x) => x.t))].sort();
@@ -67,6 +78,7 @@ function render() {
   $('#legend').innerHTML = causes.map((c) => `<span><i style="background:${CAUSES[c][1]}"></i>${esc(CAUSES[c][0])}</span>`).join('');
   const norm = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   let rows = DATA.rows[r].map((x) => ({ ...x, lost: causes.reduce((s, c) => s + (x[c] ?? 0), 0) }));
+  if (state.min > 0) rows = rows.filter((x) => (x.healthy ?? 0) >= state.min);
   if (state.q) rows = rows.filter((x) => norm(x.n).includes(norm(state.q)));
   if (state.team) rows = rows.filter((x) => x.t === state.team);
   if (state.pos) rows = rows.filter((x) => (x.pos ?? '').toUpperCase().split(/[,/ ]+/).includes(state.pos));
@@ -109,7 +121,7 @@ function render() {
   }
   $('#more').hidden = rows.length <= state.shown;
   $('#foot').innerHTML =
-    `${rows.length.toLocaleString()} ${r === 'h' ? 'hitters' : 'pitchers'}. Expected: the projection's playing time with the injury risk; ` +
+    `${rows.length.toLocaleString()} ${r === 'h' ? 'hitters' : 'pitchers'}${state.min > 0 ? ` with ${state.min}+ healthy ${unit}` : ''}. Expected: the projection's playing time with the injury risk; ` +
     `healthy: a healthy season in his role; capacity: a full season. Injury risk: 1 − expected / healthy. ` +
     `$ cost: the auction value of his expected playing time against a regular's, the calculator's full-time target for his role; ` +
     `below it, the calculator fills the missing time with replacement-level production. ` +
