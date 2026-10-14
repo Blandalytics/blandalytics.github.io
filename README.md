@@ -1360,6 +1360,61 @@ upload shows on the next one; if the zone ever caches them, purge their URLs. Af
 any change to the JavaScript, bump the `?v=` on the script tag in `index.html` and on `app.js`'s
 imports of `calc.js` and `risk.js` (`risk.js` imports nothing: `app.js` hands it `calc.js`).
 
+## Projection pages
+
+Four pages explain the 2027 projections behind the Auction Calculator. The first three come from
+the factor ledger of the projections repository (`src/ledger.py`); What Changed comes from its
+daily change (`src/change.py`).
+
+* [Projection Drilldown](https://blandalytics.com/projection-drilldown/): one player, stat by stat.
+  A waterfall goes from a league-average player to his projection, one factor at a time: talent,
+  aging, parks, platoon mix, the pull toward the average, the league environment, team context, and
+  playing time by cause. Gold raises the stat and teal lowers it, as on the Model Drilldown. The page
+  also shows the 10th–90th percentile range, split into talent, playing time and luck, and the
+  largest effects in plain sentences. *Expected* / *Healthy* switches the playing-time basis.
+  `?p=h:<mlbam>&s=<stat>&b=ev|healthy` opens a player, a stat and a basis.
+* [Playing-Time Risk](https://blandalytics.com/playing-time-risk/): every projection's PA (hitters)
+  or batters faced (pitchers) lost per cause against a full season, and the auction value that the
+  risk costs. The table sorts by any column and filters by team and position.
+* [Promotion Timelines](https://blandalytics.com/promotion-timelines/): each prospect's chance of a
+  first MLB day in each of the next five seasons, and the first season by service-time window.
+* [What Changed](https://blandalytics.com/what-changed/) (in season): each day's change of every
+  player's rest-of-season auction value, split by cause: new results, role and playing time, the
+  league environment, the parks left, and the days played. A bar per player stacks the causes
+  left (lower) and right (higher) of zero. A row opens the stats by cause and a sentence. By
+  default the page shows only the material changes: larger than the change on a day with no new
+  data (a placebo refit). `?date=YYYY-MM-DD&r=h|p&b=ev|hb` opens a day, a role and a basis.
+
+### How it works
+
+The pages read JSON from `data.blandalytics.com/projections/site/<season>/` (`projection-drilldown/data.js`):
+
+| file | what it holds |
+|---|---|
+| `meta.json` | the schema version, the runs, the factors' labels and sentences, the stats |
+| `index.json` | one row per player and role, for the search |
+| `team/<TEAM>.json` | each player's waterfalls per stat and basis, his playing-time causes, his bands |
+| `pt_risk.json`, `promotion.json` | the two leaderboards |
+| `change/index.json`, `change/<date>.json` | in season: the dates, and one day's change per player |
+| `manifest.json` | in season: the date of the newest run; uploaded last |
+
+The playing-time causes are stored once per player. A stat's "Playing time" row splits by them in
+proportion when it opens. Rates are exact Shapley values over the factors. Counting stats and $ come
+from simulations with each factor removed, and a last row holds the factors' interaction.
+
+### Updating
+
+The projections repository writes and uploads the files:
+
+    python -m src.ledger --season 2027 --release      # the ledger of the live runs
+    python -m src.site_export --season 2027           # the JSON (data/site/projections/2027/)
+    python -m src.publish --site                      # the upload (it asks first)
+
+To work on a page without uploading, run `python -m src.site_export --serve <this checkout>` in the
+projections repository, and open `http://127.0.0.1:8771/projection-drilldown/?data=/_data/`. The
+`?data=` is kept on the links between the pages. The files' URLs carry an hourly stamp. After a
+change to the JavaScript, bump the `?v=` on its script tag and imports.
+
 ## NHL Draft Tool
 
 [blandalytics.com/nhl-draft/](https://blandalytics.com/nhl-draft/) — a draft tool for a 12-team

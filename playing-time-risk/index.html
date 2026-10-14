@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Playing-Time Risk · Blandalytics</title>
+    <meta
+      name="description"
+      content="Every 2027 projection's playing time, cause by cause: the plate appearances or batters faced lost to injury, the minors, performance, platoons and rest, and what it costs in auction value."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+    />
+    <style>
+      :root {
+        --ground: #0d1117;
+        --surface: #151b23;
+        --card: #292c42;
+        --raise: #30344f;
+        --ink: #e3e9f1;
+        --muted: #8a96a6;
+        --faint: #6b7684;
+        --grid: #3a3e5a;
+        --accent: #6cb4ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--ground);
+        color: var(--ink);
+        font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-size: 15px;
+        line-height: 1.45;
+        padding: 24px 16px;
+      }
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      a {
+        color: var(--accent);
+      }
+      nav.tools {
+        font-size: 13px;
+        color: var(--faint);
+      }
+      header h1 {
+        margin: 0;
+        font-size: 26px;
+      }
+      header p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        max-width: 78ch;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      input,
+      select {
+        font: inherit;
+        font-size: 14px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--grid);
+        background: var(--surface);
+        color: var(--ink);
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--grid);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .seg button {
+        font: inherit;
+        font-size: 13px;
+        color: var(--muted);
+        background: var(--surface);
+        border: 0;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--raise);
+        color: var(--ink);
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .legend i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        margin-right: 5px;
+        vertical-align: -1px;
+      }
+      .wrap {
+        overflow-x: auto;
+        background: var(--card);
+        border-radius: 12px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+      }
+      th,
+      td {
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--grid);
+        text-align: left;
+        white-space: nowrap;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 12px;
+        cursor: pointer;
+        user-select: none;
+        position: sticky;
+        top: 0;
+        background: var(--card);
+      }
+      th[aria-sort='descending']::after {
+        content: ' ▾';
+      }
+      th[aria-sort='ascending']::after {
+        content: ' ▴';
+      }
+      td.n {
+        text-align: right;
+        font-family: 'JetBrains Mono', monospace;
+      }
+      .bars {
+        display: flex;
+        width: 220px;
+        height: 12px;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #1f2333;
+      }
+      .more {
+        align-self: center;
+      }
+      .more button {
+        font: inherit;
+        color: var(--ink);
+        background: var(--raise);
+        border: 1px solid var(--grid);
+        border-radius: 8px;
+        padding: 8px 14px;
+        cursor: pointer;
+      }
+      .foot {
+        color: var(--faint);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav class="tools">
+        <a href="/">Blandalytics</a> · <a id="to-dd" href="../projection-drilldown/">Projection Drilldown</a> ·
+        <a id="to-promo" href="../promotion-timelines/">Promotion Timelines</a>
+      </nav>
+      <header>
+        <h1>Playing-Time Risk</h1>
+        <p>
+          How much of a full season each 2027 projection expects him to lose, and to what. The bar splits the lost
+          playing time by cause. $ cost: the auction value that his playing-time risk costs against a full season.
+        </p>
+      </header>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Role">
+          <button type="button" data-r="h" aria-pressed="true">Hitters</button>
+          <button type="button" data-r="p" aria-pressed="false">Pitchers</button>
+        </div>
+        <input id="q" type="search" placeholder="Find a player" aria-label="Find a player" />
+        <select id="team" aria-label="Team"><option value="">All teams</option></select>
+        <input id="pos" type="search" placeholder="Position (e.g. SS, RP)" aria-label="Position" size="16" />
+      </div>
+      <div class="legend" id="legend"></div>
+      <div class="wrap"><table id="t"></table></div>
+      <div class="more"><button type="button" id="more">Show more</button></div>
+      <p class="foot" id="foot"></p>
+    </main>
+    <script type="module" src="app.js?v=1"></script>
+  </body>
+</html>
