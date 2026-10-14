@@ -267,3 +267,12 @@ Part 4 (the user's decisions of 2026-10-13):
 * The default objective in roto is mean roto points; head-to-head keeps the payout's measure (`web_api.objective_of`). The page's selector starts on the default and keeps the payout's measure as an option.
 * The recommended maximum bid in an auction is the break-even, capped at the value bid (`Draft.user_value_bid`: the calculator's $ at the user's inflation, the bench share for a bench player). The cfg key `bid_cap` ("value" by default, "none" for the break-even alone) sets it. The result's `bid` gives the amount, the break-even, the value bid and whether the cap applied.
 * `part3_check.py run --plan part4_auction part4_rivals` checks the new defaults in all 14 main auction rooms and against the other rival models (6 rooms each); `part3/report.md` section 4.6 has the results. `part3_check.py replay` runs stored jobs again: the change leaves part 3's rows as they were.
+
+Part 4's confirmation (2026-10-13 to 10-14; `part3/report.md` section 4.6): the new defaults in 13 of the 14 main auction rooms (room 13 and the auction rooms against the other rival models did not run: the machine's load slowed a room from 12 to about 90 minutes). Each drafter minus V in the same room, in points (the standard error in brackets):
+
+| Auction | the default engine − V | the same objective without the cap − V | the default − the same without the cap | R − V |
+|---|---|---|---|---|
+| roto, win% | +8.3 (1.6) | +2.4 (1.8) | +5.9 (1.4) | +3.5 (1.9) |
+| head-to-head, playoff% | +12.3 (1.9) | +9.9 (2.6) | +2.4 (1.7) | +6.2 (1.4) |
+
+The default engine beats the calculator's $ board in both formats. The cap gains most in roto (+5.9 win%, 4.2 SE) and keeps the roster's $ near V's ($300 against $262 without the cap). Not tested: the auction against the other rival models.
