@@ -132,14 +132,17 @@ class PitchModel:
         cats = [c for c in raw.columns if isinstance(raw[c].dtype, pd.CategoricalDtype)]
         return raw.astype(dict.fromkeys(cats, "object")) if cats else raw
 
-    def score(self, raw: pd.DataFrame) -> pd.DataFrame:
+    def score(self, raw: pd.DataFrame, abs_env: bool = True) -> pd.DataFrame:
         """Per-pitch run values for a whole game's statfast pitches, keyed by KEYS.
+        ``abs_env`` applies the scorer's 2026 ABS adjustment, which is fit on MLB zones
+        and calls; the scorer's own default (none) is the one for every other level.
 
         Pass whole outings: the scorer reads each pitcher's arsenal off the pitches it is
         given to decide which fastball is primary. Pitches it does not model (pitchouts,
         automatic balls, types outside the modeled groups, anything missing tracking) are
         simply absent from the result. One game is small, so it is scored in-process."""
         sp, models, mix, values, by_count, env, _ = self._load()
+        env = env if abs_env else None
         try:
             pitches, _dropped = sp.score(self._plain(raw), models, mix, values, by_count,
                                          env=env, workers=1)  # fmt: skip

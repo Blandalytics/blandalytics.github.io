@@ -1,6 +1,8 @@
 name: Build pitcher cards
 
-# Cards for every pitcher in every finished MLB game, written to the bucket (cards/) by
+# Cards for every pitcher in every finished game with Statcast tracking (MLB, Triple-A, the
+# Florida State League's Hawk-Eye parks, the Arizona Fall League, ...), written to the bucket
+# (cards/<level>/) by
 # tools/pitcher_card/build_site.py; nothing is committed. The nightly run does yesterday
 # and today. A backfill splits its range into months and builds them in parallel, each
 # job checkpointing its day manifests in the bucket, and the index is rebuilt from the
@@ -17,6 +19,10 @@ on:
       end:
         description: "Last date to build (YYYY-MM-DD). Default: today."
         required: false
+      levels:
+        description: "Levels to build, as sport codes (e.g. mlb,aaa,afx). Default: every tracked level."
+        required: false
+        default: "all"
       force:
         description: "Rebuild cards already built (after a change to the data or the models)"
         type: boolean
@@ -102,7 +108,7 @@ jobs:
 
       - name: Build
         run: |
-          ARGS="--start ${{ matrix.chunk.start }} --end ${{ matrix.chunk.end }}"
+          ARGS="--start ${{ matrix.chunk.start }} --end ${{ matrix.chunk.end }} --levels ${{ inputs.levels || 'all' }}"
           [ "${{ inputs.force }}" = "true" ] && ARGS="$ARGS --force"
           python tools/pitcher_card/build_site.py $ARGS
 

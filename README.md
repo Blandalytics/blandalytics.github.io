@@ -159,14 +159,20 @@ linked in the picker as `pitcher-cards/#<gamePk>-<pitcherId>`.
   [Blandalytics/statcast_scraper](https://github.com/Blandalytics/statcast_scraper) (the
   pitches) and [Blandalytics/player_cards](https://github.com/Blandalytics/player_cards) (the
   xSLG model) and fetches the pitch-modeling chain from the bucket, then builds a card for
-  every pitcher who threw a tracked pitch the day before. A backfill splits its range into
+  every pitcher who threw a tracked pitch the day before, at every level with Statcast
+  tracking (see *Levels* below). A backfill splits its range into
   months and builds them as parallel jobs; the index is rebuilt from the day manifests once
   they have all finished. A last job writes what the live cards need (below).
-- `https://data.blandalytics.com/cards/data/<date>.json` — that day's card dicts, keyed
-  `<gamePk>-<pitcherId>` (about 1.8 MB for a full slate, 320 KB compressed).
-- `https://data.blandalytics.com/cards/days/<date>.json` — that day's games and pitchers,
-  which the picker lists; `.../cards/index.json` lists the dates built and which date each
-  game is on.
+- `https://data.blandalytics.com/cards/<level>/data/<date>.json` — that day's card dicts at
+  a level, keyed `<gamePk>-<pitcherId>` (about 1.8 MB for a full MLB slate, 320 KB
+  compressed).
+- `https://data.blandalytics.com/cards/<level>/days/<date>.json` — that day's games and
+  pitchers at a level, which the picker lists; each game carries its `level` and `league`.
+- `.../cards/index.json` — `levels` (each level's dates, card counts and leagues) and
+  `level_games` (gamePk → [level, date]); and, for the picker and the live Worker that read
+  them today, the MLB-only `days` and `games` (gamePk → date) of before the levels. MLB's
+  cards are also still written to `cards/data/` and `cards/days/`, and the reindex copies any
+  MLB day found only there to `cards/mlb/`.
 - Before the cards were data, each had a page of its own
   (`.../cards/<gamePk>-<pitcherId>.html`, its manifest entry's `file`), which the picker frames
   until a `force` run rebuilds the day. Once a day is rebuilt its old pages are retired (see
@@ -268,10 +274,33 @@ columns a card reads and cached, so a cold build of a card is under a minute rat
 four. The days the files don't reach yet — the two most recent — are pulled through the
 scraper, as is a game in progress (one game at a time, so a card can be built mid-game). The
 only other sources are the game's live feed (box score, bio, team names — one request per
-game) and Baseball Savant's arm-angle leaderboard, which the scraper does not cover. The card is MLB
-only, because the scraper is; the minor-league and international levels the app offered
-are not built. Comparison seasons go back to 2023, as in the app; a season is offered once
-the pitcher has three appearances in it before the game.
+game) and Baseball Savant's arm-angle leaderboard, which the scraper does not cover.
+Comparison seasons go back to 2023, as in the app; a season is offered once the pitcher has
+three appearances in it before the game.
+
+#### Levels
+
+A level is a Stats API sport code, as in the data files: `mlb`, `aaa`, `afx` (the Florida
+State League's Hawk-Eye parks), `win` (the Arizona Fall League's MLB-park games; the other
+winter leagues aren't tracked), `rok`, `bbc` (college), `int`, `hsb`. Every level with
+tracked games in the data files' manifest gets cards, built the same way, with these
+differences below MLB:
+
+- **Graded against MLB.** The pitch models are MLB's and every grade is on the MLB scale;
+  the card says so (`graded_vs: "mlb"`).
+- **Pitching (PLV) and Location are provisional** (`provisional: ["plv", "loc"]`): the
+  scorer isn't calibrated to the minors' strike zones (their ABS zones are fixed per batter,
+  the models were fit on MLB's pose-tracked ones) or their parks' elevations. Stuff, which is
+  count- and location-neutral, isn't affected. The 2026 ABS adjustment, fit on MLB, is not
+  applied.
+- **No comparison seasons.**
+- **No arm angle**, usually: Savant's leaderboard is MLB's (an MLB pitcher on a rehab
+  assignment keeps his).
+- The club keeps its own abbreviation, and every postseason round reads *Playoffs*.
+
+A day not yet in the data files is pulled through `tools/data/backfill.py`'s own schedule and
+pull, which find any level's games by sportId (MLB still goes through statfast). The live
+cards are MLB only.
 
 The code passes `ruff check` and `ruff format` with the config in
 [`tools/pitcher_card/ruff.toml`](tools/pitcher_card/ruff.toml), including a McCabe
@@ -280,7 +309,8 @@ complexity limit of 5 per function.
 ### Backfilling or rebuilding
 
 Run the workflow by hand from the **Actions** tab (*Build pitcher cards → Run workflow*)
-with a `start` and `end` date; tick `force` to rebuild cards that already exist, which is
+with a `start` and `end` date, and `levels` to limit it (e.g. `aaa,afx`; every tracked level
+by default); tick `force` to rebuild cards that already exist, which is
 what you want after changing the data or the models (a change to `card.js` needs only its
 `?v=` bump).
 A day of games is roughly 150 cards at about half a second each; a whole season runs as one

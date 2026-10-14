@@ -1,17 +1,26 @@
 """Build the cards: every pitcher's card dict for each day, plus the manifests, into the bucket.
 
-    python build_site.py                              # yesterday and today
+    python build_site.py                              # yesterday and today, every level
     python build_site.py --start 2026-08-01 --end 2026-08-31
+    python build_site.py --levels mlb,aaa             # only these levels (sport codes)
     python build_site.py --start 2026-08-28 --force   # rebuild cards already built
     python build_site.py --reindex                    # only rebuild the index
     python build_site.py --prune-pages [--apply]      # retire the old per-card pages
     python build_site.py --out ./pitcher-cards ...    # a folder instead of the bucket
 
-Writes, under the bucket's ``cards/`` prefix (served from https://data.blandalytics.com):
+A level is a Stats API sport code, as in the data files (data/<code>/): mlb, aaa, afx
+(Single-A), win (winter leagues: the Arizona Fall League), rok, bbc, int, hsb. Every level
+with tracked games in the data files' manifest is built. Writes, under the bucket's
+``cards/`` prefix (served from https://data.blandalytics.com):
 
-    cards/data/<date>.json            that day's card dicts, keyed "<gamePk>-<pitcherId>"
-    cards/days/<date>.json            that day's games and pitchers: what the picker lists
-    cards/index.json                  the dates built, and which date each game is on
+    cards/<level>/data/<date>.json    that day's card dicts, keyed "<gamePk>-<pitcherId>"
+    cards/<level>/days/<date>.json    that day's games and pitchers: what the picker lists
+    cards/index.json                  the dates built at each level, and where each game is
+
+MLB's cards are written to cards/data/ and cards/days/ as well, and cards/index.json keeps
+the MLB-only ``days`` and ``games`` beside ``levels`` and ``level_games``, for the picker
+and the Worker that read those today; the reindex copies any MLB day built only at the
+old keys to cards/mlb/.
 
 The picker page in pitcher-cards/ reads them from there and draws the card itself with
 pitcher-cards/card.js, so nothing is committed to the repo, a whole season fits, and a
@@ -46,6 +55,7 @@ import fetch  # noqa: E402
 
 sys.path.insert(0, os.path.join(ROOT, "tools", "data"))
 from backfill import LocalStore, R2Store  # noqa: E402
+from card import MLB  # noqa: E402
 
 PREFIX = "cards"
 # a day's data is rewritten when the day is rebuilt; the manifests move every night
@@ -53,8 +63,10 @@ DATA_CACHE = "public, max-age=300"
 INDEX_CACHE = "public, max-age=120"
 # the old per-card pages, and where a card is viewed now
 OLD_PAGE = re.compile(rf"^(?:live/)?{PREFIX}/(\d+-\d+)\.html$")
+LEVEL_DAY = re.compile(rf"^{PREFIX}/([a-z0-9]+)/days/(\d{{4}}-\d\d-\d\d)\.json$")
 CARD_VIEW = "https://blandalytics.com/pitcher-cards/card.html"
 REDIRECT_CACHE = "public, max-age=86400"
+SPORTS = "https://statsapi.mlb.com/api/v1/sports"
 
 
 def entry(pk: int, pid: int, card: dict) -> dict:
@@ -73,7 +85,11 @@ def entry(pk: int, pid: int, card: dict) -> dict:
 
 def game_entry(card: dict) -> dict:
     home, away = (card["team"], card["opp"]) if card["home"] else (card["opp"], card["team"])
-    return {"date": card["date"], "home": home, "away": away, "pitchers": []}
+    level = card.get("level") or {}
+    return {
+        "date": card["date"], "home": home, "away": away, "pitchers": [],
+        "level": level.get("code", MLB[0]), "league": level.get("league"),
+    }  # fmt: skip
 
 
 def date_range(start: str, end: str):
@@ -92,24 +108,35 @@ def _compact(data) -> bytes:
 
 
 class Site:
-    """The cards and their manifests in a store: the bucket, or a folder."""
+    """One level's cards and their manifests in a store: the bucket, or a folder."""
 
-    def __init__(self, store):
+    def __init__(self, store, level: str = MLB[0]):
         self.store = store
+        self.level = level
 
-    def day_key(self, date: str) -> str:
-        return f"{PREFIX}/days/{date}.json"
+    def day_key(self, date: str, level: str | None = None) -> str:
+        return f"{PREFIX}/{level or self.level}/days/{date}.json"
 
-    def data_key(self, date: str) -> str:
-        return f"{PREFIX}/data/{date}.json"
+    def data_key(self, date: str, level: str | None = None) -> str:
+        return f"{PREFIX}/{level or self.level}/data/{date}.json"
+
+    @property
+    def legacy(self) -> bool:
+        """MLB also keeps its cards at the keys from before the levels."""
+        return self.level == MLB[0]
 
     def _load(self, key: str) -> dict:
         raw = self.store.get(key)
         return json.loads(raw) if raw else {}
 
     def day(self, date: str) -> tuple[dict, dict]:
-        """(the day's manifest, its card dicts)."""
-        return self._load(self.day_key(date)), self._load(self.data_key(date))
+        """(the day's manifest, its card dicts); MLB's from the old keys while a day is
+        only there."""
+        day, data = self._load(self.day_key(date)), self._load(self.data_key(date))
+        if not day and self.legacy:
+            day = self._load(f"{PREFIX}/days/{date}.json")
+            data = self._load(f"{PREFIX}/data/{date}.json")
+        return day, data
 
     def has(self, day: dict, pk: int, pid: int) -> bool:
         return any(p["id"] == pid for p in day.get(str(pk), {}).get("pitchers", []))
@@ -123,21 +150,60 @@ class Site:
     def checkpoint(self, date: str, day: dict, data: dict) -> None:
         """Write the day's cards and then its manifest, so a rerun (or another run)
         skips what is built."""
-        if day:
-            self.store.put(self.data_key(date), _compact(data), "application/json", DATA_CACHE)
-            self.store.put(self.day_key(date), _dump(day), "application/json", INDEX_CACHE)
+        if not day:
+            return
+        keys = [(self.data_key(date), self.day_key(date))]
+        if self.legacy:
+            keys.append((f"{PREFIX}/data/{date}.json", f"{PREFIX}/days/{date}.json"))
+        for data_key, day_key in keys:
+            self.store.put(data_key, _compact(data), "application/json", DATA_CACHE)
+            self.store.put(day_key, _dump(day), "application/json", INDEX_CACHE)
+
+    def migrate_legacy(self) -> int:
+        """Copy every MLB day built only at the old keys to cards/mlb/; returns how many."""
+        have = {LEVEL_DAY.match(k).group(2) for k in self.store.keys(f"{PREFIX}/{MLB[0]}/days/")}
+        copied = 0
+        for key in self.store.keys(f"{PREFIX}/days/"):
+            date = os.path.basename(key)[: -len(".json")]
+            if date in have:
+                continue
+            data = self.store.get(f"{PREFIX}/data/{date}.json")
+            if data is not None:
+                self.store.put(self.data_key(date, MLB[0]), data, "application/json", DATA_CACHE)
+            self.store.put(
+                self.day_key(date, MLB[0]), self.store.get(key), "application/json", INDEX_CACHE
+            )
+            copied += 1
+        return copied
 
     def reindex(self) -> dict:
-        """Rebuild the index from every day manifest in the store."""
-        index = {"days": {}, "games": {}}
+        """Rebuild the index from every day manifest in the store: MLB's ``days`` and
+        ``games`` (from the old keys), and every level's dates and games."""
+        copied = self.migrate_legacy()
+        if copied:
+            print(f"copied {copied} MLB days to {PREFIX}/{MLB[0]}/")
+        index = {"days": {}, "games": {}, "levels": {}, "level_games": {}}
         for key in self.store.keys(f"{PREFIX}/days/"):
             date = os.path.basename(key)[: -len(".json")]
             day = json.loads(self.store.get(key) or b"{}")
             index["days"][date] = sum(len(g["pitchers"]) for g in day.values())
             index["games"].update(dict.fromkeys(day, date))
+        for key in self.store.keys(f"{PREFIX}/"):
+            m = LEVEL_DAY.match(key)
+            if m:
+                self._index_level_day(index, *m.groups(), json.loads(self.store.get(key) or b"{}"))
         index["built"] = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         self.store.put(f"{PREFIX}/index.json", _dump(index), "application/json", INDEX_CACHE)
         return index
+
+    @staticmethod
+    def _index_level_day(index: dict, level: str, date: str, day: dict) -> None:
+        entry = index["levels"].setdefault(level, {"days": {}, "leagues": []})
+        entry["days"][date] = sum(len(g["pitchers"]) for g in day.values())
+        for pk, game in day.items():
+            index["level_games"][pk] = [level, date]
+            if game.get("league") and game["league"] not in entry["leagues"]:
+                entry["leagues"].append(game["league"])
 
     def listed(self) -> tuple[set[str], set[str]]:
         """("<gamePk>-<pitcherId>" of every card the manifests list, the pages any of
@@ -207,8 +273,9 @@ def prune_pages(site: Site, apply: bool, workers: int = 16) -> dict[str, list[st
     return plan
 
 
-def build_day(site: Site, date: str, session, data, force: bool) -> tuple[int, int]:
-    """Build one date's cards; returns (built, skipped)."""
+def build_day(site: Site, date: str, session, store, force: bool, level=MLB) -> tuple[int, int]:
+    """Build one level's cards for one date from ``store``, that level's DataStore;
+    returns (built, skipped)."""
     (day, data), built, skipped = site.day(date), 0, []
 
     def skip(pk: int, pid: int) -> bool:  # cards already built are not rebuilt unless forced
@@ -216,33 +283,54 @@ def build_day(site: Site, date: str, session, data, force: bool) -> tuple[int, i
         skipped.append(seen)
         return seen
 
-    cards = cards_for_date(date, session, data, strict=False, skip=skip)
+    cards = cards_for_date(date, session, store, strict=False, skip=skip, level=level)
     for pk, pid, _, card in cards:
         site.add(day, data, pk, pid, card)
         built += 1
-        print(f"  {date}  {card['team']} {'vs' if card['home'] else '@'} {card['opp']}  "
+        at = "vs" if card["home"] else "@"
+        print(f"  {date}  {level[0]:4} {card['team']} {at} {card['opp']}  "
               f"{card['name']}  {card['grades']['game']}")  # fmt: skip
     site.checkpoint(date, day, data)
     return built, sum(skipped)
 
 
-def build(site: Site, start: str, end: str, force=False, cache=DEFAULT_CACHE, first_season=None):
-    """Every date from ``start`` to ``end``, then the index."""
+def levels(session, manifest: dict, wanted: str = "all") -> list[tuple[str, int, str]]:
+    """(code, sportId, name) of every level with tracked games in the data files (and MLB
+    always), or of the ``wanted`` codes among them."""
+    ids = {u["sport"]: u["sport_id"] for u in manifest.get("units", {}).values()}
+    codes = {MLB[0], *manifest.get("last_finalized", {})} & {MLB[0], *ids}
+    if wanted != "all":
+        codes &= {c.strip() for c in wanted.split(",")}
+    r = session.get(SPORTS, params={"fields": "sports,id,code,name"}, timeout=30)
+    r.raise_for_status()
+    names = {s["code"]: s["name"] for s in r.json()["sports"]}
+    ids[MLB[0]] = MLB[1]
+    return sorted(((c, ids[c], names.get(c, c)) for c in codes), key=lambda lv: lv[1])
+
+
+def build(site: Site, start: str, end: str, force=False, cache=DEFAULT_CACHE, first_season=None,
+          wanted: str = "all"):  # fmt: skip
+    """Every level's cards for every date from ``start`` to ``end``, then the index."""
     session = fetch.session()
-    data = fetch.DataStore(cache, session, first_season or fetch.FIRST_SEASON)
+    first = first_season or fetch.FIRST_SEASON
+    mlb_data = fetch.DataStore(cache, session, first)
     built = skipped = failed = 0
     t0 = time.perf_counter()
-    for date in date_range(start, end):
-        try:
-            b, s = build_day(site, date, session, data, force)
-            built, skipped = built + b, skipped + s
-        except Exception:  # noqa: BLE001 - one bad day must not sink the rest of the range
-            failed += 1
-            print(f"  {date}  FAILED", file=sys.stderr)
-            traceback.print_exc()
+    for level in levels(session, mlb_data.manifest, wanted):
+        data = mlb_data if level == MLB else fetch.DataStore(cache, session, first, sport=level[0])
+        level_site = Site(site.store, level[0])
+        for date in date_range(start, end):
+            try:
+                b, s = build_day(level_site, date, session, data, force, level)
+                built, skipped = built + b, skipped + s
+            except Exception:  # noqa: BLE001 - one bad day must not sink the rest of the range
+                failed += 1
+                print(f"  {date}  {level[0]}  FAILED", file=sys.stderr)
+                traceback.print_exc()
     index = site.reindex()
     print(f"built {built}, skipped {skipped}, {failed} days failed, "
-          f"{sum(index['days'].values())} cards across {len(index['days'])} dates in the index, "
+          f"{sum(sum(lv['days'].values()) for lv in index['levels'].values())} cards across "
+          f"{len(index['levels'])} levels in the index, "
           f"{time.perf_counter() - t0:.0f}s")  # fmt: skip
     return built
 
@@ -254,6 +342,8 @@ def main(argv=None) -> int:
                     help="first date, YYYY-MM-DD (default: yesterday)")  # fmt: skip
     ap.add_argument("--end", default=today.isoformat(), help="last date (default: today)")
     ap.add_argument("--force", action="store_true", help="rebuild cards already in the manifest")
+    ap.add_argument("--levels", default="all",
+                    help="sport codes, e.g. mlb,aaa (default: every tracked level)")  # fmt: skip
     ap.add_argument("--reindex", action="store_true", help="only rebuild the index")
     ap.add_argument("--prune-pages", action="store_true",
                     help="report what becomes of the old per-card pages")  # fmt: skip
@@ -271,7 +361,7 @@ def main(argv=None) -> int:
     if a.prune_pages:
         prune_pages(site, a.apply)
         return 0
-    build(site, a.start, a.end, a.force, a.cache, a.first_season)
+    build(site, a.start, a.end, a.force, a.cache, a.first_season, a.levels)
     return 0
 
 

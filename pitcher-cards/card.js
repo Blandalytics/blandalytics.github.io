@@ -1,5 +1,5 @@
 // The PLV Pitcher Game Card, drawn from its card dict (tools/pitcher_card/build_data.py,
-// version 3) as one SVG, plus what a page needs to show it: the comparison layer, and the
+// versions 3 and 4) as one SVG, plus what a page needs to show it: the comparison layer, and the
 // card as a PNG to copy or save. The Stuff, Location and PLV letters are given here, from
 // the outing's means in the dict and GRADE_CUTS below, so a change of cuts reaches every
 // card without a rebuild. Version 2 dicts, which carry the letters themselves, still draw.
@@ -33,7 +33,9 @@
 })(typeof self !== "undefined" ? self : this, () => {
   "use strict";
 
-  const VERSION = 3; // the card dict this draws (and 2, whose grades are letters already)
+  // the card dict this draws (and 2, whose grades are letters already; and 3, which is 4
+  // without the level fields)
+  const VERSION = 4;
 
   // ---- Python's number formatting ---------------------------------------------------
   // f"{v:.Nf}" and round() take the double's exact binary value to the nearest, ties to
@@ -831,8 +833,8 @@
   // ---- the card ---------------------------------------------------------------------
   // the whole card as one SVG; opts.logo is the Pitcher List mark's URL
   function svg(card, opts = {}) {
-    if (card.version !== VERSION && card.version !== 2) {
-      throw new Error(`card.js draws card dict versions 2 and ${VERSION}, not ${card.version}`);
+    if (![2, 3, VERSION].includes(card.version)) {
+      throw new Error(`card.js draws card dict versions 2 to ${VERSION}, not ${card.version}`);
     }
     const body = [
       rect(0, 0, W, H, { fill: BACKGROUND }),
