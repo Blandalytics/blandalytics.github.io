@@ -743,6 +743,40 @@ function fillSpecOf(c, bare) {
   return fillSpec;
 }
 
+/**
+ * Roster impact: each player's line with the time he doesn't play filled at his role's
+ * replacement production, the same targets and per-unit rates the playing-time fill prices
+ * (fillSpecOf). It is what his roster spot yields over a season: his own stats, then a
+ * replacement-level player up to his role's target. cols: the shown stats; pts: each
+ * category's points (Points leagues). Null for every player when the fill is off, and for a
+ * player whose role has no target
+ */
+function rosterLines(T, side, specs, targets, cols, pts) {
+  if (!targets) return new Array(T.n).fill(null);
+  const volCol = side === "h" ? "PA" : "IP";
+  return rolesOf(T, side).map((role, i) => {
+    const t = targets[role];
+    if (!t) return null;
+    const vol = Number.isFinite(T.data[volCol][i]) ? T.data[volCol][i] : 0;
+    const fill = Math.max(0, t.target - vol);
+    const out = { filled: fill };
+    for (const c of cols) out[c] = T.data[c][i];
+    out[volCol] = vol + fill;
+    specs.forEach((sp, k) => {
+      const u = t.perUnit[k];
+      if (sp.kind === "count") {
+        const own = Number.isFinite(T.data[sp.cat][i]) ? T.data[sp.cat][i] : 0;
+        const w = pts ? pts[k] : 1;
+        out[sp.cat] = own + (w ? (fill * u.count) / w : 0);
+      } else {
+        const den = sp.den[i] + fill * u.den;
+        out[sp.cat] = den > 0 ? (sp.num[i] + fill * u.num) / den : NaN;
+      }
+    });
+    return out;
+  });
+}
+
 function valueSideWith(c, fillSpec, lockSpec) {
   const n = c.T.n, K = c.specs.length, N = c.N;
   const volCol = c.side === "h" ? "PA" : "IP";
@@ -963,14 +997,16 @@ export function auctionValues(H, P, s) {
   const hCaps = sideCaps(hPos, s.slots, SLOT_TYPES, "UT", s.teams);
   const pCaps = sideCaps(pPos, s.pitcherSlots, PITCHER_SLOT_TYPES, "P", s.teams);
   const benchOf = (starters) => Math.trunc(s.teams * (starters + bench / 2)) - s.teams * starters;
+  const hCatSpecs = points ? hPoints.map(([c, w]) => categorySpec(H, "h", c, w)) : hitterCats.map((c) => categorySpec(H, "h", c));
+  const pCatSpecs = points ? pPoints.map(([c, w]) => categorySpec(P, "p", c, w)) : pitcherCats.map((c) => categorySpec(P, "p", c));
   const h = valueSide({
     ...opts, T: H, side: "h", pos: hPos, caps: withAny(hCaps, "UT", benchOf(hitters)), types: SLOT_TYPES, start: hStart.total,
-    specs: points ? hPoints.map(([c, w]) => categorySpec(H, "h", c, w)) : hitterCats.map((c) => categorySpec(H, "h", c)),
+    specs: hCatSpecs,
   });
   const p = valueSide({
     ...opts, T: P, side: "p", pos: pPos, caps: withAny(pCaps, "P", benchOf(pitchers)), types: PITCHER_SLOT_TYPES, start: pStart.total,
     lock: s.lock ?? "daily", lineupCaps: pCaps, benchFull: s.teams * s.bench - Math.floor((s.teams * s.bench) / 2),
-    specs: points ? pPoints.map(([c, w]) => categorySpec(P, "p", c, w)) : pitcherCats.map((c) => categorySpec(P, "p", c)),
+    specs: pCatSpecs,
   });
 
   // Task 11: dollars. The drafted players fill every team's legal roster (lineups, and half the
@@ -1070,7 +1106,7 @@ export function auctionValues(H, P, s) {
   const pitcherCols = ["IP", ...pitcherCats.filter((c) => c !== "IP")];
   const players = [];
   const rows = { h: [], p: [] };
-  const add = (T, side, start, value, slot, type, cols, partsOf) => {
+  const add = (T, side, start, value, slot, type, cols, partsOf, full) => {
     for (let i = 0; i < T.n; i++) {
       const stats = {};
       for (const c of cols) stats[c] = T.data[c][i];
@@ -1081,15 +1117,16 @@ export function auctionValues(H, P, s) {
         elig: T.data.Eligibility ? T.data.Eligibility[i] : null,
         start: start.total[i], points: points ? start.total[i] : NaN, sgp: side.score[i], sgpar: side.sgpar[i],
         value: v,
-        drafted: slot[i] !== null, slot: slot[i], valuedAt: side.byPos.valuedAt[i], stats, breakdown: partsOf[i],
+        drafted: slot[i] !== null, slot: slot[i], valuedAt: side.byPos.valuedAt[i], stats, full: full[i], breakdown: partsOf[i],
         lockShare: side.lock && side.lock.kappa ? side.lock.kappa[i] : 1,
         lockTier: side.lock && side.lock.tier && side.lock.tier[i] !== null ? SP_TIERS[side.lock.tier[i]] : null,
       });
       rows[type][i] = players[players.length - 1];
     }
   };
-  add(H, h, hStart, hValue, hSlot, "h", hitterCols, hParts);
-  add(P, p, pStart, pValue, pSlot, "p", pitcherCols, pParts);
+  const ptsOf = (rows) => (points ? rows.map(([, w]) => w) : null);
+  add(H, h, hStart, hValue, hSlot, "h", hitterCols, hParts, rosterLines(H, "h", hCatSpecs, h.targets, hitterCols, ptsOf(hPoints)));
+  add(P, p, pStart, pValue, pSlot, "p", pitcherCols, pParts, rosterLines(P, "p", pCatSpecs, p.targets, pitcherCols, ptsOf(pPoints)));
   // A two-way player shows as one row, his hitter row, with his pitching beside it: in a
   // one-spot league priced into it already; in a simultaneous one his pitcher row's dollars and
   // parts added on (he's drafted for both spots), so the rows' totals don't change
@@ -1100,7 +1137,7 @@ export function auctionValues(H, P, s) {
   };
   for (const t of pairs) {
     const hp = rows.h[t.ih], pp = rows.p[t.ip];
-    hp.twoWay = { mode: twoWay, lock: s.lock ?? "daily", pos: pp.pos, elig: pp.elig, stats: pp.stats, H: t.H, P: t.P, starts: t.starts, hit: t.hit ?? 1, pitch: t.pitch ?? 0, priceRatio: ratio,
+    hp.twoWay = { mode: twoWay, lock: s.lock ?? "daily", pos: pp.pos, elig: pp.elig, stats: pp.stats, full: pp.full, H: t.H, P: t.P, starts: t.starts, hit: t.hit ?? 1, pitch: t.pitch ?? 0, priceRatio: ratio,
       hPos: hp.pos, hValue: hp.value, hDrafted: hp.drafted, pDrafted: false, value: 0 };
     hp.pos = `${hp.pos},${pp.pos}`;
     if (twoWay === "simultaneous" && pp.drafted) {
