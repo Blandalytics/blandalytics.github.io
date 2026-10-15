@@ -12,7 +12,7 @@
 // --cfg: also write the worker's Session cfg for these choices (setup.js sessionConfig), as the page sends it;
 // the choices' payout and playoff teams also go to risk.js, as on the page (setup.js draftRisk).
 import { readFileSync, writeFileSync } from "node:fs";
-import * as C from "../calc.js?v=20";
+import * as C from "../calc.js?v=21";
 import * as R from "../risk.js?v=2";
 import { buildTable, draftRisk, riskSettingsFrom, sessionConfig, settingsFrom } from "./setup.js?v=4";
 

@@ -2,7 +2,7 @@
 // console driven by the worker (worker.js -> py/web_api.py). The league and the payout come from the
 // calculator's saved settings (setup.js); the projections and the risk files load as the calculator
 // loads them (?data=<base>, ?riskdata=<base>).
-import * as C from "../calc.js?v=20";
+import * as C from "../calc.js?v=21";
 import * as R from "../risk.js?v=2";
 import { STORE, buildTable, draftRisk, riskSettingsFrom, sessionConfig, settingsFrom, unsupported } from "./setup.js?v=4";
 
