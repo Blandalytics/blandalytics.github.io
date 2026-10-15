@@ -732,7 +732,9 @@ function valueSide(c) {
   const bare = valueSideWith({ ...c, span: 0, specialists: false }, null, null);
   const lockSpec = locked ? lockSpecOf(c, bare) : null;
   const fillSpec = c.fillPT ? fillSpecOf(c, bare) : null;
-  return { ...valueSideWith(c, fillSpec, lockSpec), lock: lockSpec };
+  const out = valueSideWith(c, fillSpec, lockSpec);
+  // settled only if the bare run settled too: its pool sets the fill and the lock
+  return { ...out, lock: lockSpec, converged: out.converged && bare.converged };
 }
 
 function fillSpecOf(c, bare) {
