@@ -28,6 +28,7 @@ const SHORT = {
   other: 'Other factors',
   usage: 'Usage when active',
   calibration: 'Playing-time calibration',
+  process: 'Process',
 };
 const label = (f) => META.factors[f]?.label ?? CAUSES[f]?.[0] ?? SHORT[f] ?? f;
 // escaped text for a label that the page writes in capitals: wRC+ keeps its own case
