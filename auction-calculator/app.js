@@ -2,7 +2,7 @@
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket, and the
 // positions come from a third, last season's games by position.
 
-import * as C from "./calc.js?v=20";
+import * as C from "./calc.js?v=21";
 import * as R from "./risk.js?v=2";
 
 const $ = (id) => document.getElementById(id);

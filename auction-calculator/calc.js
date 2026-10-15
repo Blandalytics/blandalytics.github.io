@@ -923,8 +923,9 @@ function valueSideWith(c, fillSpec, lockSpec) {
 
   // Task 10: until the pool stops changing and no weight moves 1%. A pool that cycles through
   // the same few states, swapping marginal players, with weights within 3% across the cycle,
-  // has settled too: on the mean of the cycle's weights. Otherwise, after 20 passes, the mean
-  // of the last two (the procedure's fallback), flagged.
+  // has settled too: on the mean of the cycle's weights; so has a cycle of any spread that
+  // repeats itself exactly for two periods (pools and weights within 0.1%). Otherwise, after 20
+  // passes, the mean of the last two (the procedure's fallback), flagged.
   let converged = false, cycle = 0, it = 0;
   const key = (bp) => bp.slot.map((t) => (t === null ? 0 : 1)).join("");
   const keys = [key(byPos)];
@@ -932,6 +933,8 @@ function valueSideWith(c, fillSpec, lockSpec) {
     const d = Gs.map((g) => 1 / g[j]);
     return Math.max(...d) / Math.min(...d) - 1 <= tol;
   });
+  const repeats = (ks, p) => ks.length >= 2 * p + 1 && history.length >= 2 * p && Array.from({ length: p }, (_, j) => j).every((j) =>
+    ks[ks.length - 1 - j] === ks[ks.length - 1 - j - p] && spreadOk([history[history.length - 1 - j], history[history.length - 1 - j - p]], 0.001));
   for (it = 1; it <= 20; it++) {
     out = pass(null);
     const k = key(out.byPos);
@@ -944,6 +947,7 @@ function valueSideWith(c, fillSpec, lockSpec) {
     for (let p = 2; p <= 4 && !cycle; p++) {
       if (keys.length >= p && k === keys[keys.length - p] && history.length >= p && spreadOk(history.slice(-p), 0.03)) cycle = p;
     }
+    for (let p = 2; p <= 4 && !cycle; p++) if (repeats([...keys, k], p)) cycle = p;
     if (cycle) { converged = true; break; }
     keys.push(k);
   }
