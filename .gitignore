@@ -29,3 +29,5 @@ model-drilldown/node_modules
 tools/park_factors/cache/
 # the Savant pulls behind the xwOBA model
 tools/xwoba/cache/
+# the Lineup Sim pipeline's FanGraphs extract and per-game play-by-play
+tools/lineup_sims/cache/
