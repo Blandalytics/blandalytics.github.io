@@ -91,7 +91,7 @@ def blurb():
             if parts else "Every plate appearance of the game, scored the long way.")
     return (lead + " Each box draws only the bases that batter actually reached, coloured by "
             "what the outcome was worth, with the count on the deciding pitch and the exit "
-            "velocity in the corners. Hover any box for the full play.")
+            "velocity in the corners. Hover over or tap any box for the full play.")
 
 
 # outcome colours for the notation and the basepaths, never a cell background.
@@ -732,6 +732,19 @@ a.pl-n:focus-visible{outline:2px solid var(--ink); outline-offset:1px; border-ra
 @media (max-width:640px){
   .wrap{padding:24px 12px 0}
   .band{border-radius:6px 6px 0 0}
+  /* the innings scroll sideways under the batter, the pitcher and the line score's team, which
+     stay in view and narrower; the batting-order number scrolls away */
+  .grid th.who,.grid tr.tot th,.pitch th.who{position:sticky; left:0; z-index:4; background:var(--surface)}
+  .line tbody th,.line thead th:first-child{position:sticky; left:0; z-index:4; background:var(--ground)}
+  /* the batter's and pitcher's edge, as an overlay: a collapsed table paints neither a sticky cell's
+     border nor its shadow (the line score's names clip it, and need none) */
+  .grid th.who::after,.grid tr.tot th::after,.pitch th.who::after{
+    content:""; position:absolute; top:0; bottom:0; right:-10px; width:10px; pointer-events:none;
+    border-left:1px solid var(--rule); background:linear-gradient(90deg,rgba(0,0,0,.5),transparent)}
+  .grid th.who{width:132px; padding-left:10px}
+  .pitch th.who{width:150px}
+  .grid th.who .nm,.pitch th.who .nm,.line tbody th{max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .nm{font-size:14px}
 }
 @media print{.readout{display:none} .team{break-inside:avoid}}
 """
@@ -899,7 +912,7 @@ def render_html(data):
       <div class="pitchlist" id="pitchlist" role="tooltip" aria-hidden="true"></div>
 
       <div class="readout" id="readout">
-        <span class="d-play">Hover or tab through any box to read the play.</span>
+        <span class="d-play">Hover, tap or tab through any box to read the play.</span>
         <span class="d-meta">Counts, exit velocity and pitch types come from Statcast tracking.</span>
       </div>
 
