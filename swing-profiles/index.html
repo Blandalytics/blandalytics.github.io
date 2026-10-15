@@ -50,7 +50,7 @@ button.primary:hover:not(:disabled){background:#8cc6ff}
 .suggest{position:relative}
 /* ten rows tall (32px each plus the list's own padding and border), scrolling through the rest */
 .suggest-list{--rows:10; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:5; margin:0; padding:4px; list-style:none;
-  background:var(--raise); border:1px solid var(--rule); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.4);
+  background:var(--raise); border:1px solid var(--rule); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.4);
   max-height:calc(var(--rows) * 32px + 10px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--faint) transparent}
 .suggest-list li{display:flex; justify-content:space-between; gap:12px; padding:6px 9px; border-radius:4px; cursor:pointer; font-size:14px; line-height:20px; color:var(--ink)}
 .suggest-list li small{color:var(--muted); font-size:12px; white-space:nowrap}
@@ -80,12 +80,20 @@ button.primary:hover:not(:disabled){background:#8cc6ff}
 .method p:last-child{margin-bottom:0}
 .method code{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:12.5px; background:var(--ground); border:1px solid var(--rule); border-radius:4px; padding:1px 5px; color:var(--ink)}
 .method b{color:var(--ink); font-weight:500}
-.card-img{display:block; width:100%; max-width:640px; border-radius:6px; margin-top:8px}
+.card-img{display:block; width:100%; max-width:640px; border-radius:6px; margin-top:8px; outline:1px solid oklch(1 0 0 / .1); outline-offset:-1px}
 [hidden]{display:none!important}
 details summary{cursor:pointer; font-size:17px; font-weight:600; list-style:none}
 details summary::-webkit-details-marker{display:none}
 details summary span{color:var(--muted); font-weight:400; font-size:13px; margin-left:10px}
 details[open] summary{margin-bottom:10px}
+/* polish: balanced headings, prose without orphan words, a slight scale on press, and controls
+   at least 44px tall on touch screens */
+h1,h2,h3{text-wrap:balance}
+p,li,.tag,.note,.method,.status{text-wrap:pretty}
+button:not(.share-menu button){transition:transform .12s cubic-bezier(.2,0,0,1)}
+button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
+@media (pointer:coarse){button,select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}}
+@media (prefers-reduced-motion:reduce){button:not(.share-menu button):active:not(:disabled){transform:none}}
 </style>
 </head>
 <body>
@@ -142,7 +150,7 @@ details[open] summary{margin-bottom:10px}
     </details>
   </section>
 </main>
-<script src="/shared/share-image.js?v=1"></script>
+<script src="/shared/share-image.js?v=2"></script>
 <script src="swing.js?v=9"></script>
 <script src="plot.js?v=9"></script>
 <script src="app.js?v=11"></script>

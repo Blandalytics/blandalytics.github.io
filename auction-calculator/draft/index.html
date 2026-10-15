@@ -88,6 +88,14 @@ details summary{cursor:pointer; font-size:17px; font-weight:600; list-style:none
 details summary::-webkit-details-marker{display:none}
 details summary span{color:var(--muted); font-weight:400; font-size:13px; margin-left:10px}
 details[open] summary{margin-bottom:10px}
+/* polish: balanced headings, prose without orphan words, a slight scale on press, and controls
+   at least 44px tall on touch screens */
+h1,h2,h3{text-wrap:balance}
+p,li,.tag,.note,.method,.status{text-wrap:pretty}
+button{transition:transform .12s cubic-bezier(.2,0,0,1)}
+button:active:not(:disabled){transform:scale(.96)}
+@media (pointer:coarse){button:not(.tip,.link,.take,.chips button,.points button,.chip button),select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}}
+@media (prefers-reduced-motion:reduce){button:active:not(:disabled){transform:none}}
 </style>
 </head>
 <body>

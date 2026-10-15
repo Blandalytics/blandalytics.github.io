@@ -20,6 +20,16 @@
 
 	body {
 		background: var(--ground);
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	h1, h2, h3, h4 {
+		text-wrap: balance;
+	}
+
+	p {
+		text-wrap: pretty;
 	}
 
 	body, input, select, textarea {
@@ -182,11 +192,32 @@
 
 /* Tiles: the app output shows through a dark scrim instead of Phantom's color wash. */
 
+	/* The edge is pure white at low opacity, so it reads the same over every picture. The
+	   template eases the tiles over 0.5s; a quicker ease-out keeps the hover responsive. */
 	.tiles article > .image {
-		border: solid 1px var(--rule);
+		border: solid 1px oklch(1 0 0 / 0.1);
 		border-radius: 8px;
 		background: var(--surface);
 		aspect-ratio: 1 / 1;
+		transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+	}
+
+	.tiles article > .image:before {
+		transition: background-color 0.3s cubic-bezier(0.2, 0, 0, 1), opacity 0.3s cubic-bezier(0.2, 0, 0, 1);
+	}
+
+	.tiles article > a {
+		transition: background-color 0.3s cubic-bezier(0.2, 0, 0, 1), transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+	}
+
+	.tiles article > a .content {
+		transition: max-height 0.3s cubic-bezier(0.2, 0, 0, 1), opacity 0.3s cubic-bezier(0.2, 0, 0, 1);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		body:not(.is-touch) .tiles article:hover > .image {
+			transform: none;
+		}
 	}
 
 	/* Every tile is square whatever its picture: the image fills the square, cropped rather than

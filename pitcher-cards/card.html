@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@600;700&display=swap">
 <style>
-html,body{margin:0;background:#292C42;color:#8D96B3;font:15px "DM Sans",system-ui,sans-serif}
+html,body{margin:0;background:#292C42;color:#8D96B3;font:15px "DM Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}
 #card{width:100%;max-width:1500px}
 #prov{margin:6px 0 10px;padding:0 20px;font-size:13px;text-align:center}
@@ -23,6 +23,9 @@ body{display:flex;flex-direction:column;align-items:center;justify-content:cente
   color:#fff;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.35);border-radius:6px;
   padding:7px 11px;cursor:pointer}
 #png:hover{background:rgba(0,0,0,.7)}
+#png{transition:transform .12s cubic-bezier(.2,0,0,1)}
+#png:active{transform:scale(.96)}
+@media (prefers-reduced-motion:reduce){#png:active{transform:none}}
 #png[hidden]{display:none}
 </style>
 </head>
@@ -31,7 +34,7 @@ body{display:flex;flex-direction:column;align-items:center;justify-content:cente
 <p id="prov" hidden><b>PLV and Location are provisional below MLB</b> (the models aren't yet calibrated to minor-league strike zones and parks).</p>
 <p id="msg">Loading the card…</p>
 <button id="png" type="button" hidden>Share image ▾</button>
-<script src="/shared/share-image.js?v=1"></script>
+<script src="/shared/share-image.js?v=2"></script>
 <script src="card.js?v=2"></script>
 <script>
 // One card, full size: card.html#<gamePk>-<pitcherId>, optionally &cmp=<year> (0 for no

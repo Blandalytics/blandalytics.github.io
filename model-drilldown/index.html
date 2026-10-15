@@ -501,6 +501,38 @@
           transition: none;
         }
       }
+      /* polish: balanced headings, prose without orphan words, a slight scale on press, and
+         controls at least 44px tall on touch screens */
+      h1,
+      h2,
+      h3 {
+        text-wrap: balance;
+      }
+      p,
+      li {
+        text-wrap: pretty;
+      }
+      .actions button {
+        transition: transform 0.12s cubic-bezier(0.2, 0, 0, 1);
+      }
+      .actions button:active:not(:disabled) {
+        transform: scale(0.96);
+      }
+      @media (pointer: coarse) {
+        button,
+        select,
+        input[type='text'],
+        input[type='number'],
+        input[type='search'],
+        input[type='date'] {
+          min-height: 44px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .actions button:active:not(:disabled) {
+          transform: none;
+        }
+      }
     </style>
   </head>
   <body>
@@ -665,7 +697,7 @@
       </section>
     </main>
     <div id="tip" hidden role="tooltip"></div>
-    <script src="/shared/share-image.js?v=1"></script>
+    <script src="/shared/share-image.js?v=2"></script>
     <script type="module" src="app.js?v=108"></script>
   </body>
 </html>

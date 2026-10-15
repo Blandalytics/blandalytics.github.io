@@ -95,6 +95,14 @@ details summary{cursor:pointer; color:var(--ink); font-weight:600}
 .method{display:flex; flex-direction:column; gap:10px; margin-top:12px; color:var(--muted); font-size:14px}
 .method b{color:var(--ink); font-weight:600}
 code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--ground); border:1px solid var(--rule); border-radius:4px; padding:0 4px; color:var(--ink)}
+/* polish: balanced headings, prose without orphan words, a slight scale on press, and controls
+   at least 44px tall on touch screens */
+h1,h2,h3{text-wrap:balance}
+p,li,.tag,.note,.method,.status{text-wrap:pretty}
+button.reset,button.play{transition:transform .12s cubic-bezier(.2,0,0,1)}
+button.reset:active:not(:disabled),button.play:active:not(:disabled){transform:scale(.96)}
+@media (pointer:coarse){button:not(.play),select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}button.play{width:44px;height:44px}}
+@media (prefers-reduced-motion:reduce){button.reset:active:not(:disabled),button.play:active:not(:disabled){transform:none}}
 </style>
 </head>
 <body>

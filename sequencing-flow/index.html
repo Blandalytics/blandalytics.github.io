@@ -171,6 +171,14 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
   .note{padding:4px 12px 6px; font-size:11px}
 }
 @media (prefers-reduced-motion:reduce){.chip{transition:none}}
+/* polish: balanced headings, prose without orphan words, a slight scale on press, and controls
+   at least 44px tall on touch screens */
+h1,h2,h3{text-wrap:balance}
+p,li,.tag,.note,.method,.status{text-wrap:pretty}
+.btn{transition:transform .12s cubic-bezier(.2,0,0,1)}
+.btn:active:not(:disabled){transform:scale(.96)}
+@media (pointer:coarse){button:not(.chip),select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}}
+@media (prefers-reduced-motion:reduce){.btn:active:not(:disabled){transform:none}}
 </style>
 </head>
 <body>
@@ -232,7 +240,7 @@ select:disabled,input:disabled{opacity:.45; cursor:default}
   <div id="tip" hidden role="tooltip"></div>
 </main>
 
-<script src="/shared/share-image.js?v=1"></script>
+<script src="/shared/share-image.js?v=2"></script>
 <script type="module" src="app.js?v=24"></script>
 </body>
 </html>

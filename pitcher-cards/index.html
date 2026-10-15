@@ -93,6 +93,14 @@ select:disabled{opacity:.45; cursor:default}
   .stage{display:block; padding:8px}
   .card,iframe{width:100%; height:auto}
 }
+/* polish: balanced headings, prose without orphan words, a slight scale on press, and controls
+   at least 44px tall on touch screens */
+h1,h2,h3{text-wrap:balance}
+p,li,.tag,.note,.method,.status{text-wrap:pretty}
+.btn,.open{transition:transform .12s cubic-bezier(.2,0,0,1)}
+.btn:active:not(:disabled),.open:active:not(:disabled){transform:scale(.96)}
+@media (pointer:coarse){button,select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}}
+@media (prefers-reduced-motion:reduce){.btn:active:not(:disabled),.open:active:not(:disabled){transform:none}}
 </style>
 </head>
 <body>
@@ -147,7 +155,7 @@ select:disabled{opacity:.45; cursor:default}
   <a href="https://x.com/blandalytics" target="_blank" rel="noopener">Twitter</a>.
 </footer>
 
-<script src="/shared/share-image.js?v=1"></script>
+<script src="/shared/share-image.js?v=2"></script>
 <script src="card.js?v=2"></script>
 <script>
 (function () {

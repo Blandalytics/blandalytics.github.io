@@ -26,7 +26,7 @@
   background:#1b222c; border:1px solid #2c3541; border-radius:8px; padding:4px; box-shadow:0 10px 28px rgba(0,0,0,.5);
   font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:14px; line-height:1.3; text-align:left}
 .share-menu[hidden]{display:none}
-.share-menu button{all:unset; box-sizing:border-box; display:block; padding:8px 11px; border-radius:5px; cursor:pointer;
+.share-menu button{all:unset; box-sizing:border-box; display:block; padding:8px 11px; border-radius:4px; cursor:pointer;
   color:#e3e9f1; white-space:nowrap; font:inherit}
 .share-menu button:hover,.share-menu button:focus-visible{background:#151b23; color:#6cb4ff}
 .share-menu .share-head{padding:7px 11px 2px; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#8a96a6}
