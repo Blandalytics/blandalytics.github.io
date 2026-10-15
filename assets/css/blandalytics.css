@@ -391,3 +391,15 @@
 		padding-left: 0;
 		margin-bottom: 0.4em;
 	}
+
+	/* the footer's tool links as 34px taps on a touch screen (22px, 0.4em apart, otherwise) */
+	@media (pointer: coarse) {
+		#footer ul.tool-links li {
+			margin-bottom: 0;
+		}
+
+		#footer ul.tool-links a {
+			display: inline-block;
+			padding: 6px 0;
+		}
+	}
