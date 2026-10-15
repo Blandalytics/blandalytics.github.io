@@ -85,6 +85,19 @@ button.primary:hover:not(:disabled){background:#8cc6ff}
 .curve th,.curve td{padding:4px 8px; border-top:1px solid var(--rule); text-align:right; white-space:nowrap}
 .curve thead th{border-top:0; font-size:12px; font-weight:500; color:var(--muted)}
 .curve th[scope=row],.curve thead th:first-child{text-align:left; font-weight:400; color:var(--muted); padding-left:0}
+/* lineup optimizer */
+.opt-controls{display:flex; flex-wrap:wrap; gap:12px 22px; align-items:center; margin-top:12px}
+label.check{flex-direction:row; align-items:center; gap:8px; color:var(--ink); font-size:14px}
+label.check.off{color:var(--faint)}
+label.check input{width:16px; height:16px; margin:0; accent-color:var(--accent)}
+.opt-controls select{width:auto}
+.opt-controls label:not(.check){flex-direction:row; align-items:center; gap:8px}
+.locks{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:12px; font-size:13px; color:var(--muted)}
+.locks span{margin-right:4px}
+.locks button{min-width:34px; padding:4px 0; font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-size:12.5px}
+.locks button[aria-pressed=true]{background:var(--accent); color:#0b1320; border-color:var(--accent); font-weight:600}
+#opt_out{margin-top:14px}
+#opt_summary{color:var(--ink); font-size:14px}
 @media (max-width:640px){.lineup .opt{display:none} .who-sub{max-width:200px}}
 @media (max-width:480px){.lineup .opt2{display:none} .lineup td{padding:3px 4px} .who-sub{max-width:110px}}
 .suggest{position:relative}
@@ -216,6 +229,40 @@ button:active:not(:disabled){transform:scale(.96)}
     <p id="status" class="status" style="margin-top:10px" role="status">loading 2026 data…</p>
   </section>
 
+  <section class="card" aria-labelledby="opt_h">
+    <h2 id="opt_h">Lineup optimizer</h2>
+    <p class="note">Rearranges the lineup above, and moves its MLB-average spots along the contact–power axis, to score the most runs. Each spot keeps its wOBA. Lineups are judged by exact expected runs, so there's no simulation noise to chase.</p>
+    <div class="opt-controls">
+      <label class="check"><input type="checkbox" id="opt_order" checked> Batting order</label>
+      <label class="check" id="opt_tilt_label"><input type="checkbox" id="opt_tilt" checked> Contact–power settings</label>
+      <label><b>Overall mix</b>
+        <select id="opt_mix">
+          <option value="same" selected>Keep the lineup's average setting</option>
+          <option value="free">Free: each spot anywhere</option>
+        </select>
+      </label>
+    </div>
+    <div class="locks" id="opt_locks" role="group" aria-label="Spots to keep as they are"><span>Keep as is</span></div>
+    <div class="row" style="margin-top:14px">
+      <button id="opt_go" class="primary" type="button">Optimize</button>
+      <button id="opt_undo" type="button" hidden>Undo</button>
+      <span id="opt_status" class="status" role="status"></span>
+    </div>
+    <p id="opt_hint" class="note" style="margin-top:8px"></p>
+    <p id="opt_now" class="note" style="margin-top:8px"></p>
+    <div id="opt_out" hidden>
+      <p id="opt_summary"></p>
+      <div id="opt_chart_box" class="section" style="margin-top:14px">
+        <h3>Contact–power setting by lineup spot</h3>
+        <div class="legend" aria-hidden="true" style="margin-top:4px">
+          <span><i class="key-bar" style="background:var(--s-lineup)"></i>Optimized</span>
+          <span><i class="key-tick" style="background:var(--muted)"></i>Before</span>
+        </div>
+        <div class="chart" id="opt_chart"></div>
+      </div>
+    </div>
+  </section>
+
   <section id="out" class="card" hidden aria-labelledby="out_h">
     <h2 id="out_h">Per 9 innings</h2>
     <div id="kpis" class="kpis"></div>
@@ -290,6 +337,7 @@ button:active:not(:disabled){transform:scale(.96)}
         <p><b>Stats.</b> R, H, HR, K and BB are per nine innings (27 outs). AVG, OBP and SLG are the usual ones; wOBA uses FanGraphs' 2026 weights (<span id="weights"></span>). BB counts unintentional walks only and OBP leaves intentional walks out, in the simulation and in the team and MLB numbers it is compared with.</p>
         <p><b>The comparison.</b> <b>Teams' 2026 actual</b> is each team's real batting in innings 1–9, per 27 outs. <b>Teams' lineup spots, simulated</b> runs each team's nine spots through the same simulation, so the comparison is like for like. <span id="calibration"></span></p>
         <p><b>Contact vs power.</b> Take every 2026 hitter with 200 or more plate appearances and remove what wOBA explains about each of the eleven outcome rates. What's left is how hitters with the same wOBA differ, and most of it (<span id="tilt_share"></span>) runs along one line: strikeouts, walks and homers one way, singles and balls in play the other. That line is the contact–power axis. Moving an MLB-average spot along it changes its K%, BB%, AVG and SLG but not its wOBA, because the axis gives up exactly as much wOBA in one outcome as it adds in another. Steps are standard deviations of 2026 hitters along the axis, and the sliders reach ±<span id="tilt_range"></span>, about as far as the most extreme regulars. AVG and SLG beside the sliders estimate sacrifice flies at the league rate; the simulation's own numbers are exact. With so little difference between settings, 50,000 or more games keeps noise below the effect.</p>
+        <p><b>Lineup optimizer.</b> The optimizer doesn't simulate. It solves for expected runs exactly, with a Markov chain over who's up, the outs and the bases, built from the same running-game and advancement tables the simulation draws from. That gives the average the simulation would reach over endless games (<span id="exact_check"></span>), in about a millisecond per lineup. Batting order: swaps of two spots, the best one each time, until none helps. Contact–power settings: with <b>Keep the lineup's average setting</b>, spots trade contact for power with each other in moves of 1, 0.5, 0.2 or 0.1 while the total stays put; with <b>Free</b>, each spot takes its own best setting, and in 2026 that is the contact end almost everywhere, since outs on balls in play move runners and strikeouts don't. The two searches alternate until neither helps. They are local searches, checked against brute force on smaller problems. Spots under <b>Keep as is</b> keep their hitter and setting.</p>
         <p><b>Not modeled yet:</b> the opposing pitcher and platoon splits, park, runner speed, intentional walks, bunts, pinch hitters and extra innings. Results use a fixed random seed, so the same lineup always gets the same numbers and two orders of the same nine hitters face the same luck.</p>
         <p><b>Data:</b> MLB Stats API play-by-play (<span id="data_range"></span>); lineups and wOBA weights from FanGraphs.</p>
       </div>
@@ -298,6 +346,6 @@ button:active:not(:disabled){transform:scale(.96)}
 </main>
 <div id="tip" class="tip" hidden></div>
 <style>.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}</style>
-<script type="module" src="app.js?v=3"></script>
+<script type="module" src="app.js?v=4"></script>
 </body>
 </html>

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import assert from "node:assert/strict";
 import { CATS, prepare, rates, simulate, summarize, tilt } from "../../lineup-sims/sim.js";
+import { chainTables, expectedRuns, hitterBlock, optimize } from "../../lineup-sims/markov.js";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const data = JSON.parse(readFileSync(join(repo, "lineup-sims", "data", `${process.argv[2] ?? "2026"}.json`), "utf8"));
@@ -93,6 +94,72 @@ check("contact vs power keeps each MLB-average spot's wOBA and moves K%, BB%, AV
     assert.ok(b.K > a.K && b.BB > a.BB && b.SLG > a.SLG && b.AVG < a.AVG, `simulated ${a.theta} -> ${b.theta}`);
     assert.ok(Math.abs(b.wOBA - pts[0].wOBA) < 0.002, `simulated wOBA at ${b.theta}`);
   }
+});
+
+// ---- the optimizer's exact expected runs (markov.js) ----
+const chain = chainTables(model);
+const probs = (counts) => { const t = counts.reduce((s, x) => s + x, 0); return counts.map((x) => x / t); };
+const exact = (profiles) => expectedRuns(chain, profiles.map((p) => hitterBlock(chain, p)));
+const T = data.tradeoff, axis = { perSd: T.per_sd, range: T.range };
+
+check("exact expected runs agree with the simulation", () => {
+  const mlb = exact(data.mlb.spots.map((s) => probs(s.counts)));
+  assert.ok(Math.abs(mlb - data.sims.mlb.R) < 0.02, `MLB spots: exact ${mlb} vs simulated ${data.sims.mlb.R}`);
+  const diffs = data.teams.map((t) => exact(t.spots.map((s) => probs(s.counts))) - data.sims.teams[t.abbr].spots.R);
+  const mean = diffs.reduce((a, d) => a + d, 0) / diffs.length;
+  assert.ok(Math.abs(mean) < 0.01, `teams: mean difference ${mean}`);
+  assert.ok(Math.max(...diffs.map(Math.abs)) < 0.04, "teams: largest difference");
+});
+
+check("the optimizer matches brute force: settings of three spots with the total fixed", () => {
+  const lineup = data.mlb.spots.map((s) => ({ base: s.counts, theta: 0 }));
+  let best = -1;
+  for (let a = -30; a <= 30; a++) {
+    for (let b = -30; b <= 30; b++) {
+      const c = -a - b;
+      if (c < -30 || c > 30) continue;
+      const th = [0, a, b, c, 0, 0, 0, 0, 0];
+      best = Math.max(best, exact(data.mlb.spots.map((s, i) => tilt(s.counts, T.per_sd, th[i] / 10))));
+    }
+  }
+  const r = optimize(chain, lineup, { order: false, tilt: true, mix: "same", locked: [0, 4, 5, 6, 7, 8], ...axis });
+  assert.ok(r.after >= best - 1e-9, `optimizer ${r.after} vs brute force ${best}`);
+});
+
+check("the optimizer matches brute force: batting order of five spots", () => {
+  const team = data.teams.find((t) => t.abbr === "NYY").spots.map((s) => ({ probs: probs(s.counts) }));
+  const blocks = team.map((h) => hitterBlock(chain, h.probs));
+  let best = -1;
+  const perm = (arr, k = 0) => {
+    if (k === arr.length) {
+      best = Math.max(best, expectedRuns(chain, [0, 1, ...arr, 7, 8].map((h) => blocks[h])));
+      return;
+    }
+    for (let i = k; i < arr.length; i++) {
+      [arr[k], arr[i]] = [arr[i], arr[k]];
+      perm(arr, k + 1);
+      [arr[k], arr[i]] = [arr[i], arr[k]];
+    }
+  };
+  perm([2, 3, 4, 5, 6]);
+  const r = optimize(chain, team, { order: true, tilt: false, locked: [0, 1, 7, 8], ...axis });
+  assert.ok(r.after >= best - 1e-9, `optimizer ${r.after} vs brute force ${best}`);
+});
+
+check("the optimizer keeps locked spots, the total setting, and the sliders' range", () => {
+  const start = data.mlb.spots.map((s, i) => ({ base: s.counts, theta: [0.5, -1, 0, 2, 0, 0, -0.5, 1, 0][i] }));
+  const total = start.reduce((t, h) => t + h.theta, 0);
+  const r = optimize(chain, start, { order: true, tilt: true, mix: "same", locked: [0, 3], ...axis });
+  assert.equal(r.slot[0], 0);
+  assert.equal(r.slot[3], 3);
+  assert.equal(r.theta[0], 0.5);
+  assert.equal(r.theta[3], 2);
+  assert.ok(Math.abs(r.theta.reduce((t, x) => t + x, 0) - total) < 1e-9, "total setting");
+  assert.ok(r.theta.every((t) => Math.abs(t) <= T.range + 1e-9), "range");
+  assert.ok(r.after >= r.before - 1e-12, "never worse");
+  assert.deepEqual([...r.slot].sort(), [0, 1, 2, 3, 4, 5, 6, 7, 8], "a permutation");
+  const free = optimize(chain, start, { order: true, tilt: true, mix: "free", locked: [0, 3], ...axis });
+  assert.ok(free.after >= r.after - 1e-9, "free can only do better than the same mix");
 });
 
 console.log(`${n} checks passed`);

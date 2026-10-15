@@ -63,6 +63,13 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
 * **Contact vs power**: the first principal component of the hitters' outcome rates
   after removing what wOBA explains (200+ PA). Moving a profile along it keeps its wOBA
   exactly. The page applies it to the MLB-average lineup spots.
+* **Lineup optimizer** (`lineup-sims/markov.js`, run in the page's worker): exact
+  expected runs from a Markov chain over (batter due up, outs, bases) built from the same
+  two tables, so it equals the simulation's average without the noise (2026: MLB's
+  lineup spots 4.432 exact, 4.434 over 100,000 simulated games). It searches batting
+  orders (pair swaps) and contact-power settings (moves between spots that keep the total,
+  or each spot free) and runs twice, from the lineup as given and from its settings made
+  even. `test_sim.mjs` checks it against brute force on smaller problems.
 
 ## Files
 
@@ -73,4 +80,4 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
 | `pbp.py` | replays plays into base-out states and coded runner outcomes |
 | `build.py` | builds the data file and runs the cross-checks |
 | `precompute.mjs` | team simulations, the contact-power curve, the calibration report |
-| `test_sim.mjs` | engine checks |
+| `test_sim.mjs` | engine and optimizer checks |

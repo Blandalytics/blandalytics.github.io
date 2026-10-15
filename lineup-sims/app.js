@@ -1,4 +1,5 @@
 import { CATS, prepare, rates, simulate, summarize, tilt } from "./sim.js?v=2";
+import { chainTables, expectedRuns, hitterBlock, optimize } from "./markov.js?v=1";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -228,6 +229,7 @@ function renderLineup() {
     wireSuggest(input, tr.querySelector("ul"), i);
     body.append(tr);
   });
+  renderOptimizer();
 }
 
 function fillRow(tr, e) {
@@ -379,7 +381,7 @@ let worker = null;
 let useWorker = typeof Worker !== "undefined";
 
 function startWorker() {
-  const w = new Worker(new URL("./sim-worker.js?v=1", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./sim-worker.js?v=2", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
   w.onmessage = ({ data: msg }) => {
     if (job && msg.id === job.id) finish(job, msg.res, msg.ms);
@@ -512,6 +514,7 @@ function renderResults() {
   renderTradeoff(moe);
   renderSpots();
   renderTeams();
+  renderOptimizer();
 }
 
 function strip(st, v, mlb, teams) {
@@ -587,6 +590,17 @@ function showTip(ev, rows, title) {
 }
 function hideTip() { $("tip").hidden = true; }
 
+// charts are drawn at the width they're shown at (text stays 11-12px on a phone) and
+// redrawn when that changes
+const chartWidth = (id) => Math.max(300, Math.round($(id).clientWidth || 640));
+let resizeTimer = 0, drawnWidth = 0;
+addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (last && $("runs_chart").clientWidth !== drawnWidth) renderResults();
+  }, 200);
+});
+
 function runsChart(dist, games) {
   const MAX = 13; // last bucket is 13+
   const share = (arr, total) => {
@@ -596,7 +610,8 @@ function runsChart(dist, games) {
   };
   const mine = share(dist, games);
   const mlb = share(data.sims.mlb.runDist, 1);
-  const W = 640, H = 230, L = 40, R = 8, T = 10, B = 34;
+  const W = chartWidth("runs_chart"), H = 230, L = 40, R = 8, T = 10, B = 34;
+  drawnWidth = $("runs_chart").clientWidth;
   const n = mine.length, band = (W - L - R) / n, bw = Math.min(24, band * 0.62);
   const top = Math.max(...mine, ...mlb);
   const step = top > 0.16 ? 0.05 : 0.04;
@@ -780,7 +795,7 @@ function renderTradeoff(moe) {
 }
 
 function tradeoffChart(pts, avg, R, moe) {
-  const W = 640, H = 240, L = 44, Rt = 14, T = 22, B = 44;
+  const W = chartWidth("tradeoff_chart"), H = 240, L = 44, Rt = 14, T = 22, B = 44;
   const range = data.tradeoff.range;
   const ys = pts.map((p) => p.R).concat(avg == null ? [] : [R - moe, R + moe]);
   const span = Math.max(...ys) - Math.min(...ys);
@@ -836,6 +851,228 @@ function tradeoffChart(pts, avg, R, moe) {
   $("tradeoff_chart").replaceChildren(svg);
 }
 
+// ---------- lineup optimizer ----------
+// The optimizer judges lineups by exact expected runs (markov.js), not simulated ones:
+// the differences it chases are hundredths of a run, which simulation noise would bury.
+// It runs in its own worker, so a search and a simulation never cancel each other.
+let chain = null;          // markov tables, for the exact runs of the lineup on screen
+let optWorker = null;
+let optJob = null;         // the search under way
+let optJobs = 0;
+let optDone = null;        // the last search: { before, after, result, ms } (lineup ids)
+const locked = new Set();  // lineup slots (0-8) the search leaves alone
+
+// a lineup entry's outcome chances, exactly as the simulation would draw them
+function probsOf(e) {
+  const cum = rates(e.counts, prior, e.kind === "player" ? Number($("regress").value) : 0);
+  return Array.from(cum, (c, i) => c - (i ? cum[i - 1] : 0));
+}
+
+function exactRuns(ids) {
+  chain ??= chainTables(model);
+  return expectedRuns(chain, ids.map((id) => hitterBlock(chain, probsOf(entryOf(id)))));
+}
+
+const shortName = (e) => (e.kind === "spot" && e.team === "MLB" ? `${e.name.split(" · ")[1].replace(" spot", "")}-spot hitter` : e.name);
+
+function setupOptimizer() {
+  const box = $("opt_locks");
+  for (let i = 0; i < 9; i++) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = String(i + 1);
+    b.setAttribute("aria-pressed", "false");
+    b.setAttribute("aria-label", `Keep the ${ordinal(i + 1)} spot as it is`);
+    b.addEventListener("click", () => {
+      if (locked.has(i)) locked.delete(i); else locked.add(i);
+      b.setAttribute("aria-pressed", String(locked.has(i)));
+    });
+    box.append(b);
+  }
+  $("opt_tilt").addEventListener("change", renderOptimizer);
+  $("opt_go").addEventListener("click", startOptimize);
+  $("opt_undo").addEventListener("click", () => {
+    if (!optDone) return;
+    lineup = [...optDone.before];
+    optDone = null;
+    renderLineup();
+    run();
+  });
+}
+
+// controls that depend on the lineup, the exact-runs line, and the last search's result
+function renderOptimizer() {
+  const canTilt = lineup.some((id) => entryOf(id).theta != null);
+  $("opt_tilt").disabled = !canTilt;
+  $("opt_tilt_label").classList.toggle("off", !canTilt);
+  $("opt_mix").disabled = !canTilt || !$("opt_tilt").checked;
+  const thetas = lineup.map((id) => entryOf(id).theta).filter((t) => t != null);
+  const avg = thetas.length ? thetas.reduce((x, t) => x + t, 0) / thetas.length : 0;
+  $("opt_mix").options[0].textContent = `Keep the lineup's average setting (${fmtTheta(avg)})`;
+  $("opt_go").disabled = optJob != null;
+  $("opt_hint").textContent = canTilt ? ""
+    : "Contact–power settings apply to MLB-average spots: pick “MLB-average spots: contact vs power” under Lineup, or put an MLB-average spot in the lineup.";
+  if (last && last.lineup.join() === lineup.join()) {
+    const r = exactRuns(lineup);
+    $("opt_now").textContent = `This lineup: ${r.toFixed(3)} expected runs per nine innings, exact. `
+      + `The simulation's ${last.sum.R.toFixed(2)} is the same quantity with sampling noise.`;
+  }
+  const shown = optDone && optDone.after.join() === lineup.join();
+  $("opt_out").hidden = !shown;
+  $("opt_undo").hidden = !shown;
+  if (shown) renderOptResult();
+}
+
+function startOptimize() {
+  const canTilt = lineup.some((id) => entryOf(id).theta != null);
+  const opts = { order: $("opt_order").checked, tilt: canTilt && $("opt_tilt").checked, mix: $("opt_mix").value,
+    locked: [...locked], perSd: data.tradeoff.per_sd, range: data.tradeoff.range };
+  if (!opts.order && !opts.tilt) {
+    $("opt_status").textContent = "Pick batting order, contact–power settings or both to search.";
+    return;
+  }
+  if (locked.size >= 8 && !opts.tilt) {
+    $("opt_status").textContent = "With eight or nine spots kept as they are, there's no order left to search.";
+    return;
+  }
+  const ids = [...lineup];
+  const hitters = ids.map((id) => {
+    const e = entryOf(id);
+    return opts.tilt && e.theta != null ? { base: entries.get(e.base).counts, theta: e.theta } : { probs: probsOf(e) };
+  });
+  optJob = { id: ++optJobs, ids, opts };
+  $("opt_status").textContent = "searching…";
+  renderOptimizer();
+  const j = optJob;
+  const here = () => setTimeout(() => {
+    const t0 = performance.now();
+    chain ??= chainTables(model);
+    optFinish(j, optimize(chain, hitters, opts), performance.now() - t0);
+  }, 30);
+  if (!useWorker) return here();
+  try {
+    if (!optWorker) {
+      optWorker = new Worker(new URL("./sim-worker.js?v=2", import.meta.url), { type: "module" });
+      optWorker.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
+    }
+  } catch {
+    return here();
+  }
+  optWorker.onmessage = ({ data: msg }) => {
+    if (msg.id !== j.id) return;
+    if (msg.progress) $("opt_status").textContent = `searching… ${msg.progress.toLocaleString()} lineups so far`;
+    else optFinish(j, msg.result, msg.ms);
+  };
+  optWorker.onerror = (ev) => {
+    ev.preventDefault();
+    optWorker.terminate();
+    optWorker = null;
+    here();
+  };
+  optWorker.postMessage({ type: "optimize", id: j.id, hitters, opts });
+}
+
+function optFinish(j, result, ms) {
+  if (optJob !== j) return;
+  optJob = null;
+  if (lineup.join() !== j.ids.join()) {
+    // edited while the search ran; its answer is for a lineup that's gone
+    $("opt_status").textContent = "The lineup changed during the search. Optimize again for this one.";
+    renderOptimizer();
+    return;
+  }
+  const after = result.slot.map((h) => {
+    const e = entryOf(j.ids[h]);
+    return result.theta[h] != null ? tiltId(e.base, result.theta[h]) : j.ids[h];
+  });
+  $("opt_status").textContent = `Searched ${result.evals.toLocaleString()} lineups in ${(ms / 1000).toFixed(2)} s.`;
+  optDone = { before: j.ids, after, result, opts: j.opts };
+  if (after.join() !== lineup.join()) {
+    lineup = [...after]; // a copy: edits to the lineup mustn't rewrite the search's record
+    edited = true;
+    renderLineup();
+  }
+  run();
+}
+
+function renderOptResult() {
+  const { before, after, result } = optDone;
+  const gain = result.after - result.before;
+  const season = gain * 162;
+  const parts = [before.join() === after.join()
+    ? `The lineup was already as good as the search could find: ${result.after.toFixed(3)} expected runs per nine innings.`
+    : `Expected runs per nine innings: ${result.before.toFixed(3)} → ${result.after.toFixed(3)} (+${gain.toFixed(gain < 0.001 ? 4 : 3)}), `
+      + (season < 0.5 ? "under a run over 162 games." : `about ${season.toFixed(1)} more runs over 162 games.`)];
+  const baseOf = (id) => id.split("@")[0];
+  const wasSlot = (s) => before.findIndex((id) => baseOf(id) === baseOf(after[s]));
+  const reordered = after.map((_, s) => [s, wasSlot(s)]).filter(([s, b]) => b !== s);
+  if (reordered.length) {
+    parts.push("Order: " + reordered.map(([s, b]) => `${shortName(entryOf(after[s]))} from ${ordinal(b + 1)} to ${ordinal(s + 1)}`).join("; ") + ".");
+  }
+  $("opt_summary").textContent = parts.join(" ");
+  const tilted = after.some((id) => entryOf(id).theta != null);
+  $("opt_chart_box").hidden = !tilted;
+  if (tilted) settingsChart(before, after, wasSlot);
+}
+
+// the optimized setting of each slot's hitter (bar) against where that hitter was (tick)
+function settingsChart(before, after, wasSlot) {
+  const range = data.tradeoff.range;
+  const W = chartWidth("opt_chart"), rowH = 26, L = Math.min(150, Math.round(W * 0.36)), Rt = 50, T = 6, B = 40;
+  const H = T + 9 * rowH + B, room = Math.floor((L - 22) / 6.6); // characters that fit beside the bars
+  const x = (t) => L + ((t + range) / (2 * range)) * (W - L - Rt);
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Optimized contact–power setting by lineup spot: "
+    + after.map((id, s) => `${ordinal(s + 1)} ${fmtTheta(entryOf(id).theta ?? 0)}`).join(", "));
+  const el = (name, attrs, text) => {
+    const e = document.createElementNS(SVG, name);
+    for (const [k, a] of Object.entries(attrs)) e.setAttribute(k, a);
+    if (text != null) e.textContent = text;
+    svg.append(e);
+    return e;
+  };
+  for (let t = -Math.floor(range); t <= Math.floor(range); t++) {
+    el("line", { x1: x(t), x2: x(t), y1: T, y2: T + 9 * rowH, stroke: t === 0 ? "var(--faint)" : "var(--rule)", "stroke-width": 1 });
+    el("text", { x: x(t), y: T + 9 * rowH + 15, "text-anchor": "middle", fill: "var(--muted)", "font-size": 11 }, fmtStep(t));
+  }
+  el("text", { x: L, y: H - 6, fill: "var(--muted)", "font-size": 11 }, "← Contact");
+  el("text", { x: W - Rt, y: H - 6, "text-anchor": "end", fill: "var(--muted)", "font-size": 11 }, "Power →");
+  after.forEach((id, s) => {
+    const e = entryOf(id), y = T + s * rowH + rowH / 2;
+    const prev = entryOf(before[wasSlot(s)]);
+    el("text", { x: 0, y: y + 4, fill: "var(--muted)", "font-size": 12 }, String(s + 1));
+    // narrow: "4th spot" rather than a cut-off "4th-spot hitter"
+    const name = shortName(e).length > room && e.kind === "spot" && e.team === "MLB" ? e.name.split(" · ")[1] : shortName(e);
+    el("text", { x: 16, y: y + 4, fill: "var(--ink)", "font-size": 12 }, name.length > room ? name.slice(0, room - 1) + "…" : name);
+    if (e.theta == null) {
+      el("text", { x: x(0) + 6, y: y + 4, fill: "var(--faint)", "font-size": 11 }, "as is");
+      return;
+    }
+    const t = e.theta, x0 = x(0), x1 = x(t), h = 12, r = Math.min(4, Math.abs(x1 - x0) / 2);
+    if (Math.abs(x1 - x0) > 0.5) {
+      const [a, b] = t > 0 ? [x0, x1] : [x1, x0];
+      // rounded at the data end only, square at zero
+      const d = t > 0
+        ? `M${a},${y - h / 2} H${b - r} Q${b},${y - h / 2} ${b},${y - h / 2 + r} V${y + h / 2 - r} Q${b},${y + h / 2} ${b - r},${y + h / 2} H${a} Z`
+        : `M${b},${y - h / 2} H${a + r} Q${a},${y - h / 2} ${a},${y - h / 2 + r} V${y + h / 2 - r} Q${a},${y + h / 2} ${a + r},${y + h / 2} H${b} Z`;
+      el("path", { d, fill: "var(--s-lineup)" });
+    }
+    if (prev?.theta != null) el("rect", { x: x(prev.theta) - 1, y: y - 9, width: 2, height: 18, rx: 1, fill: "var(--muted)" });
+    el("text", { x: W - Rt + 8, y: y + 4, fill: "var(--ink)", "font-size": 12, "font-family": "JetBrains Mono, monospace" }, fmtTheta(t));
+    const hit = el("rect", { x: 0, y: y - rowH / 2, width: W, height: rowH, fill: "transparent" });
+    hit.addEventListener("pointermove", (ev) => {
+      const l = lineOf(e.counts);
+      showTip(ev, [["var(--s-lineup)", fmtTheta(t), "optimized"], ["var(--muted)", fmtTheta(prev?.theta ?? 0), "before"],
+        ["transparent", `${pct(l.K)} / ${pct(l.BB)}`, "K% / BB%"], ["transparent", `${fmtRate(l.AVG)} / ${fmtRate(l.SLG)}`, "AVG / SLG"],
+        ["transparent", fmtRate(l.wOBA), "wOBA"]], `${ordinal(s + 1)}: ${shortName(e)}`);
+    });
+    hit.addEventListener("pointerleave", hideTip);
+  });
+  $("opt_chart").replaceChildren(svg);
+}
+
 // ---------- URL state ----------
 function writeHash() {
   const p = new URLSearchParams({ l: lineup.join(","), g: $("games").value, r: $("regress").value, b: basis,
@@ -882,8 +1119,12 @@ async function boot() {
   $("calibration").textContent = `As a check, MLB's pooled lineup spots simulate to ${sm.R.toFixed(2)} runs per nine innings against an actual ${am.R.toFixed(2)} `
     + `(${Math.abs(gap).toFixed(1)}% ${gap < 0 ? "low" : "high"}), and to a ${fmtRate(sm.AVG)}/${fmtRate(sm.OBP)}/${fmtRate(sm.SLG)} line against an actual `
     + `${fmtRate(am.AVG)}/${fmtRate(am.OBP)}/${fmtRate(am.SLG)}.`;
+  const ex = exactRuns(Array.from({ length: 9 }, (_, i) => `sMLB-${i + 1}`));
+  $("exact_check").textContent = `for MLB's lineup spots, ${ex.toFixed(3)} runs per nine innings exactly against `
+    + `${sm.R.toFixed(3)} over ${data.sims.games.toLocaleString()} simulated games`;
 
   setupTradeoff();
+  setupOptimizer();
   const saved = readHash(); // before wiring controls: it sets their values and `basis`
   document.querySelectorAll(".basis button").forEach((b) => {
     b.setAttribute("aria-pressed", String(b.dataset.basis === basis));
