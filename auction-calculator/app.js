@@ -2,7 +2,7 @@
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket, and the
 // positions come from a third, last season's games by position.
 
-import * as C from "./calc.js?v=19";
+import * as C from "./calc.js?v=20";
 import * as R from "./risk.js?v=2";
 
 const $ = (id) => document.getElementById(id);
@@ -310,7 +310,8 @@ function showEligibility() {
 // ---- settings ----------------------------------------------------------------------
 
 function readSettings() {
-  const bad = [...NUM_INPUTS, ...(autoSplit() ? [] : ["split"])].filter((id) => !$(id).checkValidity() || $(id).value === "")
+  // the PT CV may be blank (the fitted luck)
+  const bad = [...NUM_INPUTS, ...(autoSplit() ? [] : ["split"])].filter((id) => !$(id).checkValidity() || ($(id).value === "" && id !== "pt_cv"))
     .concat(ELIG_INPUTS.filter((id) => !$(id).checkValidity()));
   if (bad.length) {
     const names = bad.map((id) => {
@@ -327,7 +328,7 @@ function readSettings() {
     slots, pitcherSlots, hitters: total(slots), pitchers: total(pitcherSlots), bench: n("bench"), span: n("span"),
     minimizeBench: $("min_bench").checked, style: style(), teams: n("teams"), minBid: n("min_bid"),
     budget: n("budget"), pool: $("pool").value, includeFa: $("include_fa").checked,
-    format: $("format").value, weeks: n("weeks"), phi: n("phi"), ptCV: n("pt_cv"), lock: $("lock").value, twoWay: $("twoway").value,
+    format: $("format").value, weeks: n("weeks"), phi: n("phi"), ptCV: $("pt_cv").value === "" ? null : n("pt_cv"), lock: $("lock").value, twoWay: $("twoway").value,
     fillPT: $("fill_pt").checked, specialists: $("specialists").checked, curve: n("curve"),
     hitterShare: autoSplit() ? null : n("split") / 100,
     hitterCats: cats.h, pitcherCats: cats.p, hitterPoints: points.h, pitcherPoints: points.p,
@@ -399,6 +400,7 @@ function restore() {
   let form;
   try { form = JSON.parse(localStorage.getItem(STORE)); } catch { return; }
   if (!form) return;
+  if (form.pt_cv === "0.15") form.pt_cv = "";   // the old placeholder default: now the fitted luck
   for (const id of [...NUM_INPUTS, ...ELIG_INPUTS]) if (form[id] !== undefined) $(id).value = form[id];
   if (form.twoway === "daily" || form.twoway === "weekly") form.twoway = "oneslot";   // one slot now switches at the lineup lock
   for (const id of SELECTS) if (form[id] && [...$(id).options].some((o) => o.value === form[id])) $(id).value = form[id];

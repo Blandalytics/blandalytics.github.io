@@ -561,6 +561,23 @@ export function categorySpec(T, side, cat, points) {
   return { cat, kind: "rate", sign, num, den, unit: spec.unit, prop: !!spec.prop, sd };
 }
 
+// A season's luck where the projections have no percentiles, fit on the projections' 2023-26
+// backtest (projections repo, src/backtest/noise_fit.py): phi, a category's variance per unit of
+// its count at the player's actual playing time ("*": any other category, the side's median);
+// cv, the playing-time error as a share of the projected PA or IP; fitOnly, the categories priced
+// by phi even where the file has percentiles: those whose percentiles gauge a team's luck worse than
+// phi does (noise_gate; a setup man's role most). SV and QS too, but phi on SV cost the pitchers' $ RMSE
+export const NOISE_FIT = {
+  phi: {
+    h: { R: 1.49, HR: 1.76, RBI: 2.32, SB: 4.36, CS: 1.37, H: 1.04, "2B": 1.09, "3B": 1.42, BB: 2.3, HBP: 1.49, K: 2.28, SF: 1.43, TB: 3.01,
+      XBH: 1.43, "1B": 1.24, AVG: 1.39, OBP: 1.6, SLG: 3.01, ISO: 3.98, OPS: 3.77, "BB%": 2.53, "K%": 2.96, "*": 1.68 },
+    p: { W: 0.91, L: 1.03, SV: 8.92, HD: 6.34, "SV+H": 6.38, BS: 1.89, QS: 1.57, K: 1.91, ER: 2.98, H: 1.92, BB: 2.25, HBP: 1.4, HR: 1.44,
+      ERA: 2.98, WHIP: 2.33, "K/9": 1.91, "BB/9": 2.25, "HR/9": 1.44, "K%": 2.49, "BB%": 2.46, "K-BB%": 4.38, "K/BB": 1.91, "*": 2.09 },
+  },
+  cv: { h: 0.46, p: 0.61 },
+  fitOnly: { h: ["BB%", "K", "OPS", "SLG"], p: ["HD", "SV+H", "BS", "H", "L", "BB/9", "HR/9", "K/9"] },
+};
+
 // ---- lineup locks (lineup-locks spec, Tasks 1-4) ---------------------------------------------
 
 // How often a league sets its lineups: every day, twice a week (Monday-Thursday, then
@@ -848,17 +865,18 @@ function valueSideWith(c, fillSpec, lockSpec) {
         });
         // Task 6: a season's luck in one team's total
         nu = c.specs.map((sp, k) => {
+          const phi = c.phiTable ? c.phi * (c.phiTable[sp.cat] ?? c.phiTable["*"]) : c.phi;
           let total = 0;
           for (const i of pool) {
             const wi = w ? w[i] : 1, xi = wi * own[k][i];
             if (sp.kind === "count") {
-              total += sp.sd && Number.isFinite(sp.sd[i]) ? (wi * sp.sd[i]) ** 2 : c.phi * wi * Math.abs(sp.raw[i]) + (cv[i] * xi) ** 2;
+              total += sp.sd && Number.isFinite(sp.sd[i]) ? (wi * sp.sd[i]) ** 2 : phi * wi * Math.abs(sp.raw[i]) + (cv[i] * xi) ** 2;
             } else if (sp.sd && Number.isFinite(sp.sd[i]) && sp.den[i] > 0) {
               const rate = sp.num[i] / sp.den[i];
               total += (wi * sp.den[i] * sp.sd[i]) ** 2 + ((rate - rates[k]) * wi * sp.den[i] * cv[i]) ** 2;
             } else {
               const count = sp.prop && sp.den[i] > 0 ? sp.num[i] * (1 - sp.num[i] / sp.den[i]) : Math.abs(sp.num[i]);
-              total += c.phi * wi * Math.max(0, count) + (cv[i] * xi) ** 2;
+              total += phi * wi * Math.max(0, count) + (cv[i] * xi) ** 2;
             }
           }
           return total / N;
@@ -956,7 +974,9 @@ function draftPool(value, posStrings, caps, types, benchSlots) {
  *   a straight line), lock ("daily" | "split" | "weekly": how often lineups are set),
  *   twoWay ("split" | "simultaneous" | "oneslot": how two-way players are used; one slot
  *   switches at each lineup lock),
- *   phi, ptCV (noise where the projections have no percentiles), fillPT, specialists,
+ *   noise ("fit", the default: NOISE_FIT; a table of its shape; "off": one phi and ptCV for every
+ *   category and side), phi (a scale on the fitted phi; with noise off, phi itself), ptCV (the PT
+ *   luck; null for the fitted one), fillPT, specialists,
  *   hitterCats, pitcherCats (Categories), hitterPoints, pitcherPoints ([[cat, pts]], Points)
  * Exactly the players on legal rosters (lineups, plus the bench unless it's minimized) are
  * worth the min bid or more, and they add up to the league's budget (less a minimized bench's
@@ -1001,12 +1021,20 @@ export function auctionValues(H, P, s) {
   const pCatSpecs = points ? pPoints.map(([c, w]) => categorySpec(P, "p", c, w)) : pitcherCats.map((c) => categorySpec(P, "p", c));
   adjustSpecs(hCatSpecs, s.adjust && s.adjust.h);
   adjustSpecs(pCatSpecs, s.adjust && s.adjust.p);
+  // a season's luck where the projections have no percentiles: fitted by category and side
+  // (NOISE_FIT, or a table of its shape), or with noise "off" the one phi and ptCV for all
+  const mode = s.noise ?? "fit";
+  const fit = mode === "fit" ? NOISE_FIT : mode && typeof mode === "object" ? mode : null;
+  const noise = (side) => (fit ? { phiTable: fit.phi[side], ptCV: s.ptCV ?? fit.cv[side] } : {});
+  for (const [side, specs] of [["h", hCatSpecs], ["p", pCatSpecs]]) {
+    for (const sp of specs) if (fit && (fit.fitOnly?.[side] || []).includes(sp.cat)) sp.sd = null;
+  }
   const h = valueSide({
-    ...opts, T: H, side: "h", pos: hPos, caps: withAny(hCaps, "UT", benchOf(hitters)), types: SLOT_TYPES, start: hStart.total,
+    ...opts, ...noise("h"), T: H, side: "h", pos: hPos, caps: withAny(hCaps, "UT", benchOf(hitters)), types: SLOT_TYPES, start: hStart.total,
     specs: hCatSpecs,
   });
   const p = valueSide({
-    ...opts, T: P, side: "p", pos: pPos, caps: withAny(pCaps, "P", benchOf(pitchers)), types: PITCHER_SLOT_TYPES, start: pStart.total,
+    ...opts, ...noise("p"), T: P, side: "p", pos: pPos, caps: withAny(pCaps, "P", benchOf(pitchers)), types: PITCHER_SLOT_TYPES, start: pStart.total,
     lock: s.lock ?? "daily", lineupCaps: pCaps, benchFull: s.teams * s.bench - Math.floor((s.teams * s.bench) / 2),
     specs: pCatSpecs,
   });
