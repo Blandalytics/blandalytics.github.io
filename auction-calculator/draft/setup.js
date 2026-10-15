@@ -19,7 +19,7 @@ const SLOT_KEYS = ["C", "1B", "2B", "3B", "SS", "CI", "MI", "OF", "UT"];
 const PSLOT_KEYS = ["SP", "RP", "P"];
 // the calculator's default league (its index.html inputs): Yahoo 5x5 roto, 12 teams, $260
 const DEFAULT_FORM = {
-  style: "Categories", bench: "5", teams: "12", min_bid: "1", budget: "260", span: "3", curve: "1.05", weeks: "23", phi: "1", pt_cv: "0.15",
+  style: "Categories", bench: "5", teams: "12", min_bid: "1", budget: "260", span: "3", curve: "1.05", weeks: "23", phi: "1", pt_cv: "",
   slot_C: "1", slot_1B: "1", slot_2B: "1", slot_3B: "1", slot_SS: "1", slot_CI: "0", slot_MI: "0", slot_OF: "3", slot_UT: "2",
   pslot_SP: "2", pslot_RP: "2", pslot_P: "4",
   pool: "All", format: "roto", lock: "daily", twoway: "split",
@@ -45,7 +45,9 @@ export function settingsFrom(C, form) {
   return {
     slots, pitcherSlots, hitters: total(slots), pitchers: total(pitcherSlots), bench: num("bench"), span: num("span"),
     minimizeBench: bool("min_bench"), style, teams: num("teams"), minBid: num("min_bid"), budget: num("budget"),
-    pool: f.pool, includeFa: bool("include_fa"), format: f.format, weeks: num("weeks"), phi: num("phi"), ptCV: num("pt_cv"),
+    pool: f.pool, includeFa: bool("include_fa"), format: f.format, weeks: num("weeks"), phi: num("phi"),
+    // blank, or the old placeholder default: the fitted PT luck
+    ptCV: f.pt_cv === "" || f.pt_cv === "0.15" || f.pt_cv == null ? null : num("pt_cv"),
     lock: f.lock, twoWay, fillPT: bool("fill_pt"), specialists: bool("specialists"), curve: num("curve"),
     hitterShare: bool("split_auto") ? null : split / 100,
     hitterCats: cats ? cats.h : [...C.DEFAULT_HITTER_CATS], pitcherCats: cats ? cats.p : [...C.DEFAULT_PITCHER_CATS],

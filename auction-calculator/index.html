@@ -288,8 +288,8 @@ button:not(.tip,.link,.settoggle):active:not(:disabled){transform:scale(.96)}
         <label class="check"><input id="fill_pt" type="checkbox" checked><span>Fill missing playing time</span><button type="button" class="tip" data-tip="What a player doesn't play, his team fills with replacement production for his role">i</button></label>
         <label class="check" id="spec_field"><input id="specialists" type="checkbox" checked><span>Specialist correction</span><button type="button" class="tip" data-tip="Roto: a category far above replacement buys standings points on a curve, not a line">i</button></label>
         <div class="pair">
-          <label><span class="lab"><b>Count noise φ</b><button type="button" class="tip" data-tip="A season's luck in a count is φ × the count, where the projections have no 10th/90th percentiles for it. A placeholder until fit to projection errors">i</button></span><input id="phi" type="number" min="0" max="5" step="0.1" value="1" required></label>
-          <label><span class="lab"><b>Playing-time CV</b><button type="button" class="tip" data-tip="A season's luck in playing time, as a share of a player's PA or IP, where the projections have no PA/IP percentiles. A placeholder until fit to projection errors">i</button></span><input id="pt_cv" type="number" min="0" max="1" step="0.01" value="0.15" required></label>
+          <label><span class="lab"><b>Count noise ×</b><button type="button" class="tip" data-tip="A season's luck in a category where the projections have no 10th/90th percentiles for it: φ × the player's count, with φ fit by category to how far the projections' 2023-26 seasons landed from them (about 1 to 3; steals 4.4, saves 8.9, holds 6.3). This scales every φ: 1 is the fitted luck">i</button></span><input id="phi" type="number" min="0" max="5" step="0.1" value="1" required></label>
+          <label><span class="lab"><b>Playing-time CV</b><button type="button" class="tip" data-tip="A season's luck in playing time, as a share of a player's PA or IP, where the projections have no PA/IP percentiles. Blank: the fitted luck (hitters .46, pitchers .61, from the projections' 2023-26 seasons); a number replaces both">i</button></span><input id="pt_cv" type="number" min="0" max="1" step="0.01" value="" placeholder="fitted"></label>
         </div>
       </details>
       <details class="adv" id="risk_box">
@@ -346,6 +346,6 @@ button:not(.tip,.link,.settoggle):active:not(:disabled){transform:scale(.96)}
   </div>
 </main>
 <div id="tip" role="tooltip" hidden></div>
-<script type="module" src="app.js?v=30"></script>
+<script type="module" src="app.js?v=31"></script>
 </body>
 </html>
