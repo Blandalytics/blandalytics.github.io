@@ -283,6 +283,14 @@
         input[type='date'] {
           min-height: 44px;
         }
+        /* the checkboxes: 18px boxes in 40px label taps (13px in 20px otherwise) */
+        label.check {
+          min-height: 40px;
+        }
+        label.check input {
+          width: 18px;
+          height: 18px;
+        }
       }
       @media (prefers-reduced-motion: reduce) {
         .more button:active:not(:disabled) {

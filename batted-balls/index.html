@@ -83,6 +83,8 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
 button:not(.share-menu button){transition:transform .12s cubic-bezier(.2,0,0,1)}
 button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
 @media (pointer:coarse){button,select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}}
+/* the radios and checkbox: 18px boxes in 40px label taps on a touch screen (13px in 20px otherwise) */
+@media (pointer:coarse){fieldset .opts label,label.check{min-height:40px} fieldset .opts input,label.check input{width:18px; height:18px}}
 @media (prefers-reduced-motion:reduce){button:not(.share-menu button):active:not(:disabled){transform:none}}
 </style>
 </head>

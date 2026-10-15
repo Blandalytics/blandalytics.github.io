@@ -180,6 +180,8 @@ button:not(.tip,.link,.settoggle):active:not(:disabled){transform:scale(.96)}
   button.tip{position:relative}
   button.tip::after{content:""; position:absolute; inset:-8px}
   .chips button{min-height:36px}}
+/* the checkboxes: 18px boxes in 40px label taps on a touch screen (13px otherwise) */
+@media (pointer:coarse){label.check{min-height:40px} label.check input{width:18px; height:18px}}
 @media (prefers-reduced-motion:reduce){button:not(.tip,.link,.settoggle):active:not(:disabled){transform:none}}
 </style>
 </head>
