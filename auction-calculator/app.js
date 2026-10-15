@@ -2,7 +2,7 @@
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket, and the
 // positions come from a third, last season's games by position.
 
-import * as C from "./calc.js?v=17";
+import * as C from "./calc.js?v=18";
 import * as R from "./risk.js?v=2";
 
 const $ = (id) => document.getElementById(id);
@@ -21,6 +21,10 @@ const RISK_BASIS = FILES.h.includes("_ev") ? "ev" : "healthy";
 const STORE = "auction-calculator:v1";
 const VIEW_STORE = "auction-calculator:view";
 const IMPACT_STORE = "auction-calculator:impact";
+// Pitcher List's staff rankings: the rank columns are in the projections, the lists (each one's
+// date, article and credit weights) beside them
+const PL_FILE = "pl_lists.json";
+const PL_NAMES = { H: "Hitters", SP: "SP", "RP-SV": "SV", "RP-HD": "HD", "RP-SVHD": "SV+HD" };
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
 const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
 const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "span", "curve", "weeks", "phi", "pt_cv", ...SLOT_IDS, ...PSLOT_IDS];
@@ -107,6 +111,23 @@ async function loadRisk() {
   } catch (e) {
     risk.state = "error";
     risk.error = e.message || String(e);
+  }
+  update();
+}
+
+// The lists load only once the ranks are switched on
+const pl = { state: "idle", lists: null, error: null };
+async function loadPL() {
+  if (pl.state !== "idle") return;
+  pl.state = "loading";
+  try {
+    const r = await fetch(DATA + PL_FILE, { cache: "no-cache" });
+    if (!r.ok) throw new Error(`${PL_FILE}: HTTP ${r.status}`);
+    pl.lists = await r.json();
+    pl.state = "ready";
+  } catch (e) {
+    pl.state = "error";
+    pl.error = e.message || String(e);
   }
   update();
 }
@@ -340,11 +361,34 @@ function readRiskSettings(teams) {
   return { payout, playoffTeams: n("risk_playoffs"), transactions: $("risk_txn").value, ilSlots: n("risk_il") };
 }
 
+// ---- Pitcher List ranks ----------------------------------------------------------------------
+
+const plOn = () => $("pl_on").checked;
+const plStrength = () => Number($("pl_strength").value);
+function showPL() {
+  $("pl_fields").hidden = !plOn();
+  const v = plStrength();
+  $("pl_strength_out").textContent = v === 0 ? "None" : v === 1 ? "Fitted" : v === 2 ? "Full" : v < 1 ? `${Math.round(v * 100)}% of fitted` : `fitted + ${Math.round((v - 1) * 100)}% to full`;
+}
+$("pl_on").addEventListener("change", showPL);
+$("pl_strength").addEventListener("input", showPL);
+// The lists in this league's credit, each with its article and date
+function showPLSources() {
+  if (!result || !result.ranks || !pl.lists) { $("pl_src").textContent = ""; return; }
+  const used = ["H", "SP", ...Object.keys(result.ranks.relievers)].filter((k) => pl.lists.lists[k]);
+  $("pl_src").innerHTML = "Ranks from Pitcher List: " + used.map((k) => {
+    const e = pl.lists.lists[k];
+    const when = C.listTiming(e) === "in" ? "in-season weights" : "preseason weights";
+    return `<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title || PL_NAMES[k])}</a> (${esc(PL_NAMES[k])}, ${esc(e.date)}; ${when})`;
+  }).join("; ") + ".";
+}
+
 function save() {
   const form = { style: style(), cats, points, split: manualSplit };
   for (const id of [...NUM_INPUTS, ...ELIG_INPUTS, ...SELECTS]) form[id] = $(id).value;
   for (const id of CHECKS) form[id] = $(id).checked;
   form.risk = { on: riskOn(), ...Object.fromEntries(RISK_INPUTS.map((id) => [id, $(id).value])) };
+  form.pl = { on: plOn(), strength: $("pl_strength").value };
   try { localStorage.setItem(STORE, JSON.stringify(form)); } catch { /* private mode */ }
 }
 
@@ -361,6 +405,10 @@ function restore() {
   if (form.cats?.h && form.cats?.p) cats = form.cats;
   if (Array.isArray(form.points?.h) && Array.isArray(form.points?.p)) points = form.points;
   manualSplit = typeof form.split === "string" ? form.split : defaultSplit();
+  if (form.pl && typeof form.pl === "object") {
+    $("pl_on").checked = form.pl.on === true;
+    if (typeof form.pl.strength === "string" && Number.isFinite(Number(form.pl.strength))) $("pl_strength").value = form.pl.strength;
+  }
   if (form.risk && typeof form.risk === "object") {
     $("risk_on").checked = form.risk.on === true;
     for (const id of RISK_INPUTS) {
@@ -492,7 +540,12 @@ function update() {
   const rs = riskOn() ? readRiskSettings(s.teams) : null;
   const ownData = !uploads.h && !uploads.p;
   const useRisk = !!rs && !rs.error && ownData && risk.state === "ready";
-  result = C.auctionValues(H, P, useRisk ? { ...s, debug: true } : s);
+  // The Pitcher List credit (off by default): the league priced again with each ranked player's
+  // projected stats moved toward his rank's value
+  const hasRanks = Object.values(C.RANK_COLS).some((c) => C.isNumeric(H, c) || C.isNumeric(P, c));
+  const usePL = plOn() && pl.state === "ready" && hasRanks;
+  const s1 = useRisk ? { ...s, debug: true } : s;
+  result = usePL ? C.rankCredit(H, P, s1, pl.lists, plStrength()) : C.auctionValues(H, P, s1);
   result.settings = s;
   const noTeams = (t) => t.data.Team.every((x) => x === null);
   const warnings = [];
@@ -501,6 +554,13 @@ function update() {
   }
   if (!result.converged) warnings.push("The values didn't settle in 20 passes; these use the mean of the last two.");
   if (eligError) warnings.push(`The position eligibility file didn't load (${eligError}), so positions are the projections' own.`);
+  if (plOn()) {
+    if (pl.state === "idle" || pl.state === "loading") { warnings.push("Loading the Pitcher List ranks…"); loadPL(); }
+    else if (pl.state === "error") warnings.push(`The Pitcher List ranks didn't load (${pl.error}).`);
+    else if (!hasRanks) warnings.push("These projections have no Pitcher List rank columns, so the values are the projections' own.");
+    else if (useRisk) warnings.push("The risk-aware $ prices the projections' own draws, without the Pitcher List credit.");
+  }
+  showPLSources();
   if (useRisk) {
     try {
       result.risk = R.applyRisk(C, result, H, P, s, risk.files, rs);
@@ -604,6 +664,25 @@ const RISK_COL = {
   key: "risk", label: "Risk $", get: riskValue, cell: (p) => money(riskValue(p)), cls: (p) => "risk" + (riskValue(p) < result.settings.minBid ? " neg" : ""), tip: riskTip,
   title: "The risk-aware dollars: each player's value plus the option to drop him for a free agent if he busts, plus what his variance is worth for the payout, less an IL cost, priced over the same roster spots and budget. A beta",
 };
+// The rank and the dollars the Pitcher List credit moved (Auction $ less the value without it)
+const plRanks = (p) => (p.pl ? p.pl.ranks : []);
+const PL_RANK_COL = {
+  key: "plrank", label: "PL rank", text: true, cls: "l muted",
+  get: (p) => (plRanks(p).length ? `${plRanks(p)[0].list}:${String(plRanks(p)[0].rank).padStart(4, "0")}` : "~"),
+  cell: (p) => esc(plRanks(p).map((r) => `${PL_NAMES[r.list]} ${r.rank}`).join(" · ")),
+  tip: (p) => plRanks(p).map((r) => {
+    const e = pl.lists && pl.lists.lists[r.list];
+    const what = r.unit === "$" ? `value at that rank ${money(r.implied)}, his ${money(r.own)}` : `${r.unit} at that rank ${fmt(r.unit, r.implied)}, his ${fmt(r.unit, r.own)}`;
+    return `${PL_NAMES[r.list]} #${r.rank}${e ? ` (Pitcher List, ${e.date})` : ""}: ${what}; credit weight ${r.w.toFixed(2)}`;
+  }).join(". "),
+  title: "Pitcher List's staff rank, by list (hover for its date and the value at that rank)",
+};
+const PL_CREDIT_COL = {
+  key: "plcredit", label: "PL ±", get: (p) => (p.pl ? p.pl.credit : NaN), cell: (p) => (p.pl ? signed(p.pl.credit) : ""), cls: (p) => (p.pl ? signCls(p.pl.credit) : ""),
+  tip: (p) => (p.pl ? `${money(p.pl.base)} without the ranks, ${money(p.value)} with them`
+    + (plRanks(p).length ? "" : " (unranked: every drafted player gives back the side's average credit, so the budget is spent once)") : ""),
+  title: "What the Pitcher List credit moved: Auction $ less the value without the ranks",
+};
 const RISK_MOVE_COL = {
   key: "riskmove", label: "Risk ±", get: (p) => riskValue(p) - p.value, cell: (p) => signed(riskValue(p) - p.value), cls: (p) => signCls(riskValue(p) - p.value),
   title: "Risk $ less Auction $",
@@ -631,6 +710,7 @@ function breakdownColumns() {
   if (any("specialist")) base.push(part("b:spec", "Specialist", "Roto: a category far above replacement buys standings points on a curve, not a line", (p) => (b(p) ? b(p).specialist : NaN)));
   if (any("lock")) base.push(part("b:lock", "Lineup lock", "What a binding lineup lock takes from an SP: he keeps his tier's share of his value above replacement", (p) => (b(p) ? b(p).lock : NaN)));
   if (any("twoWay")) base.push(part("b:tw", "Two-way", "A two-way player's pitching in a one-spot league, less the hitting he gives up for it, at the pitchers' price", (p) => (b(p) ? b(p).twoWay : NaN)));
+  if (any("pl")) base.push(part("b:pl", "Pitcher List", "The Pitcher List credit: a share of the gap to his rank's value, less the side's average credit for drafted players", (p) => (b(p) ? b(p).pl ?? 0 : NaN)));
   if (any("other")) base.push(part("b:other", "No spot", "Held under the min bid: no legal roster has room for him", (p) => (b(p) ? b(p).other : NaN)));
   base.forEach((c, i) => Object.assign(c, { group: "v", first: i === 0 }));
   const unit = (side, cat) => (result.weights[side].find((w) => w.cat === cat) || {}).unit;
@@ -647,7 +727,7 @@ const filledTip = (s, cat) => (s && s.filled > 0.05 ? `Includes ${fmt(cat, s.fil
 
 function columns() {
   // The dollars sit by the name, so they're on screen on a phone too
-  const info = [INFO[0], INFO[1], VALUE_COL, ...(result.risk ? [RISK_COL, RISK_MOVE_COL] : []), INFO[2], INFO[3], SLOT_COL,
+  const info = [INFO[0], INFO[1], VALUE_COL, ...(result.ranks ? [PL_CREDIT_COL, PL_RANK_COL] : []), ...(result.risk ? [RISK_COL, RISK_MOVE_COL] : []), INFO[2], INFO[3], SLOT_COL,
     ...(result.settings.style === "Points" ? [POINTS_COL] : [])];
   const stat = (type, cat, first) => ({
     key: `${type}:${cat}`, label: cat, group: type, first,
@@ -832,7 +912,8 @@ $("download").onclick = () => {
   const name = (c, side) => (byValue ? c + " $" : c) + (both.has(c) ? "_" + side : "");
   const extra = byValue ? breakdownColumns().filter((c) => c.group === "v") : [];
   const withRisk = !!result.risk;
-  const head = ["Rank", "Name", "Team", "Y! Pos", "Slot", ...(settings.style === "Points" ? ["Points"] : []), "Value", ...(withRisk ? ["Risk $"] : []),
+  const withPL = !!result.ranks;
+  const head = ["Rank", "Name", "Team", "Y! Pos", "Slot", ...(settings.style === "Points" ? ["Points"] : []), "Value", ...(withPL ? ["PL rank", "PL $"] : []), ...(withRisk ? ["Risk $"] : []),
     ...extra.map((c) => c.label), ...hitterCols.map((c) => name(c, "h")), ...pitcherCols.map((c) => name(c, "p"))];
   const num = (v, d) => (v === undefined || Number.isNaN(v) ? "" : d === undefined ? String(v) : v.toFixed(d));
   const cell = (v) => (/[",\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v);
@@ -840,6 +921,7 @@ $("download").onclick = () => {
   const lines = [head.map(cell).join(",")];
   for (const p of players) {
     lines.push([num(p.rank), p.name, p.team, p.pos, p.slot ?? "", ...(settings.style === "Points" ? [num(p.points, 2)] : []), num(p.value, 2),
+      ...(withPL ? [plRanks(p).map((r) => `${PL_NAMES[r.list]} ${r.rank}`).join(" / "), p.pl ? num(p.pl.credit, 2) : ""] : []),
       ...(withRisk ? [num(riskValue(p), 2)] : []),
       ...extra.map((c) => num(c.get(p), 2)),
       ...hitterCols.map((c) => sideValue(p, "h", c)),
@@ -903,6 +985,7 @@ restore();
 showSplit();
 showFormat();
 showRisk();
+showPL();
 showSlotTotals();
 showPreset();
 renderSources();

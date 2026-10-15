@@ -70,6 +70,9 @@ button.tip{display:inline-grid; place-items:center; flex:none; width:15px; heigh
 button.tip:hover:not(:disabled),button.tip:focus-visible{color:var(--ink); border-color:var(--faint); background:none}
 label.check button.tip{margin-left:-2px}
 label.check.impact{margin:0; align-self:flex-end; padding-bottom:6px}
+#pl_strength{width:100%; margin:4px 0 0}
+#pl_strength_out{margin-left:auto; font-size:12.5px}
+.ticks{display:flex; justify-content:space-between; font-size:12px; color:var(--muted)}
 #settings label[data-tip],.scarcity [data-tip]{cursor:help}
 #tip{position:fixed; z-index:20; max-width:280px; padding:7px 10px; background:var(--raise); border:1px solid var(--rule); border-radius:6px;
   box-shadow:0 6px 18px rgba(0,0,0,.35); color:var(--ink); font-size:12.5px; line-height:1.45; pointer-events:none}
@@ -303,6 +306,15 @@ button:not(.tip,.link,.settoggle):active:not(:disabled){transform:scale(.96)}
           </div>
         </div>
       </details>
+      <details class="adv" id="pl_box">
+        <summary>Pitcher List ranks</summary>
+        <label class="check"><input id="pl_on" type="checkbox"><span>Credit the staff's ranks</span><button type="button" class="tip" data-tip="Pitcher List's staff rankings move each ranked player's dollars toward the dollars of the projection's player at his rank (the k-th hitter, SP or reliever). The credit is a share of the gap, by list and rank band, fit to how the ranks and the projections did against the seasons that followed (2023-26), before the season and during it. Each side's drafted players then give back the side's average credit, so the budget is spent once. Relievers follow your categories: saves alone the saves list, holds alone the holds list, one saves-plus-holds category its list, saves and holds apart each list on its own category">i</button></label>
+        <div id="pl_fields" hidden>
+          <label class="block"><span class="lab"><b>Strength</b><button type="button" class="tip" data-tip="None: the projections alone. Fitted: the share of the gap each list and rank band earned in past seasons (preseason or in-season weights, by the list's date). Full: each ranked player at his rank's value">i</button><output id="pl_strength_out" class="muted"></output></span><input id="pl_strength" type="range" min="0" max="2" step="0.05" value="1"></label>
+          <div class="ticks" aria-hidden="true"><span>None</span><span>Fitted</span><span>Full</span></div>
+          <p class="note" id="pl_src"></p>
+        </div>
+      </details>
       <button type="button" class="link" id="reset">Reset all settings</button>
       </div>
     </form>
@@ -334,6 +346,6 @@ button:not(.tip,.link,.settoggle):active:not(:disabled){transform:scale(.96)}
   </div>
 </main>
 <div id="tip" role="tooltip" hidden></div>
-<script type="module" src="app.js?v=28"></script>
+<script type="module" src="app.js?v=29"></script>
 </body>
 </html>
