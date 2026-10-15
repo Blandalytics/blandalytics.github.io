@@ -327,6 +327,19 @@ a.pl-n:focus-visible{outline:2px solid var(--ink); outline-offset:1px; border-ra
 @media (max-width:640px){
   .wrap{padding:24px 12px 0}
   .band{border-radius:6px 6px 0 0}
+  /* the innings scroll sideways under the batter, the pitcher and the line score's team, which
+     stay in view and narrower; the batting-order number scrolls away */
+  .grid th.who,.grid tr.tot th,.pitch th.who{position:sticky; left:0; z-index:4; background:var(--surface)}
+  .line tbody th,.line thead th:first-child{position:sticky; left:0; z-index:4; background:var(--ground)}
+  /* the batter's and pitcher's edge, as an overlay: a collapsed table paints neither a sticky cell's
+     border nor its shadow (the line score's names clip it, and need none) */
+  .grid th.who::after,.grid tr.tot th::after,.pitch th.who::after{
+    content:""; position:absolute; top:0; bottom:0; right:-10px; width:10px; pointer-events:none;
+    border-left:1px solid var(--rule); background:linear-gradient(90deg,rgba(0,0,0,.5),transparent)}
+  .grid th.who{width:132px; padding-left:10px}
+  .pitch th.who{width:150px}
+  .grid th.who .nm,.pitch th.who .nm,.line tbody th{max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .nm{font-size:14px}
 }
 @media print{.readout{display:none} .team{break-inside:avoid}}
 </style>
@@ -339,7 +352,7 @@ a.pl-n:focus-visible{outline:2px solid var(--ink); outline-offset:1px; border-ra
         <div class="score">
           <h1><span class="away">Yankees <em>2</em></span><span class="at">/</span><span class="home">Padres <em>3</em></span></h1>
         </div>
-        <p class="blurb">Every plate appearance of a one-run Yankees 10th and a two-run Padres 10th, scored the long way. Each box draws only the bases that batter actually reached, coloured by what the outcome was worth, with the count on the deciding pitch and the exit velocity in the corners. Hover any box for the full play.</p>
+        <p class="blurb">Every plate appearance of a one-run Yankees 10th and a two-run Padres 10th, scored the long way. Each box draws only the bases that batter actually reached, coloured by what the outcome was worth, with the count on the deciding pitch and the exit velocity in the corners. Hover over or tap any box for the full play.</p>
         <div class="scroll"><table class="line"><thead><tr><th></th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th class="tt">R</th><th class="tt">H</th><th class="tt">E</th></tr></thead><tbody><tr class="team--away"><th>New York Yankees</th><td class="" tabindex="0" data-inn="away|1">0</td><td class="" tabindex="0" data-inn="away|2">0</td><td class="got" tabindex="0" data-inn="away|3">1</td><td class="" tabindex="0" data-inn="away|4">0</td><td class="" tabindex="0" data-inn="away|5">0</td><td class="" tabindex="0" data-inn="away|6">0</td><td class="" tabindex="0" data-inn="away|7">0</td><td class="" tabindex="0" data-inn="away|8">0</td><td class="" tabindex="0" data-inn="away|9">0</td><td class="got" tabindex="0" data-inn="away|10">1</td><td class="tt">2</td><td class="tt">5</td><td class="tt">0</td></tr><tr class="team--home"><th>San Diego Padres</th><td class="" tabindex="0" data-inn="home|1">0</td><td class="got" tabindex="0" data-inn="home|2">1</td><td class="" tabindex="0" data-inn="home|3">0</td><td class="" tabindex="0" data-inn="home|4">0</td><td class="" tabindex="0" data-inn="home|5">0</td><td class="" tabindex="0" data-inn="home|6">0</td><td class="" tabindex="0" data-inn="home|7">0</td><td class="" tabindex="0" data-inn="home|8">0</td><td class="" tabindex="0" data-inn="home|9">0</td><td class="got" tabindex="0" data-inn="home|10">2</td><td class="tt">3</td><td class="tt">6</td><td class="tt">0</td></tr></tbody></table></div>
       </header>
 
@@ -349,7 +362,7 @@ a.pl-n:focus-visible{outline:2px solid var(--ink); outline-offset:1px; border-ra
       <div class="pitchlist" id="pitchlist" role="tooltip" aria-hidden="true"></div>
 
       <div class="readout" id="readout">
-        <span class="d-play">Hover or tab through any box to read the play.</span>
+        <span class="d-play">Hover, tap or tab through any box to read the play.</span>
         <span class="d-meta">Counts, exit velocity and pitch types come from Statcast tracking.</span>
       </div>
 
