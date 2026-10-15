@@ -74,6 +74,21 @@
       nav.tools a {
         margin-right: 12px;
       }
+      /* on a phone the links wrap as a row of taps, without the " · " that would start a line */
+      @media (max-width: 640px) {
+        nav.tools {
+          display: flex;
+          flex-wrap: wrap;
+          font-size: 0;
+        }
+        nav.tools a {
+          display: inline-flex;
+          align-items: center;
+          min-height: 32px;
+          margin-right: 16px;
+          font-size: 13px;
+        }
+      }
       .controls {
         display: flex;
         flex-wrap: wrap;
