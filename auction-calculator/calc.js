@@ -999,6 +999,8 @@ export function auctionValues(H, P, s) {
   const benchOf = (starters) => Math.trunc(s.teams * (starters + bench / 2)) - s.teams * starters;
   const hCatSpecs = points ? hPoints.map(([c, w]) => categorySpec(H, "h", c, w)) : hitterCats.map((c) => categorySpec(H, "h", c));
   const pCatSpecs = points ? pPoints.map(([c, w]) => categorySpec(P, "p", c, w)) : pitcherCats.map((c) => categorySpec(P, "p", c));
+  adjustSpecs(hCatSpecs, s.adjust && s.adjust.h);
+  adjustSpecs(pCatSpecs, s.adjust && s.adjust.p);
   const h = valueSide({
     ...opts, T: H, side: "h", pos: hPos, caps: withAny(hCaps, "UT", benchOf(hitters)), types: SLOT_TYPES, start: hStart.total,
     specs: hCatSpecs,
@@ -1112,7 +1114,7 @@ export function auctionValues(H, P, s) {
       for (const c of cols) stats[c] = T.data[c][i];
       const v = value[i];
       players.push({
-        type, name: T.data.Name[i] ?? "", mlbamid: T.data.MLBAMID[i], team: T.data.Team[i] ?? "",
+        type, row: i, name: T.data.Name[i] ?? "", mlbamid: T.data.MLBAMID[i], team: T.data.Team[i] ?? "",
         pos: T.data["Y! Pos"] ? (T.data["Y! Pos"][i] ?? (type === "p" ? "P" : "UT")) : "P",
         elig: T.data.Eligibility ? T.data.Eligibility[i] : null,
         start: start.total[i], points: points ? start.total[i] : NaN, sgp: side.score[i], sgpar: side.sgpar[i],
@@ -1189,6 +1191,194 @@ export function auctionValues(H, P, s) {
       p: { slot: pSlot, base: pBase, ...pRate, caps: pCaps, bench: s.teams * bench - benchH, pos: pPos, types: PITCHER_SLOT_TYPES },
       spare, share, gamma } } : undefined,
   };
+}
+
+// ---- Pitcher List ranks (PLAN.md row 15) ------------------------------------------------------
+
+// The rank columns of the projection files, by list
+export const RANK_COLS = { H: "PL rank", SP: "PL SP rank", "RP-SV": "PL SV rank", "RP-HD": "PL HD rank", "RP-SVHD": "PL SV+HD rank" };
+export const RANK_BANDS = [0, 25, 75, 150, 1000];
+
+/**
+ * The reliever lists a league's categories call for, each with the category it credits: null
+ * credits the reliever's dollars (one saves-and-holds category, or only one of the two), a
+ * category name credits that category alone (saves and holds scored apart: each list moves
+ * its own count)
+ */
+export function relieverLists(s) {
+  const points = s.style === "Points";
+  const cats = points ? dedupePoints(s.pitcherPoints).filter(([, w]) => w).map(([c]) => c) : s.pitcherCats;
+  const sv = cats.includes("SV"), hd = cats.includes("HD");
+  if (cats.includes("SV+H") || (points && sv && hd)) return { "RP-SVHD": null };
+  if (sv && hd) return { "RP-SV": "SV", "RP-HD": "HD" };
+  if (sv) return { "RP-SV": null };
+  if (hd) return { "RP-HD": null };
+  return {};
+}
+
+/**
+ * A list's credit weight at rank k. strength 0 is no credit, 1 the fitted weight of the rank's
+ * band, 2 a weight of 1 (the list's ranks priced as they stand); between, a straight line
+ */
+export function rankWeight(entry, k, bands, strength, timing = "pre") {
+  const ws = Array.isArray(entry.w) ? entry.w : (entry.w && (entry.w[timing] || entry.w.pre)) || [];
+  let fit = 0;
+  for (let j = 0; j + 1 < bands.length; j++) if (k > bands[j] && k <= bands[j + 1]) fit = Number.isFinite(ws[j]) ? ws[j] : 0;
+  return strength <= 1 ? strength * fit : fit + (strength - 1) * (1 - fit);
+}
+
+// The credit moves a player's projected contributions: every category scaled by his factor
+// (scale); a share of the drafted pool's average line added (line: for a player whose own line
+// is too small to scale); or a count added to one category (add: a reliever's saves or holds list)
+function adjustSpecs(specs, adj) {
+  if (!adj) return;
+  for (const sp of specs) {
+    for (const arr of sp.kind === "count" ? [sp.raw] : [sp.num, sp.den]) {
+      const avg = adj.line ? adj.pool.reduce((a, i) => a + arr[i], 0) / Math.max(1, adj.pool.length) : 0;
+      arr.forEach((v, i) => { arr[i] = v * (adj.scale ? adj.scale[i] : 1) + (adj.line ? adj.line[i] * avg : 0); });
+    }
+    const add = adj.add && adj.add[sp.cat];
+    if (add && sp.kind === "count") sp.raw.forEach((v, i) => { sp.raw[i] = v + add[i]; });
+  }
+}
+
+/**
+ * Auction values with the Pitcher List rank credit. A list's rank k implies the value of the
+ * k-th player of the same pool (hitters; SP: GS / G of .5 or more; RP: the rest), or nothing
+ * past the pool's end; the credit is w × (implied − his own), w by list and rank band
+ * (rankWeight). Two modes:
+ *   direct: the credit added to his dollars, then each side's drafted players less their mean
+ *     credit, so they still spend the budget (no re-pricing; the reduced form the w are fit in);
+ *   scale: it moves his projected contributions, so the league prices it: his categories scaled
+ *     by the SGP above replacement the credit's dollars buy (the inverse of the dollar curve).
+ *     The market moves every other player's dollars with it. passes: the re-pricings; after the
+ *     first, each scale is corrected by the dollars it bought.
+ * For saves and holds scored apart, a reliever's credit is the implied count of the k-th
+ * reliever in that category (direct: at the pitchers' dollars per SGP).
+ * lists: pl_lists.json ({ lists: { H, SP, RP-SV, ...: { date, url, title, w } }, bands }).
+ * Each player the credit moved gets pl: { ranks: [{ list, rank, w, implied, own, unit, target, how }],
+ * base, credit } (base: his value without the credit; credit: the dollars it moved)
+ */
+export function rankCredit(H, P, s, lists, strength = 1, { timing = "pre", passes = 2, mode = "direct" } = {}) {
+  const run = (adjust) => auctionValues(H, P, { ...s, debug: true, adjust });
+  const r0 = run(null);
+  const bands = lists.bands || RANK_BANDS;
+  const value0 = { h: new Array(H.n).fill(NaN), p: new Array(P.n).fill(NaN) };
+  for (const x of r0.players) value0[x.type][x.row] = x.twoWay ? x.twoWay.hValue : x.value;
+  const pool = { H: [], SP: [], RP: [] };
+  for (let i = 0; i < H.n; i++) pool.H.push(i);
+  const sp = isNumeric(P, "GS") && isNumeric(P, "G");
+  for (let i = 0; i < P.n; i++) (sp && P.data.G[i] > 0 && P.data.GS[i] / P.data.G[i] >= 0.5 ? pool.SP : pool.RP).push(i);
+
+  const credits = [];
+  const plan = [["h", "H", pool.H, null], ["p", "SP", pool.SP, null],
+    ...Object.entries(relieverLists(s)).map(([list, cat]) => ["p", list, pool.RP, cat])];
+  for (const [side, list, idx, cat] of plan) {
+    const T = side === "h" ? H : P, entry = lists.lists && lists.lists[list];
+    if (!entry || !isNumeric(T, RANK_COLS[list]) || (cat && !isNumeric(T, cat))) continue;
+    const rk = T.data[RANK_COLS[list]];
+    const own = cat ? (i) => (Number.isNaN(T.data[cat][i]) ? 0 : T.data[cat][i]) : (i) => value0[side][i];
+    const ladder = idx.map(own).filter(Number.isFinite).sort((a, b) => b - a);
+    for (const i of idx) {
+      const k = Math.round(rk[i]), o = own(i);
+      if (!(k >= 1) || !Number.isFinite(o)) continue;
+      const implied = k <= ladder.length ? ladder[k - 1] : 0;
+      const w = rankWeight(entry, k, bands, strength, timing);
+      credits.push({ side, i, list, rank: k, w, implied, own: o, unit: cat || "$", target: w * (implied - o) });
+    }
+  }
+
+  const pr = r0.debug.pricing, gamma = pr.gamma;
+  if (mode === "direct") return directCredit(r0, s, credits, value0, { strength, timing });
+  const sgparAt = (d, r) => {
+    const e = d - s.minBid - r.flat;
+    return e > 0 && r.k > 0 ? (e / r.k) ** (1 / gamma) : r.perSGP > 0 ? e / r.perSGP : 0;
+  };
+  // His own line scaled while that at most doubles it; else the pool's average line
+  const drafted = { h: [], p: [] }, avgScore = {};
+  for (const side of ["h", "p"]) {
+    pr[side].slot.forEach((t, i) => { if (t !== null) drafted[side].push(i); });
+    avgScore[side] = drafted[side].reduce((a, i) => a + r0.debug[side].ownScore[i], 0) / Math.max(1, drafted[side].length);
+  }
+  const how = credits.map(() => "add");
+  const size = credits.map((c, j) => {
+    if (c.unit !== "$") return c.target;
+    const own = r0.debug[c.side].ownScore[c.i];
+    const d = sgparAt(c.own + c.target, pr[c.side]) - sgparAt(c.own, pr[c.side]);
+    if (own > 0 && d / own <= 1) { how[j] = "scale"; return d / own; }
+    how[j] = "line";
+    return avgScore[c.side] > 0 ? d / avgScore[c.side] : 0;
+  });
+  let r = r0;
+  for (let pass = 0; pass < passes && strength > 0 && credits.length; pass++) {
+    if (pass > 0) {
+      const now = { h: [], p: [] };
+      for (const x of r.players) now[x.type][x.row] = x.twoWay ? x.twoWay.hValue : x.value;
+      credits.forEach((c, j) => {
+        const got = now[c.side][c.i] - c.own;
+        if (c.unit === "$" && Math.abs(got) > 1e-6 && Math.sign(got) === Math.sign(c.target)) size[j] *= Math.min(2, Math.max(0.5, c.target / got));
+      });
+    }
+    const adjust = {
+      h: { scale: new Array(H.n).fill(1), line: new Array(H.n).fill(0), pool: drafted.h },
+      p: { scale: new Array(P.n).fill(1), line: new Array(P.n).fill(0), pool: drafted.p, add: {} },
+    };
+    credits.forEach((c, j) => {
+      if (how[j] === "scale") adjust[c.side].scale[c.i] = Math.max(0, 1 + size[j]);
+      else if (how[j] === "line") adjust[c.side].line[c.i] = size[j];
+      else (adjust.p.add[c.unit] ||= new Array(P.n).fill(0))[c.i] = size[j];
+    });
+    r = run(adjust);
+  }
+  const bySide = ranksBySide(credits, how);
+  for (const x of r.players) {
+    const ranks = bySide[x.type].get(x.row) || [];
+    const base = value0[x.type][x.row], credit = (x.twoWay ? x.twoWay.hValue : x.value) - base;
+    if (ranks.length || Math.abs(credit) >= 0.005) x.pl = { ranks, base, credit };
+  }
+  r.ranks = { mode, strength, timing, relievers: relieverLists(s) };
+  if (!s.debug) delete r.debug;
+  return r;
+}
+
+function ranksBySide(credits, how) {
+  const bySide = { h: new Map(), p: new Map() };
+  credits.forEach((c, j) => {
+    const m = bySide[c.side];
+    if (!m.has(c.i)) m.set(c.i, []);
+    m.get(c.i).push({ list: c.list, rank: c.rank, w: c.w, implied: c.implied, own: c.own, unit: c.unit, target: c.target, how: how[j] });
+  });
+  return bySide;
+}
+
+// rankCredit's direct mode: the credit in dollars, re-centred on each side's drafted players
+function directCredit(r, s, credits, value0, { strength, timing }) {
+  const pr = r.debug.pricing;
+  const credit = { h: new Map(), p: new Map() };
+  for (const c of credits) {
+    const k = c.unit === "$" ? -1 : r.debug.p.catNames.indexOf(c.unit);
+    const d = c.unit === "$" ? c.target : k >= 0 ? c.target * pr.p.perSGP * r.debug.p.G[k] : 0;
+    credit[c.side].set(c.i, (credit[c.side].get(c.i) || 0) + d);
+  }
+  const shift = {};
+  for (const side of ["h", "p"]) {
+    const drafted = r.players.filter((x) => x.type === side && x.drafted);
+    shift[side] = drafted.reduce((a, x) => a + (credit[side].get(x.row) || 0), 0) / Math.max(1, drafted.length);
+  }
+  const bySide = ranksBySide(credits, credits.map(() => "direct"));
+  for (const x of r.players) {
+    const d = (credit[x.type].get(x.row) || 0) - (x.drafted ? shift[x.type] : 0);
+    const ranks = bySide[x.type].get(x.row) || [];
+    if (!ranks.length && Math.abs(d) < 0.005) continue;
+    x.pl = { ranks, base: value0[x.type][x.row], credit: d };
+    x.value += d;
+    if (x.breakdown) x.breakdown.pl = d;
+  }
+  r.players.sort((a, b) => (Number.isNaN(a.value) ? 1 : Number.isNaN(b.value) ? -1 : b.value - a.value));
+  rankDescending(r.players);
+  r.ranks = { mode: "direct", strength, timing, relievers: relieverLists(s), recentre: shift };
+  if (!s.debug) delete r.debug;
+  return r;
 }
 
 // pandas' rank(ascending=False): ties share the average of their places
