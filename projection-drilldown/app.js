@@ -33,6 +33,14 @@ const label = (f) => META.factors[f]?.label ?? CAUSES[f]?.[0] ?? SHORT[f] ?? f;
 // escaped text for a label that the page writes in capitals: wRC+ keeps its own case
 const keepCase = (t) => esc(t).replace(/wRC\+/g, '<span class="kc">wRC+</span>');
 const short = (f) => SHORT[f] ?? CAUSES[f]?.[0] ?? label(f);
+// a label's drawn width at the waterfall's 13px
+const textWidth = (() => {
+  const ctx = document.createElement('canvas').getContext('2d');
+  return (str, weight = 400) => {
+    ctx.font = `${weight} 13px "DM Sans", system-ui, sans-serif`;
+    return ctx.measureText(str).width;
+  };
+})();
 
 init().catch((e) => {
   $('#player').innerHTML = `<p class="err">The projection data did not load (${esc(e.message)}).</p>`;
@@ -51,6 +59,8 @@ async function init() {
     clearTimeout(resize);
     resize = setTimeout(() => state.player && renderWaterfall(), 120);
   });
+  // the label column is sized by measuring the labels, so measure again once DM Sans has loaded
+  document.fonts?.ready.then(() => state.player && renderWaterfall());
   for (const b of document.querySelectorAll('.seg button')) {
     b.addEventListener('click', () => {
       state.basis = b.dataset.b;
@@ -220,7 +230,15 @@ function renderWaterfall() {
   }
   // drawn at the container's own width, so the text keeps its size (redrawn on a resize)
   const W = Math.max(320, Math.round($('#wf').clientWidth || 640));
-  const LW = Math.round(Math.min(230, W * 0.36));
+  // the label column: 36% of the width (230 at most), widened to the longest label up to half,
+  // since on a phone 36% runs "League-average regular" into the bars
+  const name = (r) => (r.child ? '   ' : '') + (r.toggle ? (state.open ? '▾ ' : '▸ ') : '') + short(r.f);
+  const longest = Math.max(
+    textWidth(baseShort(m.bk, s.kind)),
+    textWidth('Projection', 700),
+    ...rows.map((r) => (r.child ? 10 : 0) + textWidth(name(r)))
+  );
+  const LW = Math.round(Math.max(Math.min(230, W * 0.36), Math.min(8 + longest + 10, W * 0.5)));
   const VW = 74;
   const RH = 28;
   const top = 8;
@@ -254,11 +272,10 @@ function renderWaterfall() {
   let prevEnd = m.base;
   y += RH;
   for (const r of rows) {
-    const name = (r.child ? '   ' : '') + (r.toggle ? (state.open ? '▾ ' : '▸ ') : '') + short(r.f);
     const tip = r.members ? r.members.map((mm) => `${label(mm.f)} ${fmtDelta(mm.d, s.kind, dp)}`).join('; ') : label(r.f);
     const g = r.toggle ? ' class="toggle" data-toggle="1"' : '';
     parts.push(`<g${g}><title>${esc(tip)}</title>`);
-    parts.push(text(r.child ? 18 : 8, y + RH / 2 + 4, name, `font-size="13" fill="${r.child ? C.muted : C.ink}"`));
+    parts.push(text(r.child ? 18 : 8, y + RH / 2 + 4, name(r), `font-size="13" fill="${r.child ? C.muted : C.ink}"`));
     if (!r.head) {
       parts.push(`<line x1="${x(prevEnd).toFixed(1)}" x2="${x(prevEnd).toFixed(1)}" y1="${y - RH + 5}" y2="${y + 5}" stroke="${C.conn}" stroke-opacity="0.45" stroke-dasharray="2 2"/>`);
       parts.push(bar(r.before, r.after, y, r.d >= 0 ? C.gold : C.teal));
