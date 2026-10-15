@@ -88,6 +88,11 @@ select:disabled{opacity:.45; cursor:default}
   /* two fields to a row, the pitcher's alone; each select fills its field */
   .field{flex:1 1 40%; min-width:0}
   .field.wide{flex-basis:100%}
+  /* the date sizes to its options (the Live entry is the widest) and the level takes the rest of
+     the row, at least 110px: half each cut the Live entry short */
+  .field:has(#date){flex:0 1 auto}
+  .field:has(#level){flex:1 1 0; min-width:110px}
+  .field:has(#game){flex-basis:100%}   /* its own row, also while the dates load */
   .field select{width:100%}
   #pitcher{min-width:0}
   .brand img{height:26px}
@@ -98,6 +103,9 @@ select:disabled{opacity:.45; cursor:default}
   html,body{height:auto}
   .stage{flex:none; overflow:visible; display:block; padding:8px; min-height:160px}
   .card,iframe{width:100%; height:auto}
+}
+@media (max-width:359px){
+  .field:has(#date){flex:1 1 100%}     /* too narrow for both: the date takes the row, the level the next */
 }
 /* polish: balanced headings, prose without orphan words, a slight scale on press, and controls
    at least 44px tall on touch screens */
