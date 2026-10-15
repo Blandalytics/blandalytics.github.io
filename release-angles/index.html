@@ -53,7 +53,7 @@ button[aria-pressed=true]{border-color:var(--accent); background:#1d2a3a}
 .figure canvas{display:block; width:100%; max-width:820px; height:auto; aspect-ratio:1}
 .suggest{position:relative}
 .suggest-list{--rows:10; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:5; margin:0; padding:4px; list-style:none;
-  background:var(--raise); border:1px solid var(--rule); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.4);
+  background:var(--raise); border:1px solid var(--rule); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.4);
   max-height:calc(var(--rows) * 32px + 10px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--faint) transparent}
 .suggest-list li{display:flex; justify-content:space-between; gap:12px; padding:6px 9px; border-radius:4px; cursor:pointer; font-size:14px; line-height:20px; color:var(--ink)}
 .suggest-list li small{color:var(--muted); font-size:12px; white-space:nowrap}
@@ -85,6 +85,14 @@ tr.clip td{color:var(--muted)}
 .facts dt{color:var(--muted); font-size:12.5px}
 .facts dd{margin:0; font-size:15px}
 .facts small{color:var(--muted); font-size:12px}
+/* polish: balanced headings, prose without orphan words, a slight scale on press, and controls
+   at least 44px tall on touch screens */
+h1,h2,h3{text-wrap:balance}
+p,li,.tag,.note,.method,.status{text-wrap:pretty}
+button:not(.share-menu button){transition:transform .12s cubic-bezier(.2,0,0,1)}
+button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
+@media (pointer:coarse){button,select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}}
+@media (prefers-reduced-motion:reduce){button:not(.share-menu button):active:not(:disabled){transform:none}}
 </style>
 </head>
 <body>
@@ -161,7 +169,7 @@ tr.clip td{color:var(--muted)}
     </details>
   </section>
 </main>
-<script src="/shared/share-image.js?v=1"></script>
+<script src="/shared/share-image.js?v=2"></script>
 <script src="angles.js?v=9"></script>
 <script type="module" src="app.js?v=7"></script>
 </body>

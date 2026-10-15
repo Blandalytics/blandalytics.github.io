@@ -316,6 +316,27 @@
       .err {
         color: #ff8a80;
       }
+      /* polish: balanced headings, prose without orphan words, and controls at least 44px tall
+         on touch screens */
+      h1,
+      h2,
+      h3 {
+        text-wrap: balance;
+      }
+      p,
+      li {
+        text-wrap: pretty;
+      }
+      @media (pointer: coarse) {
+        button,
+        select,
+        input[type='text'],
+        input[type='number'],
+        input[type='search'],
+        input[type='date'] {
+          min-height: 44px;
+        }
+      }
     </style>
   </head>
   <body>

@@ -164,6 +164,14 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
 .empty{padding:28px; text-align:center; color:var(--muted)}
 .note{color:var(--faint); font-size:12.5px; margin-top:10px}
 [hidden]{display:none!important}
+/* polish: balanced headings, prose without orphan words, a slight scale on press, and controls
+   at least 44px tall on touch screens */
+h1,h2,h3{text-wrap:balance}
+p,li,.tag,.note,.method,.status{text-wrap:pretty}
+button:not(.tip,.link,.settoggle){transition:transform .12s cubic-bezier(.2,0,0,1)}
+button:not(.tip,.link,.settoggle):active:not(:disabled){transform:scale(.96)}
+@media (pointer:coarse){button:not(.tip,.link,.take,.chips button,.points button,.chip button),select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}}
+@media (prefers-reduced-motion:reduce){button:not(.tip,.link,.settoggle):active:not(:disabled){transform:none}}
 </style>
 </head>
 <body>
