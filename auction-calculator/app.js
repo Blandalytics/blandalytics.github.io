@@ -25,8 +25,6 @@ const IMPACT_STORE = "auction-calculator:impact";
 // date, article and credit weights) beside them
 const PL_FILE = "pl_lists.json";
 const PL_NAMES = { H: "Hitters", SP: "SP", "RP-SV": "SV", "RP-HD": "HD", "RP-SVHD": "SV+HD" };
-// direct: the credit on the dollars; scale: on the projected stats, priced by the league (?plmode=scale)
-const PL_MODE = params.get("plmode") === "scale" ? "scale" : "direct";
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
 const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
 const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "span", "curve", "weeks", "phi", "pt_cv", ...SLOT_IDS, ...PSLOT_IDS];
@@ -380,7 +378,8 @@ function showPLSources() {
   const used = ["H", "SP", ...Object.keys(result.ranks.relievers)].filter((k) => pl.lists.lists[k]);
   $("pl_src").innerHTML = "Ranks from Pitcher List: " + used.map((k) => {
     const e = pl.lists.lists[k];
-    return `<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title || PL_NAMES[k])}</a> (${esc(PL_NAMES[k])}, ${esc(e.date)})`;
+    const when = C.listTiming(e) === "in" ? "in-season weights" : "preseason weights";
+    return `<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title || PL_NAMES[k])}</a> (${esc(PL_NAMES[k])}, ${esc(e.date)}; ${when})`;
   }).join("; ") + ".";
 }
 
@@ -546,7 +545,7 @@ function update() {
   const hasRanks = Object.values(C.RANK_COLS).some((c) => C.isNumeric(H, c) || C.isNumeric(P, c));
   const usePL = plOn() && pl.state === "ready" && hasRanks;
   const s1 = useRisk ? { ...s, debug: true } : s;
-  result = usePL ? C.rankCredit(H, P, s1, pl.lists, plStrength(), { mode: PL_MODE }) : C.auctionValues(H, P, s1);
+  result = usePL ? C.rankCredit(H, P, s1, pl.lists, plStrength()) : C.auctionValues(H, P, s1);
   result.settings = s;
   const noTeams = (t) => t.data.Team.every((x) => x === null);
   const warnings = [];
@@ -681,7 +680,7 @@ const PL_RANK_COL = {
 const PL_CREDIT_COL = {
   key: "plcredit", label: "PL ±", get: (p) => (p.pl ? p.pl.credit : NaN), cell: (p) => (p.pl ? signed(p.pl.credit) : ""), cls: (p) => (p.pl ? signCls(p.pl.credit) : ""),
   tip: (p) => (p.pl ? `${money(p.pl.base)} without the ranks, ${money(p.value)} with them`
-    + (plRanks(p).length ? "" : result.ranks.mode === "direct" ? " (unranked: every drafted player gives back the side's average credit, so the budget is spent once)" : " (unranked: the league's prices moved)") : ""),
+    + (plRanks(p).length ? "" : " (unranked: every drafted player gives back the side's average credit, so the budget is spent once)") : ""),
   title: "What the Pitcher List credit moved: Auction $ less the value without the ranks",
 };
 const RISK_MOVE_COL = {

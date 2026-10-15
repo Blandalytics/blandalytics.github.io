@@ -1217,11 +1217,24 @@ export function relieverLists(s) {
 }
 
 /**
- * A list's credit weight at rank k. strength 0 is no credit, 1 the fitted weight of the rank's
- * band, 2 a weight of 1 (the list's ranks priced as they stand); between, a straight line
+ * Whether a list is a preseason one: dated on or before March 31 of the season it ranks for (a
+ * list from October on ranks the next season). An undated list counts as preseason
  */
-export function rankWeight(entry, k, bands, strength, timing = "pre") {
-  const ws = Array.isArray(entry.w) ? entry.w : (entry.w && (entry.w[timing] || entry.w.pre)) || [];
+export function listTiming(entry) {
+  const d = entry && entry.date ? new Date(entry.date + "T00:00:00Z") : null;
+  if (!d || Number.isNaN(d.getTime())) return "pre";
+  const season = d.getUTCMonth() >= 9 ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
+  return d.getTime() <= Date.UTC(season, 2, 31) ? "pre" : "in";
+}
+
+/**
+ * A list's credit weight at rank k. strength 0 is no credit, 1 the fitted weight of the rank's
+ * band, 2 a weight of 1 (the list's ranks priced as they stand); between, a straight line.
+ * timing: "pre" or "in" (the weights fit before the season or during it); "auto" by the list's date
+ */
+export function rankWeight(entry, k, bands, strength, timing = "auto") {
+  const t = timing === "auto" ? listTiming(entry) : timing;
+  const ws = Array.isArray(entry.w) ? entry.w : (entry.w && (entry.w[t] || entry.w.pre)) || [];
   let fit = 0;
   for (let j = 0; j + 1 < bands.length; j++) if (k > bands[j] && k <= bands[j + 1]) fit = Number.isFinite(ws[j]) ? ws[j] : 0;
   return strength <= 1 ? strength * fit : fit + (strength - 1) * (1 - fit);
@@ -1259,7 +1272,7 @@ function adjustSpecs(specs, adj) {
  * Each player the credit moved gets pl: { ranks: [{ list, rank, w, implied, own, unit, target, how }],
  * base, credit } (base: his value without the credit; credit: the dollars it moved)
  */
-export function rankCredit(H, P, s, lists, strength = 1, { timing = "pre", passes = 2, mode = "direct" } = {}) {
+export function rankCredit(H, P, s, lists, strength = 1, { timing = "auto", passes = 2, mode = "direct" } = {}) {
   const run = (adjust) => auctionValues(H, P, { ...s, debug: true, adjust });
   const r0 = run(null);
   const bands = lists.bands || RANK_BANDS;
