@@ -106,10 +106,23 @@
           grid-column: 1 / -1;
           order: -1;
         }
+        /* the pitch type's label ("FF · Four-Seam Fastball (1,622)") needs two of the three columns */
+        .controls .ptype {
+          grid-column: span 2;
+        }
       }
+      /* a phone: the pitch type ("FF · Four-Seam Fastball (1,622)") is cut short in half a row, so it
+         takes a row under the pitcher; season and model pair up, and the target takes the last row */
       @media (max-width: 600px) {
         .controls {
           grid-template-columns: 1fr 1fr;
+        }
+        .controls .ptype {
+          grid-column: 1 / -1;
+          order: -1;
+        }
+        .controls label:has(#target) {
+          grid-column: 1 / -1;
         }
       }
       label {
