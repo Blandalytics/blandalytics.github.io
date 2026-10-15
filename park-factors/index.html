@@ -89,6 +89,8 @@ td.dim{color:var(--muted)}
 th.sep,td.sep{border-left:1px solid var(--rule)}
 tbody tr:hover td{box-shadow:inset 0 0 0 999px rgba(255,255,255,.04)}
 tbody tr:hover td.venue{background:#1a212a}
+/* pinned at full width the longest venue takes ~215px of a phone's 343px table: capped, the stats keep the room */
+@media (max-width:640px){th.venue,td.venue{max-width:132px; overflow:hidden; text-overflow:ellipsis}}
 .empty td{text-align:center; color:var(--muted); padding:28px; font-family:inherit}
 
 details summary{cursor:pointer; color:var(--ink); font-weight:600}

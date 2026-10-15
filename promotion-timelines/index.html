@@ -146,6 +146,24 @@
         text-align: right;
         font-family: 'JetBrains Mono', monospace;
       }
+      /* the prospect stays in view while the table scrolls sideways (on a desktop it doesn't scroll);
+         on a phone the name is capped so the arrival bars keep the room */
+      th:first-child,
+      td:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        background: var(--card);
+      }
+      @media (max-width: 640px) {
+        th:first-child,
+        td:first-child {
+          max-width: 132px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          box-shadow: inset -1px 0 0 var(--grid);
+        }
+      }
       .bars {
         display: flex;
         width: 200px;
