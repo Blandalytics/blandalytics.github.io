@@ -184,6 +184,8 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
 .btn{transition:transform .12s cubic-bezier(.2,0,0,1)}
 .btn:active:not(:disabled){transform:scale(.96)}
 @media (pointer:coarse){button:not(.chip),select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}}
+/* the plate-appearance toggle: an 18px box in a 40px label tap on a touch screen */
+@media (pointer:coarse){.toggle{min-height:40px} .toggle input{width:18px; height:18px}}
 @media (prefers-reduced-motion:reduce){.btn:active:not(:disabled){transform:none}}
 </style>
 </head>

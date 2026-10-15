@@ -108,6 +108,8 @@ button.reset:active:not(:disabled),button.play:active:not(:disabled){transform:s
 @media (pointer:coarse){button:not(.play),select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}button.play{width:44px;height:44px}}
 /* the week slider: the input is the touch target, so it's 36px tall on a touch screen (the track and thumb drawn as before) */
 @media (pointer:coarse){.slider input[type=range]{height:36px; margin:0}}
+/* the expander rows as ~38px taps on a touch screen */
+@media (pointer:coarse){details summary{padding-block:8px}}
 @media (prefers-reduced-motion:reduce){button.reset:active:not(:disabled),button.play:active:not(:disabled){transform:none}}
 </style>
 </head>

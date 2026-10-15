@@ -737,20 +737,42 @@ function render() {
       const aria = c.key === sort.key ? ` aria-sort="${sort.dir < 0 ? "descending" : "ascending"}"` : "";
       return `<th data-key="${esc(c.key)}"${cls ? ` class="${cls}"` : ""}${aria}${c.title ? ` data-tip="${esc(c.title)}"` : ""} scope="col">${esc(c.label)}</th>`;
     }).join("") + `</tr></thead>`;
+  const rowHtml = (p) => `<tr class="${p.type}">` + cols.map((c) => {
+    const cls = [typeof c.cls === "function" ? c.cls(p) : c.cls, c.frozen ? "frz" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
+    const title = c.tip ? c.tip(p) : c.key === "name" ? p.name : c.key === "pos" ? posTip(p)
+      : c.key === "value" && !p.drafted ? "Not on a drafted roster" : "";
+    const style = c.style ? c.style(p) : "";
+    return `<td${cls ? ` class="${cls}"` : ""}${style ? ` style="${style}"` : ""}${title ? ` data-tip="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
+  }).join("") + `</tr>`;
+  // enough rows to fill the box down to where it's scrolled, then more as it scrolls
+  const box = $("tbl");
+  const rowH = $("table").tBodies[0]?.rows[0]?.offsetHeight || 30;
+  const n = Math.max(ROW_CHUNK, Math.ceil((box.scrollTop + box.clientHeight) / rowH) + ROW_CHUNK);
+  shown = { rows, html: rowHtml, n: Math.min(n, rows.length) };
   const body = rows.length
-    ? rows.map((p) => `<tr class="${p.type}">` + cols.map((c) => {
-      const cls = [typeof c.cls === "function" ? c.cls(p) : c.cls, c.frozen ? "frz" : "", c.first ? "gp" : ""].filter(Boolean).join(" ");
-      const title = c.tip ? c.tip(p) : c.key === "name" ? p.name : c.key === "pos" ? posTip(p)
-        : c.key === "value" && !p.drafted ? "Not on a drafted roster" : "";
-      const style = c.style ? c.style(p) : "";
-      return `<td${cls ? ` class="${cls}"` : ""}${style ? ` style="${style}"` : ""}${title ? ` data-tip="${esc(title)}"` : ""}>${c.cell(p)}</td>`;
-    }).join("") + `</tr>`).join("")
+    ? rows.slice(0, shown.n).map(rowHtml).join("")
     : `<tr><td class="empty l" colspan="${cols.length}">No players match.</td></tr>`;
   $("table").innerHTML = head + `<tbody>${body}</tbody>`;
   $("heatkey").hidden = view() === "value";
-  $("tbl").hidden = false;
+  box.hidden = false;
   freezeOffset();
 }
+
+// The table draws its rows a chunk at a time: all ~2,300 at once was a 1.5MB rebuild (44,000
+// elements) on every setting and search keystroke, seconds on a phone. Sorting, filtering and the
+// CSV still cover every player; scrolling the box near its end adds the next chunk.
+const ROW_CHUNK = 100;
+let shown = null;
+function moreRows() {
+  if (!shown || shown.n >= shown.rows.length) return;
+  const box = $("tbl");
+  if (box.scrollTop + box.clientHeight < box.scrollHeight - 800) return;
+  const next = shown.rows.slice(shown.n, shown.n + ROW_CHUNK);
+  shown.n += next.length;
+  $("table").tBodies[0].insertAdjacentHTML("beforeend", next.map(shown.html).join(""));
+  freezeOffset();   // a longer name further down can widen the frozen name column
+}
+$("tbl").addEventListener("scroll", moreRows, { passive: true });
 
 // Each position's premium over its side's deepest one, scarcest first, as the data has it
 function renderScarcity() {
