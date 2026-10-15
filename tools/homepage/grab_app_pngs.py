@@ -166,6 +166,10 @@ PAGES = [
      "document.querySelector('#t tbody tr')", "[document.getElementById('t')]", 1100),
     ("promotion-timelines", "https://blandalytics.com/promotion-timelines/",
      "document.querySelector('#t tbody tr')", "[document.getElementById('t')]", 1100),
+    # the Dodgers' 2026 lineup spots: the per-9 KPIs over the comparison with all 30 teams
+    ("lineup-sims", "https://blandalytics.com/lineup-sims/#t=LAD&k=spots",
+     "!document.getElementById('out').hidden && document.querySelector('#compare tr svg')",
+     "[document.getElementById('out')]", 1100),
 ]
 
 

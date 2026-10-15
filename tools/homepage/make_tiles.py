@@ -45,6 +45,7 @@ CROPS = {
     "projection-drilldown": None,        # padded: the player's card over the whole waterfall card
     "playing-time-risk": (0.0, 0.0),     # top of the leaderboard
     "promotion-timelines": (0.0, 0.0),   # top of the leaderboard
+    "lineup-sims": (0.0, 0.0),           # the KPIs and the comparison strips
 }
 
 
