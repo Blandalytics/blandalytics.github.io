@@ -160,6 +160,9 @@ table.values{border-collapse:separate; border-spacing:0; width:100%; font-family
   .card{padding:14px 12px}
   .values th,.values td{padding:4px 6px}
   .values td.name{max-width:132px; font-size:13px}
+  /* the View switch is wider than a 320px phone's card: it takes the row and its halves share it */
+  .bar fieldset.view{flex:1 1 100%}
+  .bar fieldset.view .seg label{flex:1 1 auto; white-space:nowrap}
 }
 .empty{padding:28px; text-align:center; color:var(--muted)}
 .note{color:var(--faint); font-size:12.5px; margin-top:10px}
@@ -170,7 +173,11 @@ h1,h2,h3{text-wrap:balance}
 p,li,.tag,.note,.method,.status{text-wrap:pretty}
 button:not(.tip,.link,.settoggle){transition:transform .12s cubic-bezier(.2,0,0,1)}
 button:not(.tip,.link,.settoggle):active:not(:disabled){transform:scale(.96)}
-@media (pointer:coarse){button:not(.tip,.link,.take,.chips button,.points button,.chip button),select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}}
+@media (pointer:coarse){button:not(.tip,.link,.take,.chips button,.points button,.chip button),select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}
+  /* the ⓘ stays 15px but takes a 31px tap (short of the input below it); the category chips stay compact at 36px */
+  button.tip{position:relative}
+  button.tip::after{content:""; position:absolute; inset:-8px}
+  .chips button{min-height:36px}}
 @media (prefers-reduced-motion:reduce){button:not(.tip,.link,.settoggle):active:not(:disabled){transform:none}}
 </style>
 </head>
@@ -323,6 +330,6 @@ button:not(.tip,.link,.settoggle):active:not(:disabled){transform:scale(.96)}
   </div>
 </main>
 <div id="tip" role="tooltip" hidden></div>
-<script type="module" src="app.js?v=26"></script>
+<script type="module" src="app.js?v=27"></script>
 </body>
 </html>
