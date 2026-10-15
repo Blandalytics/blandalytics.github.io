@@ -370,35 +370,78 @@ function wireSuggest(input, list, slot) {
 }
 
 // ---------- simulation ----------
-let pending = 0;
+// Runs go to a module worker (sim-worker.js) so the page keeps responding while a long
+// run works. A run can't be stopped partway, so a newer request replaces a busy worker.
+// Where module workers fail to start, runs fall back to this thread, as before.
+let job = null;        // the run whose result the page is waiting for
+let jobs = 0;
+let worker = null;
+let useWorker = typeof Worker !== "undefined";
+
+function startWorker() {
+  const w = new Worker(new URL("./sim-worker.js?v=1", import.meta.url), { type: "module" });
+  w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
+  w.onmessage = ({ data: msg }) => {
+    if (job && msg.id === job.id) finish(job, msg.res, msg.ms);
+  };
+  w.onerror = (ev) => {
+    ev.preventDefault();
+    w.terminate();
+    worker = null;
+    useWorker = false;
+    if (job) runHere(job);
+  };
+  return w;
+}
+
 function run() {
-  const token = ++pending;
+  const games = Number($("games").value);
+  const regress = Number($("regress").value);
+  const cums = lineup.map((id) => {
+    const e = entryOf(id);
+    return rates(e.counts, prior, e.kind === "player" ? regress : 0);
+  });
+  const busy = job != null;
+  job = { id: ++jobs, cums, games, ids: [...lineup] };
   $("status").textContent = "simulating…";
   $("out").style.opacity = last ? ".55" : "";
   writeHash();
+  if (!useWorker) return runHere(job);
+  if (busy && worker) {
+    worker.terminate();
+    worker = null;
+  }
+  try {
+    worker ??= startWorker();
+  } catch {
+    useWorker = false; // no module workers here
+    return runHere(job);
+  }
+  worker.postMessage({ id: job.id, lineup: cums, games, seed: SEED });
+}
+
+function runHere(j) {
   // let the status paint before the (blocking) run
   setTimeout(() => {
-    if (token !== pending) return;
-    const games = Number($("games").value);
-    const regress = Number($("regress").value);
-    const cums = lineup.map((id) => {
-      const e = entryOf(id);
-      return rates(e.counts, prior, e.kind === "player" ? regress : 0);
-    });
+    if (job !== j) return;
     const t0 = performance.now();
-    const res = simulate(model, cums, games, SEED);
-    const ms = performance.now() - t0;
-    last = { res, sum: summarize(res.totals, data.weights), games, lineup: [...lineup] };
-    $("out").hidden = false;
-    $("out").style.opacity = "";
-    $("status").textContent = `${games.toLocaleString()} games simulated in ${(ms / 1000).toFixed(2)} s.`;
-    $("status").classList.toggle("err", res.capped > 0);
-    if (res.capped) {
-      $("status").textContent += ` ${res.capped.toLocaleString()} innings were called off at 60 plate appearances: this lineup almost never makes an out. `
-        + "Adding MLB-average PA under Small samples fixes that.";
-    }
-    renderResults();
+    const res = simulate(model, j.cums, j.games, SEED);
+    finish(j, res, performance.now() - t0);
   }, 30);
+}
+
+function finish(j, res, ms) {
+  job = null;
+  last = { res, sum: summarize(res.totals, data.weights), games: j.games, lineup: j.ids };
+  $("out").hidden = false;
+  $("out").style.opacity = "";
+  $("status").textContent = `${j.games.toLocaleString()} games simulated in ${(ms / 1000).toFixed(2)} s.`;
+  $("status").classList.toggle("err", res.capped > 0);
+  if (res.capped) {
+    $("status").textContent += ` ${res.capped.toLocaleString()} innings were called off at 60 plate appearances: this lineup almost never makes an out. `
+      + "Adding MLB-average PA under Small samples fixes that.";
+  }
+  renderResults();
 }
 
 // ---------- results ----------
