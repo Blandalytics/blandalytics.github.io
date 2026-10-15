@@ -95,6 +95,8 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
 button:not(.share-menu button){transition:transform .12s cubic-bezier(.2,0,0,1)}
 button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
 @media (pointer:coarse){button,select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}}
+/* the Savant and source-card links as 40px taps on a touch screen, the layout unmoved */
+@media (pointer:coarse){#savant_link,#card_link{display:inline-block; padding:9px 0; margin:-9px 0}}
 @media (prefers-reduced-motion:reduce){button:not(.share-menu button):active:not(:disabled){transform:none}}
 </style>
 </head>

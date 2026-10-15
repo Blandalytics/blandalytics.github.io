@@ -540,6 +540,14 @@
         input[type='date'] {
           min-height: 44px;
         }
+        /* "Show every row": an 18px box in a 40px label tap */
+        .opts label:has(#all) {
+          min-height: 40px;
+        }
+        #all {
+          width: 18px;
+          height: 18px;
+        }
       }
       @media (prefers-reduced-motion: reduce) {
         .actions button:active:not(:disabled) {

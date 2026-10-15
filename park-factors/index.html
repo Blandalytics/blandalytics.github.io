@@ -104,6 +104,8 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
 button.reset,button.play{transition:transform .12s cubic-bezier(.2,0,0,1)}
 button.reset:active:not(:disabled),button.play:active:not(:disabled){transform:scale(.96)}
 @media (pointer:coarse){button:not(.play),select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}button.play{width:44px;height:44px}}
+/* the expander rows as ~38px taps on a touch screen */
+@media (pointer:coarse){details summary{padding-block:8px}}
 @media (prefers-reduced-motion:reduce){button.reset:active:not(:disabled),button.play:active:not(:disabled){transform:none}}
 </style>
 </head>
