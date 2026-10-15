@@ -420,7 +420,8 @@ function showPreset() {
 // ---- the settings panel ------------------------------------------------------------------
 
 // Folds to a rail beside the table (a bar over it on a phone), so the table gets the room;
-// remembered between visits
+// remembered between visits. A phone's first visit starts folded: open, the settings run
+// ~2,300px before the table.
 const PANEL_STORE = "auction-calculator:panel";
 function showPanel(open) {
   document.querySelector(".layout").classList.toggle("collapsed", !open);
@@ -434,7 +435,11 @@ $("settoggle").addEventListener("click", () => {
   showPanel(open);
   try { localStorage.setItem(PANEL_STORE, open ? "open" : "closed"); } catch { /* private mode */ }
 });
-try { if (localStorage.getItem(PANEL_STORE) === "closed") showPanel(false); } catch { /* private mode */ }
+{
+  let saved = null;
+  try { saved = localStorage.getItem(PANEL_STORE); } catch { /* private mode */ }
+  if (saved === "closed" || (saved === null && matchMedia("(max-width:640px)").matches)) showPanel(false);
+}
 
 $("reset").onclick = () => {
   try { localStorage.removeItem(STORE); } catch { /* private mode */ }
