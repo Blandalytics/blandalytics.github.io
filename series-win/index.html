@@ -26,6 +26,8 @@ p{margin:0}
 .tag{margin:6px 0 0; color:var(--muted); font-size:14px}
 a{color:var(--accent)}
 a.home{color:var(--muted); text-decoration:none; font-size:14px}
+/* a 40px tap on a touch screen, the layout unmoved */
+@media (pointer:coarse){a.home{display:inline-block; padding:10px 0; margin:-10px 0}}
 a.home:hover{color:var(--ink)}
 .card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
 .controls{display:grid; grid-template-columns:90px minmax(120px,1fr) minmax(120px,1fr) 80px 128px auto; gap:12px 14px; align-items:end}

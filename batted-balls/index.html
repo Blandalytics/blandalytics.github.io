@@ -26,6 +26,8 @@ p{margin:0}
 .tag{margin:6px 0 0; color:var(--muted); font-size:14px}
 a{color:var(--accent)}
 a.home{color:var(--muted); text-decoration:none; font-size:14px}
+/* a 40px tap on a touch screen, the layout unmoved */
+@media (pointer:coarse){a.home{display:inline-block; padding:10px 0; margin:-10px 0}}
 a.home:hover{color:var(--ink)}
 .card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
 .controls{display:grid; grid-template-columns:100px minmax(220px,1fr) auto; gap:12px 18px; align-items:end}
@@ -81,6 +83,8 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
 button:not(.share-menu button){transition:transform .12s cubic-bezier(.2,0,0,1)}
 button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
 @media (pointer:coarse){button,select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}}
+/* the radios and checkbox: 18px boxes in 40px label taps on a touch screen (13px in 20px otherwise) */
+@media (pointer:coarse){fieldset .opts label,label.check{min-height:40px} fieldset .opts input,label.check input{width:18px; height:18px}}
 @media (prefers-reduced-motion:reduce){button:not(.share-menu button):active:not(:disabled){transform:none}}
 </style>
 </head>

@@ -55,6 +55,21 @@
         font-size: 13px;
         color: var(--faint);
       }
+      /* on a phone the links wrap as a row of taps, without the " · " that would start a line */
+      @media (max-width: 640px) {
+        nav.tools {
+          display: flex;
+          flex-wrap: wrap;
+          font-size: 0;
+        }
+        nav.tools a {
+          display: inline-flex;
+          align-items: center;
+          min-height: 32px;
+          margin-right: 16px;
+          font-size: 13px;
+        }
+      }
       header h1 {
         margin: 0;
         font-size: 26px;
@@ -86,6 +101,10 @@
         border: 1px solid var(--grid);
         background: var(--surface);
         color: var(--ink);
+      }
+      /* until the change index lists any dates the date select is an empty 40px box: hidden */
+      #date:empty {
+        display: none;
       }
       label.check {
         font-size: 14px;
@@ -267,6 +286,14 @@
         input[type='search'],
         input[type='date'] {
           min-height: 44px;
+        }
+        /* the checkboxes: 18px boxes in 40px label taps (13px in 20px otherwise) */
+        label.check {
+          min-height: 40px;
+        }
+        label.check input {
+          width: 18px;
+          height: 18px;
         }
       }
       @media (prefers-reduced-motion: reduce) {
