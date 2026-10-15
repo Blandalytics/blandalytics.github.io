@@ -1009,6 +1009,16 @@ function renderOptResult() {
   if (reordered.length) {
     parts.push("Order: " + reordered.map(([s, b]) => `${shortName(entryOf(after[s]))} from ${ordinal(b + 1)} to ${ordinal(s + 1)}`).join("; ") + ".");
   }
+  // settings that moved, by where they ended up (the chart below has the values)
+  const changed = after.map((id, s) => [s, entryOf(id).theta, entryOf(before[wasSlot(s)])?.theta])
+    .filter(([, t, was]) => t != null && t !== was);
+  if (changed.length) {
+    const spots = (list) => list.map(([s]) => ordinal(s + 1)).join(", ");
+    const power = changed.filter(([, t]) => t > 0), contact = changed.filter(([, t]) => t < 0), even = changed.filter(([, t]) => t === 0);
+    const where = [power.length && `power at ${spots(power)}`, contact.length && `contact at ${spots(contact)}`,
+      even.length && `0 at ${spots(even)}`].filter(Boolean).join("; ");
+    parts.push(`Settings: ${changed.length} spot${changed.length === 1 ? "" : "s"} moved, now ${where}.`);
+  }
   $("opt_summary").textContent = parts.join(" ");
   const tilted = after.some((id) => entryOf(id).theta != null);
   $("opt_chart_box").hidden = !tilted;
