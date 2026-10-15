@@ -11,6 +11,7 @@ const state = { r: q0.get('r') === 'p' ? 'p' : 'h', b: q0.get('b') === 'hb' ? 'h
 // the causes, in the order of src/change.CAUSES, with their colours
 const COLOR = {
   schedule: '#5C6B80',
+  frame: '#A08BD8',
   performance: '#F1C647',
   park: '#7BD88F',
   environment: '#6CB4FF',
