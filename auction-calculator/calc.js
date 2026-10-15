@@ -1227,14 +1227,21 @@ export function listTiming(entry) {
   return d.getTime() <= Date.UTC(season, 2, 31) ? "pre" : "in";
 }
 
+// A list with every weight 0 is shown but not credited, at any strength
+export const listOff = (entry, timing = "auto") => listWeights(entry, timing).every((w) => !w);
+const listWeights = (entry, timing) => {
+  const t = timing === "auto" ? listTiming(entry) : timing;
+  return Array.isArray(entry.w) ? entry.w : (entry.w && (entry.w[t] || entry.w.pre)) || [];
+};
+
 /**
  * A list's credit weight at rank k. strength 0 is no credit, 1 the fitted weight of the rank's
  * band, 2 a weight of 1 (the list's ranks priced as they stand); between, a straight line.
  * timing: "pre" or "in" (the weights fit before the season or during it); "auto" by the list's date
  */
 export function rankWeight(entry, k, bands, strength, timing = "auto") {
-  const t = timing === "auto" ? listTiming(entry) : timing;
-  const ws = Array.isArray(entry.w) ? entry.w : (entry.w && (entry.w[t] || entry.w.pre)) || [];
+  const ws = listWeights(entry, timing);
+  if (ws.every((w) => !w)) return 0;
   let fit = 0;
   for (let j = 0; j + 1 < bands.length; j++) if (k > bands[j] && k <= bands[j + 1]) fit = Number.isFinite(ws[j]) ? ws[j] : 0;
   return strength <= 1 ? strength * fit : fit + (strength - 1) * (1 - fit);

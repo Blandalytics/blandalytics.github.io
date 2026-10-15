@@ -2,7 +2,7 @@
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket, and the
 // positions come from a third, last season's games by position.
 
-import * as C from "./calc.js?v=18";
+import * as C from "./calc.js?v=19";
 import * as R from "./risk.js?v=2";
 
 const $ = (id) => document.getElementById(id);
@@ -378,8 +378,11 @@ function showPLSources() {
   const used = ["H", "SP", ...Object.keys(result.ranks.relievers)].filter((k) => pl.lists.lists[k]);
   $("pl_src").innerHTML = "Ranks from Pitcher List: " + used.map((k) => {
     const e = pl.lists.lists[k];
-    const when = C.listTiming(e) === "in" ? "in-season weights" : "preseason weights";
-    return `<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title || PL_NAMES[k])}</a> (${esc(PL_NAMES[k])}, ${esc(e.date)}; ${when})`;
+    const when = C.listOff(e) ? "rank shown, no credit" : C.listTiming(e) === "in" ? "in-season weights" : "preseason weights";
+    // only an https link: esc() doesn't stop a javascript: URL
+    const name = esc(e.title || PL_NAMES[k]);
+    const link = /^https:\/\//i.test(e.url || "") ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${name}</a>` : name;
+    return `${link} (${esc(PL_NAMES[k])}, ${esc(e.date)}; ${when})`;
   }).join("; ") + ".";
 }
 
