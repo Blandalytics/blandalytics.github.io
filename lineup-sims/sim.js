@@ -5,7 +5,8 @@
 // (steals, caught stealing, pickoffs, wild pitches, passed balls, balks); if that ends
 // the inning, the same hitter leads off the next one. Then the hitter's outcome is
 // drawn from the hitter's rates, and what the runners and the hitter do on it is drawn from
-// the league's 2026 results for that outcome in that base-out state.
+// the league's 2026 results for that outcome in that base-out state. Against a given
+// pitcher, the hitter's rates are first combined with the pitcher's by log5 (below).
 //
 // Baserunning is league average throughout. Runner-specific baserunning would replace
 // pickRunning / pickAdvance with draws that also see who is on base (`bases` holds the
@@ -95,9 +96,24 @@ export function prepare(data) {
 // adds that many plate appearances at `prior` rates (MLB average) to small samples.
 export function rates(counts, prior = null, regress = 0) {
   const n = counts.reduce((s, x) => s + x, 0);
-  const p = counts.map((x, i) => (regress && prior ? (x + regress * prior[i]) / (n + regress) : x / n));
+  return cumulative(counts.map((x, i) => (regress && prior ? (x + regress * prior[i]) / (n + regress) : x / n)));
+}
+
+export function cumulative(probs) {
   let acc = 0;
-  return Float64Array.from(p, (x) => (acc += x));
+  return Float64Array.from(probs, (x) => (acc += x));
+}
+
+// A hitter's outcome chances against a pitcher by log5 (the odds-ratio method, one
+// outcome at a time): hitter × pitcher / league for each of the eleven, then scaled to sum
+// to 1. `b`, `p` and `l` are the hitter's, the pitcher's and the league's chances (each
+// summing to 1). A league-average pitcher leaves the hitter as he is, and a
+// league-average hitter takes on the pitcher's rates. Returns plain chances, not cumulative.
+export function log5(b, p, l) {
+  const q = Array.from(b, (x, i) => (l[i] > 0 ? (x * p[i]) / l[i] : 0));
+  const t = q.reduce((s, x) => s + x, 0);
+  // only when every outcome the hitter has is one the pitcher never allowed
+  return t > 0 ? q.map((x) => x / t) : Array.from(b);
 }
 
 // Move an outcome profile (counts or rates, in CATS order) along the contact-power axis
@@ -143,7 +159,9 @@ const MAX_INNING_PA = 60;
 
 // Simulate `games` 9-inning games for a lineup of 9 cumulative-rate arrays.
 // Returns season-style totals plus the per-game run distribution and per-spot lines.
-export function simulate(model, lineup, games, seed = 1) {
+// `pen`, another 9 arrays, is the lineup against the bullpen, which takes over from the
+// plate appearance that starts with `hook` outs made in the game (the starter's last out).
+export function simulate(model, lineup, games, seed = 1, pen = null, hook = 27) {
   const rand = rng(seed);
   const { running, advance } = model;
   const t = { G: games, PA: 0, AB: 0, H: 0, "1B": 0, "2B": 0, "3B": 0, HR: 0, BB: 0, HBP: 0, K: 0, SF: 0, R: 0, outs: 0 };
@@ -160,6 +178,8 @@ export function simulate(model, lineup, games, seed = 1) {
       bases[1] = bases[2] = bases[3] = -1;
       while (outs < 3) {
         if (++pas > MAX_INNING_PA) { capped++; break; }
+        // who's pitching is settled as the plate appearance starts, before any running
+        const bat = pen && inning * 3 + outs >= hook ? pen : lineup;
         let mask = maskOf(bases);
         if (mask) {
           const cr = running[mask * 3 + outs];
@@ -169,7 +189,7 @@ export function simulate(model, lineup, games, seed = 1) {
           if (outs >= 3) break; // the inning ended on the bases; this hitter leads off the next
           mask = maskOf(bases);
         }
-        const cat = pick(lineup[up], rand());
+        const cat = pick(bat[up], rand());
         const ca = advance[(cat * 8 + mask) * 3 + outs];
         const o = ca.codes[pick(ca.cum, rand())];
         gameRuns += move(bases, lead, o, up, spotR);

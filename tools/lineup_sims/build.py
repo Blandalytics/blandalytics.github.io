@@ -14,6 +14,10 @@ Output, all for the regular season:
     mlb         the same spots and actuals for the whole league
     running     league-average running game before a plate appearance, by base-out state
     advance     league-average runner advancement on each outcome, by base-out state
+    pitchers    every pitcher's batters faced by simulator outcome, with starts and the
+                outs recorded in them
+    pitching    the outcome counts of every plate appearance (the league baseline for
+                log5 matchups) and of those against relievers (the bullpen)
 """
 import collections
 import datetime as dt
@@ -151,12 +155,26 @@ def main(season):
     running = collections.defaultdict(collections.Counter)          # "mask,outs" -> run code counts
     advance = collections.defaultdict(collections.Counter)          # "cat,mask,outs" -> event code counts
     starting = collections.defaultdict(collections.Counter)         # team -> starting order counts
+    pitcher_counts = collections.defaultdict(collections.Counter)  # pitcher -> cat counts faced
+    pitcher_bf = collections.Counter()                              # official batters faced
+    pitcher_last = {}                                               # pitcher -> (date, team)
+    pitcher_throws = {}
+    starts = collections.Counter()                                  # pitcher -> games started
+    start_outs = collections.Counter()                              # pitcher -> outs recorded in those starts
+    relief = collections.Counter()                                  # cat counts against relievers
     skipped = 0
 
     for g in pbp.load_games(season, CACHE):
         abbr = {side: g["teams"][side]["abbr"] for side in ("away", "home")}
+        fielding = {"away": abbr["home"], "home": abbr["away"]}
         spot_of = {side: {int(pid): int(code) // 100 for pid, code in g["order"][side].items()}
                    for side in ("away", "home")}
+        # the first pitcher each lineup faced started against it
+        starter = {}
+        for p in g["plays"]:
+            starter.setdefault("away" if p[2] else "home", p[6])
+        for pid in starter.values():
+            starts[pid] += 1
         for side in ("away", "home"):
             starters = sorted((int(code), int(pid)) for pid, code in g["order"][side].items() if int(code) % 100 == 0)
             if len(starters) == 9:
@@ -173,14 +191,24 @@ def main(season):
                     line.add_pa(r["event"])
             if r["inning"] <= 9 and r["state0"][0]:
                 running["%d,%d" % r["state0"]][r["run_code"]] += 1
+            pid = r["pitcher"]
+            in_start = pid == starter[r["side"]]
+            if in_start:
+                start_outs[pid] += r["run_outs"] + r["event_outs"]
             if not r["is_pa"]:
                 continue
             b = r["batter"]
             player_line[b].add_pa(r["event"])
             player_last[b] = max(player_last.get(b, ("", "")), (g["date"], team))
+            pitcher_bf[pid] += 1
+            pitcher_last[pid] = max(pitcher_last.get(pid, ("", "")), (g["date"], fielding[r["side"]]))
+            pitcher_throws[pid] = r["throws"]
             cat = pbp.category(r["event"], r["traj"])
             if cat is None:
                 continue
+            pitcher_counts[pid][cat] += 1
+            if not in_start:
+                relief[cat] += 1
             spot = spot_of[r["side"]].get(b)
             player_counts[b][cat] += 1
             if spot:
@@ -216,6 +244,22 @@ def main(season):
         # counts feed the rates; the official PA (with IBB, bunts, interference) is for display
         players.append([b, name_of.get(b, str(b)), player_last[b][1], [cnt[c] for c in CATS], player_line[b].c["PA"]])
     players.sort(key=lambda p: -sum(p[3]))
+
+    # --- pitchers ----------------------------------------------------------------------
+    # counts feed the matchups; batters faced (official, with IBB and bunts) is for display
+    pitchers = [[pid, name_of.get(pid, str(pid)), pitcher_last[pid][1], pitcher_throws[pid], [cnt[c] for c in CATS],
+                 pitcher_bf[pid], starts[pid], start_outs[pid]]
+                for pid, cnt in pitcher_counts.items() if sum(cnt.values())]
+    pitchers.sort(key=lambda p: -sum(p[4]))
+    league = collections.Counter()
+    for cnt in pitcher_counts.values():
+        league.update(cnt)
+    assert league == sum(player_counts.values(), collections.Counter())
+    pitching = {"league": [league[c] for c in CATS], "relief": [relief[c] for c in CATS]}
+    n_league, n_relief = sum(league.values()), sum(relief.values())
+    print(f"{len(pitchers)} pitchers; relievers faced {n_relief / n_league:.1%} of plate appearances, "
+          f"K {relief['K'] / n_relief:.1%} vs {league['K'] / n_league:.1%} overall; "
+          f"{sum(starts.values())} starts, {sum(start_outs.values()) / sum(starts.values()) / 3:.2f} innings on average")
 
     # --- most-used orders (FanGraphs) and a check against the box scores ---------------
     fg_to_mlbam = {k: int(v) for k, v in fg["fg_to_mlbam"].items()}
@@ -272,7 +316,7 @@ def main(season):
         "season": season, "built": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "range": [fg["start"], fg["end"]], "fangraphs_extracted": fg["extracted"],
         "weights": {**w, "wOBA": guts["wOBA"], "wOBAScale": guts["wOBAScale"]},
-        "cats": CATS, "players": players, "teams": teams, "mlb": mlb,
+        "cats": CATS, "players": players, "pitchers": pitchers, "pitching": pitching, "teams": teams, "mlb": mlb,
         "running": table(running), "advance": table(advance), "tradeoff": tradeoff,
     }
     dest = REPO / "lineup-sims" / "data" / f"{season}.json"

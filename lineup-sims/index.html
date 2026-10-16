@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Lineup Sim · Blandalytics</title>
-<meta name="description" content="Simulate nine innings of any 2026 MLB lineup, plate appearance by plate appearance, and compare its runs, hits, homers, strikeouts, walks, AVG, OBP, SLG and wOBA with every team.">
+<meta name="description" content="Simulate nine innings of any 2026 MLB lineup, plate appearance by plate appearance, against any 2026 pitcher, and compare its runs, hits, homers, strikeouts, walks, AVG, OBP, SLG and wOBA with every team.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -52,6 +52,15 @@ button.primary:hover:not(:disabled){background:#8cc6ff}
 /* lineup builder */
 .loader{display:grid; grid-template-columns:minmax(180px,1.4fr) minmax(170px,1fr); gap:12px 14px; align-items:end; margin-bottom:14px}
 @media (max-width:560px){.loader{grid-template-columns:1fr}}
+.field{display:flex; flex-direction:column; gap:4px}
+/* the opposing pitcher: a search box with a clear button inside its right edge */
+/* as tall as the select beside it, so the two labels line up (touch screens raise both to 44px) */
+.pick input[type=text]{padding-right:38px; height:35px}
+.pick input::placeholder{color:var(--muted); opacity:1}
+.pick > button{position:absolute; top:1px; right:1px; bottom:1px; min-height:0; padding:0 12px; border:0; border-radius:0 6px 6px 0;
+  background:transparent; color:var(--muted); font-size:18px; line-height:1}
+.pick > button:hover:not(:disabled){background:transparent; color:var(--ink)}
+.note.warn{color:var(--warn)}
 .lineup{width:100%; border-collapse:collapse}
 .lineup th{font-size:12px; font-weight:500; color:var(--muted); text-align:right; padding:0 8px 6px; white-space:nowrap}
 .lineup th:nth-child(2){text-align:left}
@@ -219,7 +228,7 @@ button:active:not(:disabled){transform:scale(.96)}
   <header>
     <a class="home" href="/">← Blandalytics</a>
     <h1>Lineup Sim</h1>
-    <p class="tag">Nine innings of a 2026 lineup, simulated one plate appearance at a time, and how its runs, hits, homers, strikeouts, walks and slash line stack up against every MLB team. Start from a team's lineup spots or its most-used batting order, then put any 2026 hitter in any spot; results update as you go.</p>
+    <p class="tag">Nine innings of a 2026 lineup, simulated one plate appearance at a time, and how its runs, hits, homers, strikeouts, walks and slash line stack up against every MLB team. Start from a team's lineup spots or its most-used batting order, put any 2026 hitter in any spot, and face any 2026 pitcher; results update as you go.</p>
   </header>
 
   <section class="card" aria-labelledby="lineup_h">
@@ -235,6 +244,24 @@ button:active:not(:disabled){transform:scale(.96)}
       </label>
     </div>
     <p id="loaded" class="note" style="margin:-4px 0 10px"></p>
+    <div class="loader">
+      <div class="field">
+        <label for="p_in"><b>Opposing pitcher</b></label>
+        <div class="suggest pick">
+          <input id="p_in" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false"
+            aria-controls="p_sug" placeholder="MLB-average pitching">
+          <button id="p_clear" type="button" aria-label="Clear: back to MLB-average pitching" title="Back to MLB-average pitching" hidden>×</button>
+          <ul id="p_sug" class="suggest-list" role="listbox" hidden></ul>
+        </div>
+      </div>
+      <label><b>He pitches</b>
+        <select id="p_hook">
+          <option value="game" selected>All nine innings</option>
+          <option value="start">His average start, then bullpen</option>
+        </select>
+      </label>
+    </div>
+    <p id="p_note" class="note" style="margin:-4px 0 10px"></p>
     <div id="tradeoff_ctl" class="tradeoff-ctl" hidden>
       <div class="tilt master">
         <b>All nine spots</b><span>Contact</span>
@@ -257,7 +284,7 @@ button:active:not(:disabled){transform:scale(.96)}
           <option value="100000">100,000</option>
         </select>
       </label>
-      <label title="Applies to individual hitters, not to lineup spots"><b>Small samples (hitters)</b>
+      <label title="Applies to individual hitters and the opposing pitcher, not to lineup spots"><b>Small samples (players)</b>
         <select id="regress">
           <option value="0" selected>2026 rates as they are</option>
           <option value="100">Add 100 PA of MLB average</option>
@@ -271,7 +298,7 @@ button:active:not(:disabled){transform:scale(.96)}
 
   <section class="card" aria-labelledby="opt_h">
     <h2 id="opt_h">Lineup optimizer</h2>
-    <p class="note">Rearranges the lineup above, and moves its MLB spots along the contact–power axis, to score the most runs. Each spot keeps its wOBA. Lineups are judged by exact expected runs, so there's no simulation noise to chase.</p>
+    <p class="note">Rearranges the lineup above, and moves its MLB spots along the contact–power axis, to score the most runs against the pitching picked above. Each spot keeps its own wOBA. Lineups are judged by exact expected runs, so there's no simulation noise to chase.</p>
     <div class="opt-controls">
       <label class="check"><input type="checkbox" id="opt_order" checked> Batting order</label>
       <label class="check" id="opt_tilt_label"><input type="checkbox" id="opt_tilt" checked> Contact–power settings</label>
@@ -309,7 +336,7 @@ button:active:not(:disabled){transform:scale(.96)}
     <div class="row" style="justify-content:space-between">
       <div class="basis" role="group" aria-label="Compare with">
         <button type="button" data-basis="actual" aria-pressed="true">Teams' 2026 actual</button>
-        <button type="button" data-basis="sim" aria-pressed="false">Teams' lineup spots, simulated</button>
+        <button type="button" data-basis="sim" aria-pressed="false" id="basis_sim">Teams' lineup spots, simulated</button>
       </div>
       <div class="legend" aria-hidden="true">
         <span><i class="key-dot" style="background:var(--s-lineup)"></i>This lineup</span>
@@ -338,7 +365,7 @@ button:active:not(:disabled){transform:scale(.96)}
       <h3>Runs per game</h3>
       <div class="legend" aria-hidden="true" style="margin-top:4px">
         <span><i class="key-bar" style="background:var(--s-lineup)"></i>This lineup</span>
-        <span><i class="key-line" style="background:var(--s-mlb)"></i>MLB lineup (simulated)</span>
+        <span><i class="key-line" style="background:var(--s-mlb)"></i><span id="runs_mlb_key">MLB lineup (simulated)</span></span>
       </div>
       <div class="chart" id="runs_chart"></div>
     </div>
@@ -378,7 +405,8 @@ button:active:not(:disabled){transform:scale(.96)}
         <p><b>The comparison.</b> <b>Teams' 2026 actual</b> is each team's real batting in innings 1–9, per 27 outs. <b>Teams' lineup spots, simulated</b> runs each team's nine spots through the same simulation, so the comparison is like for like. <span id="calibration"></span></p>
         <p><b>Contact vs power.</b> Take every 2026 hitter with 200 or more plate appearances and remove what wOBA explains about each of the eleven outcome rates. What's left is how hitters with the same wOBA differ, and most of it (<span id="tilt_share"></span>) runs along one line: strikeouts, walks and homers one way, singles and balls in play the other. That line is the contact–power axis. Moving an MLB spot along it changes its K%, BB%, AVG and SLG but not its wOBA, because the axis gives up exactly as much wOBA in one outcome as it adds in another. Steps are standard deviations of 2026 hitters along the axis, and the sliders reach ±<span id="tilt_range"></span>, about as far as the most extreme regulars. AVG and SLG beside the sliders estimate sacrifice flies at the league rate; the simulation's own numbers are exact. With so little difference between settings, 50,000 or more games keeps noise below the effect.</p>
         <p><b>Lineup optimizer.</b> The optimizer doesn't simulate. It solves for expected runs exactly, with a Markov chain over who's up, the outs and the bases, built from the same running-game and advancement tables the simulation draws from. That gives the average the simulation would reach over endless games (<span id="exact_check"></span>), in about a millisecond per lineup. Batting order: swaps of two spots, the best one each time, until none helps. Contact–power settings: with <b>Keep the lineup's average setting</b>, spots trade contact for power with each other in moves of 1, 0.5, 0.2 or 0.1 while the total stays put; with <b>Free</b>, each spot takes its own best setting, and in 2026 that is the contact end almost everywhere, since outs on balls in play move runners and strikeouts don't. The two searches alternate until neither helps. They are local searches, checked against brute force on smaller problems. Spots under <b>Keep as is</b> keep their hitter and setting.</p>
-        <p><b>Not modeled yet:</b> the opposing pitcher and platoon splits, park, runner speed, intentional walks, bunts, pinch hitters and extra innings. Results use a fixed random seed, so the same lineup always gets the same numbers and two orders of the same nine hitters face the same luck.</p>
+        <p><b>Opposing pitcher.</b> With a pitcher picked, every plate appearance is a matchup, worked out by log5 (the odds-ratio method) for each of the eleven outcomes: the hitter's rate times the pitcher's, divided by the league's, then all eleven scaled to add up to 1. A pitcher who strikes out more hitters than the league raises every hitter's strikeout rate in proportion, a league-average pitcher changes nothing, and a league-average hitter takes on the pitcher's 2026 rates exactly. The pitcher's rates are everything hitters did against him in 2026, the same eleven outcomes, so his ground-ball and fly-ball outs carry through to double plays and sacrifice flies; Small samples adds MLB-average batters faced to his line as it adds plate appearances to a hitter's. He pitches all nine innings, or, with <b>His average start</b>, as many outs as his 2026 starts averaged, rounded to the nearest out; after that the bullpen pitches at the rates of all 2026 relievers, who struck out <span id="relief_k"></span>. Pitching changes come between plate appearances. The lineup table shows each hitter against him. In the results, <b>Teams' lineup spots vs</b> him puts every team's spots against the same pitching, worked out exactly with the optimizer's Markov chain; the runs-per-game chart's MLB line is MLB's spots against him, simulated over 20,000 games; and the contact–power curve is exact against him too. Because log5 scales each outcome by the pitcher's rate, a pitcher changes which end of the contact–power axis pays. Against MLB-average pitching the contact end scores a little more; across the 153 pitchers with 15 or more 2026 starts, pitching all nine innings, contact comes out ahead against nearly every high-strikeout starter and power against nearly every low-strikeout one, or one who gives up homers. So the optimizer's answer can change with the pitcher.</p>
+        <p><b>Not modeled yet:</b> platoon splits (a pitcher's rates are against hitters of both hands, and a hitter's against pitchers of both), the times-through-the-order penalty, park, runner speed, intentional walks, bunts, pinch hitters and extra innings. Results use a fixed random seed, so the same lineup always gets the same numbers and two orders of the same nine hitters face the same luck.</p>
         <p><b>Data:</b> MLB Stats API play-by-play (<span id="data_range"></span>); lineups and wOBA weights from FanGraphs.</p>
       </div>
     </details>
@@ -386,6 +414,6 @@ button:active:not(:disabled){transform:scale(.96)}
 </main>
 <div id="tip" class="tip" hidden></div>
 <style>.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}</style>
-<script type="module" src="app.js?v=9"></script>
+<script type="module" src="app.js?v=10"></script>
 </body>
 </html>

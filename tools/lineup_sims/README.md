@@ -21,7 +21,8 @@ Python needs `requirements.txt`; the `.mjs` scripts need Node 22 or later.
 # 2. Stats API play-by-play for every final regular-season game, cached per game
 #    (about a minute; reruns fetch only games not cached yet)
 python -I tools/lineup_sims/fetch_pbp.py 2026
-# 3. outcome counts, lineup spots, baserunning tables, team actuals, contact-power axis
+# 3. outcome counts (hitters and pitchers), lineup spots, baserunning tables, team actuals,
+#    contact-power axis
 python -I tools/lineup_sims/build.py 2026
 # 4. every team's lineups and the contact-power curve, simulated into the data file (~1 min)
 node tools/lineup_sims/precompute.mjs 2026 100000
@@ -70,6 +71,18 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
   orders (pair swaps) and contact-power settings (moves between spots that keep the total,
   or each spot free) and runs twice, from the lineup as given and from its settings made
   even. `test_sim.mjs` checks it against brute force on smaller problems.
+* **Opposing pitcher**: `build.py` also counts every pitcher's batters faced in the same
+  eleven outcomes (`pitchers`: id, name, team, hand, counts, batters faced, starts, outs
+  recorded in those starts) and the league's and relievers' totals (`pitching.league`,
+  `pitching.relief`). The page combines hitter and pitcher by log5, outcome by outcome
+  (hitter × pitcher / league, scaled to sum to 1: `log5()` in `sim.js`). The pitcher goes
+  nine innings, or his average start rounded to the nearest out, after which the bullpen
+  pitches at the relievers' rates (`simulate()`'s `pen` and `hook`; in `markov.js` the inning
+  the hook falls in is split by outs). Against a pitcher, the page's team comparison,
+  contact-power curve and optimizer are exact Markov-chain results against him
+  (`expectedLine()`), worked out in the page's worker. `test_sim.mjs` checks log5's
+  identities, exact against simulated with and without a bullpen, and the optimizer against
+  brute force.
 
 ## Files
 
@@ -80,4 +93,4 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
 | `pbp.py` | replays plays into base-out states and coded runner outcomes |
 | `build.py` | builds the data file and runs the cross-checks |
 | `precompute.mjs` | team simulations, the contact-power curve, the calibration report |
-| `test_sim.mjs` | engine and optimizer checks |
+| `test_sim.mjs` | engine, optimizer and pitcher-matchup checks |

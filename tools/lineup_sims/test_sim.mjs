@@ -5,8 +5,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import assert from "node:assert/strict";
-import { CATS, prepare, rates, simulate, summarize, tilt } from "../../lineup-sims/sim.js";
-import { chainTables, expectedRuns, hitterBlock, optimize } from "../../lineup-sims/markov.js";
+import { CATS, cumulative, log5, prepare, rates, simulate, summarize, tilt } from "../../lineup-sims/sim.js";
+import { chainTables, expectedLine, expectedRuns, hitterBlock, lineupRuns, matchup, optimize } from "../../lineup-sims/markov.js";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const data = JSON.parse(readFileSync(join(repo, "lineup-sims", "data", `${process.argv[2] ?? "2026"}.json`), "utf8"));
@@ -160,6 +160,81 @@ check("the optimizer keeps locked spots, the total setting, and the sliders' ran
   assert.deepEqual([...r.slot].sort(), [0, 1, 2, 3, 4, 5, 6, 7, 8], "a permutation");
   const free = optimize(chain, start, { order: true, tilt: true, mix: "free", locked: [0, 3], ...axis });
   assert.ok(free.after >= r.after - 1e-9, "free can only do better than the same mix");
+});
+
+// ---- the opposing pitcher: log5 matchups, a starter's hook and the bullpen ----
+const league = probs(data.pitching.league), relief = probs(data.pitching.relief);
+const ace = data.pitchers.find((p) => p[6] >= 25 && p[5] >= 600); // a full-time starter
+const aceP = probs(ace[4]);
+const mlbP = data.mlb.spots.map((s) => probs(s.counts));
+const close = (a, b, tol, what) => assert.ok(Math.abs(a - b) < tol, `${what}: ${a} vs ${b}`);
+
+check("log5: a league-average pitcher changes nothing, and a league-average hitter takes the pitcher's rates", () => {
+  for (const b of mlbP) {
+    log5(b, league, league).forEach((x, i) => close(x, b[i], 1e-12, `spot outcome ${i}`));
+    const q = log5(b, aceP, league);
+    close(q.reduce((s, x) => s + x, 0), 1, 1e-12, "sums to 1");
+  }
+  log5(league, aceP, league).forEach((x, i) => close(x, aceP[i], 1e-12, `outcome ${i}`));
+  // more strikeouts against a pitcher who strikes out more than the league
+  const ks = probs(data.pitchers.reduce((a, p) => (p[5] >= 400 && p[4][0] / p[5] > a[4][0] / a[5] ? p : a), ace)[4]);
+  assert.ok(log5(mlbP[3], ks, league)[0] > mlbP[3][0], "K against a strikeout pitcher");
+});
+
+check("the exact line (expectedLine) agrees with expectedRuns and with the simulated MLB lineup", () => {
+  const w = data.weights;
+  const line = expectedLine(chain, mlbP.map((p) => matchup(chain, p, null, true)), null, w);
+  close(line.R, exact(mlbP), 1e-9, "runs");
+  for (const k of ["AVG", "OBP", "SLG", "wOBA"]) close(line[k], data.sims.mlb[k], 0.002, k);
+  for (const k of ["H", "HR", "K", "BB", "PA27"]) close(line[k] / data.sims.mlb[k], 1, 0.01, k);
+});
+
+check("against a pitcher, exact and simulated agree: all nine innings, and a starter's hook with the bullpen after", () => {
+  const w = data.weights;
+  const whole = { p: aceP, pen: null, league, hook: 27 };
+  const start = { p: aceP, pen: relief, league, hook: Math.round(ace[7] / ace[6]) };
+  for (const vs of [whole, start]) {
+    const sim = simulate(model, mlbP.map((p) => cumulative(log5(p, vs.p, league))), 100000, 11,
+      vs.pen ? mlbP.map((p) => cumulative(log5(p, vs.pen, league))) : null, vs.hook);
+    const s = summarize(sim.totals, w);
+    const ex = expectedLine(chain, mlbP.map((p) => matchup(chain, p, vs, true)), vs, w);
+    close(ex.R, lineupRuns(chain, mlbP.map((p) => matchup(chain, p, vs)), vs), 1e-9, "line vs runs");
+    close(s.R, ex.R, 0.05, `R, hook ${vs.hook}`);
+    for (const k of ["AVG", "OBP", "SLG", "wOBA"]) close(s[k], ex[k], 0.002, `${k}, hook ${vs.hook}`);
+    close(s.K, ex.K, 0.06, `K, hook ${vs.hook}`);
+  }
+  // the hook's edge cases: after the last out is the same as no bullpen; at 0, all bullpen
+  const m = mlbP.map((p) => matchup(chain, p, start));
+  const sp = m.map((x) => x.sp), pen = m.map((x) => x.pen);
+  close(expectedRuns(chain, sp, 9, pen, 27), expectedRuns(chain, sp), 1e-12, "hook 27");
+  close(expectedRuns(chain, sp, 9, pen, 0), expectedRuns(chain, pen), 1e-12, "hook 0");
+  // a later hook means more of the ace and fewer runs
+  assert.ok(expectedRuns(chain, sp, 9, pen, 18) < expectedRuns(chain, sp, 9, pen, 17), "17 vs 18 outs");
+  // a league-average pitcher is no pitcher at all
+  close(lineupRuns(chain, mlbP.map((p) => matchup(chain, p, { p: league, pen: null, league, hook: 27 })),
+    { p: league, pen: null, league, hook: 27 }), exact(mlbP), 1e-9, "league-average pitcher");
+});
+
+check("against a pitcher, the optimizer matches brute force: batting order of five spots", () => {
+  const vs = { p: aceP, pen: relief, league, hook: 16 };
+  const team = data.teams.find((t) => t.abbr === "LAD").spots.map((s) => ({ probs: probs(s.counts) }));
+  const ms = team.map((h) => matchup(chain, h.probs, vs));
+  let best = -1;
+  const perm = (arr, k = 0) => {
+    if (k === arr.length) {
+      best = Math.max(best, lineupRuns(chain, [0, 1, ...arr, 7, 8].map((h) => ms[h]), vs));
+      return;
+    }
+    for (let i = k; i < arr.length; i++) {
+      [arr[k], arr[i]] = [arr[i], arr[k]];
+      perm(arr, k + 1);
+      [arr[k], arr[i]] = [arr[i], arr[k]];
+    }
+  };
+  perm([2, 3, 4, 5, 6]);
+  const r = optimize(chain, team, { order: true, tilt: false, locked: [0, 1, 7, 8], vs, ...axis });
+  assert.ok(r.after >= best - 1e-9, `optimizer ${r.after} vs brute force ${best}`);
+  close(r.before, lineupRuns(chain, ms, vs), 1e-12, "the search's starting value");
 });
 
 console.log(`${n} checks passed`);
