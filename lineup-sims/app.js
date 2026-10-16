@@ -1012,7 +1012,7 @@ function runsChart(dist, games, runs, avg) {
   // a team's lineup (its spots or its most-used order, edited or not) leads the subtitle with its abbreviation
   const team = $("team").value !== "MLB" && !ohtani && mode !== "tradeoff" ? $("team").value : null;
   runsShare = { mine, mlb: goldVs || !last.vs ? mlb : share(data.sims.mlb.runDist, 1), goldVs, R: runs, subs, games, ids: last.lineup,
-    team, vs: last.vs ? { name: last.name, full: last.full, short: last.short } : null };
+    team, ohtani, vs: last.vs ? { name: last.name, full: last.full, short: last.short } : null };
   const W = chartWidth("runs_chart"), H = 230, L = 40, R = 8, T = 10, B = 34;
   drawnWidth = $("runs_chart").clientWidth;
   const n = mine.length, band = (W - L - R) / n, bw = Math.min(24, band * 0.62);
@@ -1776,7 +1776,7 @@ let runsShare = null;   // what the chart on screen shows: { mine, mlb (gold), g
 const runsFileName = () => `lineup_sim_runs_per_game${runsShare?.vs ? `_vs_${fold(lastName(runsShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
 
 async function runsTileBlob() {
-  const { mine, mlb, goldVs, R, subs, games, ids, team, vs } = runsShare;
+  const { mine, mlb, goldVs, R, subs, games, ids, team, ohtani: allOhtanis, vs } = runsShare;
   await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 15px "DM Sans"',
     '600 48px "JetBrains Mono"', '600 20px "JetBrains Mono"', '400 17px "JetBrains Mono"', '400 15px "DM Sans"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
@@ -1795,7 +1795,9 @@ async function runsTileBlob() {
   g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
   // the subtitle, led by a team lineup's abbreviation, breaks after its first comma: "CLE vs. Paul Skenes
   // for 5.1 innings," / "then the Pirates bullpen"; both lines in one size, the largest at which each fits
-  const sub = `${team ? `${team} ` : ""}vs. ${vs ? vs.full : "MLB-average pitching"}`, cut = sub.indexOf(", ");
+  // in Oops! All Ohtanis! mode, the subtitle is just that
+  const sub = allOhtanis ? "Oops! All Ohtanis!" : `${team ? `${team} ` : ""}vs. ${vs ? vs.full : "MLB-average pitching"}`;
+  const cut = sub.indexOf(", ");
   const subLines = cut < 0 ? [sub] : [sub.slice(0, cut + 1), sub.slice(cut + 2)];
   let titleSize = 21;
   for (; titleSize > 12; titleSize--) {
