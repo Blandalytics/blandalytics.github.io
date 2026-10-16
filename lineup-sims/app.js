@@ -83,6 +83,17 @@ function entryOf(id) {
   return tilted.get(id);
 }
 
+// A contact-power slider takes its setting's color: white at 0, blending toward the brand
+// teal at the contact end and the brand amber at the power end (--contact and --power in
+// index.html), all the way there at the end of the range.
+let tiltEnds = null;
+function tintRange(range, theta) {
+  const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  tiltEnds ??= ["--contact", "--power"].map((v) => rgb(getComputedStyle(document.documentElement).getPropertyValue(v).trim()));
+  const f = Math.max(-1, Math.min(1, theta / data.tradeoff.range)), end = tiltEnds[f < 0 ? 0 : 1];
+  range.style.accentColor = `rgb(${end.map((c) => Math.round(255 + (c - 255) * Math.abs(f))).join(", ")})`;
+}
+
 const labelOf = (e) => (e.theta ? `${e.name}, ${e.theta < 0 ? "contact" : "power"} ${Math.abs(e.theta).toFixed(1)}` : e.name);
 
 // ---------- data ----------
@@ -296,6 +307,7 @@ function addTiltControl(tr, i) {
   range.min = -data.tradeoff.range;
   range.max = data.tradeoff.range;
   range.value = e.theta;
+  tintRange(range, e.theta);
   range.setAttribute("aria-label", `Contact to power, ${ordinal(i + 1)} spot`);
   out.textContent = fmtTheta(e.theta);
   range.addEventListener("input", () => {
@@ -315,6 +327,7 @@ function setTilt(i, theta) {
   const tr = $("slots").rows[i];
   const range = tr.querySelector(".tilt input");
   if (Number(range.value) !== theta) range.value = theta;
+  tintRange(range, theta);
   tr.querySelector(".tilt output").textContent = fmtTheta(theta);
   fillRow(tr, entryOf(lineup[i]));
 }
@@ -958,6 +971,7 @@ const TRADEOFF_NOTE = "MLB lineup spots, each movable along the contact–power 
 
 function setMaster(theta) {
   $("tilt_all").value = theta;
+  tintRange($("tilt_all"), theta);
   $("tilt_all_out").textContent = fmtTheta(theta);
 }
 
