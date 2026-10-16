@@ -1791,10 +1791,17 @@ async function runsTileBlob() {
   g.fillStyle = OPT_TILE.cyan;
   g.fillText("Runs per Game", 48, 64);
   g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
-  const sub = vs ? `vs ${vs.full}` : "vs MLB-average pitching";
-  fitFont(g, sub, 400, 21, '"DM Sans"', W - 96);
+  // the subtitle breaks after its first comma: "vs Paul Skenes for 5.1 innings," / "then the Pirates
+  // bullpen"; both lines in one size, the largest at which each fits
+  const sub = vs ? `vs ${vs.full}` : "vs MLB-average pitching", cut = sub.indexOf(", ");
+  const subLines = cut < 0 ? [sub] : [sub.slice(0, cut + 1), sub.slice(cut + 2)];
+  let titleSize = 21;
+  for (; titleSize > 12; titleSize--) {
+    g.font = `400 ${titleSize}px "DM Sans"`;
+    if (subLines.every((line) => g.measureText(line).width <= W - 96)) break;
+  }
   g.fillStyle = OPT_TILE.sub;
-  g.fillText(sub, 48, 100);
+  subLines.forEach((line, i) => g.fillText(line, 48, 100 + 28 * i));
 
   // the lineup, down the left ("1 - Shohei Ohtani"), level with the chart, each under a title
   // centered over it: "Lineup" over the names, "Distribution" over the chart
