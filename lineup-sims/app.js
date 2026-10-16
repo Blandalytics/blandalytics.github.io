@@ -99,7 +99,7 @@ function buildEntries() {
       team: abbr, counts: s.counts, pa, sub: `${pa.toLocaleString()} PA: ${who}`,
       search: fold(`${label} ${short} ${abbr} ${i + 1} spot`) });
   });
-  spotsOf("MLB", "MLB", "mlb league", data.mlb.spots);
+  spotsOf("MLB", "MLB", "mlb league average", data.mlb.spots);
   for (const t of data.teams) spotsOf(t.abbr, t.short, `${t.name} ${t.abbr}`, t.spots);
   const totals = data.mlb.spots.reduce((acc, s) => acc.map((x, i) => x + s.counts[i]), CATS.map(() => 0));
   const n = totals.reduce((s, x) => s + x, 0);
@@ -401,6 +401,7 @@ function startWorker() {
 }
 
 function run() {
+  if (optJob && lineup.join() !== optJob.ids.join()) stopSearch("Search stopped: the lineup changed. Optimize again for this one.");
   const games = Number($("games").value);
   const regress = Number($("regress").value);
   const cums = lineup.map((id) => {
@@ -1008,6 +1009,19 @@ function startOptimize() {
   optWorker.postMessage({ type: "optimize", id: j.id, hitters, opts });
 }
 
+// Stop a search that's still running, not just ignore its answer: the worker would
+// otherwise keep a core busy for a second or two. The next search starts a new one.
+function stopSearch(note) {
+  if (!optJob) return;
+  optJob = null;
+  if (optWorker) {
+    optWorker.terminate();
+    optWorker = null;
+  }
+  $("opt_status").textContent = note;
+  renderOptimizer();
+}
+
 function optFinish(j, result, ms) {
   if (optJob !== j) return;
   optJob = null;
@@ -1131,7 +1145,7 @@ function resetSettings() {
   setMaster(0);
   locked.clear();
   document.querySelectorAll("#opt_locks button").forEach((b) => b.setAttribute("aria-pressed", "false"));
-  optJob = null; // a search still running is dropped
+  stopSearch("");
   optDone = null;
   $("opt_status").textContent = "";
   sortKey = { k: "R", dir: -1 };
