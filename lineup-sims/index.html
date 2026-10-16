@@ -228,7 +228,8 @@ svg.strip{display:block; width:100%; height:26px; overflow:visible; cursor:cross
   .teams tr.me td:first-child{background:linear-gradient(rgba(57,135,229,.16),rgba(57,135,229,.16)),var(--surface)}
   .teams tr.mlb td:first-child{background:linear-gradient(rgba(217,89,38,.12),rgba(217,89,38,.12)),var(--surface)}}
 /* The lineup card folds to a summary (app.js keeps it current) under an Edit lineup button, so
-   the results lead; it opens folded, at every width. Open, Oops! All Ohtanis! sits beside Done. */
+   the results lead. Phones open folded; wider screens open with the whole card (the script after
+   the card's head). Open, Oops! All Ohtanis! sits beside Done. */
 .lineup-sum{display:none}
 #lineup_card.folded #lineup_body,#lineup_card.folded #ohtani_box{display:none}
 #lineup_card.folded .lineup-sum{display:block}
@@ -285,6 +286,16 @@ button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
       <label class="check" id="ohtani_box" title="Every hitter is Shohei Ohtani, and so is the pitcher"><input type="checkbox" id="ohtani"> Oops! All Ohtanis!</label>
       <button id="lineup_toggle" class="fold" type="button" aria-expanded="false" aria-controls="lineup_body">Edit lineup</button>
     </div>
+    <script>
+      // wider than a phone, the card opens unfolded; done here, before the first paint, so it
+      // doesn't open folded and then jump (app.js's setFolded() takes over from here)
+      if (!matchMedia("(max-width: 640px)").matches) {
+        document.getElementById("lineup_card").classList.remove("folded");
+        const toggle = document.getElementById("lineup_toggle");
+        toggle.textContent = "Done";
+        toggle.setAttribute("aria-expanded", "true");
+      }
+    </script>
     <div class="lineup-sum">
       <p id="sum_what"></p>
       <p id="sum_who" class="note"></p>
@@ -486,6 +497,6 @@ button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
 <div id="tip" class="tip" hidden></div>
 <style>.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}</style>
 <script src="/shared/share-image.js?v=2"></script>
-<script type="module" src="app.js?v=24"></script>
+<script type="module" src="app.js?v=25"></script>
 </body>
 </html>
