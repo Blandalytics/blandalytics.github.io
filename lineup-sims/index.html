@@ -55,7 +55,10 @@ button.primary:hover:not(:disabled){background:#8cc6ff}
 
 /* lineup builder */
 .loader{display:grid; grid-template-columns:minmax(180px,1.4fr) minmax(170px,1fr); gap:12px 14px; align-items:end; margin-bottom:14px}
-@media (max-width:560px){.loader{grid-template-columns:1fr}}
+/* a tablet splits the row evenly, so "Lineup spots (all hitters, 2026)" and "His average start (6.0 IP), then
+   bullpen" fit; below 640px each control takes the full width */
+@media (max-width:760px){.loader{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+@media (max-width:640px){.loader{grid-template-columns:1fr}}
 .field{display:flex; flex-direction:column; gap:4px}
 /* the opposing pitcher: a search box with a clear button inside its right edge */
 /* as tall as the select beside it, so the two labels line up (touch screens raise both to 44px) */
@@ -134,7 +137,7 @@ label.check input{width:16px; height:16px; margin:0; accent-color:var(--accent)}
   background:var(--raise); border:1px solid var(--rule); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.4);
   max-height:calc(var(--rows) * 32px + 10px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--faint) transparent}
 /* touch: six rows, to fit above the keyboard; the box scrolls to the top when focused */
-@media (pointer:coarse){.suggest-list{--rows:6} .lineup input[type=text]{scroll-margin-top:12px}}
+@media (pointer:coarse){.suggest-list{--rows:6} .lineup input[type=text],.pick input[type=text]{scroll-margin-top:12px}}
 /* phones: the list grows past its box toward the screen edge, so a name and its team, PA and wOBA share a line */
 @media (max-width:640px){.suggest-list{right:auto; width:max-content; min-width:100%; max-width:calc(100vw - 70px)}}
 .suggest-list li{display:flex; justify-content:space-between; gap:12px; padding:6px 9px; border-radius:4px; cursor:pointer; font-size:14px; line-height:20px}
@@ -202,8 +205,11 @@ svg.strip{display:block; width:100%; height:26px; overflow:visible; cursor:cross
 .teams .short{display:none}
 @media (max-width:640px){
   /* hitter names wrap rather than push the spot table sideways */
-  .spots td:nth-child(2){white-space:normal; min-width:80px}
-  /* the team stays in view while the stats scroll; short names keep it narrow */
+  .spots td:nth-child(2){white-space:normal; min-width:80px}}
+/* up to 700px (where full names stop fitting): the team stays in view while the stats scroll, and short
+   names and 6px cell padding keep it narrow (the table fits outright from ~600px) */
+@media (max-width:700px){
+  .teams th,.teams td{padding-inline:6px}
   .teams .long{display:none} .teams .short{display:inline}
   .teams th:first-child,.teams td:first-child{position:sticky; left:0; z-index:1; background:var(--surface); box-shadow:inset -1px 0 0 var(--rule)}
   .teams tr.me td:first-child{background:linear-gradient(rgba(57,135,229,.16),rgba(57,135,229,.16)),var(--surface)}
@@ -228,6 +234,8 @@ button:active:not(:disabled){transform:scale(.96)}
   .teams thead th{padding:10px 0 6px} .teams th:first-child{padding-left:8px}
   .teams th button{display:block; box-sizing:border-box; width:100%; padding:0 8px; min-height:28px; line-height:28px}}
 @media (pointer:coarse) and (max-width:480px){.lineup td.move button{min-height:32px}}
+@media (pointer:coarse) and (max-width:700px){.teams thead th{padding-inline:0} .teams th:first-child{padding-left:6px}
+  .teams th button{padding:0 6px}}
 @media (prefers-reduced-motion:reduce){button:active:not(:disabled){transform:none}}
 </style>
 </head>
