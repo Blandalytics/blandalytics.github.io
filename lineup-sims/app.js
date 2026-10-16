@@ -1829,18 +1829,17 @@ async function runsTileBlob() {
   g.textBaseline = "middle"; // the gridlines' labels sit on their lines
 
   // the chart: gridlines and shares, teal bars, gold steps for MLB's spots. Runs per 9 and the
-  // smaller numbers stack in a rounded box in a top corner: the one whose columns under it are
-  // lower (the high-run end, nearly always), with the scale raised if they'd reach it.
+  // smaller numbers stack in a rounded box over the 7, 8, 9 and 10+ columns (the short high-run
+  // end), a third of the y-axis tall, with the scale raised if those columns would reach it.
   const widthOf = (font, text) => { g.font = font; return g.measureText(text).width; };
-  // a third of the y-axis tall; the smaller numbers a row each, label left and value right
-  const boxH = (B - T) / 3;
-  const boxW = Math.max(widthOf('400 16px "DM Sans"', "Runs per 9"), widthOf('600 48px "JetBrains Mono"', R.toFixed(2)),
-    ...subs.map(([label, v]) => widthOf('400 15px "DM Sans"', label) + 20 + widthOf('600 20px "JetBrains Mono"', v.toFixed(2)))) + 32;
-  const band = (P1 - P0) / n, bw = band * 0.62;
-  // the columns whose bar or gold step reaches under the box, from either corner
-  const reach = (right) => mine.map((_, i) => i).filter((i) => (right ? P0 + band * (i + 1) - 4 > P1 - boxW : P0 + band * i + 4 < P0 + boxW));
-  const tallest = (cols) => Math.max(...cols.map((i) => Math.max(mine[i], mlb[i])));
-  const right = tallest(reach(true)) <= tallest(reach(false)), high = tallest(reach(right));
+  const band = (P1 - P0) / n, bw = band * 0.62, first = n - 4, pad = 12;
+  const boxH = (B - T) / 3, boxW = band * 4;
+  // the smaller numbers a row each, label left and value right, their type shrunk until the longest fits
+  const rowW = (size) => Math.max(0, ...subs.map(([label, v]) =>
+    widthOf(`400 ${size}px "DM Sans"`, label) + 10 + widthOf(`600 ${size + 4}px "JetBrains Mono"`, v.toFixed(2))));
+  let subSize = 15;
+  while (subSize > 11 && rowW(subSize) > boxW - 2 * pad) subSize--;
+  const high = Math.max(...mine.slice(first), ...mlb.slice(first));
   const top = Math.max(...mine, ...mlb), step = top > 0.16 ? 0.05 : 0.04;
   const yMax = Math.ceil(Math.max(top, high / (1 - (boxH + 12) / (B - T))) / step - 1e-9) * step;
   const y = (v) => T + (1 - v / yMax) * (B - T);
@@ -1879,8 +1878,8 @@ async function runsTileBlob() {
   g.font = '400 16px "DM Sans"';
   g.fillText("Runs", (P0 + P1) / 2, B + 58);
 
-  // the box, in the corner chosen above: runs per 9 centered, then the smaller numbers
-  const x0 = right ? P1 - boxW : P0, y0 = T, mid = x0 + boxW / 2, rad = 14;
+  // the box: runs per 9 centered, then the smaller numbers
+  const x0 = P0 + band * first, y0 = T, mid = x0 + boxW / 2, rad = 14;
   g.beginPath();
   g.moveTo(x0 + rad, y0);
   g.arcTo(x0 + boxW, y0, x0 + boxW, y0 + boxH, rad);
@@ -1904,18 +1903,18 @@ async function runsTileBlob() {
   g.fillText(R.toFixed(2), mid, y0 + 72 + lift);
   g.strokeStyle = "#4b5075";
   g.lineWidth = 1;
-  if (subs.length) { g.beginPath(); g.moveTo(x0 + 16, y0 + 88); g.lineTo(x0 + boxW - 16, y0 + 88); g.stroke(); }
+  if (subs.length) { g.beginPath(); g.moveTo(x0 + pad, y0 + 88); g.lineTo(x0 + boxW - pad, y0 + 88); g.stroke(); }
   const subH = (boxH - 88) / subs.length;
   subs.forEach(([label, v], k) => {
     const yb = y0 + 88 + subH * (k + 0.5) + 6;
     g.textAlign = "left";
-    g.font = '400 15px "DM Sans"';
+    g.font = `400 ${subSize}px "DM Sans"`;
     g.fillStyle = OPT_TILE.sub;
-    g.fillText(label, x0 + 16, yb);
+    g.fillText(label, x0 + pad, yb);
     g.textAlign = "right";
-    g.font = '600 20px "JetBrains Mono"';
+    g.font = `600 ${subSize + 4}px "JetBrains Mono"`;
     g.fillStyle = OPT_TILE.axis;
-    g.fillText(v.toFixed(2), x0 + boxW - 16, yb);
+    g.fillText(v.toFixed(2), x0 + boxW - pad, yb);
   });
 
   // the key
