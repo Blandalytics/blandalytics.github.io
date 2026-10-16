@@ -14,7 +14,7 @@
   --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
   --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
   --accent:#6cb4ff; --good:#7bd88f; --bad:#ff8a80; --warn:#ffd166;
-  /* chart series: this lineup, MLB average (validated pair on --surface); teams are context gray */
+  /* chart series: this lineup, MLB (validated pair on --surface); teams are context gray */
   --s-lineup:#3987e5; --s-mlb:#d95926; --s-team:#5b6675;
 }
 *{box-sizing:border-box}
@@ -31,6 +31,7 @@ a.home{color:var(--muted); text-decoration:none; font-size:14px}
 @media (pointer:coarse){a.home{display:inline-block; padding:10px 0; margin:-10px 0}}
 a.home:hover{color:var(--ink)}
 .card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
+@media (max-width:400px){.card{padding:14px 12px}}
 label{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
 label b{color:var(--ink); font-weight:500}
 input,select,button{font:inherit; color:var(--ink)}
@@ -85,6 +86,9 @@ button.primary:hover:not(:disabled){background:#8cc6ff}
 .curve th,.curve td{padding:4px 8px; border-top:1px solid var(--rule); text-align:right; white-space:nowrap}
 .curve thead th{border-top:0; font-size:12px; font-weight:500; color:var(--muted)}
 .curve th[scope=row],.curve thead th:first-child{text-align:left; font-weight:400; color:var(--muted); padding-left:0}
+/* phones: the row names stay in view while the settings scroll */
+@media (max-width:640px){.curve th[scope=row],.curve thead th:first-child{position:sticky; left:0; z-index:1; background:var(--surface);
+  box-shadow:inset -1px 0 0 var(--rule)} .curve thead th:first-child{white-space:normal; min-width:72px}}
 /* lineup optimizer */
 .opt-controls{display:flex; flex-wrap:wrap; gap:12px 22px; align-items:center; margin-top:12px}
 label.check{flex-direction:row; align-items:center; gap:8px; color:var(--ink); font-size:14px}
@@ -92,25 +96,41 @@ label.check.off{color:var(--faint)}
 label.check input{width:16px; height:16px; margin:0; accent-color:var(--accent)}
 .opt-controls select{width:auto}
 .opt-controls label:not(.check){flex-direction:row; align-items:center; gap:8px}
+@media (max-width:480px){.opt-controls label:not(.check){flex-direction:column; align-items:stretch; gap:4px; flex:1 1 100%}
+  .opt-controls select{width:100%}}
 .locks{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:12px; font-size:13px; color:var(--muted)}
 .locks span{margin-right:4px}
 .locks button{min-width:34px; padding:4px 0; font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-size:12.5px}
+/* phones: the label on its own line, the nine chips in one row */
+@media (max-width:480px){.locks{display:grid; grid-template-columns:repeat(9,minmax(0,1fr)); gap:4px} .locks span{grid-column:1 / -1}
+  .locks button{min-width:0}}
 .locks button[aria-pressed=true]{background:var(--accent); color:#0b1320; border-color:var(--accent); font-weight:600}
 #opt_out{margin-top:14px}
 #opt_summary{color:var(--ink); font-size:14px}
-@media (max-width:640px){.lineup .opt{display:none} .who-sub{max-width:200px}}
-@media (max-width:480px){.lineup .opt2{display:none} .lineup td{padding:3px 4px} .who-sub{max-width:110px}}
+/* on phones the caption fills its cell without widening it */
+@media (max-width:640px){.lineup .opt{display:none} .who-sub{max-width:none; width:0; min-width:100%}}
+/* the order arrows stack, up over down, which gives the hitter box ~40px more */
+@media (max-width:480px){.lineup .opt2{display:none} .lineup td{padding:3px 4px}
+  .lineup td.move button{display:block} .lineup td.move button + button{margin-top:4px}
+  /* a spot with a slider is an MLB spot, whose ~20,000 PA caption says little; the stat line stays */
+  .lineup td.who:has(.tilt) .who-sub{display:none}}
 .suggest{position:relative}
 .suggest-list{--rows:10; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:5; margin:0; padding:4px; list-style:none;
   background:var(--raise); border:1px solid var(--rule); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.4);
   max-height:calc(var(--rows) * 32px + 10px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--faint) transparent}
+/* touch: six rows, to fit above the keyboard; the box scrolls to the top when focused */
+@media (pointer:coarse){.suggest-list{--rows:6} .lineup input[type=text]{scroll-margin-top:12px}}
+/* phones: the list grows past its box toward the screen edge, so a name and its team, PA and wOBA share a line */
+@media (max-width:640px){.suggest-list{right:auto; width:max-content; min-width:100%; max-width:calc(100vw - 70px)}}
 .suggest-list li{display:flex; justify-content:space-between; gap:12px; padding:6px 9px; border-radius:4px; cursor:pointer; font-size:14px; line-height:20px}
 .suggest-list li small{color:var(--muted); font-size:12px; white-space:nowrap; font-variant-numeric:tabular-nums}
 .suggest-list li.active{background:#222b36}
 .suggest-list li.head{cursor:default; color:var(--faint); font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; padding:6px 9px 2px}
 .options{display:grid; grid-template-columns:150px minmax(190px,260px) auto; gap:12px 14px; align-items:end; margin-top:14px}
 .options button{justify-self:start}
-@media (max-width:560px){.options{grid-template-columns:1fr 1fr} .options button{grid-column:1 / -1}}
+/* Games is a short number; Small samples' "2026 rates as they are" takes the rest */
+@media (max-width:560px){.options{grid-template-columns:auto minmax(0,1fr)} .options button{grid-column:1 / -1}}
+@media (max-width:400px){.options{grid-template-columns:minmax(0,1fr)}}
 
 /* results */
 .kpis{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px 20px; margin-bottom:16px}
@@ -136,7 +156,10 @@ label.check input{width:16px; height:16px; margin:0; accent-color:var(--accent)}
 .compare td.d.up{color:var(--good)} .compare td.d.down{color:var(--bad)}
 .compare td.strip{width:42%; min-width:180px; padding-right:0}
 .compare td .unit{color:var(--faint); font-size:11.5px; font-weight:400}
-@media (max-width:720px){.compare .opt{display:none}}
+.compare tr.strip-row{display:none}
+@media (max-width:720px){.compare .opt{display:none}
+  /* the strip under its stat, full width */
+  .compare tr.strip-row{display:table-row} .compare tr.strip-row td{border-top:0; padding:0 0 8px}}
 svg.strip{display:block; width:100%; height:26px; overflow:visible; cursor:crosshair}
 .chart{position:relative; margin-top:6px}
 .chart svg{display:block; width:100%; height:auto; overflow:visible}
@@ -158,6 +181,16 @@ svg.strip{display:block; width:100%; height:26px; overflow:visible; cursor:cross
 .teams tr.me td{background:rgba(57,135,229,.16); font-weight:600}
 .teams tr.mlb td{background:rgba(217,89,38,.12)}
 .scroll{overflow-x:auto}
+@media (max-width:400px){.spots th,.spots td{padding-inline:4px}}
+.teams .short{display:none}
+@media (max-width:640px){
+  /* hitter names wrap rather than push the spot table sideways */
+  .spots td:nth-child(2){white-space:normal; min-width:80px}
+  /* the team stays in view while the stats scroll; short names keep it narrow */
+  .teams .long{display:none} .teams .short{display:inline}
+  .teams th:first-child,.teams td:first-child{position:sticky; left:0; z-index:1; background:var(--surface); box-shadow:inset -1px 0 0 var(--rule)}
+  .teams tr.me td:first-child{background:linear-gradient(rgba(57,135,229,.16),rgba(57,135,229,.16)),var(--surface)}
+  .teams tr.mlb td:first-child{background:linear-gradient(rgba(217,89,38,.12),rgba(217,89,38,.12)),var(--surface)}}
 details summary{cursor:pointer; font-size:15px; font-weight:600; list-style:none}
 details summary::-webkit-details-marker{display:none}
 details summary::before{content:"▸ "; color:var(--muted)}
@@ -172,7 +205,12 @@ h1,h2,h3{text-wrap:balance}
 p,li,.tag,.note,.method,.status{text-wrap:pretty}
 button{transition:transform .12s cubic-bezier(.2,0,0,1)}
 button:active:not(:disabled){transform:scale(.96)}
-@media (pointer:coarse){button,select,input[type=text]{min-height:44px} .lineup td.move button{min-height:36px; min-width:36px}}
+@media (pointer:coarse){button,select,input[type=text]{min-height:44px} .lineup td.move button{min-height:36px; min-width:36px}
+  label.check{min-height:40px} label.check input{width:18px; height:18px}
+  details summary{padding-block:8px}
+  .teams thead th{padding:10px 0 6px} .teams th:first-child{padding-left:8px}
+  .teams th button{display:block; box-sizing:border-box; width:100%; padding:0 8px; min-height:28px; line-height:28px}}
+@media (pointer:coarse) and (max-width:480px){.lineup td.move button{min-height:32px}}
 @media (prefers-reduced-motion:reduce){button:active:not(:disabled){transform:none}}
 </style>
 </head>
@@ -192,7 +230,7 @@ button:active:not(:disabled){transform:scale(.96)}
         <select id="kind">
           <option value="spots">Lineup spots (all hitters, 2026)</option>
           <option value="most_used">Most-used batting order</option>
-          <option value="tradeoff">MLB-average spots: contact vs power</option>
+          <option value="tradeoff">MLB spots: contact vs power</option>
         </select>
       </label>
     </div>
@@ -226,14 +264,14 @@ button:active:not(:disabled){transform:scale(.96)}
           <option value="200">Add 200 PA of MLB average</option>
         </select>
       </label>
-      <button id="reset_all" type="button" title="Back to the MLB-average lineup spots and every option's default">Reset settings</button>
+      <button id="reset_all" type="button" title="Back to the MLB lineup spots and every option's default">Reset settings</button>
     </div>
     <p id="status" class="status" style="margin-top:10px" role="status">loading 2026 data…</p>
   </section>
 
   <section class="card" aria-labelledby="opt_h">
     <h2 id="opt_h">Lineup optimizer</h2>
-    <p class="note">Rearranges the lineup above, and moves its MLB-average spots along the contact–power axis, to score the most runs. Each spot keeps its wOBA. Lineups are judged by exact expected runs, so there's no simulation noise to chase.</p>
+    <p class="note">Rearranges the lineup above, and moves its MLB spots along the contact–power axis, to score the most runs. Each spot keeps its wOBA. Lineups are judged by exact expected runs, so there's no simulation noise to chase.</p>
     <div class="opt-controls">
       <label class="check"><input type="checkbox" id="opt_order" checked> Batting order</label>
       <label class="check" id="opt_tilt_label"><input type="checkbox" id="opt_tilt" checked> Contact–power settings</label>
@@ -275,7 +313,7 @@ button:active:not(:disabled){transform:scale(.96)}
       </div>
       <div class="legend" aria-hidden="true">
         <span><i class="key-dot" style="background:var(--s-lineup)"></i>This lineup</span>
-        <span><i class="key-tick" style="background:var(--s-mlb)"></i>MLB average</span>
+        <span><i class="key-tick" style="background:var(--s-mlb)"></i>MLB</span>
         <span><i class="key-dot" style="background:var(--s-team)"></i>MLB teams</span>
       </div>
     </div>
@@ -289,7 +327,7 @@ button:active:not(:disabled){transform:scale(.96)}
       <h3>Contact vs power at the same wOBA</h3>
       <p id="tradeoff_note" class="note"></p>
       <div class="legend" aria-hidden="true" style="margin-top:8px">
-        <span><i class="key-line" style="background:var(--s-mlb)"></i>All nine MLB-average spots moved together</span>
+        <span><i class="key-line" style="background:var(--s-mlb)"></i>All nine MLB spots moved together</span>
         <span><i class="key-dot" style="background:var(--s-lineup)"></i>This lineup, with its 95% range</span>
       </div>
       <div class="chart" id="tradeoff_chart"></div>
@@ -300,7 +338,7 @@ button:active:not(:disabled){transform:scale(.96)}
       <h3>Runs per game</h3>
       <div class="legend" aria-hidden="true" style="margin-top:4px">
         <span><i class="key-bar" style="background:var(--s-lineup)"></i>This lineup</span>
-        <span><i class="key-line" style="background:var(--s-mlb)"></i>MLB average lineup (simulated)</span>
+        <span><i class="key-line" style="background:var(--s-mlb)"></i>MLB lineup (simulated)</span>
       </div>
       <div class="chart" id="runs_chart"></div>
     </div>
@@ -333,12 +371,12 @@ button:active:not(:disabled){transform:scale(.96)}
       <summary>How it works</summary>
       <div class="method" id="method">
         <p><b>Hitters.</b> Every 2026 regular-season plate appearance, from MLB's play-by-play, is sorted into one of eleven outcomes: strikeout, walk, hit by pitch, single, double, triple, home run, or a ball in play that wasn't a hit, split by ground ball, line drive, fly ball and popup. A hitter's rates are how often each one happened. Intentional walks, sacrifice bunts and catcher's interference are left out; they are a manager's or a fielder's choice more than the hitter's.</p>
-        <p><b>Lineup spots.</b> A team's spot is everyone who batted there in 2026, pooled, pinch hitters included. The MLB average lineup pools all 30 teams. <b>Most-used batting order</b> is the exact 1–9 order a team started most often, from FanGraphs' RosterResource Lineup Tracker (ties go to the one used most recently); its hitters bat at their own 2026 rates. Any slot can be changed to any 2026 hitter or any team's spot. Few orders were used more than a handful of times, which is why the spots are the default.</p>
+        <p><b>Lineup spots.</b> A team's spot is everyone who batted there in 2026, pooled, pinch hitters included. The MLB lineup pools all 30 teams. <b>Most-used batting order</b> is the exact 1–9 order a team started most often, from FanGraphs' RosterResource Lineup Tracker (ties go to the one used most recently); its hitters bat at their own 2026 rates. Any slot can be changed to any 2026 hitter or any team's spot. Few orders were used more than a handful of times, which is why the spots are the default.</p>
         <p><b>A game.</b> The lineup bats until it makes 27 outs (nine innings), turning over as it goes. Before each plate appearance with runners on, the running game happens: steals, caught stealing, pickoffs, wild pitches, passed balls and balks, at the rates they happened in 2026 in that base-out state. If that ends the inning, the same hitter leads off the next. Then the hitter's outcome is drawn from the hitter's rates, and where the runners and the hitter end up is drawn from what actually happened on that outcome, in that base-out state, across the league. Double plays, sacrifice flies, fielder's choices, errors, extra bases taken and runners thrown out all come along at their 2026 rates.</p>
         <p><b>Baserunning is league average</b> for every runner, for now. The engine keeps track of which hitter is on which base, so runner-specific speed, steal attempts and advancement can replace the league tables later.</p>
         <p><b>Stats.</b> R, H, HR, K and BB are per nine innings (27 outs). AVG, OBP and SLG are the usual ones; wOBA uses FanGraphs' 2026 weights (<span id="weights"></span>). BB counts unintentional walks only and OBP leaves intentional walks out, in the simulation and in the team and MLB numbers it is compared with.</p>
         <p><b>The comparison.</b> <b>Teams' 2026 actual</b> is each team's real batting in innings 1–9, per 27 outs. <b>Teams' lineup spots, simulated</b> runs each team's nine spots through the same simulation, so the comparison is like for like. <span id="calibration"></span></p>
-        <p><b>Contact vs power.</b> Take every 2026 hitter with 200 or more plate appearances and remove what wOBA explains about each of the eleven outcome rates. What's left is how hitters with the same wOBA differ, and most of it (<span id="tilt_share"></span>) runs along one line: strikeouts, walks and homers one way, singles and balls in play the other. That line is the contact–power axis. Moving an MLB-average spot along it changes its K%, BB%, AVG and SLG but not its wOBA, because the axis gives up exactly as much wOBA in one outcome as it adds in another. Steps are standard deviations of 2026 hitters along the axis, and the sliders reach ±<span id="tilt_range"></span>, about as far as the most extreme regulars. AVG and SLG beside the sliders estimate sacrifice flies at the league rate; the simulation's own numbers are exact. With so little difference between settings, 50,000 or more games keeps noise below the effect.</p>
+        <p><b>Contact vs power.</b> Take every 2026 hitter with 200 or more plate appearances and remove what wOBA explains about each of the eleven outcome rates. What's left is how hitters with the same wOBA differ, and most of it (<span id="tilt_share"></span>) runs along one line: strikeouts, walks and homers one way, singles and balls in play the other. That line is the contact–power axis. Moving an MLB spot along it changes its K%, BB%, AVG and SLG but not its wOBA, because the axis gives up exactly as much wOBA in one outcome as it adds in another. Steps are standard deviations of 2026 hitters along the axis, and the sliders reach ±<span id="tilt_range"></span>, about as far as the most extreme regulars. AVG and SLG beside the sliders estimate sacrifice flies at the league rate; the simulation's own numbers are exact. With so little difference between settings, 50,000 or more games keeps noise below the effect.</p>
         <p><b>Lineup optimizer.</b> The optimizer doesn't simulate. It solves for expected runs exactly, with a Markov chain over who's up, the outs and the bases, built from the same running-game and advancement tables the simulation draws from. That gives the average the simulation would reach over endless games (<span id="exact_check"></span>), in about a millisecond per lineup. Batting order: swaps of two spots, the best one each time, until none helps. Contact–power settings: with <b>Keep the lineup's average setting</b>, spots trade contact for power with each other in moves of 1, 0.5, 0.2 or 0.1 while the total stays put; with <b>Free</b>, each spot takes its own best setting, and in 2026 that is the contact end almost everywhere, since outs on balls in play move runners and strikeouts don't. The two searches alternate until neither helps. They are local searches, checked against brute force on smaller problems. Spots under <b>Keep as is</b> keep their hitter and setting.</p>
         <p><b>Not modeled yet:</b> the opposing pitcher and platoon splits, park, runner speed, intentional walks, bunts, pinch hitters and extra innings. Results use a fixed random seed, so the same lineup always gets the same numbers and two orders of the same nine hitters face the same luck.</p>
         <p><b>Data:</b> MLB Stats API play-by-play (<span id="data_range"></span>); lineups and wOBA weights from FanGraphs.</p>
@@ -348,6 +386,6 @@ button:active:not(:disabled){transform:scale(.96)}
 </main>
 <div id="tip" class="tip" hidden></div>
 <style>.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}</style>
-<script type="module" src="app.js?v=7"></script>
+<script type="module" src="app.js?v=8"></script>
 </body>
 </html>

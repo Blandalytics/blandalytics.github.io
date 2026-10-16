@@ -99,7 +99,7 @@ function buildEntries() {
       team: abbr, counts: s.counts, pa, sub: `${pa.toLocaleString()} PA: ${who}`,
       search: fold(`${label} ${short} ${abbr} ${i + 1} spot`) });
   });
-  spotsOf("MLB", "MLB average", "mlb league", data.mlb.spots);
+  spotsOf("MLB", "MLB", "mlb league", data.mlb.spots);
   for (const t of data.teams) spotsOf(t.abbr, t.short, `${t.name} ${t.abbr}`, t.spots);
   const totals = data.mlb.spots.reduce((acc, s) => acc.map((x, i) => x + s.counts[i]), CATS.map(() => 0));
   const n = totals.reduce((s, x) => s + x, 0);
@@ -113,7 +113,7 @@ function teamOf(abbr) {
 // ---------- lineup loading ----------
 function fillTeams() {
   const sel = $("team");
-  sel.add(new Option("MLB average", "MLB"));
+  sel.add(new Option("MLB", "MLB"));
   for (const lg of ["American", "National"]) {
     const g = document.createElement("optgroup");
     g.label = `${lg} League`;
@@ -125,7 +125,7 @@ function fillTeams() {
 
 function loadPreset() {
   const kindSel = $("kind");
-  // contact vs power works on the MLB-average spots
+  // contact vs power works on the MLB spots
   if (kindSel.value === "tradeoff") $("team").value = "MLB";
   const abbr = $("team").value;
   kindSel.querySelector("[value=most_used]").disabled = abbr === "MLB";
@@ -353,6 +353,10 @@ function wireSuggest(input, list, slot) {
     paint();
   };
   input.addEventListener("focus", () => input.select());
+  // a phone's keyboard covers the bottom half, and the list opens below the box: bring the box to the top
+  input.addEventListener("focus", () => {
+    if (matchMedia("(pointer: coarse)").matches) setTimeout(() => input.scrollIntoView({ block: "start" }), 300);
+  });
   input.addEventListener("input", open);
   input.addEventListener("keydown", (ev) => {
     if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
@@ -478,7 +482,7 @@ function renderResults() {
   };
   $("kpis").replaceChildren(
     kpi("Runs per 9 innings", s.R.toFixed(2), `±${moe.toFixed(2)} (95%) · ${ordinal(rankOf(s.R, r.teams, 1))} of 30 teams`),
-    kpi("Over 162 games", Math.round(s.R * 162).toLocaleString(), `MLB average ${Math.round(r.mlb * 162).toLocaleString()}`),
+    kpi("Over 162 games", Math.round(s.R * 162).toLocaleString(), `MLB ${Math.round(r.mlb * 162).toLocaleString()}`),
     kpi("wOBA", fmtRate(s.wOBA), `${ordinal(rankOf(s.wOBA, w.teams, 1))} of 30 · MLB ${fmtRate(w.mlb)}`),
   );
 
@@ -504,7 +508,12 @@ function renderResults() {
     td.className = "strip opt";
     td.append(strip(st, v, mlb, teams));
     tr.append(td);
-    body.append(tr);
+    // phones hide the strip column and show the strip on a row of its own under the stat
+    const under = document.createElement("tr");
+    under.className = "strip-row";
+    under.innerHTML = `<td colspan="6"></td>`;
+    under.firstChild.append(strip(st, v, mlb, teams));
+    body.append(tr, under);
   }
   $("basis_note").textContent = basis === "actual"
     ? "Teams and MLB: actual 2026 batting in innings 1–9, per 27 outs (unintentional walks; OBP without intentional walks). Rank is where this lineup would place among the 30 teams; for strikeouts, fewer ranks higher."
@@ -528,7 +537,7 @@ function strip(st, v, mlb, teams) {
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.setAttribute("class", "strip");
   svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", `${st.label}: this lineup ${fmtStat(st, v)}, MLB average ${fmtStat(st, mlb)}, teams from ${fmtStat(st, Math.min(...teams.map((t) => t.v)))} to ${fmtStat(st, Math.max(...teams.map((t) => t.v)))}`);
+  svg.setAttribute("aria-label", `${st.label}: this lineup ${fmtStat(st, v)}, MLB ${fmtStat(st, mlb)}, teams from ${fmtStat(st, Math.min(...teams.map((t) => t.v)))} to ${fmtStat(st, Math.max(...teams.map((t) => t.v)))}`);
   const el = (name, attrs) => {
     const n = document.createElementNS(SVG, name);
     for (const [k, a] of Object.entries(attrs)) n.setAttribute(k, a);
@@ -540,9 +549,9 @@ function strip(st, v, mlb, teams) {
   el("rect", { x: x(mlb) - 1.5, y: H / 2 - 8, width: 3, height: 16, rx: 1, fill: "var(--s-mlb)" });
   el("circle", { cx: x(v), cy: H / 2, r: 6, fill: "var(--s-lineup)", stroke: "var(--surface)", "stroke-width": 2 });
 
-  const points = [{ label: "This lineup", v, key: "var(--s-lineup)" }, { label: "MLB average", v: mlb, key: "var(--s-mlb)" },
+  const points = [{ label: "This lineup", v, key: "var(--s-lineup)" }, { label: "MLB", v: mlb, key: "var(--s-mlb)" },
     ...teams.map((t) => ({ label: t.abbr, v: t.v, key: "var(--s-team)" }))];
-  svg.addEventListener("pointermove", (ev) => {
+  hover(svg, (ev) => {
     const box = svg.getBoundingClientRect();
     const px = ((ev.clientX - box.left) / box.width) * W;
     // nearest by x; the two highlighted marks win ties so they're never buried under a team dot
@@ -554,7 +563,6 @@ function strip(st, v, mlb, teams) {
     const same = teams.filter((t) => Math.abs(x(t.v) - x(best.v)) < 1.5 && t.abbr !== best.label).map((t) => t.abbr);
     showTip(ev, [[best.key, fmtStat(st, best.v), best.label + (same.length && best.label.length <= 3 ? `, ${same.join(", ")}` : "")]]);
   });
-  svg.addEventListener("pointerleave", hideTip);
   return svg;
 }
 
@@ -589,6 +597,28 @@ function showTip(ev, rows, title) {
   tip.style.top = `${top}px`;
 }
 function hideTip() { $("tip").hidden = true; }
+// A finger doesn't hover: pointermove only fires on a drag, which scrolls instead, and
+// pointerleave follows every lift. So a tap shows the tip, and it stays until the next
+// tap elsewhere or a scroll.
+let tapHide = null, tapEvent = null;
+function hover(el, show, hide = hideTip) {
+  el.addEventListener("pointermove", (ev) => { if (ev.pointerType !== "touch") show(ev); });
+  el.addEventListener("pointerleave", (ev) => { if (ev.pointerType !== "touch") hide(); });
+  el.addEventListener("pointerdown", (ev) => {
+    if (ev.pointerType !== "touch") return;
+    if (tapHide && tapHide !== hide) tapHide();
+    tapHide = hide;
+    tapEvent = ev;
+    show(ev);
+  });
+}
+const tapAway = (ev) => {
+  if (!tapHide || ev === tapEvent) return;
+  tapHide();
+  tapHide = null;
+};
+document.addEventListener("pointerdown", tapAway);
+addEventListener("scroll", tapAway, { passive: true, capture: true });
 
 // charts are drawn at the width they're shown at (text stays 11-12px on a phone) and
 // redrawn when that changes
@@ -620,7 +650,7 @@ function runsChart(dist, games) {
   const svg = document.createElementNS(SVG, "svg");
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", `Share of games by runs scored, this lineup against the simulated MLB average lineup. Most common: ${mine.indexOf(Math.max(...mine))} runs.`);
+  svg.setAttribute("aria-label", `Share of games by runs scored, this lineup against the simulated MLB lineup. Most common: ${mine.indexOf(Math.max(...mine))} runs.`);
   const el = (name, attrs, text) => {
     const e = document.createElementNS(SVG, name);
     for (const [k, a] of Object.entries(attrs)) e.setAttribute(k, a);
@@ -641,7 +671,7 @@ function runsChart(dist, games) {
     }
     el("text", { x: cx(i), y: H - B + 16, "text-anchor": "middle", fill: "var(--muted)", "font-size": 11 }, i === MAX ? `${MAX}+` : String(i));
   });
-  // MLB average as a step line across each band
+  // MLB as a step line across each band
   let d = "";
   mlb.forEach((v, i) => {
     const x0 = L + band * i + 2, x1 = L + band * (i + 1) - 2;
@@ -652,9 +682,8 @@ function runsChart(dist, games) {
   // hover: one band per run total
   mine.forEach((v, i) => {
     const hit = el("rect", { x: L + band * i, y: T, width: band, height: H - T - B, fill: "transparent" });
-    hit.addEventListener("pointermove", (ev) => showTip(ev, [["var(--s-lineup)", pct(v), "this lineup"], ["var(--s-mlb)", pct(mlb[i]), "MLB average"]],
+    hover(hit, (ev) => showTip(ev, [["var(--s-lineup)", pct(v), "this lineup"], ["var(--s-mlb)", pct(mlb[i]), "MLB"]],
       i === MAX ? `${MAX}+ runs` : `${i} run${i === 1 ? "" : "s"}`));
-    hit.addEventListener("pointerleave", hideTip);
   });
   $("runs_chart").replaceChildren(svg);
 }
@@ -700,8 +729,8 @@ function renderTeams() {
     hr.append(th);
   }
   head.append(hr);
-  const rows = data.teams.map((t) => ({ label: t.name, cls: "", v: Object.fromEntries(STATS.map((st) => [st.k, compareSet(st.k).teams.find((x) => x.abbr === t.abbr).v])) }));
-  rows.push({ label: "MLB average", cls: "mlb", v: Object.fromEntries(STATS.map((st) => [st.k, compareSet(st.k).mlb])) });
+  const rows = data.teams.map((t) => ({ label: t.name, short: t.short, cls: "", v: Object.fromEntries(STATS.map((st) => [st.k, compareSet(st.k).teams.find((x) => x.abbr === t.abbr).v])) }));
+  rows.push({ label: "MLB", cls: "mlb", v: Object.fromEntries(STATS.map((st) => [st.k, compareSet(st.k).mlb])) });
   rows.push({ label: "This lineup", cls: "me", v: last.sum });
   rows.sort((a, b) => sortKey.dir * (a.v[sortKey.k] - b.v[sortKey.k]));
   const body = $("teams_body");
@@ -711,6 +740,12 @@ function renderTeams() {
     if (r.cls) tr.className = r.cls;
     const td0 = document.createElement("td");
     td0.textContent = r.label;
+    if (r.short) {
+      // phones show "Cubs" for "Chicago Cubs", so the pinned column stays narrow
+      td0.innerHTML = `<span class="long"></span><span class="short"></span>`;
+      td0.firstChild.textContent = r.label;
+      td0.lastChild.textContent = r.short;
+    }
     tr.append(td0);
     for (const st of STATS) {
       const td = document.createElement("td");
@@ -723,7 +758,7 @@ function renderTeams() {
 }
 
 // ---------- contact vs power results ----------
-const TRADEOFF_NOTE = "MLB-average lineup spots, each movable along the contact–power axis while keeping its own wOBA.";
+const TRADEOFF_NOTE = "MLB lineup spots, each movable along the contact–power axis while keeping its own wOBA.";
 
 function setMaster(theta) {
   $("tilt_all").value = theta;
@@ -757,9 +792,9 @@ function renderTradeoff(moe) {
   const base = pts.find((p) => p.theta === 0), lo = pts[0], hi = pts[pts.length - 1];
   const dR = (p) => `${p.R >= base.R ? "+" : "−"}${Math.abs(p.R - base.R).toFixed(2)}`;
   $("tradeoff_note").textContent = `With every spot moved together, the contact end (${fmtTheta(lo.theta)}) scores ${dR(lo)} runs per nine innings `
-    + `against the MLB-average lineup and the power end (${fmtTheta(hi.theta)}) ${dR(hi)}, with wOBA at ${fmtRate(lo.wOBA)} to ${fmtRate(hi.wOBA)} throughout. `
+    + `against the MLB lineup and the power end (${fmtTheta(hi.theta)}) ${dR(hi)}, with wOBA at ${fmtRate(lo.wOBA)} to ${fmtRate(hi.wOBA)} throughout. `
     + `Each point is ${data.sims.tradeoff.games.toLocaleString()} games on the same random seed, which keeps the curve smooth.`
-    + (avg == null ? "" : thetas.length < 9 ? " This lineup is plotted at the average setting of its MLB-average spots."
+    + (avg == null ? "" : thetas.length < 9 ? " This lineup is plotted at the average setting of its MLB spots."
       : " This lineup is plotted at its spots' average setting.");
   tradeoffChart(pts, avg, last.sum.R, moe);
 
@@ -820,13 +855,14 @@ function tradeoffChart(pts, avg, R, moe) {
     el("text", { x: L - 6, y: y(v) + 4, "text-anchor": "end", fill: "var(--muted)", "font-size": 11 }, v.toFixed(2));
   }
   el("line", { x1: x(0), x2: x(0), y1: T - 6, y2: H - B, stroke: "var(--faint)", "stroke-width": 1 });
-  el("text", { x: x(0), y: T - 10, "text-anchor": "middle", fill: "var(--muted)", "font-size": 11 }, "MLB average");
+  el("text", { x: x(0), y: T - 10, "text-anchor": "middle", fill: "var(--muted)", "font-size": 11 }, "MLB");
   for (let t = -Math.floor(range); t <= Math.floor(range); t++) {
     el("text", { x: x(t), y: H - B + 16, "text-anchor": "middle", fill: "var(--muted)", "font-size": 11 }, fmtStep(t));
   }
   el("text", { x: L, y: H - 6, fill: "var(--muted)", "font-size": 11 }, "← Contact");
   el("text", { x: W - Rt, y: H - 6, "text-anchor": "end", fill: "var(--muted)", "font-size": 11 }, "Power →");
-  el("text", { x: (L + W - Rt) / 2, y: H - 6, "text-anchor": "middle", fill: "var(--faint)", "font-size": 11 }, "standard deviations of 2026 hitters");
+  el("text", { x: (L + W - Rt) / 2, y: H - 6, "text-anchor": "middle", fill: "var(--faint)", "font-size": 11 },
+    W < 400 ? "SDs of 2026 hitters" : "standard deviations of 2026 hitters"); // a phone's chart has room for the short one
   el("path", { d: pts.map((p, i) => `${i ? "L" : "M"}${x(p.theta)},${y(p.R)}`).join(" "), fill: "none",
     stroke: "var(--s-mlb)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" });
   if (avg != null) {
@@ -835,7 +871,8 @@ function tradeoffChart(pts, avg, R, moe) {
   }
   const cross = el("line", { x1: 0, x2: 0, y1: T, y2: H - B, stroke: "var(--muted)", "stroke-width": 1, visibility: "hidden" });
   const hit = el("rect", { x: L, y: T, width: W - L - Rt, height: H - T - B, fill: "transparent" });
-  hit.addEventListener("pointermove", (ev) => {
+  const hideCross = () => { cross.setAttribute("visibility", "hidden"); hideTip(); };
+  hover(hit, (ev) => {
     const box = svg.getBoundingClientRect();
     const t = ((((ev.clientX - box.left) / box.width) * W - L) / (W - L - Rt)) * 2 * range - range;
     const p = pts.reduce((a, b) => (Math.abs(b.theta - t) < Math.abs(a.theta - t) ? b : a));
@@ -845,9 +882,8 @@ function tradeoffChart(pts, avg, R, moe) {
     const rows = [["var(--s-mlb)", p.R.toFixed(2), "runs / 9"], ["transparent", `${fmtRate(p.AVG)} / ${fmtRate(p.SLG)}`, "AVG / SLG"],
       ["transparent", `${p.K.toFixed(1)} / ${p.BB.toFixed(1)}`, "K / BB per 9"], ["transparent", fmtRate(p.wOBA), "wOBA"]];
     if (avg != null && Math.abs(avg - p.theta) < 0.25) rows.splice(1, 0, ["var(--s-lineup)", `${R.toFixed(2)} ±${moe.toFixed(2)}`, "this lineup"]);
-    showTip(ev, rows, p.theta === 0 ? "MLB-average spots" : `All spots ${fmtTheta(p.theta)}`);
-  });
-  hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
+    showTip(ev, rows, p.theta === 0 ? "MLB spots" : `All spots ${fmtTheta(p.theta)}`);
+  }, hideCross);
   $("tradeoff_chart").replaceChildren(svg);
 }
 
@@ -911,7 +947,7 @@ function renderOptimizer() {
   $("opt_mix").options[0].textContent = `Keep the lineup's average setting (${fmtTheta(avg)})`;
   $("opt_go").disabled = optJob != null;
   $("opt_hint").textContent = canTilt ? ""
-    : "Contact–power settings apply to MLB-average spots: pick “MLB-average spots: contact vs power” under Lineup, or put an MLB-average spot in the lineup.";
+    : "Contact–power settings apply to MLB spots: pick “MLB spots: contact vs power” under Lineup, or put an MLB spot in the lineup.";
   if (last && last.lineup.join() === lineup.join()) {
     const r = exactRuns(lineup);
     $("opt_now").textContent = `This lineup: ${r.toFixed(3)} expected runs per nine innings, exact. `
@@ -1072,19 +1108,18 @@ function settingsChart(before, after, wasSlot) {
     if (prev?.theta != null) el("rect", { x: x(prev.theta) - 1, y: y - 9, width: 2, height: 18, rx: 1, fill: "var(--muted)" });
     el("text", { x: W - Rt + 8, y: y + 4, fill: "var(--ink)", "font-size": 12, "font-family": "JetBrains Mono, monospace" }, fmtTheta(t));
     const hit = el("rect", { x: 0, y: y - rowH / 2, width: W, height: rowH, fill: "transparent" });
-    hit.addEventListener("pointermove", (ev) => {
+    hover(hit, (ev) => {
       const l = lineOf(e.counts);
       showTip(ev, [["var(--s-lineup)", fmtTheta(t), "optimized"], ["var(--muted)", fmtTheta(prev?.theta ?? 0), "before"],
         ["transparent", `${pct(l.K)} / ${pct(l.BB)}`, "K% / BB%"], ["transparent", `${fmtRate(l.AVG)} / ${fmtRate(l.SLG)}`, "AVG / SLG"],
         ["transparent", fmtRate(l.wOBA), "wOBA"]], `${ordinal(s + 1)}: ${shortName(e)}`);
     });
-    hit.addEventListener("pointerleave", hideTip);
   });
   $("opt_chart").replaceChildren(svg);
 }
 
 // ---------- reset ----------
-// Everything back to how the page first opens: the MLB-average lineup spots, every
+// Everything back to how the page first opens: the MLB lineup spots, every
 // option at its default (as written in index.html), sliders at 0, no spots kept as
 // they are, and no search result. The link (URL hash) follows.
 function resetSettings() {
@@ -1167,7 +1202,7 @@ async function boot() {
     });
   });
   $("team").addEventListener("change", () => {
-    // picking a team leaves contact vs power, which works on the MLB-average spots
+    // picking a team leaves contact vs power, which works on the MLB spots
     if ($("kind").value === "tradeoff" && $("team").value !== "MLB") $("kind").value = "spots";
     loadPreset();
   });
