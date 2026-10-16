@@ -1573,8 +1573,7 @@ function tileFooter(g) {
 
 // ---------- the contact-vs-power curve as an image ----------
 // The curve above in the same style: runs per nine with every MLB spot moved together, the line
-// on the sliders' teal-white-amber scale, and this lineup at its spots' average setting with its
-// 95% range.
+// on the sliders' teal-white-amber scale, with its ends and its middle labeled.
 let tradeoffShare = null;   // what the chart on screen shows: { pts, vs }
 const tradeoffFileName = () => `lineup_sim_contact_vs_power${tradeoffShare?.vs ? `_vs_${fold(lastName(tradeoffShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
 
