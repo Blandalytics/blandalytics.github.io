@@ -566,19 +566,41 @@ function setPitcher(e) {
   run();
 }
 
+// "He pitches" labels, longest first: the closed select shows the longest that fits its
+// width, so a phone gets "Opener with follower" where a wide screen gets the innings and the
+// team ("Opener with follower (1.0 + 4.1 IP), then Dodgers bullpen"). A folded card's select
+// has no width; a ResizeObserver (boot) labels it again whenever its width changes, as when the
+// card opens, and once fonts load.
+let measure = null;
+function fitHookLabels() {
+  const sel = $("p_hook"), room = sel.clientWidth - 40; // its padding and arrow
+  if (!data || room <= 0) return;
+  const team = pitcher && penTeam() !== "MLB" ? teamOf(penTeam()).short : null, pen = `${team ?? "MLB"} bullpen`;
+  const ip = pitcher?.gs ? ` (${fmtIP(startOutsOf(pitcher))} IP)` : "";
+  const op = fmtIP(data.pitching.opener.outs), fo = fmtIP(data.pitching.follower.outs);
+  // three levels of detail, every option at the same one: the most detailed at which they all fit
+  const labels = {
+    start: [`Average start${ip}, then ${pen}`, `Average start, then ${pen}`, `Average start, then ${team ? "team" : "MLB"} bullpen`],
+    start_mlb: [`Average start${ip}, then MLB bullpen`, "Average start, then MLB bullpen", "Average start, then MLB bullpen"],
+    bullpen: [`Bullpen day: opener (${op} IP), then ${pen}`, `Bullpen day: opener, then ${pen}`, "Bullpen day"],
+    follower: [`Opener with follower (${op} + ${fo} IP), then ${pen}`, `Opener with follower, then ${pen}`, "Opener with follower"],
+  };
+  measure ??= document.createElement("canvas").getContext("2d");
+  const cs = getComputedStyle(sel);
+  measure.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const lists = Object.values(labels);
+  const level = [0, 1].find((k) => lists.every((list) => measure.measureText(list[k]).width <= room)) ?? 2;
+  for (const [v, list] of Object.entries(labels)) sel.querySelector(`[value=${v}]`).textContent = list[level];
+}
+
 function renderPitcher() {
   $("p_in").value = pitcher ? pitcher.name : "";
   $("p_clear").hidden = !pitcher;
   // every pitcher can open; an average start needs starts, and "then MLB bullpen" a team bullpen to differ from
   const sel = $("p_hook"), opt = (v) => sel.querySelector(`[value=${v}]`);
-  const team = pitcher && penTeam() !== "MLB" ? teamOf(penTeam()).short : null, pen = `${team ?? "MLB"} bullpen`;
-  const ip = pitcher?.gs ? ` (${fmtIP(startOutsOf(pitcher))} IP)` : "";
-  const op = fmtIP(data.pitching.opener.outs), fo = fmtIP(data.pitching.follower.outs);
+  const team = pitcher && penTeam() !== "MLB" ? teamOf(penTeam()).short : null;
   sel.disabled = !pitcher;
-  opt("start").textContent = `Average start${ip}, then ${pen}`;
-  opt("start_mlb").textContent = `Average start${ip}, then MLB bullpen`;
-  opt("bullpen").textContent = `Bullpen day: opener (${op} IP), then ${pen}`;
-  opt("follower").textContent = `Opener with follower (${op} + ${fo} IP), then ${pen}`;
+  fitHookLabels();
   opt("start").disabled = !pitcher?.gs;
   opt("start_mlb").disabled = opt("start_mlb").hidden = !pitcher?.gs || !team;
   if (opt(sel.value).disabled) sel.value = sel.value === "start_mlb" && !opt("start").disabled ? "start" : "game";
@@ -1846,6 +1868,8 @@ async function boot() {
     + `right-handers) and ${fmtRate(wobaOf(lc.RR))} for right-handed batters against right-handers (${fmtRate(wobaOf(lc.LR))} against left-handers)`;
   const saved = readHash(); // before wiring controls: it sets their values, `basis` and `pitcher`
   renderPitcher();
+  if (window.ResizeObserver) new ResizeObserver(() => fitHookLabels()).observe($("p_hook"));
+  document.fonts?.ready.then(fitHookLabels); // measured in DM Sans, not a fallback
   paintBasis();
   document.querySelectorAll(".basis button").forEach((b) => {
     b.addEventListener("click", () => {
