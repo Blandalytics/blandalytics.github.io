@@ -1684,11 +1684,9 @@ function readHash() {
 }
 
 // ---------- boot ----------
-// ---------- phones: the lineup card folds ----------
-// The card takes several screens on a phone, so it opens folded to a summary (index.html's CSS
-// does the folding, and moves the results up under it); Edit lineup opens it, and Done folds it
-// back so the summary and the results fill the screen. Wider screens ignore the fold.
-const narrow = matchMedia("(max-width: 640px)");
+// ---------- the lineup card folds ----------
+// The card opens folded to a summary (index.html's CSS does the folding), so the results lead;
+// Edit lineup opens it, and Done folds it back. The same at every width.
 const surname = (n) => {
   const w = n.split(" ").filter((x) => !/^(Jr\.?|Sr\.?|II|III|IV)$/.test(x));
   return w.length > 1 ? w.slice(1).join(" ") : n;
@@ -1697,7 +1695,8 @@ function setFolded(folded, scroll = false) {
   $("lineup_card").classList.toggle("folded", folded);
   $("lineup_toggle").textContent = folded ? "Edit lineup" : "Done";
   $("lineup_toggle").setAttribute("aria-expanded", String(!folded));
-  if (scroll && narrow.matches) $("lineup_card").scrollIntoView({ block: "start" });
+  // folding from the Done at its foot can leave the card's top above the screen
+  if (scroll && $("lineup_card").getBoundingClientRect().top < 0) $("lineup_card").scrollIntoView({ block: "start" });
 }
 function renderSummary() {
   if (!lineup.length) return;
