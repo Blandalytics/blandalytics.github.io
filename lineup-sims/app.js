@@ -567,8 +567,8 @@ function setPitcher(e) {
 }
 
 // "He pitches" labels, longest first: the closed select shows the longest that fits its
-// width, so a phone gets "Opener with follower" where a wide screen gets the innings and the
-// team ("Opener with follower (1.0 + 4.1 IP), then Dodgers bullpen"). A folded card's select
+// width, so a phone gets "As opener, with follower" where a wide screen gets the innings and
+// the team ("As opener, with follower (1.0 + 4.1 IP), then Dodgers bullpen"). A folded card's select
 // has no width; a ResizeObserver (boot) labels it again whenever its width changes, as when the
 // card opens, and once fonts load.
 let measure = null;
@@ -583,7 +583,7 @@ function fitHookLabels() {
     start: [`Average start${ip}, then ${pen}`, `Average start, then ${pen}`, `Average start, then ${team ? "team" : "MLB"} bullpen`],
     start_mlb: [`Average start${ip}, then MLB bullpen`, "Average start, then MLB bullpen", "Average start, then MLB bullpen"],
     bullpen: [`Bullpen day: opener (${op} IP), then ${pen}`, `Bullpen day: opener, then ${pen}`, "Bullpen day"],
-    follower: [`Opener with follower (${op} + ${fo} IP), then ${pen}`, `Opener with follower, then ${pen}`, "Opener with follower"],
+    follower: [`As opener, with follower (${op} + ${fo} IP), then ${pen}`, `As opener, with follower, then ${pen}`, "As opener, with follower"],
   };
   measure ??= document.createElement("canvas").getContext("2d");
   const cs = getComputedStyle(sel);
