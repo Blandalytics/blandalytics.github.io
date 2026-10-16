@@ -28,7 +28,6 @@ let league = null;         // { all, cells }: MLB's outcome chances overall and 
 const tilted = new Map();  // "sMLB-3@-1.5" -> that spot moved 1.5 SD toward contact
 let lineup = [];
 let mode = "spots";        // what was loaded: "spots", "most_used" or "tradeoff"
-let loadedNote = "";
 let edited = false;
 let basis = "actual";
 let last = null;
@@ -115,14 +114,14 @@ function buildEntries() {
     nameOf.set(id, name);
     const side = { L: "bats L", R: "bats R", S: "switch" }[bats];
     entries.set(`p${id}`, { id: `p${id}`, kind: "player", name, team, counts, pa, cells, bats,
-      sub: [team, side, `${pa.toLocaleString()} PA`].filter(Boolean).join(" · "), search: fold(name) });
+      sub: [team, side].filter(Boolean).join(" · "), search: fold(name) });
   }
   const spotsOf = (abbr, label, short, spots) => spots.forEach((s, i) => {
     const pa = s.counts.reduce((a, x) => a + x, 0);
-    const who = abbr === "MLB" ? "all 30 teams"
+    const who = abbr === "MLB" ? ""
       : s.top.map(([pid, n]) => `${lastName(nameOf.get(pid) ?? String(pid))} ${Math.round((100 * n) / pa)}%`).join(", ");
     entries.set(`s${abbr}-${i + 1}`, { id: `s${abbr}-${i + 1}`, kind: "spot", name: `${label} · ${ordinal(i + 1)} spot`,
-      team: abbr, counts: s.counts, cells: s.cells, pa, sub: `${pa.toLocaleString()} PA: ${who}`,
+      team: abbr, counts: s.counts, cells: s.cells, pa, sub: who,
       search: fold(`${label} ${short} ${abbr} ${i + 1} spot`) });
   });
   spotsOf("MLB", "MLB", "mlb league average", data.mlb.spots);
@@ -177,23 +176,20 @@ function loadPreset() {
   if (kind === "tradeoff") {
     const theta = Number($("tilt_all").value);
     lineup = Array.from({ length: 9 }, (_, i) => tiltId(`sMLB-${i + 1}`, theta));
-    loadedNote = TRADEOFF_NOTE;
     // the differences are small; fewer games would bury them in noise
     if (Number($("games").value) < 50000) $("games").value = "50000";
   } else if (kind === "spots") {
     lineup = Array.from({ length: 9 }, (_, i) => `s${abbr}-${i + 1}`);
-    const pa = lineup.reduce((s, id) => s + entryOf(id).pa, 0);
-    loadedNote = abbr === "MLB"
-      ? `Every MLB hitter, pooled by the lineup spot they batted in (${pa.toLocaleString()} PA).`
-      : `Every ${teamOf(abbr).short} hitter, pooled by the lineup spot they batted in (${pa.toLocaleString()} PA).`;
   } else {
     const t = teamOf(abbr), mu = t.most_used, o = mu.orders[0];
     lineup = o.ids.map((id) => `p${id}`);
     const when = new Date(o.last + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
     const tie = mu.orders.length > 1 && mu.orders[1].uses === o.uses ? " (tied; the most recent of them)" : "";
-    loadedNote = `${t.short}' most-used order${tie}: started ${o.uses} of ${mu.games} games, last on ${when}. `
+    // on hover: how often they used it
+    kindSel.title = `${t.short}' most-used order${tie}: started ${o.uses} of ${mu.games} games, last on ${when}. `
       + `They used ${mu.distinct} different orders.`;
   }
+  if (kind !== "most_used") kindSel.title = "";
   edited = false;
   renderLineup();
   run();
@@ -232,7 +228,6 @@ function paShown(e) {
 }
 
 function renderLineup() {
-  $("loaded").textContent = !edited ? loadedNote : loadedNote ? `${loadedNote} Edited since.` : "Custom lineup.";
   $("tradeoff_ctl").hidden = mode !== "tradeoff";
   const head = $("slots_head");
   head.replaceChildren();
@@ -268,6 +263,7 @@ function renderLineup() {
     const input = tr.querySelector("input");
     input.value = e.name;
     tr.querySelector(".who-sub").textContent = e.sub;
+    tr.querySelector(".who-sub").hidden = !e.sub;
     if (small && mode !== "tradeoff") {
       const pa = tr.querySelectorAll("td.stat")[0];
       pa.classList.add("small");
@@ -517,28 +513,22 @@ function renderPitcher() {
   start.textContent = pitcher?.gs ? `Average start (${fmtIP(Math.round(pitcher.startOuts / pitcher.gs))} IP), then bullpen`
     : "Average start, then bullpen";
   $("platoon").disabled = !pitcher;
+  // his 2026 line in numbers; the lineup table shows each hitter against him
   const note = $("p_note");
   note.classList.remove("warn");
-  if (!pitcher) {
-    note.textContent = "Hitters bat at their own 2026 rates, which were against MLB-average pitching. "
-      + "Pick a pitcher, or type RHP or LHP for an MLB-average right- or left-hander.";
-    return;
-  }
+  note.title = "";
+  note.hidden = !pitcher;
+  if (!pitcher) return;
   const l = lineOf(pitcher.counts), e = pitcher, mode = $("platoon").value;
   // his wOBA against each side, where he faced it
-  const sides = ["L", "R"].filter((s) => countOf(e.cells?.[s])).map((s) => `${fmtRate(wobaOf(e.cells[s]))} vs ${s}HB`);
-  note.textContent = (e.generic
-    ? `Every 2026 ${e.throws === "L" ? "left" : "right"}-hander pooled: ${e.pa.toLocaleString()} batters faced, K ${pct(l.K)}, BB ${pct(l.BB)}, `
-      + `${fmtRate(l.wOBA)} wOBA against (${sides.join(", ")}); starts averaged ${fmtIP(Math.round(e.startOuts / e.gs))} innings. `
-    : `${e.name} (${e.team}, ${handOf(e)}), 2026: ${e.pa.toLocaleString()} batters faced, K ${pct(l.K)}, BB ${pct(l.BB)}, `
-      + `${fmtRate(l.AVG)} AVG and ${fmtRate(l.wOBA)} wOBA against${mode === "off" ? "" : ` (${sides.join(", ")})`}; `
-      + (e.gs ? `${e.gs} start${e.gs === 1 ? "" : "s"} averaging ${fmtIP(Math.round(e.startOuts / e.gs))} innings. ` : "no starts. "))
-    + `The table shows each hitter's rates against him (log5${mode === "own" ? ", with both players' platoon splits"
-      : mode === "league" ? ", with league-average platoon gaps" : ""}).`;
+  const sides = ["L", "R"].filter((s) => countOf(e.cells?.[s])).map((s) => `${fmtRate(wobaOf(e.cells[s]))} v ${s}HB`);
+  note.textContent = [e.generic ? `Every 2026 ${handOf(e)} pooled` : `${e.team} · ${handOf(e)}`,
+    `${e.pa.toLocaleString()} BF`, `K ${pct(l.K)}`, `BB ${pct(l.BB)}`,
+    `${fmtRate(l.wOBA)} wOBA against${mode === "off" || !sides.length ? "" : ` (${sides.join(", ")})`}`].join(" · ");
   const thin = ["L", "R"].filter((s) => countOf(e.cells?.[s]) < 60);
   if (!e.generic && (e.pa < 100 || (mode === "own" && thin.length))) {
-    note.textContent += e.pa >= 100 ? ` Small sample against ${thin.map((s) => `${s}HB`).join(" and ")}: consider adding MLB-average PA below, or league-average platoon gaps.`
-      : " Small sample: consider adding MLB-average PA below.";
+    note.textContent += e.pa >= 100 ? ` · small sample v ${thin.map((s) => `${s}HB`).join(" and ")}` : " · small sample";
+    note.title = "Sim settings can add MLB-average plate appearances, or use league-average platoon gaps";
     note.classList.add("warn");
   }
 }
@@ -549,23 +539,16 @@ function renderPitcher() {
 const OHTANI = 660271;
 let ohtani = false, beforeOhtani = null;
 const allOhtani = () => lineup.every((id) => id === `p${OHTANI}`) && pitcher?.mlbam === OHTANI;
-function ohtaniNote() {
-  const h = entries.get(`p${OHTANI}`), sp = pitchers.get(`P${OHTANI}`);
-  return `Oops! All Ohtanis! Nine Shohei Ohtanis (${h.pa.toLocaleString()} PA, ${fmtRate(wobaOf(h.counts))} wOBA) against `
-    + `Shohei Ohtani on the mound (${sp.pa.toLocaleString()} batters faced, ${fmtRate(wobaOf(sp.counts))} wOBA against).`;
-}
-
 function setOhtani(on) {
   if (on === ohtani) return;
   if (on) {
-    beforeOhtani = { lineup: [...lineup], pitcher, mode, edited, loadedNote, basis, kind: $("kind").value };
+    beforeOhtani = { lineup: [...lineup], pitcher, mode, edited, basis, kind: $("kind").value };
     ohtani = true;
     // contact vs power works on MLB spots, not hitters
     if (mode === "tradeoff") mode = $("kind").value = "spots";
     lineup = Array(9).fill(`p${OHTANI}`);
     pitcher = pitchers.get(`P${OHTANI}`);
     edited = false;
-    loadedNote = ohtaniNote();
     basis = "sim"; // the teams' spots against him too
   } else {
     ohtani = false;
@@ -578,7 +561,7 @@ function setOhtani(on) {
       loadPreset();
       return;
     }
-    ({ mode, edited, loadedNote, basis } = b);
+    ({ mode, edited, basis } = b);
     lineup = b.lineup;
     pitcher = b.pitcher;
     $("kind").value = b.kind;
@@ -689,11 +672,11 @@ function finish(j, res, ms, ref, lines) {
     hook: j.hook, ctx: j.vs ? versus.ctx : null };
   $("out").hidden = false;
   $("out").style.opacity = "";
-  $("status").textContent = `${j.games.toLocaleString()} games simulated in ${(ms / 1000).toFixed(2)} s.`;
+  $("status").textContent = "";
   $("status").classList.toggle("err", res.capped > 0);
   if (res.capped) {
-    $("status").textContent += ` ${res.capped.toLocaleString()} innings were called off at 60 plate appearances: this lineup almost never makes an out. `
-      + "Adding MLB-average PA under Small samples fixes that.";
+    $("status").textContent = `${res.capped.toLocaleString()} innings were called off at 60 plate appearances: this lineup almost never makes an out. `
+      + "Adding MLB-average PA under Sim settings fixes that.";
   }
   renderResults();
 }
@@ -779,13 +762,8 @@ function renderResults() {
     under.firstChild.append(strip(st, v, mlb, teams));
     body.append(tr, under);
   }
-  const rank = " Rank is where this lineup would place among the 30 teams; for strikeouts, fewer ranks higher.";
-  $("basis_note").textContent = basis === "actual"
-    ? "Teams and MLB: actual 2026 batting in innings 1–9, per 27 outs (unintentional walks; OBP without intentional walks)." + rank
-      + (last.ctx ? ` That batting was against all the pitching they faced, not ${lastName(last.name)}.` : "")
-    : last.ctx
-      ? `Teams and MLB: each team's nine lineup spots (and MLB's) against ${vsWords(last)}, worked out exactly rather than simulated.` + rank
-      : `Teams and MLB: each team's nine lineup spots (and MLB's), run through the same simulation, ${data.sims.games.toLocaleString()} games each.` + rank;
+  $("basis_sim").title = last.ctx ? `Each team's nine lineup spots against ${vsWords(last)}, worked out exactly`
+    : `Each team's nine lineup spots run through the same simulation, ${data.sims.games.toLocaleString()} games each`;
   $("basis_sim").textContent = last.ctx ? `Teams' lineup spots vs ${lastName(last.name)}` : "Teams' lineup spots, simulated";
   $("runs_mlb_key").textContent = last.ctx ? `MLB lineup spots vs ${lastName(last.name)} (simulated)` : "MLB lineup (simulated)";
 
@@ -1032,8 +1010,6 @@ function renderTeams() {
 }
 
 // ---------- contact vs power results ----------
-const TRADEOFF_NOTE = "MLB lineup spots, each movable along the contact–power axis while keeping its own wOBA.";
-
 function setMaster(theta) {
   $("tilt_all").value = theta;
   tintRange($("tilt_all"), theta);
@@ -1051,10 +1027,10 @@ function setupTradeoff() {
   const f = (x) => `${x > 0 ? "+" : "−"}${Math.abs(x).toFixed(1)}`;
   const bip = d.GB + d.LD + d.FB + d.PU;
   const ends = T.ends.map(([, name, score]) => `${lastName(name)} ${fmtTheta(score)}`);
-  $("tilt_axis").textContent = "Each step is one standard deviation of 2026 hitters with the same wOBA. Per 100 PA, a step toward power is "
+  $("tilt_ends").textContent = "Per 100 PA, a step toward power is "
     + `K ${f(d.K)}, BB ${f(d.BB)}, HR ${f(d.HR)}, 1B ${f(d["1B"])}, 2B ${f(d["2B"])}, outs in play ${f(bip)}; toward contact, the reverse. `
-    + `wOBA doesn't move. For scale, the most contact-heavy regulars sit at ${ends.slice(0, 3).join(", ")}; `
-    + `the most power-heavy at ${ends.slice(-3).reverse().join(", ")}. The sliders stop at ±${T.range}, as far as regulars go toward the `
+    + `For scale, the most contact-heavy regulars sit at ${ends.slice(0, 3).join(", ")}; `
+    + `the most power-heavy at ${ends.slice(-3).reverse().join(", ")}, so ±${T.range} is as far as regulars go toward the `
     + `${-T.ends[0][2] > T.ends[T.ends.length - 1][2] ? "power" : "contact"} end.`;
 }
 
@@ -1065,18 +1041,23 @@ function renderTradeoff(moe) {
   const pts = last.ctx ? last.ctx.tradeoff : data.sims.tradeoff.points;
   const thetas = last.lineup.map((id) => entryOf(id)?.theta).filter((t) => t != null);
   const avg = thetas.length ? thetas.reduce((s, t) => s + t, 0) / thetas.length : null;
+  // runs per nine with every spot at the contact end, at 0 and at the power end, in the sliders' colors
   const base = pts.find((p) => p.theta === 0), lo = pts[0], hi = pts[pts.length - 1];
   const dR = (p) => `${p.R >= base.R ? "+" : "−"}${Math.abs(p.R - base.R).toFixed(2)}`;
-  $("tradeoff_note").textContent = (last.ctx
-    // log5 scales each outcome by the pitcher's rate, so the axis no longer holds wOBA still
-    ? `Against ${vsWords(last)}, with every spot moved together, the contact end (${fmtTheta(lo.theta)}) scores ${dR(lo)} runs per nine innings `
-      + `against the MLB spots as they are and the power end (${fmtTheta(hi.theta)}) ${dR(hi)}. Against a given pitcher, wOBA moves with the mix: `
-      + `${fmtRate(lo.wOBA)} at the contact end, ${fmtRate(base.wOBA)} at 0, ${fmtRate(hi.wOBA)} at the power end. The curve is exact, not simulated.`
-    : `With every spot moved together, the contact end (${fmtTheta(lo.theta)}) scores ${dR(lo)} runs per nine innings `
-      + `against the MLB lineup and the power end (${fmtTheta(hi.theta)}) ${dR(hi)}, with wOBA at ${fmtRate(lo.wOBA)} to ${fmtRate(hi.wOBA)} throughout. `
-      + `Each point is ${data.sims.tradeoff.games.toLocaleString()} games on the same random seed, which keeps the curve smooth.`)
-    + (avg == null ? "" : thetas.length < 9 ? " This lineup is plotted at the average setting of its MLB spots."
-      : " This lineup is plotted at its spots' average setting.");
+  $("tradeoff_ends").replaceChildren(...[[lo, `← All contact ${fmtTheta(lo.theta)}`], [base, "MLB spots 0"], [hi, `All power ${fmtTheta(hi.theta)} →`]]
+    .map(([pt, label]) => {
+      const d = document.createElement("div"), a = document.createElement("span"), b = document.createElement("b");
+      a.textContent = label;
+      b.textContent = pt.R.toFixed(2);
+      b.style.color = tiltColor(pt.theta);
+      d.append(a, b);
+      if (pt !== base) {
+        const c = document.createElement("small");
+        c.textContent = dR(pt);
+        d.append(c);
+      }
+      return d;
+    }));
   tradeoffChart(pts, avg, last.sum.R, moe);
   // the saved and copied image is the curve alone
   tradeoffShare = { pts, vs: last.ctx ? { name: last.name, hook: last.hook } : null };
@@ -1219,20 +1200,14 @@ function setupOptimizer() {
 // controls that depend on the lineup, the exact-runs line, and the last search's result
 function renderOptimizer() {
   const canTilt = lineup.some((id) => entryOf(id).theta != null);
+  // the contact-power controls only show for a lineup with movable MLB spots
   $("opt_tilt").disabled = !canTilt;
-  $("opt_tilt_label").classList.toggle("off", !canTilt);
+  $("opt_tilt_label").hidden = $("opt_mix").closest("label").hidden = !canTilt;
   $("opt_mix").disabled = !canTilt || !$("opt_tilt").checked;
   const thetas = lineup.map((id) => entryOf(id).theta).filter((t) => t != null);
   const avg = thetas.length ? thetas.reduce((x, t) => x + t, 0) / thetas.length : 0;
   $("opt_mix").options[0].textContent = `Keep the lineup's average setting (${fmtTheta(avg)})`;
   $("opt_go").disabled = optJob != null;
-  $("opt_hint").textContent = canTilt ? ""
-    : "Contact–power settings apply to MLB spots: pick “MLB spots: contact vs power” under Lineup, or put an MLB spot in the lineup.";
-  if (last && last.lineup.join() === lineup.join() && last.key === vsKey()) {
-    const r = exactRuns(lineup);
-    $("opt_now").textContent = `This lineup${pitcher ? ` against ${vsWords({ name: pitcher.name, hook: hookOf() })}` : ""}: `
-      + `${r.toFixed(3)} expected runs per nine innings, exact. The simulation's ${last.sum.R.toFixed(2)} is the same quantity with sampling noise.`;
-  }
   const shown = optDone && optDone.after.join() === lineup.join() && optDone.key === vsKey();
   $("opt_out").hidden = !shown;
   $("opt_undo").hidden = !shown;
@@ -1314,7 +1289,7 @@ function optFinish(j, result, ms) {
     const e = entryOf(j.ids[h]);
     return result.theta[h] != null ? tiltId(e.base, result.theta[h]) : j.ids[h];
   });
-  $("opt_status").textContent = `Searched ${result.evals.toLocaleString()} lineups in ${(ms / 1000).toFixed(2)} s.`;
+  $("opt_status").textContent = "";
   optDone = { before: j.ids, after, result, opts: j.opts, key: j.key, name: j.name, hook: j.hook };
   if (after.join() !== lineup.join()) {
     lineup = [...after]; // a copy: edits to the lineup mustn't rewrite the search's record
@@ -1328,30 +1303,26 @@ function renderOptResult() {
   const { before, after, result } = optDone;
   const gain = result.after - result.before;
   const season = gain * 162;
-  const vsText = optDone.name ? ` against ${vsWords(optDone)}` : "";
-  const parts = [before.join() === after.join()
-    ? `The lineup was already as good as the search could find${vsText}: ${result.after.toFixed(3)} expected runs per nine innings.`
-    : `Expected runs per nine innings${vsText}: ${result.before.toFixed(3)} → ${result.after.toFixed(3)} (+${gain.toFixed(gain < 0.001 ? 4 : 3)}), `
-      // a game against him, not a season
-      + (optDone.name ? (gain < 0.01 ? "under a hundredth of a run a game against him." : `about ${gain.toFixed(2)} more runs a game against him.`)
-        : season < 0.5 ? "under a run over 162 games." : `about ${season.toFixed(1)} more runs over 162 games.`)];
+  // the gain up front; against a pitcher it's runs in a game against him, otherwise over a season
+  const same = before.join() === after.join();
+  const vsText = optDone.name ? ` vs ${vsWords(optDone)}` : "";
+  $("opt_gain").textContent = same ? "Already the best found" : `+${gain.toFixed(gain < 0.001 ? 4 : 3)}`;
+  $("opt_gain").classList.toggle("flat", same);
+  $("opt_gain_sub").textContent = same ? `${result.after.toFixed(3)} expected runs per 9${vsText}`
+    : `expected runs per 9${vsText}: ${result.before.toFixed(3)} → ${result.after.toFixed(3)}`
+      + (optDone.name ? "" : season < 0.5 ? " · under a run over 162 games" : ` · ≈${season.toFixed(1)} runs over 162 games`);
+  // the order moves, one per hitter who moved; the chart below has the settings
   const baseOf = (id) => id.split("@")[0];
   const wasSlot = (s) => before.findIndex((id) => baseOf(id) === baseOf(after[s]));
   const reordered = after.map((_, s) => [s, wasSlot(s)]).filter(([s, b]) => b !== s);
-  if (reordered.length) {
-    parts.push("Order: " + reordered.map(([s, b]) => `${shortName(entryOf(after[s]))} from ${ordinal(b + 1)} to ${ordinal(s + 1)}`).join("; ") + ".");
-  }
-  // settings that moved, by where they ended up (the chart below has the values)
-  const changed = after.map((id, s) => [s, entryOf(id).theta, entryOf(before[wasSlot(s)])?.theta])
-    .filter(([, t, was]) => t != null && t !== was);
-  if (changed.length) {
-    const spots = (list) => list.map(([s]) => ordinal(s + 1)).join(", ");
-    const power = changed.filter(([, t]) => t > 0), contact = changed.filter(([, t]) => t < 0), even = changed.filter(([, t]) => t === 0);
-    const where = [power.length && `power at ${spots(power)}`, contact.length && `contact at ${spots(contact)}`,
-      even.length && `0 at ${spots(even)}`].filter(Boolean).join("; ");
-    parts.push(`Settings: ${changed.length} spot${changed.length === 1 ? "" : "s"} moved, now ${where}.`);
-  }
-  $("opt_summary").textContent = parts.join(" ");
+  $("opt_moves").replaceChildren(...reordered.map(([s, b]) => {
+    const li = document.createElement("li"), name = document.createElement("b"), move = document.createElement("span");
+    name.textContent = shortName(entryOf(after[s]));
+    move.textContent = ` ${ordinal(b + 1)} → ${ordinal(s + 1)}`;
+    li.append(name, move);
+    return li;
+  }));
+  $("opt_moves").hidden = !reordered.length;
   const tilted = after.some((id) => entryOf(id).theta != null);
   $("opt_chart_box").hidden = !tilted;
   if (tilted) settingsChart(before, after, wasSlot);
@@ -1855,13 +1826,11 @@ async function boot() {
     mode = $("kind").value;
     if (saved.ohtani && allOhtani()) {
       ohtani = true;
-      loadedNote = ohtaniNote();
       renderLineup();
       run();
       return;
     }
     if (!edited && mode !== "tradeoff") { loadPreset(); return; }
-    loadedNote = mode === "tradeoff" ? TRADEOFF_NOTE : "";
     renderLineup();
     run();
   } else {
