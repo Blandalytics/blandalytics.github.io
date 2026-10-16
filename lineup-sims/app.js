@@ -1795,7 +1795,9 @@ async function runsTileBlob() {
   g.font = '400 18px "DM Sans"';
   const rows = ids.map((id, i) => {
     const e = entryOf(id), spot = `${i + 1} - `, x = 48 + g.measureText(spot).width, room = P0 - x - 64;
-    let name = e.theta != null ? `${e.name} ${fmtTheta(e.theta)}` : e.name;
+    // MLB's spots read "Average 1st spot"; team spots and hitters by name
+    const label = e.kind === "spot" && e.team === "MLB" ? `Average ${e.name.split(" · ")[1]}` : e.name;
+    let name = e.theta != null ? `${label} ${fmtTheta(e.theta)}` : label;
     if (g.measureText(name).width > room) {
       while (name.length > 1 && g.measureText(`${name}…`).width > room) name = name.slice(0, -1);
       name += "…";
