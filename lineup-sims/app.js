@@ -91,15 +91,18 @@ function entryOf(id) {
   return tilted.get(id);
 }
 
-// A contact-power slider takes its setting's color: white at 0, blending toward the brand
-// teal at the contact end and the brand amber at the power end (--contact and --power in
-// index.html), all the way there at the end of the range.
+// A contact-power setting's color, for the sliders and the optimizer's chart: white at 0,
+// blending toward the brand teal at the contact end and the brand amber at the power end
+// (--contact and --power in index.html), all the way there at the end of the range.
 let tiltEnds = null;
-function tintRange(range, theta) {
+function tiltColor(theta) {
   const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
   tiltEnds ??= ["--contact", "--power"].map((v) => rgb(getComputedStyle(document.documentElement).getPropertyValue(v).trim()));
   const f = Math.max(-1, Math.min(1, theta / data.tradeoff.range)), end = tiltEnds[f < 0 ? 0 : 1];
-  range.style.accentColor = `rgb(${end.map((c) => Math.round(255 + (c - 255) * Math.abs(f))).join(", ")})`;
+  return `rgb(${end.map((c) => Math.round(255 + (c - 255) * Math.abs(f))).join(", ")})`;
+}
+function tintRange(range, theta) {
+  range.style.accentColor = tiltColor(theta);
 }
 
 const labelOf = (e) => (e.theta ? `${e.name}, ${e.theta < 0 ? "contact" : "power"} ${Math.abs(e.theta).toFixed(1)}` : e.name);
@@ -511,8 +514,8 @@ function renderPitcher() {
   sel.disabled = !pitcher;
   start.disabled = !pitcher?.gs;
   if (start.disabled && sel.value === "start") sel.value = "game";
-  start.textContent = pitcher?.gs ? `His average start (${fmtIP(Math.round(pitcher.startOuts / pitcher.gs))} IP), then bullpen`
-    : "His average start, then bullpen";
+  start.textContent = pitcher?.gs ? `Average start (${fmtIP(Math.round(pitcher.startOuts / pitcher.gs))} IP), then bullpen`
+    : "Average start, then bullpen";
   $("platoon").disabled = !pitcher;
   const note = $("p_note");
   note.classList.remove("warn");
@@ -1352,9 +1355,10 @@ function renderOptResult() {
 // the optimized setting of each slot's hitter (bar) against where that hitter was (tick)
 function settingsChart(before, after, wasSlot) {
   const range = data.tradeoff.range;
-  const W = chartWidth("opt_chart"), rowH = 26, L = Math.min(150, Math.round(W * 0.36)), Rt = 50, T = 6, B = 40;
+  // G: room either side of the plot for a value label past a bar that reaches the end
+  const W = chartWidth("opt_chart"), rowH = 26, L = Math.min(150, Math.round(W * 0.36)), G = 38, T = 6, B = 40;
   const H = T + 9 * rowH + B, room = Math.floor((L - 22) / 6.6); // characters that fit beside the bars
-  const x = (t) => L + ((t + range) / (2 * range)) * (W - L - Rt);
+  const x = (t) => L + G + ((t + range) / (2 * range)) * (W - L - 2 * G);
   const svg = document.createElementNS(SVG, "svg");
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.setAttribute("role", "img");
@@ -1371,8 +1375,8 @@ function settingsChart(before, after, wasSlot) {
     el("line", { x1: x(t), x2: x(t), y1: T, y2: T + 9 * rowH, stroke: t === 0 ? "var(--faint)" : "var(--rule)", "stroke-width": 1 });
     el("text", { x: x(t), y: T + 9 * rowH + 15, "text-anchor": "middle", fill: "var(--muted)", "font-size": 11 }, fmtStep(t));
   }
-  el("text", { x: L, y: H - 6, fill: "var(--muted)", "font-size": 11 }, "← Contact");
-  el("text", { x: W - Rt, y: H - 6, "text-anchor": "end", fill: "var(--muted)", "font-size": 11 }, "Power →");
+  el("text", { x: x(-range), y: H - 6, fill: "var(--muted)", "font-size": 11 }, "← Contact");
+  el("text", { x: x(range), y: H - 6, "text-anchor": "end", fill: "var(--muted)", "font-size": 11 }, "Power →");
   after.forEach((id, s) => {
     const e = entryOf(id), y = T + s * rowH + rowH / 2;
     const prev = entryOf(before[wasSlot(s)]);
@@ -1384,21 +1388,23 @@ function settingsChart(before, after, wasSlot) {
       el("text", { x: x(0) + 6, y: y + 4, fill: "var(--faint)", "font-size": 11 }, "as is");
       return;
     }
-    const t = e.theta, x0 = x(0), x1 = x(t), h = 12, r = Math.min(4, Math.abs(x1 - x0) / 2);
+    const t = e.theta, x0 = x(0), x1 = x(t), h = 12, r = Math.min(4, Math.abs(x1 - x0) / 2), color = tiltColor(t);
     if (Math.abs(x1 - x0) > 0.5) {
       const [a, b] = t > 0 ? [x0, x1] : [x1, x0];
       // rounded at the data end only, square at zero
       const d = t > 0
         ? `M${a},${y - h / 2} H${b - r} Q${b},${y - h / 2} ${b},${y - h / 2 + r} V${y + h / 2 - r} Q${b},${y + h / 2} ${b - r},${y + h / 2} H${a} Z`
         : `M${b},${y - h / 2} H${a + r} Q${a},${y - h / 2} ${a},${y - h / 2 + r} V${y + h / 2 - r} Q${a},${y + h / 2} ${a + r},${y + h / 2} H${b} Z`;
-      el("path", { d, fill: "var(--s-lineup)" });
+      el("path", { d, fill: color });
     }
     if (prev?.theta != null) el("rect", { x: x(prev.theta) - 1, y: y - 9, width: 2, height: 18, rx: 1, fill: "var(--muted)" });
-    el("text", { x: W - Rt + 8, y: y + 4, fill: "var(--ink)", "font-size": 12, "font-family": "JetBrains Mono, monospace" }, fmtTheta(t));
+    // the value just past the bar's end (toward contact, to its left), in the bar's color
+    el("text", { x: t < 0 ? x1 - 5 : x1 + 5, y: y + 4, "text-anchor": t < 0 ? "end" : "start", fill: color, "font-size": 12,
+      "font-family": "JetBrains Mono, monospace" }, fmtTheta(t));
     const hit = el("rect", { x: 0, y: y - rowH / 2, width: W, height: rowH, fill: "transparent" });
     hover(hit, (ev) => {
       const l = lineOf(e.counts);
-      showTip(ev, [["var(--s-lineup)", fmtTheta(t), "optimized"], ["var(--muted)", fmtTheta(prev?.theta ?? 0), "before"],
+      showTip(ev, [[color, fmtTheta(t), "optimized"], ["var(--muted)", fmtTheta(prev?.theta ?? 0), "before"],
         ["transparent", `${pct(l.K)} / ${pct(l.BB)}`, "K% / BB%"], ["transparent", `${fmtRate(l.AVG)} / ${fmtRate(l.SLG)}`, "AVG / SLG"],
         ["transparent", fmtRate(l.wOBA), "wOBA"]], `${ordinal(s + 1)}: ${shortName(e)}`);
     });
