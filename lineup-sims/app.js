@@ -1478,7 +1478,7 @@ async function optTileBlob() {
   g.fillText("Optimized Lineup", 48, 64);
   g.font = '400 21px "DM Sans"';
   g.fillStyle = OPT_TILE.sub;
-  g.fillText("Contact–power setting by lineup spot", 48, 100);
+  g.fillText("Contact-Power balance, by lineup spot", 48, 100);
   g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
   const vs = optDone.name ? `vs ${vsWords(optDone)}` : "vs MLB-average pitching";
   const runs = `${result.before.toFixed(3)} → ${result.after.toFixed(3)} expected runs per 9 (+${(result.after - result.before).toFixed(3)})`;
