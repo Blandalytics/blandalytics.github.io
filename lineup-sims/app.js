@@ -1685,8 +1685,9 @@ function readHash() {
 
 // ---------- boot ----------
 // ---------- the lineup card folds ----------
-// The card opens folded to a summary (index.html's CSS does the folding), so the results lead;
-// Edit lineup opens it, and Done folds it back. The same at every width.
+// The card folds to a summary (index.html's CSS does the folding), so the results lead; Edit
+// lineup opens it, and Done folds it back. Phones open folded, wider screens open with the whole
+// card (a script in index.html, before the first paint).
 const surname = (n) => {
   const w = n.split(" ").filter((x) => !/^(Jr\.?|Sr\.?|II|III|IV)$/.test(x));
   return w.length > 1 ? w.slice(1).join(" ") : n;
