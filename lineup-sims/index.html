@@ -227,22 +227,21 @@ svg.strip{display:block; width:100%; height:26px; overflow:visible; cursor:cross
   .teams th:first-child,.teams td:first-child{position:sticky; left:0; z-index:1; background:var(--surface); box-shadow:inset -1px 0 0 var(--rule)}
   .teams tr.me td:first-child{background:linear-gradient(rgba(57,135,229,.16),rgba(57,135,229,.16)),var(--surface)}
   .teams tr.mlb td:first-child{background:linear-gradient(rgba(217,89,38,.12),rgba(217,89,38,.12)),var(--surface)}}
-/* Phones: the lineup card takes several screens, so once a lineup is set it folds to a summary
-   (app.js keeps it current) under an Edit lineup button, and the results move up beneath it,
-   ahead of the optimizer. Wider screens always show the whole card. */
-.fold,.fold-done,.lineup-sum{display:none}
+/* The lineup card folds to a summary (app.js keeps it current) under an Edit lineup button, so
+   the results lead; it opens folded, at every width. Open, Oops! All Ohtanis! sits beside Done. */
+.lineup-sum{display:none}
+#lineup_card.folded #lineup_body,#lineup_card.folded #ohtani_box{display:none}
+#lineup_card.folded .lineup-sum{display:block}
+#lineup_card.folded .card-head{margin-bottom:8px}
+.lineup-sum #sum_who{margin-top:4px}
+#lineup_card{scroll-margin-top:12px}
+.card-head #ohtani_box{margin-left:auto}
+.fold-done{display:block; margin-top:14px}
 @media (max-width:640px){
-  .card-head .fold{display:block; margin-left:auto}
+  .card-head .fold{margin-left:auto}
   /* "Lineup" and Edit/Done share the top line; Oops! All Ohtanis! gets its own, when the card is open */
-  .card-head #ohtani_box{order:1; flex-basis:100%}
-  .fold-done{display:block; width:100%; margin-top:14px}
-  #lineup_card.folded #lineup_body,#lineup_card.folded #ohtani_box{display:none}
-  #lineup_card.folded .lineup-sum{display:block}
-  #lineup_card.folded .card-head{margin-bottom:8px}
-  .lineup-sum #sum_who{margin-top:4px}
-  #lineup_card{scroll-margin-top:12px}
-  main > section[aria-labelledby=opt_h]{order:1}
-  main > section:last-of-type{order:2}}
+  .card-head #ohtani_box{order:1; flex-basis:100%; margin-left:0}
+  .fold-done{width:100%}}
 details summary{cursor:pointer; font-size:15px; font-weight:600; list-style:none}
 details summary::-webkit-details-marker{display:none}
 details summary::before{content:"▸ "; color:var(--muted)}
@@ -306,7 +305,7 @@ button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
         <label for="p_in"><b>Opposing pitcher</b></label>
         <div class="suggest pick">
           <input id="p_in" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false"
-            aria-controls="p_sug" placeholder="MLB-average pitching · search, RHP, LHP">
+            aria-controls="p_sug" placeholder="MLB average · search, RHP, LHP">
           <button id="p_clear" type="button" aria-label="Clear: back to MLB-average pitching" title="Back to MLB-average pitching" hidden>×</button>
           <ul id="p_sug" class="suggest-list" role="listbox" hidden></ul>
         </div>
@@ -487,6 +486,6 @@ button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
 <div id="tip" class="tip" hidden></div>
 <style>.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}</style>
 <script src="/shared/share-image.js?v=2"></script>
-<script type="module" src="app.js?v=23"></script>
+<script type="module" src="app.js?v=24"></script>
 </body>
 </html>
