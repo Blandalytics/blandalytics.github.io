@@ -625,6 +625,7 @@ function run() {
     beforeOhtani = null;
   }
   $("ohtani").checked = ohtani;
+  renderSummary(); // every change to the lineup or the pitching comes through here
   const key = vsKey(), vs = vsOf();
   if (optJob && (lineup.join() !== optJob.ids.join() || key !== optJob.key)) {
     stopSearch(`Search stopped: the ${key !== optJob.key ? "pitching" : "lineup"} changed. Optimize again for this one.`);
@@ -1712,6 +1713,45 @@ function readHash() {
 }
 
 // ---------- boot ----------
+// ---------- phones: the lineup card folds ----------
+// The card takes several screens on a phone, so it opens folded to a summary (index.html's CSS
+// does the folding, and moves the results up under it); Edit lineup opens it, and Done folds it
+// back so the summary and the results fill the screen. Wider screens ignore the fold.
+const narrow = matchMedia("(max-width: 640px)");
+const surname = (n) => {
+  const w = n.split(" ").filter((x) => !/^(Jr\.?|Sr\.?|II|III|IV)$/.test(x));
+  return w.length > 1 ? w.slice(1).join(" ") : n;
+};
+function setFolded(folded, scroll = false) {
+  $("lineup_card").classList.toggle("folded", folded);
+  $("lineup_toggle").textContent = folded ? "Edit lineup" : "Done";
+  $("lineup_toggle").setAttribute("aria-expanded", String(!folded));
+  if (scroll && narrow.matches) $("lineup_card").scrollIntoView({ block: "start" });
+}
+function renderSummary() {
+  if (!lineup.length) return;
+  const team = $("team").selectedOptions[0]?.text ?? "MLB";
+  const what = ohtani ? "Oops! All Ohtanis!"
+    : edited ? "Custom lineup"
+    : mode === "tradeoff" ? "MLB spots (contact–power)"
+    : mode === "most_used" ? `${team}: most-used order` : `${team}: lineup spots`;
+  const vs = !pitcher ? "MLB-average pitching" : pitcher.name + ($("p_hook").value === "start" ? ", then bullpen" : "");
+  $("sum_what").textContent = `${what} vs ${vs}`;
+  // then the nine, unless they're a team's spots in order (all at one setting, for contact-power)
+  const es = lineup.map(entryOf).filter(Boolean);
+  let who = es.map((e, i) => {
+    const name = e.kind !== "spot" ? surname(e.name)
+      : e.team === "MLB" ? `${e.name.split(" · ")[1].replace(" spot", "")}-spot` : e.name.replace(" spot", "").replace(" · ", " ");
+    // each one wraps whole: no-break spaces and hyphens inside it
+    return `${i + 1} ${name}${e.theta != null ? ` ${fmtTheta(e.theta)}` : ""}`.replace(/ /g, "\u00a0").replace(/-/g, "\u2011");
+  }).join("\u00a0· "); // the dot ends a line rather than starting one
+  if (ohtani) who = "Ohtani ×9";
+  else if (!edited && mode === "spots") who = "";
+  else if (!edited && mode === "tradeoff") who = es[0]?.theta ? `All nine spots ${fmtTheta(es[0].theta)}` : "";
+  $("sum_who").textContent = who;
+  $("sum_who").hidden = !who;
+}
+
 async function boot() {
   try {
     const r = await fetch(`data/${SEASON}.json?v=4`);
@@ -1794,6 +1834,11 @@ async function boot() {
     run();
   });
   $("reset_all").addEventListener("click", resetSettings);
+  $("lineup_toggle").addEventListener("click", () => setFolded($("lineup_toggle").getAttribute("aria-expanded") === "true", true));
+  $("lineup_done").addEventListener("click", () => {
+    setFolded(true, true);
+    $("lineup_toggle").focus({ preventScroll: true });
+  });
   // the optimizer chart's Share image button (shared/share-image.js)
   if (window.ShareImage) {
     ShareImage.image($("opt_share"), optTileBlob, optFileName);
