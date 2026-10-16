@@ -1001,8 +1001,11 @@ function runsChart(dist, games, runs, avg) {
   const mine = share(dist, games);
   const mlb = last.ctx ? share(last.ctx.refDist, REF_GAMES) : share(data.sims.mlb.runDist, 1);
   // the image's smaller numbers: MLB's spots against the same pitching, and this lineup against
-  // MLB-average pitching (with no pitcher picked, that's the headline itself, so MLB's spots alone)
-  const subs = last.vs ? [[`MLB vs ${lastName(last.name)}`, last.ctx.mlb.R], ["Lineup vs MLB", avg]] : [["MLB", data.sims.mlb.R]];
+  // MLB-average pitching (with no pitcher picked, that's the headline itself, so MLB's spots alone).
+  // When the lineup is MLB's spots as they are, MLB's number is the headline too, and goes.
+  const average = last.lineup.every((id, i) => id.replace("@0.0", "") === `sMLB-${i + 1}`);
+  const subs = (last.vs ? [[`MLB vs ${lastName(last.name)}`, last.ctx.mlb.R], ["Lineup vs MLB", avg]] : [["MLB", data.sims.mlb.R]])
+    .filter(([label]) => !(average && label.startsWith("MLB")));
   runsShare = { mine, mlb, R: runs, subs, games, ids: last.lineup, vs: last.vs ? { name: last.name, full: last.full, short: last.short } : null };
   const W = chartWidth("runs_chart"), H = 230, L = 40, R = 8, T = 10, B = 34;
   drawnWidth = $("runs_chart").clientWidth;
@@ -1886,16 +1889,18 @@ async function runsTileBlob() {
   g.strokeStyle = "#4b5075";
   g.lineWidth = 1.5;
   g.stroke();
+  // with no smaller numbers, runs per 9 sits in the middle of the box
+  const lift = subs.length ? 0 : (boxH - 88) / 2;
   g.textAlign = "center";
   g.font = '400 16px "DM Sans"';
   g.fillStyle = OPT_TILE.sub;
-  g.fillText("Runs per 9", mid, y0 + 26);
+  g.fillText("Runs per 9", mid, y0 + 26 + lift);
   g.font = '600 48px "JetBrains Mono"';
   g.fillStyle = "#fff";
-  g.fillText(R.toFixed(2), mid, y0 + 72);
+  g.fillText(R.toFixed(2), mid, y0 + 72 + lift);
   g.strokeStyle = "#4b5075";
   g.lineWidth = 1;
-  g.beginPath(); g.moveTo(x0 + 16, y0 + 88); g.lineTo(x0 + boxW - 16, y0 + 88); g.stroke();
+  if (subs.length) { g.beginPath(); g.moveTo(x0 + 16, y0 + 88); g.lineTo(x0 + boxW - 16, y0 + 88); g.stroke(); }
   const subH = (boxH - 88) / subs.length;
   subs.forEach(([label, v], k) => {
     const yb = y0 + 88 + subH * (k + 0.5) + 6;
