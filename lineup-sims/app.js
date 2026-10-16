@@ -1555,25 +1555,19 @@ async function optTileBlob() {
     g.fillText(fmtTheta(t), t < 0 ? x1 - 10 : x1 + 10, y + 1);
   });
 
-  // the key and the note
+  // the footer: what the spots are and what one step is (per 100 PA, from data.tradeoff.per_sd, as
+  // the page's own axis note has it)
+  const d = Object.fromEntries(CATS.map((c, i) => [c, data.tradeoff.per_sd[i] * 100]));
+  const f = (v) => `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`;
+  const step = `A step toward Power is: K ${f(d.K)}, BB ${f(d.BB)}, HR ${f(d.HR)}, 1B ${f(d["1B"])}, 2B ${f(d["2B"])}, `
+    + `outs in play ${f(d.GB + d.LD + d.FB + d.PU)}; toward Contact, the reverse`;
   g.textAlign = "left";
-  g.font = '400 16px "DM Sans"';
-  const ky = 820;
-  const grad = g.createLinearGradient(48, 0, 88, 0);
-  grad.addColorStop(0, tiltColor(-range)); grad.addColorStop(0.5, "#fff"); grad.addColorStop(1, tiltColor(range));
-  g.fillStyle = grad;
-  g.fillRect(48, ky - 6, 40, 12);
-  g.fillStyle = OPT_TILE.axis;
-  g.fillText("Optimized, colored by setting", 98, ky);
-  const kx = 98 + g.measureText("Optimized, colored by setting").width + 30;
-  g.fillStyle = OPT_TILE.sub;
-  g.fillRect(kx, ky - 11, 3, 22);
-  g.fillStyle = OPT_TILE.axis;
-  g.fillText("Before", kx + 12, ky);
   g.textBaseline = "alphabetic";
-  g.font = '400 15px "DM Sans"';
   g.fillStyle = OPT_TILE.sub;
-  g.fillText("Each step is one standard deviation of 2026 hitters with the same wOBA · blandalytics.com/lineup-sims", 48, 871);
+  fit("Lineup Spots are MLB-average wOBA for that spot.", 400, 16, '"DM Sans"', W - 96);
+  g.fillText("Lineup Spots are MLB-average wOBA for that spot.", 48, 836);
+  fit(step, 400, 16, '"DM Sans"', W - 96);
+  g.fillText(step, 48, 862);
   return new Promise((res) => cv.toBlob(res, "image/png"));
 }
 
