@@ -1795,10 +1795,10 @@ async function runsTileBlob() {
   g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
   // the subtitle, led by a team lineup's abbreviation, breaks after its first comma: "CLE vs. Paul Skenes
   // for 5.1 innings," / "then the Pirates bullpen"; both lines in one size, the largest at which each fits
-  // in Oops! All Ohtanis! mode, the subtitle is just that
-  const sub = allOhtanis ? "Oops! All Ohtanis!" : `${team ? `${team} ` : ""}vs. ${vs ? vs.full : "MLB-average pitching"}`;
-  const cut = sub.indexOf(", ");
-  const subLines = cut < 0 ? [sub] : [sub.slice(0, cut + 1), sub.slice(cut + 2)];
+  // in Oops! All Ohtanis! mode it's that, then "9 Ohtanis vs Shohei Ohtani for all nine innings"
+  const sub = `${team ? `${team} ` : ""}vs. ${vs ? vs.full : "MLB-average pitching"}`, cut = sub.indexOf(", ");
+  const subLines = allOhtanis ? ["Oops! All Ohtanis!", `9 Ohtanis vs ${vs?.full ?? "Shohei Ohtani"}`]
+    : cut < 0 ? [sub] : [sub.slice(0, cut + 1), sub.slice(cut + 2)];
   let titleSize = 21;
   for (; titleSize > 12; titleSize--) {
     g.font = `400 ${titleSize}px "DM Sans"`;
