@@ -1009,8 +1009,10 @@ function runsChart(dist, games, runs, avg) {
   // its gold lines: MLB's spots against the same pitching, or, when they're the lineup (the bars
   // already), against MLB-average pitching
   const goldVs = last.vs && !average ? last.short : null;
+  // a team's lineup (its spots or its most-used order, edited or not) leads the subtitle with its abbreviation
+  const team = $("team").value !== "MLB" && !ohtani && mode !== "tradeoff" ? $("team").value : null;
   runsShare = { mine, mlb: goldVs || !last.vs ? mlb : share(data.sims.mlb.runDist, 1), goldVs, R: runs, subs, games, ids: last.lineup,
-    vs: last.vs ? { name: last.name, full: last.full, short: last.short } : null };
+    team, vs: last.vs ? { name: last.name, full: last.full, short: last.short } : null };
   const W = chartWidth("runs_chart"), H = 230, L = 40, R = 8, T = 10, B = 34;
   drawnWidth = $("runs_chart").clientWidth;
   const n = mine.length, band = (W - L - R) / n, bw = Math.min(24, band * 0.62);
@@ -1770,11 +1772,11 @@ async function tradeoffTileBlob() {
 // against MLB's lineup spots facing the same pitching (gold lines), the lineup down the left,
 // the pitching as the subtitle, and its runs per 9 as a headline number inside the chart, in
 // whichever top corner its bars leave clear.
-let runsShare = null;   // what the chart on screen shows: { mine, mlb (gold), goldVs, R, subs: [[label, runs]], games, ids, vs }
+let runsShare = null;   // what the chart on screen shows: { mine, mlb (gold), goldVs, R, subs: [[label, runs]], games, ids, team, vs }
 const runsFileName = () => `lineup_sim_runs_per_game${runsShare?.vs ? `_vs_${fold(lastName(runsShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
 
 async function runsTileBlob() {
-  const { mine, mlb, goldVs, R, subs, games, ids, vs } = runsShare;
+  const { mine, mlb, goldVs, R, subs, games, ids, team, vs } = runsShare;
   await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 15px "DM Sans"',
     '600 48px "JetBrains Mono"', '600 20px "JetBrains Mono"', '400 17px "JetBrains Mono"', '400 15px "DM Sans"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
@@ -1791,9 +1793,9 @@ async function runsTileBlob() {
   g.fillStyle = OPT_TILE.cyan;
   g.fillText("Runs per Game", 48, 64);
   g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
-  // the subtitle breaks after its first comma: "vs Paul Skenes for 5.1 innings," / "then the Pirates
-  // bullpen"; both lines in one size, the largest at which each fits
-  const sub = vs ? `vs ${vs.full}` : "vs MLB-average pitching", cut = sub.indexOf(", ");
+  // the subtitle, led by a team lineup's abbreviation, breaks after its first comma: "CLE vs. Paul Skenes
+  // for 5.1 innings," / "then the Pirates bullpen"; both lines in one size, the largest at which each fits
+  const sub = `${team ? `${team} ` : ""}vs. ${vs ? vs.full : "MLB-average pitching"}`, cut = sub.indexOf(", ");
   const subLines = cut < 0 ? [sub] : [sub.slice(0, cut + 1), sub.slice(cut + 2)];
   let titleSize = 21;
   for (; titleSize > 12; titleSize--) {
