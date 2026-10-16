@@ -1354,6 +1354,7 @@ function renderOptResult() {
 
 // the optimized setting of each slot's hitter (bar) against where that hitter was (tick)
 function settingsChart(before, after, wasSlot) {
+  optShare = { before, after, wasSlot };
   const range = data.tradeoff.range;
   // G: room either side of the plot for a value label past a bar that reaches the end
   const W = chartWidth("opt_chart"), rowH = 26, L = Math.min(150, Math.round(W * 0.36)), G = 38, T = 6, B = 40;
@@ -1435,6 +1436,145 @@ function resetSettings() {
   sortKey = { k: "R", dir: -1 };
   $("teams_details").open = false;
   loadPreset();
+}
+
+// ---------- the optimizer chart as an image ----------
+// The chart above as a 900 x 900 image in the site's share-image style (League Factors' and the
+// homepage tiles': the Pitcher List Stats ground, a cyan title, the wordmark top right), to copy
+// or download with the Share image button (shared/share-image.js).
+const OPT_TILE = { W: 900, bg: "rgb(41,44,66)", cyan: "rgb(4,209,249)", sub: "#9aa0b8", axis: "#c0c4d3", grid: "#3a3e5a", zero: "#6d7290" };
+let optShare = null;   // what the chart on screen shows: { before, after, wasSlot }
+let logoImg = null;
+const loadLogo = () => logoImg || (logoImg = new Promise((res, rej) => {
+  const im = new Image();
+  im.onload = () => res(im);
+  im.onerror = rej;
+  im.src = "logo.png";
+}));
+const optFileName = () => `lineup_sim_contact_power${optDone?.name ? `_vs_${fold(lastName(optDone.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
+
+async function optTileBlob() {
+  const { before, after, wasSlot } = optShare;
+  const { result } = optDone;
+  await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"',
+    '600 19px "JetBrains Mono"'].map((f) => document.fonts.load(f)));
+  const logo = await loadLogo();
+  const { W } = OPT_TILE, range = data.tradeoff.range;
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = W;
+  const g = cv.getContext("2d");
+  g.fillStyle = OPT_TILE.bg;
+  g.fillRect(0, 0, W, W);
+  // shrink a line's font until it fits
+  const fit = (text, weight, size, family, width) => {
+    for (; size > 11; size--) {
+      g.font = `${weight} ${size}px ${family}`;
+      if (g.measureText(text).width <= width) break;
+    }
+  };
+  // title, subtitle, wordmark
+  g.font = '700 36px "DM Sans"';
+  g.fillStyle = OPT_TILE.cyan;
+  g.fillText("Optimized Lineup", 48, 64);
+  g.font = '400 21px "DM Sans"';
+  g.fillStyle = OPT_TILE.sub;
+  g.fillText("Contact–power setting by lineup spot", 48, 100);
+  g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
+  const vs = optDone.name ? `vs ${vsWords(optDone)}` : "vs MLB-average pitching";
+  const runs = `${result.before.toFixed(3)} → ${result.after.toFixed(3)} expected runs per 9 (+${(result.after - result.before).toFixed(3)})`;
+  const ctx = `${vs} · ${runs}`;
+  fit(ctx, 400, 18, '"DM Sans"', W - 96);
+  g.fillStyle = OPT_TILE.axis;
+  g.fillText(ctx, 48, 136);
+
+  // the plot: nine rows, a bar from 0 to each spot's setting
+  const T = 178, B = 718, rowH = (B - T) / 9, LABEL = 48, P0 = 326, P1 = W - 40, G = 62;
+  const x = (t) => P0 + G + ((t + range) / (2 * range)) * (P1 - P0 - 2 * G);
+  g.lineWidth = 1;
+  g.textAlign = "center";
+  g.font = '400 17px "DM Sans"';
+  for (let t = -Math.floor(range); t <= Math.floor(range); t++) {
+    g.strokeStyle = t === 0 ? OPT_TILE.zero : OPT_TILE.grid;
+    g.lineWidth = t === 0 ? 2 : 1;
+    g.beginPath(); g.moveTo(x(t), T - 6); g.lineTo(x(t), B); g.stroke();
+    g.fillStyle = OPT_TILE.axis;
+    g.fillText(fmtStep(t), x(t), B + 30);
+  }
+  g.textAlign = "left";
+  g.font = '400 16px "DM Sans"';
+  g.fillStyle = tiltColor(-range);
+  g.fillText("← Contact", x(-range), B + 58);
+  g.textAlign = "right";
+  g.fillStyle = tiltColor(range);
+  g.fillText("Power →", x(range), B + 58);
+  g.textBaseline = "middle";
+  after.forEach((id, s) => {
+    const e = entryOf(id), y = T + s * rowH + rowH / 2, prev = entryOf(before[wasSlot(s)]);
+    g.textAlign = "left";
+    g.font = '400 18px "DM Sans"';
+    g.fillStyle = OPT_TILE.sub;
+    g.fillText(String(s + 1), LABEL, y);
+    g.fillStyle = "#fff";
+    let name = shortName(e);
+    const room = P0 - LABEL - 34 - 12;
+    if (g.measureText(name).width > room) {
+      while (name.length > 1 && g.measureText(`${name}…`).width > room) name = name.slice(0, -1);
+      name += "…";
+    }
+    g.fillText(name, LABEL + 30, y);
+    if (e.theta == null) {
+      g.fillStyle = OPT_TILE.sub;
+      g.font = '400 16px "DM Sans"';
+      g.fillText("as is", x(0) + 10, y);
+      return;
+    }
+    const t = e.theta, x0 = x(0), x1 = x(t), h = 26, color = tiltColor(t);
+    if (Math.abs(x1 - x0) > 0.5) {
+      const r = Math.min(6, Math.abs(x1 - x0) / 2), [a, b] = t > 0 ? [x0, x1] : [x1, x0];
+      g.fillStyle = color;
+      g.beginPath();
+      // rounded at the data end only, square at zero
+      if (t > 0) {
+        g.moveTo(a, y - h / 2); g.lineTo(b - r, y - h / 2); g.quadraticCurveTo(b, y - h / 2, b, y - h / 2 + r);
+        g.lineTo(b, y + h / 2 - r); g.quadraticCurveTo(b, y + h / 2, b - r, y + h / 2); g.lineTo(a, y + h / 2);
+      } else {
+        g.moveTo(b, y - h / 2); g.lineTo(a + r, y - h / 2); g.quadraticCurveTo(a, y - h / 2, a, y - h / 2 + r);
+        g.lineTo(a, y + h / 2 - r); g.quadraticCurveTo(a, y + h / 2, a + r, y + h / 2); g.lineTo(b, y + h / 2);
+      }
+      g.closePath();
+      g.fill();
+    }
+    if (prev?.theta != null) {
+      g.fillStyle = OPT_TILE.sub;
+      g.fillRect(x(prev.theta) - 1.5, y - 19, 3, 38);
+    }
+    // the value just past the bar's end, in the bar's color
+    g.font = '600 19px "JetBrains Mono"';
+    g.fillStyle = color;
+    g.textAlign = t < 0 ? "right" : "left";
+    g.fillText(fmtTheta(t), t < 0 ? x1 - 10 : x1 + 10, y + 1);
+  });
+
+  // the key and the note
+  g.textAlign = "left";
+  g.font = '400 16px "DM Sans"';
+  const ky = 820;
+  const grad = g.createLinearGradient(48, 0, 88, 0);
+  grad.addColorStop(0, tiltColor(-range)); grad.addColorStop(0.5, "#fff"); grad.addColorStop(1, tiltColor(range));
+  g.fillStyle = grad;
+  g.fillRect(48, ky - 6, 40, 12);
+  g.fillStyle = OPT_TILE.axis;
+  g.fillText("Optimized, colored by setting", 98, ky);
+  const kx = 98 + g.measureText("Optimized, colored by setting").width + 30;
+  g.fillStyle = OPT_TILE.sub;
+  g.fillRect(kx, ky - 11, 3, 22);
+  g.fillStyle = OPT_TILE.axis;
+  g.fillText("Before", kx + 12, ky);
+  g.textBaseline = "alphabetic";
+  g.font = '400 15px "DM Sans"';
+  g.fillStyle = OPT_TILE.sub;
+  g.fillText("Each step is one standard deviation of 2026 hitters with the same wOBA · blandalytics.com/lineup-sims", 48, 871);
+  return new Promise((res) => cv.toBlob(res, "image/png"));
 }
 
 // ---------- URL state ----------
@@ -1558,6 +1698,9 @@ async function boot() {
     run();
   });
   $("reset_all").addEventListener("click", resetSettings);
+  // the optimizer chart's Share image button (shared/share-image.js)
+  if (window.ShareImage) ShareImage.image($("opt_share"), optTileBlob, optFileName);
+  else $("opt_share").hidden = true;
   // another season's data might not have him both ways
   $("ohtani_box").hidden = !entries.has(`p${OHTANI}`) || !pitchers.has(`P${OHTANI}`);
   $("ohtani").addEventListener("change", () => setOhtani($("ohtani").checked));

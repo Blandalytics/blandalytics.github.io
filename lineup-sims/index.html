@@ -226,8 +226,8 @@ details[open] summary{margin-bottom:10px}
 .method code{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:12.5px; background:var(--ground); border:1px solid var(--rule); border-radius:4px; padding:1px 5px; color:var(--ink)}
 h1,h2,h3{text-wrap:balance}
 p,li,.tag,.note,.method,.status{text-wrap:pretty}
-button{transition:transform .12s cubic-bezier(.2,0,0,1)}
-button:active:not(:disabled){transform:scale(.96)}
+button:not(.share-menu button){transition:transform .12s cubic-bezier(.2,0,0,1)}
+button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
 @media (pointer:coarse){button,select,input[type=text]{min-height:44px} .lineup td.move button{min-height:36px; min-width:36px}
   label.check{min-height:40px} label.check input{width:18px; height:18px}
   details summary{padding-block:8px}
@@ -236,7 +236,7 @@ button:active:not(:disabled){transform:scale(.96)}
 @media (pointer:coarse) and (max-width:480px){.lineup td.move button{min-height:32px}}
 @media (pointer:coarse) and (max-width:700px){.teams thead th{padding-inline:0} .teams th:first-child{padding-left:6px}
   .teams th button{padding:0 6px}}
-@media (prefers-reduced-motion:reduce){button:active:not(:disabled){transform:none}}
+@media (prefers-reduced-motion:reduce){button:not(.share-menu button):active:not(:disabled){transform:none}}
 </style>
 </head>
 <body>
@@ -352,6 +352,7 @@ button:active:not(:disabled){transform:scale(.96)}
           <span><i class="key-tick" style="background:var(--muted)"></i>Before</span>
         </div>
         <div class="chart" id="opt_chart"></div>
+        <div class="row" style="margin-top:10px"><button id="opt_share" type="button">Share image ▾</button></div>
       </div>
     </div>
   </section>
@@ -441,6 +442,7 @@ button:active:not(:disabled){transform:scale(.96)}
 </main>
 <div id="tip" class="tip" hidden></div>
 <style>.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}</style>
-<script type="module" src="app.js?v=15"></script>
+<script src="/shared/share-image.js?v=2"></script>
+<script type="module" src="app.js?v=16"></script>
 </body>
 </html>
