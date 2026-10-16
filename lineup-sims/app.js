@@ -55,6 +55,14 @@ function wobaOf(counts) {
     + w.w3B * counts[C["3B"]] + w.wHR * counts[C.HR]) / n;
 }
 
+// wOBA on contact: the hits' weights over every ball in play, homers included (FanGraphs'
+// AB − SO + SF; the counts' in-play outs already hold the sacrifice flies, and bunts are out)
+function wobaconOf(counts) {
+  const w = data.weights, hits = counts[C["1B"]] + counts[C["2B"]] + counts[C["3B"]] + counts[C.HR];
+  const bip = hits + counts[C.GB] + counts[C.LD] + counts[C.FB] + counts[C.PU];
+  return bip ? (w.w1B * counts[C["1B"]] + w.w2B * counts[C["2B"]] + w.w3B * counts[C["3B"]] + w.wHR * counts[C.HR]) / bip : 0;
+}
+
 // K%, BB%, AVG, SLG and wOBA of an outcome profile. At-bats need sacrifice flies, which
 // the profile folds into fly-ball outs, so they're estimated at the league's rate.
 function lineOf(counts) {
@@ -191,20 +199,22 @@ function loadPreset() {
 // ---------- lineup table ----------
 // columns after the hitter: [header, class, value(entry)]; contact vs power shows the
 // stats the tradeoff moves, with wOBA last to show it holding still
-// value(entry, c): c is the hitter's outcomes as shownOf() has them
+// value(entry, c): c is the hitter's outcomes as shownOf() has them. wOBA (class woba) is
+// the one in full white.
 const COLS = {
   normal: [
     ["PA", "opt2", (e) => paShown(e).toLocaleString()],
     ["K%", "opt", (e, c) => pct(lineOf(c).K)],
     ["BB%", "opt", (e, c) => pct(lineOf(c).BB)],
-    ["wOBA", "", (e, c) => fmtRate(wobaOf(c))],
+    ["wOBAcon", "opt", (e, c) => fmtRate(wobaconOf(c))],
+    ["wOBA", "woba", (e, c) => fmtRate(wobaOf(c))],
   ],
   tradeoff: [
     ["K%", "opt2", (e, c) => pct(lineOf(c).K)],
     ["BB%", "opt", (e, c) => pct(lineOf(c).BB)],
     ["AVG", "opt", (e, c) => fmtRate(lineOf(c).AVG)],
     ["SLG", "opt", (e, c) => fmtRate(lineOf(c).SLG)],
-    ["wOBA", "", (e, c) => fmtRate(wobaOf(c))],
+    ["wOBA", "woba", (e, c) => fmtRate(wobaOf(c))],
   ],
 };
 const cols = () => COLS[mode === "tradeoff" ? "tradeoff" : "normal"];
