@@ -214,6 +214,22 @@ svg.strip{display:block; width:100%; height:26px; overflow:visible; cursor:cross
   .teams th:first-child,.teams td:first-child{position:sticky; left:0; z-index:1; background:var(--surface); box-shadow:inset -1px 0 0 var(--rule)}
   .teams tr.me td:first-child{background:linear-gradient(rgba(57,135,229,.16),rgba(57,135,229,.16)),var(--surface)}
   .teams tr.mlb td:first-child{background:linear-gradient(rgba(217,89,38,.12),rgba(217,89,38,.12)),var(--surface)}}
+/* Phones: the lineup card takes several screens, so once a lineup is set it folds to a summary
+   (app.js keeps it current) under an Edit lineup button, and the results move up beneath it,
+   ahead of the optimizer. Wider screens always show the whole card. */
+.fold,.fold-done,.lineup-sum{display:none}
+@media (max-width:640px){
+  .card-head .fold{display:block; margin-left:auto}
+  /* "Lineup" and Edit/Done share the top line; Oops! All Ohtanis! gets its own, when the card is open */
+  .card-head #ohtani_box{order:1; flex-basis:100%}
+  .fold-done{display:block; width:100%; margin-top:14px}
+  #lineup_card.folded #lineup_body,#lineup_card.folded #ohtani_box{display:none}
+  #lineup_card.folded .lineup-sum{display:block}
+  #lineup_card.folded .card-head{margin-bottom:8px}
+  .lineup-sum #sum_who{margin-top:4px}
+  #lineup_card{scroll-margin-top:12px}
+  main > section[aria-labelledby=opt_h]{order:1}
+  main > section:last-of-type{order:2}}
 details summary{cursor:pointer; font-size:15px; font-weight:600; list-style:none}
 details summary::-webkit-details-marker{display:none}
 details summary::before{content:"▸ "; color:var(--muted)}
@@ -247,11 +263,17 @@ button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
     <p class="tag">Nine innings of a 2026 lineup, simulated one plate appearance at a time, and how its runs, hits, homers, strikeouts, walks and slash line stack up against every MLB team. Start from a team's lineup spots or its most-used batting order, put any 2026 hitter in any spot, and face any 2026 pitcher; results update as you go.</p>
   </header>
 
-  <section class="card" aria-labelledby="lineup_h">
+  <section class="card folded" id="lineup_card" aria-labelledby="lineup_h">
     <div class="card-head">
       <h2 id="lineup_h">Lineup</h2>
       <label class="check" id="ohtani_box" title="Every hitter is Shohei Ohtani, and so is the pitcher"><input type="checkbox" id="ohtani"> Oops! All Ohtanis!</label>
+      <button id="lineup_toggle" class="fold" type="button" aria-expanded="false" aria-controls="lineup_body">Edit lineup</button>
     </div>
+    <div class="lineup-sum">
+      <p id="sum_what"></p>
+      <p id="sum_who" class="note"></p>
+    </div>
+    <div id="lineup_body">
     <div class="loader">
       <label><b>Start from</b><select id="team"></select></label>
       <label><b>Lineup</b>
@@ -318,6 +340,8 @@ button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
         </select>
       </label>
       <button id="reset_all" type="button" title="Back to the MLB lineup spots and every option's default">Reset settings</button>
+    </div>
+    <button id="lineup_done" class="primary fold-done" type="button">Done: see the results</button>
     </div>
     <p id="status" class="status" style="margin-top:10px" role="status">loading 2026 data…</p>
   </section>
@@ -443,6 +467,6 @@ button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
 <div id="tip" class="tip" hidden></div>
 <style>.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}</style>
 <script src="/shared/share-image.js?v=2"></script>
-<script type="module" src="app.js?v=21"></script>
+<script type="module" src="app.js?v=22"></script>
 </body>
 </html>
