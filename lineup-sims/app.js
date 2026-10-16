@@ -1006,7 +1006,11 @@ function runsChart(dist, games, runs, avg) {
   const average = last.lineup.every((id, i) => id.replace("@0.0", "") === `sMLB-${i + 1}`);
   const subs = (last.vs ? [[`MLB vs ${lastName(last.name)}`, last.ctx.mlb.R], ["Lineup vs MLB", avg]] : [["MLB", data.sims.mlb.R]])
     .filter(([label]) => !(average && label.startsWith("MLB")));
-  runsShare = { mine, mlb, R: runs, subs, games, ids: last.lineup, vs: last.vs ? { name: last.name, full: last.full, short: last.short } : null };
+  // its gold lines: MLB's spots against the same pitching, or, when they're the lineup (the bars
+  // already), against MLB-average pitching
+  const goldVs = last.vs && !average ? last.short : null;
+  runsShare = { mine, mlb: goldVs || !last.vs ? mlb : share(data.sims.mlb.runDist, 1), goldVs, R: runs, subs, games, ids: last.lineup,
+    vs: last.vs ? { name: last.name, full: last.full, short: last.short } : null };
   const W = chartWidth("runs_chart"), H = 230, L = 40, R = 8, T = 10, B = 34;
   drawnWidth = $("runs_chart").clientWidth;
   const n = mine.length, band = (W - L - R) / n, bw = Math.min(24, band * 0.62);
@@ -1766,11 +1770,11 @@ async function tradeoffTileBlob() {
 // against MLB's lineup spots facing the same pitching (gold lines), the lineup down the left,
 // the pitching as the subtitle, and its runs per 9 as a headline number inside the chart, in
 // whichever top corner its bars leave clear.
-let runsShare = null;   // what the chart on screen shows: { mine, mlb, R, subs: [[label, runs]], games, ids, vs }
+let runsShare = null;   // what the chart on screen shows: { mine, mlb (gold), goldVs, R, subs: [[label, runs]], games, ids, vs }
 const runsFileName = () => `lineup_sim_runs_per_game${runsShare?.vs ? `_vs_${fold(lastName(runsShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
 
 async function runsTileBlob() {
-  const { mine, mlb, R, subs, games, ids, vs } = runsShare;
+  const { mine, mlb, goldVs, R, subs, games, ids, vs } = runsShare;
   await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 15px "DM Sans"',
     '600 48px "JetBrains Mono"', '600 20px "JetBrains Mono"', '400 17px "JetBrains Mono"', '400 15px "DM Sans"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
@@ -1924,7 +1928,7 @@ async function runsTileBlob() {
   g.strokeStyle = GOLD;
   g.lineWidth = 4;
   g.beginPath(); g.moveTo(190, 832); g.lineTo(214, 832); g.stroke();
-  const key = vs ? `MLB lineup spots vs ${vs.short} (simulated)` : "MLB lineup spots (simulated)";
+  const key = goldVs ? `MLB lineup spots vs ${goldVs} (simulated)` : "MLB lineup spots vs MLB-average pitching (simulated)";
   fitFont(g, key, 400, 16, '"DM Sans"', W - 48 - 226);
   g.fillText(key, 226, 838);
   g.font = '400 16px "DM Sans"';
