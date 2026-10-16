@@ -1,5 +1,5 @@
-import { CATS, cumulative, log5, prepare, rates, simulate, summarize, tilt } from "./sim.js?v=3";
-import { chainTables, expectedLines, lineupRuns, matchup, optimize } from "./markov.js?v=2";
+import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=4";
+import { chainTables, expectedLines, lineupRuns, matchup, optimize } from "./markov.js?v=3";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -22,9 +22,9 @@ const C = Object.fromEntries(CATS.map((c, i) => [c, i]));
 
 let data, model, prior;     // prior: MLB-average outcome chances, for small samples and log5
 const entries = new Map(); // id -> { id, kind, name, sub, team, counts, pa, search }
-const pitchers = new Map(); // "P<id>" -> { id, mlbam, kind: "pitcher", name, team, throws, counts, pa (BF), gs, startOuts, search }
+const pitchers = new Map(); // "P<id>" -> { id, mlbam, kind: "pitcher", name, team, throws, counts, cells, pa (BF), gs, startOuts, search }
 let pitcher = null;        // the opposing pitcher; null is MLB-average pitching
-let relief = null;         // the bullpen: outcome chances against all 2026 relievers
+let league = null;         // { all, cells }: MLB's outcome chances overall and in each platoon cell ("RL": LHB vs RHP)
 const tilted = new Map();  // "sMLB-3@-1.5" -> that spot moved 1.5 SD toward contact
 let lineup = [];
 let mode = "spots";        // what was loaded: "spots", "most_used" or "tradeoff"
@@ -89,17 +89,18 @@ const labelOf = (e) => (e.theta ? `${e.name}, ${e.theta < 0 ? "contact" : "power
 function buildEntries() {
   const nameOf = new Map();
   // pa: the plate appearances shown (official, with IBB and bunts); the rates use counts
-  for (const [id, name, team, counts, pa] of data.players) {
+  for (const [id, name, team, counts, pa, cells, bats] of data.players) {
     nameOf.set(id, name);
-    entries.set(`p${id}`, { id: `p${id}`, kind: "player", name, team, counts, pa,
-      sub: `${team} · ${pa.toLocaleString()} PA`, search: fold(name) });
+    const side = { L: "bats L", R: "bats R", S: "switch" }[bats];
+    entries.set(`p${id}`, { id: `p${id}`, kind: "player", name, team, counts, pa, cells, bats,
+      sub: [team, side, `${pa.toLocaleString()} PA`].filter(Boolean).join(" · "), search: fold(name) });
   }
   const spotsOf = (abbr, label, short, spots) => spots.forEach((s, i) => {
     const pa = s.counts.reduce((a, x) => a + x, 0);
     const who = abbr === "MLB" ? "all 30 teams"
       : s.top.map(([pid, n]) => `${lastName(nameOf.get(pid) ?? String(pid))} ${Math.round((100 * n) / pa)}%`).join(", ");
     entries.set(`s${abbr}-${i + 1}`, { id: `s${abbr}-${i + 1}`, kind: "spot", name: `${label} · ${ordinal(i + 1)} spot`,
-      team: abbr, counts: s.counts, pa, sub: `${pa.toLocaleString()} PA: ${who}`,
+      team: abbr, counts: s.counts, cells: s.cells, pa, sub: `${pa.toLocaleString()} PA: ${who}`,
       search: fold(`${label} ${short} ${abbr} ${i + 1} spot`) });
   });
   spotsOf("MLB", "MLB", "mlb league average", data.mlb.spots);
@@ -107,12 +108,22 @@ function buildEntries() {
   const totals = data.mlb.spots.reduce((acc, s) => acc.map((x, i) => x + s.counts[i]), CATS.map(() => 0));
   const n = totals.reduce((s, x) => s + x, 0);
   prior = totals.map((x) => x / n);
-  for (const [id, name, team, throws, counts, bf, gs, startOuts] of data.pitchers) {
-    pitchers.set(`P${id}`, { id: `P${id}`, mlbam: id, kind: "pitcher", name, team, throws, counts, pa: bf, gs, startOuts,
+  for (const [id, name, team, throws, counts, bf, gs, startOuts, cells] of data.pitchers) {
+    pitchers.set(`P${id}`, { id: `P${id}`, mlbam: id, kind: "pitcher", name, team, throws, counts, cells, pa: bf, gs, startOuts,
       search: fold(`${name} ${team}`) });
   }
-  const rn = data.pitching.relief.reduce((s, x) => s + x, 0);
-  relief = data.pitching.relief.map((x) => x / rn);
+  const scaled = (c) => { const t = c.reduce((a, x) => a + x, 0); return c.map((x) => x / t); };
+  league = { all: prior, cells: Object.fromEntries(Object.entries(data.pitching.cells).map(([k, c]) => [k, scaled(c)])) };
+  // an MLB-average right- or left-hander: every 2026 pitcher of that hand pooled
+  for (const hand of ["R", "L"]) {
+    const cells = { L: data.pitching.cells[hand + "L"], R: data.pitching.cells[hand + "R"] };
+    const counts = cells.L.map((x, i) => x + cells.R[i]);
+    const own = data.pitchers.filter((r) => r[3] === hand);
+    pitchers.set(`P${hand}HP`, { id: `P${hand}HP`, mlbam: `${hand}HP`, kind: "pitcher", generic: true, name: `MLB-average ${hand}HP`,
+      team: "MLB", throws: hand, counts, cells, pa: counts.reduce((a, x) => a + x, 0),
+      gs: own.reduce((t, r) => t + r[6], 0), startOuts: own.reduce((t, r) => t + r[7], 0),
+      search: fold(`mlb average ${hand}hp ${hand === "R" ? "right handed righty" : "left handed lefty"} pitcher`) });
+  }
 }
 
 function teamOf(abbr) {
@@ -172,7 +183,7 @@ function loadPreset() {
 // value(entry, c): c is the hitter's outcomes as shownOf() has them
 const COLS = {
   normal: [
-    ["PA", "opt2", (e) => e.pa.toLocaleString()],
+    ["PA", "opt2", (e) => paShown(e).toLocaleString()],
     ["K%", "opt", (e, c) => pct(lineOf(c).K)],
     ["BB%", "opt", (e, c) => pct(lineOf(c).BB)],
     ["wOBA", "", (e, c) => fmtRate(wobaOf(c))],
@@ -186,6 +197,15 @@ const COLS = {
   ],
 };
 const cols = () => COLS[mode === "tradeoff" ? "tradeoff" : "normal"];
+
+// With each player's own splits against a pitcher, the PA column counts plate
+// appearances against his hand (the ones his rates there come from).
+const splitHand = () => (pitcher && $("platoon").value === "own" ? (pitcher.throws === "L" ? "L" : "R") : null);
+function paShown(e) {
+  const h = splitHand(), b = e.base ? entries.get(e.base) : e;
+  if (!h || !b.cells) return e.pa;
+  return Object.entries(b.cells).reduce((t, [k, c]) => (k[0] === h ? t + c.reduce((a, x) => a + x, 0) : t), 0);
+}
 
 function renderLineup() {
   $("loaded").textContent = !edited ? loadedNote : loadedNote ? `${loadedNote} Edited since.` : "Custom lineup.";
@@ -202,7 +222,7 @@ function renderLineup() {
       span.textContent = text;
       th.append(span);
     } else {
-      th.textContent = text;
+      th.textContent = text === "PA" && splitHand() ? `PA v ${splitHand()}HP` : text;
     }
     if (cls) th.className = cls;
     head.append(th);
@@ -212,7 +232,7 @@ function renderLineup() {
   lineup.forEach((id, i) => {
     const e = entryOf(id);
     const tr = document.createElement("tr");
-    const small = e.kind === "player" && e.pa < 100;
+    const small = e.kind === "player" && paShown(e) < 100;
     tr.innerHTML = `<td class="spot">${i + 1}</td>
       <td class="who"><div class="suggest">
         <input type="text" size="1" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false"
@@ -227,7 +247,8 @@ function renderLineup() {
     if (small && mode !== "tradeoff") {
       const pa = tr.querySelectorAll("td.stat")[0];
       pa.classList.add("small");
-      pa.title = "Small sample: consider adding MLB-average PA below";
+      pa.title = splitHand() ? `Small sample against ${splitHand()}HP: consider adding MLB-average PA below, or league-average platoon gaps`
+        : "Small sample: consider adding MLB-average PA below";
     }
     if (e.theta != null) addTiltControl(tr, i);
     fillRow(tr, e);
@@ -404,23 +425,38 @@ function wireSuggest(input, list, { find, choose: take, current }) {
 // He pitches until `hook` outs into the game (27: all nine innings), then the bullpen.
 const hookOf = () => (pitcher && $("p_hook").value === "start" && pitcher.gs > 0 ? Math.round(pitcher.startOuts / pitcher.gs) : 27);
 const fmtIP = (outs) => `${Math.floor(outs / 3)}.${outs % 3}`;
-const chancesOf = (cum) => Array.from(cum, (c, i) => c - (i ? cum[i - 1] : 0));
 const handOf = (e) => ({ L: "LHP", R: "RHP" })[e.throws] ?? "P";
+const countOf = (c) => (c ? c.reduce((a, x) => a + x, 0) : 0);
+// platoon splits only come into it once a pitcher (and so a hand) is picked
+const platoonOf = () => (pitcher ? $("platoon").value : "off");
 
-// What the matchups need (markov.js's `vs`), or null against MLB-average pitching. Small
-// samples adds MLB-average batters faced to the pitcher as it adds PA to a hitter.
+// What the matchups need (markov.js's `vs`): the starter's pitching and the bullpen's as
+// facing() takes them (sim.js), or null against MLB-average pitching. Small samples adds
+// MLB-average batters faced to the pitcher as it adds PA to a hitter.
 function vsOf() {
   if (!pitcher) return null;
-  const hook = hookOf();
-  return { p: chancesOf(rates(pitcher.counts, prior, Number($("regress").value))), pen: hook < 27 ? relief : null, league: prior, hook };
+  const mode = $("platoon").value, hook = hookOf(), regress = pitcher.generic ? 0 : Number($("regress").value);
+  return { sp: pitcherOf(pitcher.counts, pitcher.cells, pitcher.throws, { mode, league, regress }),
+    pen: hook < 27 ? bullpenOf(data.pitching.relief, data.pitching.relief_cells, { mode, league }) : null, hook };
 }
 // everything vsOf() depends on: results computed against one key don't fit another
-const vsKey = () => (pitcher ? `${pitcher.id}|${hookOf()}|${$("regress").value}` : "");
+const vsKey = () => (pitcher ? `${pitcher.id}|${hookOf()}|${$("regress").value}|${$("platoon").value}` : "");
+
+// A lineup entry as facing() takes it: its own outcome chances (Small samples applied to
+// hitters), split by platoon cell once a pitcher is picked. A tilted MLB spot comes moved
+// along the contact-power axis, or, with tilted false, as the spot is at 0.
+function specOf(e, tilted = true) {
+  const b = e.base ? entries.get(e.base) : e;
+  const h = hitterOf(b.counts, b.cells, { mode: platoonOf(), league, regress: b.kind === "player" ? Number($("regress").value) : 0, bats: b.bats });
+  if (!tilted || !e.theta) return h;
+  const mv = (x) => tilt(x, data.tradeoff.per_sd, e.theta);
+  return { all: mv(h.all), parts: h.parts && Object.fromEntries(Object.entries(h.parts).map(([k, ps]) => [k, ps.map((q) => ({ ...q, b: mv(q.b) }))])) };
+}
 
 // a hitter's outcomes as the lineup table shows them: 2026 rates, or against the
-// pitcher (his own innings, not the bullpen's) by log5
+// pitcher (his own innings, not the bullpen's)
 function shownOf(e, vs = vsOf()) {
-  return vs ? log5(probsOf(e), vs.p, vs.league) : e.counts;
+  return vs ? facing(specOf(e), vs.sp) : e.counts;
 }
 
 function findPitchers(q) {
@@ -454,19 +490,29 @@ function renderPitcher() {
   if (start.disabled && sel.value === "start") sel.value = "game";
   start.textContent = pitcher?.gs ? `His average start (${fmtIP(Math.round(pitcher.startOuts / pitcher.gs))} IP), then bullpen`
     : "His average start, then bullpen";
+  $("platoon").disabled = !pitcher;
   const note = $("p_note");
   note.classList.remove("warn");
   if (!pitcher) {
-    note.textContent = "Hitters bat at their own 2026 rates, which were against MLB-average pitching.";
+    note.textContent = "Hitters bat at their own 2026 rates, which were against MLB-average pitching. "
+      + "Pick a pitcher, or type RHP or LHP for an MLB-average right- or left-hander.";
     return;
   }
-  const l = lineOf(pitcher.counts), e = pitcher;
-  note.textContent = `${e.name} (${e.team}, ${handOf(e)}), 2026: ${e.pa.toLocaleString()} batters faced, K ${pct(l.K)}, BB ${pct(l.BB)}, `
-    + `${fmtRate(l.AVG)} AVG and ${fmtRate(l.wOBA)} wOBA against; `
-    + (e.gs ? `${e.gs} start${e.gs === 1 ? "" : "s"} averaging ${fmtIP(Math.round(e.startOuts / e.gs))} innings. ` : "no starts. ")
-    + "The table shows each hitter's rates against him (log5).";
-  if (e.pa < 100) {
-    note.textContent += " Small sample: consider adding MLB-average PA below.";
+  const l = lineOf(pitcher.counts), e = pitcher, mode = $("platoon").value;
+  // his wOBA against each side, where he faced it
+  const sides = ["L", "R"].filter((s) => countOf(e.cells?.[s])).map((s) => `${fmtRate(wobaOf(e.cells[s]))} vs ${s}HB`);
+  note.textContent = (e.generic
+    ? `Every 2026 ${e.throws === "L" ? "left" : "right"}-hander pooled: ${e.pa.toLocaleString()} batters faced, K ${pct(l.K)}, BB ${pct(l.BB)}, `
+      + `${fmtRate(l.wOBA)} wOBA against (${sides.join(", ")}); starts averaged ${fmtIP(Math.round(e.startOuts / e.gs))} innings. `
+    : `${e.name} (${e.team}, ${handOf(e)}), 2026: ${e.pa.toLocaleString()} batters faced, K ${pct(l.K)}, BB ${pct(l.BB)}, `
+      + `${fmtRate(l.AVG)} AVG and ${fmtRate(l.wOBA)} wOBA against${mode === "off" ? "" : ` (${sides.join(", ")})`}; `
+      + (e.gs ? `${e.gs} start${e.gs === 1 ? "" : "s"} averaging ${fmtIP(Math.round(e.startOuts / e.gs))} innings. ` : "no starts. "))
+    + `The table shows each hitter's rates against him (log5${mode === "own" ? ", with both players' platoon splits"
+      : mode === "league" ? ", with league-average platoon gaps" : ""}).`;
+  const thin = ["L", "R"].filter((s) => countOf(e.cells?.[s]) < 60);
+  if (!e.generic && (e.pa < 100 || (mode === "own" && thin.length))) {
+    note.textContent += e.pa >= 100 ? ` Small sample against ${thin.map((s) => `${s}HB`).join(" and ")}: consider adding MLB-average PA below, or league-average platoon gaps.`
+      : " Small sample: consider adding MLB-average PA below.";
     note.classList.add("warn");
   }
 }
@@ -486,7 +532,7 @@ let worker = null;
 let useWorker = typeof Worker !== "undefined";
 
 function startWorker() {
-  const w = new Worker(new URL("./sim-worker.js?v=3", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./sim-worker.js?v=4", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
   w.onmessage = ({ data: msg }) => {
     if (job && msg.id === job.id) finish(job, msg.res, msg.ms, msg.ref, msg.lines);
@@ -507,17 +553,20 @@ function run() {
     stopSearch(`Search stopped: the ${key !== optJob.key ? "pitching" : "lineup"} changed. Optimize again for this one.`);
   }
   const games = Number($("games").value);
-  const against = (p, q) => cumulative(q ? log5(p, q, prior) : p);
-  const probs = lineup.map((id) => probsOf(entryOf(id)));
-  const cums = probs.map((p) => against(p, vs?.p));
-  const pen = vs?.pen ? probs.map((p) => against(p, vs.pen)) : null;
+  const specs = lineup.map((id) => specOf(entryOf(id)));
+  const cums = specs.map((h) => cumulative(facing(h, vs?.sp ?? null)));
+  const pen = vs?.pen ? specs.map((h) => cumulative(facing(h, vs.pen))) : null;
   let ref = null, lines = null;
   if (vs && versus.key !== key) {
-    const spots = (t) => t.spots.map((s) => chancesOf(rates(s.counts)));
-    const mlb = spots(data.mlb), T = data.tradeoff;
-    ref = { lineup: mlb.map((p) => against(p, vs.p)), pen: vs.pen ? mlb.map((p) => against(p, vs.pen)) : null, games: REF_GAMES };
-    lines = { vs, w: data.weights, lineups: [mlb, ...data.teams.map(spots),
-      ...data.sims.tradeoff.points.map((pt) => data.mlb.spots.map((s) => tilt(s.counts, T.per_sd, pt.theta)))] };
+    // each lineup's hitters matched against the starter and the bullpen here; the worker
+    // only needs the chances
+    const spots = (abbr) => Array.from({ length: 9 }, (_, i) => specOf(entries.get(`s${abbr}-${i + 1}`)));
+    const matched = (hs, theta = 0) => hs.map((h) => ({ sp: facing(h, vs.sp, theta, data.tradeoff.per_sd),
+      pen: vs.pen ? facing(h, vs.pen, theta, data.tradeoff.per_sd) : null }));
+    const mlb = spots("MLB"), m0 = matched(mlb);
+    ref = { lineup: m0.map((x) => cumulative(x.sp)), pen: vs.pen ? m0.map((x) => cumulative(x.pen)) : null, games: REF_GAMES };
+    lines = { w: data.weights, lineups: [m0, ...data.teams.map((t) => matched(spots(t.abbr))),
+      ...data.sims.tradeoff.points.map((pt) => matched(mlb, pt.theta))] };
   }
   const busy = job != null;
   job = { id: ++jobs, cums, pen, hook: vs?.hook ?? 27, games, ids: [...lineup], key, vs, name: pitcher?.name, ref, lines };
@@ -546,7 +595,7 @@ function runHere(j) {
     const res = simulate(model, j.cums, j.games, SEED, j.pen, j.hook);
     const ms = performance.now() - t0;
     const ref = j.ref && simulate(model, j.ref.lineup, j.ref.games, SEED, j.ref.pen, j.hook).runDist;
-    const lines = j.lines && expectedLines((chain ??= chainTables(model)), j.lines.lineups, j.lines.vs, j.lines.w);
+    const lines = j.lines && expectedLines((chain ??= chainTables(model)), j.lines.lineups, j.hook, j.lines.w);
     finish(j, res, ms, ref, lines);
   }, 30);
 }
@@ -584,6 +633,9 @@ function compareSet(k) {
 // "Skubal for 5.2 innings, then the bullpen" / "Skubal for all nine innings"
 const vsWords = (l) => `${lastName(l.name)} for ${l.hook < 27 ? `${fmtIP(l.hook)} innings, then the bullpen` : "all nine innings"}`;
 
+// a rank among the 30 teams, for words: 31 is behind every one of them
+const placeOf = (r) => (r > 30 ? "behind all 30 teams" : `${ordinal(r)} of 30 teams`);
+
 function rankOf(v, teams, dir) {
   return 1 + teams.filter((t) => (dir > 0 ? t.v > v : t.v < v)).length;
 }
@@ -615,9 +667,9 @@ function renderResults() {
     second = kpi("Over 162 games", Math.round(s.R * 162).toLocaleString(), `MLB ${Math.round(r.mlb * 162).toLocaleString()}`);
   }
   $("kpis").replaceChildren(
-    kpi(last.vs ? `Runs per 9 vs ${lastName(last.name)}` : "Runs per 9 innings", s.R.toFixed(2), `±${moe.toFixed(2)} (95%) · ${ordinal(rankOf(s.R, r.teams, 1))} of 30 teams`),
+    kpi(last.vs ? `Runs per 9 vs ${lastName(last.name)}` : "Runs per 9 innings", s.R.toFixed(2), `±${moe.toFixed(2)} (95%) · ${placeOf(rankOf(s.R, r.teams, 1))}`),
     second,
-    kpi("wOBA", fmtRate(s.wOBA), `${ordinal(rankOf(s.wOBA, w.teams, 1))} of 30 · MLB ${fmtRate(w.mlb)}`),
+    kpi("wOBA", fmtRate(s.wOBA), `${placeOf(rankOf(s.wOBA, w.teams, 1)).replace(" teams", "")} · MLB ${fmtRate(w.mlb)}`),
   );
 
   // comparison rows
@@ -923,7 +975,8 @@ function setupTradeoff() {
   $("tilt_axis").textContent = "Each step is one standard deviation of 2026 hitters with the same wOBA. Per 100 PA, a step toward power is "
     + `K ${f(d.K)}, BB ${f(d.BB)}, HR ${f(d.HR)}, 1B ${f(d["1B"])}, 2B ${f(d["2B"])}, outs in play ${f(bip)}; toward contact, the reverse. `
     + `wOBA doesn't move. For scale, the most contact-heavy regulars sit at ${ends.slice(0, 3).join(", ")}; `
-    + `the most power-heavy at ${ends.slice(-3).reverse().join(", ")}.`;
+    + `the most power-heavy at ${ends.slice(-3).reverse().join(", ")}. The sliders stop at ±${T.range}, as far as regulars go toward the `
+    + `${-T.ends[0][2] > T.ends[T.ends.length - 1][2] ? "power" : "contact"} end.`;
 }
 
 function renderTradeoff(moe) {
@@ -948,7 +1001,7 @@ function renderTradeoff(moe) {
   tradeoffChart(pts, avg, last.sum.R, moe);
 
   // table view of the curve at whole steps
-  const cols = pts.filter((p) => Number.isInteger(p.theta));
+  const cols = pts.filter((p) => Number.isInteger(p.theta) || Math.abs(p.theta) === data.tradeoff.range);
   const rows = [["Runs / 9", "R", 2], ["AVG", "AVG", 3], ["OBP", "OBP", 3], ["SLG", "SLG", 3], ["wOBA", "wOBA", 3],
     ["K / 9", "K", 2], ["BB / 9", "BB", 2], ["HR / 9", "HR", 2]];
   const table = $("tradeoff_table");
@@ -1047,15 +1100,10 @@ let optJobs = 0;
 let optDone = null;        // the last search: { before, after, result, ms } (lineup ids)
 const locked = new Set();  // lineup slots (0-8) the search leaves alone
 
-// a lineup entry's own outcome chances, as the simulation starts from them (before any pitcher)
-function probsOf(e) {
-  return chancesOf(rates(e.counts, prior, e.kind === "player" ? Number($("regress").value) : 0));
-}
-
 // exact expected runs per nine innings, against `vs` (by default the pitching now picked)
 function exactRuns(ids, vs = vsOf()) {
   chain ??= chainTables(model);
-  return lineupRuns(chain, ids.map((id) => matchup(chain, probsOf(entryOf(id)), vs)), vs);
+  return lineupRuns(chain, ids.map((id) => matchup(chain, specOf(entryOf(id)), vs)), vs?.hook ?? 27);
 }
 
 const shortName = (e) => (e.kind === "spot" && e.team === "MLB" ? `${e.name.split(" · ")[1].replace(" spot", "")}-spot hitter` : e.name);
@@ -1123,7 +1171,7 @@ function startOptimize() {
   const ids = [...lineup];
   const hitters = ids.map((id) => {
     const e = entryOf(id);
-    return opts.tilt && e.theta != null ? { base: entries.get(e.base).counts, theta: e.theta } : { probs: probsOf(e) };
+    return opts.tilt && e.theta != null ? { ...specOf(e, false), theta: e.theta } : specOf(e);
   });
   optJob = { id: ++optJobs, ids, opts, key: vsKey(), name: pitcher?.name, hook: hookOf() };
   $("opt_status").textContent = "searching…";
@@ -1137,7 +1185,7 @@ function startOptimize() {
   if (!useWorker) return here();
   try {
     if (!optWorker) {
-      optWorker = new Worker(new URL("./sim-worker.js?v=3", import.meta.url), { type: "module" });
+      optWorker = new Worker(new URL("./sim-worker.js?v=4", import.meta.url), { type: "module" });
       optWorker.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
     }
   } catch {
@@ -1289,7 +1337,7 @@ function settingsChart(before, after, wasSlot) {
 // they are, and no search result. The link (URL hash) follows.
 function resetSettings() {
   const toDefault = (sel) => { sel.selectedIndex = Math.max(0, [...sel.options].findIndex((o) => o.defaultSelected)); };
-  ["team", "kind", "games", "regress", "opt_mix", "p_hook"].forEach((id) => toDefault($(id)));
+  ["team", "kind", "games", "regress", "opt_mix", "p_hook", "platoon"].forEach((id) => toDefault($(id)));
   ["opt_order", "opt_tilt"].forEach((id) => { $(id).checked = $(id).defaultChecked; });
   pitcher = null;
   renderPitcher();
@@ -1313,13 +1361,19 @@ function writeHash() {
   if (pitcher) {
     p.set("p", pitcher.mlbam);
     if ($("p_hook").value === "start") p.set("h", "start");
+    if ($("platoon").value !== "own") p.set("pl", $("platoon").value);
   }
   history.replaceState(null, "", `#${p}`);
 }
 
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
-  const ids = (p.get("l") ?? "").split(",");
+  const R = data.tradeoff.range;
+  // a link from when the sliders reached further keeps its spots, at the end of the range
+  const ids = (p.get("l") ?? "").split(",").map((id) => {
+    const at = id.indexOf("@"), t = Number(id.slice(at + 1));
+    return at > 0 && Math.abs(t) > R ? tiltId(id.slice(0, at), Math.sign(t) * R) : id;
+  });
   for (const [key, sel] of [["g", "games"], ["r", "regress"], ["t", "team"], ["k", "kind"]]) {
     const v = p.get(key);
     if (v && [...$(sel).options].some((o) => o.value === v)) $(sel).value = v;
@@ -1327,8 +1381,10 @@ function readHash() {
   if (p.get("b") === "sim") basis = "sim";
   pitcher = pitchers.get(`P${p.get("p")}`) ?? null;
   if (pitcher && p.get("h") === "start") $("p_hook").value = "start";
+  const pl = p.get("pl");
+  if (pl && [...$("platoon").options].some((o) => o.value === pl)) $("platoon").value = pl;
   const a = Number(p.get("a"));
-  if (Number.isFinite(a) && Math.abs(a) <= data.tradeoff.range) setMaster(a);
+  if (Number.isFinite(a)) setMaster(Math.max(-R, Math.min(R, a)));
   if (ids.length === 9 && ids.every((id) => entryOf(id))) {
     return { ids, edited: p.get("e") === "1" };
   }
@@ -1338,7 +1394,7 @@ function readHash() {
 // ---------- boot ----------
 async function boot() {
   try {
-    const r = await fetch(`data/${SEASON}.json?v=3`);
+    const r = await fetch(`data/${SEASON}.json?v=4`);
     if (!r.ok) throw new Error(`data ${r.status}`);
     data = await r.json();
   } catch (e) {
@@ -1366,6 +1422,10 @@ async function boot() {
   setupOptimizer();
   const rn = data.pitching.relief.reduce((s, x) => s + x, 0), ln = data.pitching.league.reduce((s, x) => s + x, 0);
   $("relief_k").textContent = `${pct(data.pitching.relief[C.K] / rn)} of hitters, against ${pct(data.pitching.league[C.K] / ln)} overall`;
+  const rc = data.pitching.relief_cells, lc = data.pitching.cells;
+  $("relief_l").textContent = pct((countOf(rc.LL) + countOf(rc.LR)) / rn);
+  $("platoon_gap").textContent = `a ${fmtRate(wobaOf(lc.LL))} wOBA for left-handed batters against left-handers (${fmtRate(wobaOf(lc.RL))} against `
+    + `right-handers) and ${fmtRate(wobaOf(lc.RR))} for right-handed batters against right-handers (${fmtRate(wobaOf(lc.LR))} against left-handers)`;
   const saved = readHash(); // before wiring controls: it sets their values, `basis` and `pitcher`
   renderPitcher();
   paintBasis();
@@ -1384,6 +1444,11 @@ async function boot() {
   });
   $("p_hook").addEventListener("change", () => {
     renderPitcher();
+    run();
+  });
+  $("platoon").addEventListener("change", () => {
+    renderPitcher();
+    renderLineup(); // the table's rates against him change with it
     run();
   });
   $("team").addEventListener("change", () => {

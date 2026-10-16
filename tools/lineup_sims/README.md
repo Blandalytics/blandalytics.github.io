@@ -21,8 +21,8 @@ Python needs `requirements.txt`; the `.mjs` scripts need Node 22 or later.
 # 2. Stats API play-by-play for every final regular-season game, cached per game
 #    (about a minute; reruns fetch only games not cached yet)
 python -I tools/lineup_sims/fetch_pbp.py 2026
-# 3. outcome counts (hitters and pitchers), lineup spots, baserunning tables, team actuals,
-#    contact-power axis
+# 3. outcome counts (hitters and pitchers, whole and by platoon cell), lineup spots,
+#    baserunning tables, team actuals, contact-power axis
 python -I tools/lineup_sims/build.py 2026
 # 4. every team's lineups and the contact-power curve, simulated into the data file (~1 min)
 node tools/lineup_sims/precompute.mjs 2026 100000
@@ -63,7 +63,9 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
   `0` out, `1`-`3` base, `4` scored, trailing `s` for a sacrifice fly.
 * **Contact vs power**: the first principal component of the hitters' outcome rates
   after removing what wOBA explains (200+ PA). Moving a profile along it keeps its wOBA
-  exactly. The page applies it to the MLB-average lineup spots.
+  exactly. The page applies it to the MLB-average lineup spots, as far as 2026 regulars
+  (300+ PA) go toward the nearer end (`tradeoff.range`; 2026: ±2.5, from Caissie's +2.47 at
+  the power end).
 * **Lineup optimizer** (`lineup-sims/markov.js`, run in the page's worker): exact
   expected runs from a Markov chain over (batter due up, outs, bases) built from the same
   two tables, so it equals the simulation's average without the noise (2026: MLB's
@@ -83,6 +85,15 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
   (`expectedLine()`), worked out in the page's worker. `test_sim.mjs` checks log5's
   identities, exact against simulated with and without a bullpen, and the optimizer against
   brute force.
+* **Platoon splits**: the same counts by cell, the pitcher's hand plus the side the batter
+  hit from (`RL`: a lefty against a right-hander; switch hitters by the side they batted
+  from), for players (`players[i][5]`, bat side in `[6]`), lineup spots (`cells`), the league
+  and relievers (`pitching.cells`, `pitching.relief_cells`), and pitchers by batter side
+  (`pitchers[i][8]`). `hitterOf()`, `pitcherOf()` and `bullpenOf()` in `sim.js` turn them
+  into parts that `facing()` matches by log5 against the league's rates for the same
+  matchup: each player's own splits, league-average platoon gaps on his overall rates, or
+  off. `build.py` and `test_sim.mjs` check every split adds up to its whole; the tests also
+  check the platoon identities and exact against simulated with splits on.
 
 ## Files
 

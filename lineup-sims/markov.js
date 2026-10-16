@@ -11,11 +11,11 @@
 // same hitter due up next inning), then the hitter's outcome and the runners' moves.
 //
 // Against a given pitcher, each hitter's chances are first combined with the pitcher's by
-// log5 (sim.js). A starter who leaves after a set number of outs hands over to the
-// bullpen: innings before that use the hitters against him, innings after use them
-// against the bullpen, and the inning he leaves in uses him while fewer than that many
-// outs are made in it.
-import { log5, summarize, tilt } from "./sim.js?v=3";
+// log5, platoon splits and all (facing() in sim.js). A starter who leaves after a set
+// number of outs hands over to the bullpen: innings before that use the hitters against
+// him, innings after use them against the bullpen, and the inning he leaves in uses him
+// while fewer than that many outs are made in it.
+import { facing, summarize } from "./sim.js?v=4";
 
 const NS = 24;
 const NY = 13; // a plate appearance's tallies for expectedLine: PA, the eleven outcomes, sacrifice flies
@@ -94,18 +94,20 @@ export function hitterBlock(tab, probs, line = false) {
   return { Q, A, R, Y };
 }
 
-// A hitter's blocks against the pitching the lineup faces. `vs` is null for league-average
-// pitching, or { p: the pitcher's chances, pen: the bullpen's (null when he pitches the
-// whole game), league: the league's, hook: outs into the game when the bullpen takes over }.
-export function matchup(tab, probs, vs = null, line = false) {
-  if (!vs) return { sp: hitterBlock(tab, probs, line), pen: null };
-  return { sp: hitterBlock(tab, log5(probs, vs.p, vs.league), line),
-    pen: vs.pen ? hitterBlock(tab, log5(probs, vs.pen, vs.league), line) : null };
+// A hitter's blocks against the pitching the lineup faces. `hitter` is as for facing()
+// ({ all, parts }); `vs` is null for MLB-average pitching, or { sp: the starter's pitching,
+// pen: the bullpen's (null when he pitches the whole game), hook: outs into the game when
+// the bullpen takes over }, each pitching as facing() takes it. `theta` moves the hitter
+// along the contact-power axis (perSd) first.
+export function matchup(tab, hitter, vs = null, line = false, theta = 0, perSd = null) {
+  return { sp: hitterBlock(tab, facing(hitter, vs?.sp ?? null, theta, perSd), line),
+    pen: vs?.pen ? hitterBlock(tab, facing(hitter, vs.pen, theta, perSd), line) : null };
 }
 
-// Exact expected runs for nine hitters' matchup() blocks in batting order.
-export function lineupRuns(tab, ms, vs = null) {
-  return expectedRuns(tab, ms.map((m) => m.sp), 9, vs?.pen ? ms.map((m) => m.pen) : null, vs?.hook ?? 27);
+// Exact expected runs for nine hitters' matchup() blocks in batting order; the bullpen
+// (when the blocks have one) takes over after `hook` outs.
+export function lineupRuns(tab, ms, hook = 27) {
+  return expectedRuns(tab, ms.map((m) => m.sp), 9, ms[0].pen ? ms.map((m) => m.pen) : null, hook);
 }
 
 // Expected runs over `innings` innings for nine hitter blocks in batting order, and with
@@ -220,11 +222,11 @@ function solveLine(tab, blocks) {
 
 // The expected nine-inning line of a lineup, exactly: summarize()'s numbers for nine
 // matchup() blocks built with `line`, as a simulation would average them over endless games.
-export function expectedLine(tab, ms, vs, w, innings = 9) {
+export function expectedLine(tab, ms, hook, w, innings = 9) {
   const tot = new Float64Array(NV);
   let lead = new Float64Array(9);
   lead[0] = 1;
-  const plan = byInning(tab, ms.map((m) => m.sp), innings, vs?.pen ? ms.map((m) => m.pen) : null, vs?.hook ?? innings * 3, solveLine);
+  const plan = byInning(tab, ms.map((m) => m.sp), innings, ms[0].pen ? ms.map((m) => m.pen) : null, hook ?? innings * 3, solveLine);
   for (const { V, N } of plan) {
     const next = new Float64Array(9);
     for (let k = 0; k < 9; k++) {
@@ -239,16 +241,19 @@ export function expectedLine(tab, ms, vs, w, innings = 9) {
   return summarize({ outs: innings * 3, R, PA, K, BB, HBP, "1B": b1, "2B": b2, "3B": b3, HR, H, SF, AB: PA - BB - HBP - SF }, w);
 }
 
-// expectedLine for several lineups of raw outcome chances (nine arrays each) against `vs`
-export function expectedLines(tab, lineups, vs, w) {
-  return lineups.map((l) => expectedLine(tab, l.map((p) => matchup(tab, p, vs, true)), vs, w));
+// expectedLine for several lineups whose matchups are already worked out: nine
+// { sp, pen } each, the hitter's chances against the starter and the bullpen (pen null
+// when the starter goes nine)
+export function expectedLines(tab, lineups, hook, w) {
+  return lineups.map((l) => expectedLine(tab, l.map((x) => ({ sp: hitterBlock(tab, x.sp, true),
+    pen: x.pen ? hitterBlock(tab, x.pen, true) : null })), hook, w));
 }
 
 // Best batting order and contact-power settings by exact expected runs.
 //
-// hitters, in their current batting order: { probs } for a hitter as is, or
-// { base, theta } for an MLB-average spot that can move along the contact-power axis
-// (base: its counts; theta: its setting now, in steps of 0.1). Options:
+// hitters, in their current batting order: { all, parts } as for facing(), plus `theta`
+// (its setting now, in steps of 0.1) for an MLB-average spot that can move along the
+// contact-power axis; a hitter without one stays as he is. Options:
 //   order   search batting orders (swaps of unlocked slots)
 //   tilt    search the settings of the movable hitters in unlocked slots
 //   mix     "same": they trade contact for power among themselves, so their total (and
@@ -256,7 +261,7 @@ export function expectedLines(tab, lineups, vs, w) {
 //   locked  slots whose hitter and setting stay put
 //   perSd, range  the axis and its reach (data.tradeoff)
 //   vs      the pitching faced, as for matchup(); hitters' chances are their own, and
-//           the search combines them with the pitcher's
+//           the search combines them with the pitcher's (and moves them along the axis)
 // Settings are searched in whole tenths. "free": each hitter in turn takes the best
 // value on a half-step grid, then the best tenth around it. "same": moves of 1, 0.5,
 // 0.2 or 0.1 from one hitter to another, taken whenever they help. Order: the best swap
@@ -266,7 +271,7 @@ export function expectedLines(tab, lineups, vs, w) {
 // the better. The pipeline's tests check it against brute force on smaller problems.
 export function optimize(tab, hitters, opts, progress = () => {}) {
   const runs = [search(tab, hitters, opts, progress)];
-  const movable = hitters.map((h, s) => (h.base && !(opts.locked ?? []).includes(s) ? s : -1)).filter((s) => s >= 0);
+  const movable = hitters.map((h, s) => (h.theta != null && !(opts.locked ?? []).includes(s) ? s : -1)).filter((s) => s >= 0);
   if (opts.tilt !== false && movable.length > 1) {
     // the same total spread as evenly as tenths allow (the free search starts from 0)
     const total = movable.reduce((t, s) => t + Math.round(hitters[s].theta * 10), 0);
@@ -287,7 +292,8 @@ export function optimize(tab, hitters, opts, progress = () => {}) {
 function search(tab, hitters, opts, progress) {
   const { order = true, tilt: doTilt = true, mix = "same", locked = [], perSd, range, vs = null } = opts;
   const lim = Math.round(range * 10);
-  const tenth = hitters.map((h) => (h.base ? Math.round(h.theta * 10) : null));
+  const tenth = hitters.map((h) => (h.theta != null ? Math.round(h.theta * 10) : null));
+  const hook = vs?.hook ?? 27;
   const slot = hitters.map((_, i) => i); // slot -> hitter
   const free = slot.filter((s) => !locked.includes(s));
   const movable = free.filter((s) => tenth[s] != null); // hitters; locked slots never move
@@ -296,14 +302,13 @@ function search(tab, hitters, opts, progress) {
   const block = (h) => {
     const key = tenth[h] == null ? `${h}` : `${h}@${tenth[h]}`;
     if (!cache.has(key)) {
-      const p = tenth[h] == null ? hitters[h].probs : tilt(hitters[h].base, perSd, tenth[h] / 10);
-      cache.set(key, matchup(tab, p, vs));
+      cache.set(key, matchup(tab, hitters[h], vs, false, tenth[h] == null ? 0 : tenth[h] / 10, perSd));
     }
     return cache.get(key);
   };
   const value = () => {
     if (++evals % 250 === 0) progress(evals);
-    return lineupRuns(tab, slot.map(block), vs);
+    return lineupRuns(tab, slot.map(block), hook);
   };
   const start = value();
   let best = start;
@@ -380,5 +385,5 @@ function search(tab, hitters, opts, progress) {
     if (!a && !b) break;
   }
   return { slot, theta: tenth.map((t) => (t == null ? null : t / 10)), before: start,
-    after: lineupRuns(tab, slot.map(block), vs), evals };
+    after: lineupRuns(tab, slot.map(block), hook), evals };
 }
