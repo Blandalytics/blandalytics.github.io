@@ -7,7 +7,7 @@ Inputs, under tools/lineup_sims/ (README.md says how each is made):
     cache/fangraphs/<season>.json    fangraphs_extract.js, run by hand in a browser
 
 Output, all for the regular season:
-    players     every hitter's plate appearances by simulator outcome
+    players     every hitter's plate appearances by simulator outcome, and the side he bats
     teams       per team: the nine lineup spots (every hitter who batted there, pooled),
                 FanGraphs' most-used batting orders, and the team's actual batting per
                 27 outs in innings 1-9
@@ -18,6 +18,12 @@ Output, all for the regular season:
                 outs recorded in them
     pitching    the outcome counts of every plate appearance (the league baseline for
                 log5 matchups) and of those against relievers (the bullpen)
+
+Platoon splits: players, lineup spots, the league and relievers also carry `cells`, the
+same counts by the pitcher's hand and the side the batter hit from, keyed hand + side
+("RL" is a left-handed batter against a right-hander; a switch hitter's PAs land in the
+side he batted from). Pitchers carry theirs by batter side ("L", "R"). Empty cells are
+left out.
 """
 import collections
 import datetime as dt
@@ -100,11 +106,13 @@ def tradeoff_axis(players, w, spot_profiles, min_pa=200, anchor_pa=300, max_rang
     along it leaves its wOBA exactly where it was.
 
     Returns the rate change per standard deviation of hitters along the axis, the
-    hitters furthest toward each end, and how far each given profile can move before
-    some rate would go below zero (capped at max_range).
+    hitters furthest toward each end, and the sliders' reach: as far as 2026 regulars
+    (anchor_pa+) go toward the nearer of the two ends, to the tenth, so a setting at either
+    end is one some regular actually has; capped at max_range and where some given
+    profile's rate would go below zero.
     """
     wv = np.array([0, w["wBB"], w["wHBP"], w["w1B"], w["w2B"], w["w3B"], w["wHR"], 0, 0, 0, 0])
-    rows = [(pid, name, np.array(c, float)) for pid, name, _, c, _ in players if sum(c) >= min_pa]
+    rows = [(pid, name, np.array(c, float)) for pid, name, _, c, *_ in players if sum(c) >= min_pa]
     X = np.array([c for *_, c in rows])
     n = X.sum(1)
     R = X / n[:, None]
@@ -121,7 +129,7 @@ def tradeoff_axis(players, w, spot_profiles, min_pa=200, anchor_pa=300, max_rang
     score = (E @ axis) / sd
     regulars = sorted((score[i], rows[i][0], rows[i][1]) for i in range(len(rows)) if n[i] >= anchor_pa)
     ends = [[pid, name, round(float(s), 2)] for s, pid, name in regulars[:4] + regulars[-4:]]
-    reach = max_range
+    reach = min(max_range, round(min(-regulars[0][0], regulars[-1][0]), 1))
     for p in spot_profiles:
         for c in range(len(CATS)):
             if per_sd[c] < 0:
@@ -141,6 +149,7 @@ def main(season):
     people = cached_json(CACHE / f"players_{season}.json", f"{API}/v1/sports/1/players",
                          {"season": season})["people"]
     name_of = {p["id"]: p["fullName"] for p in people}
+    bats_of = {p["id"]: (p.get("batSide") or {}).get("code", "") for p in people}  # L, R or S (switch)
     team_meta = cached_json(CACHE / f"teams_{season}.json", f"{API}/v1/teams",
                             {"sportId": 1, "season": season})["teams"]
     team_by_abbr = {t["abbreviation"]: t for t in team_meta}
@@ -162,6 +171,8 @@ def main(season):
     starts = collections.Counter()                                  # pitcher -> games started
     start_outs = collections.Counter()                              # pitcher -> outs recorded in those starts
     relief = collections.Counter()                                  # cat counts against relievers
+    # platoon cells, keyed pitcher hand + batter side ("RL": a lefty batting against a righty)
+    cells = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))  # who -> cell -> cat counts
     skipped = 0
 
     for g in pbp.load_games(season, CACHE):
@@ -207,19 +218,29 @@ def main(season):
             if cat is None:
                 continue
             pitcher_counts[pid][cat] += 1
+            hs = r["throws"] + r["stand"]
+            cells[("pitcher", pid)][r["stand"]][cat] += 1
+            cells["league"][hs][cat] += 1
             if not in_start:
                 relief[cat] += 1
+                cells["relief"][hs][cat] += 1
             spot = spot_of[r["side"]].get(b)
             player_counts[b][cat] += 1
+            cells[("batter", b)][hs][cat] += 1
             if spot:
                 for key in ((team, spot), ("MLB", spot)):
                     spot_counts[key][cat] += 1
                     spot_players[key][b] += 1
+                    cells[("spot",) + key][hs][cat] += 1
             if r["inning"] <= 9:
                 code = r["event_code"] + ("s" if r["event"] in ("sac_fly", "sac_fly_double_play") else "")
                 advance["%s,%d,%d" % ((cat,) + r["state1"])][code] += 1
 
     print(f"{skipped} half-innings skipped (did not reconcile with the feed)")
+
+    def cells_of(who):
+        """A cells table as stored: cell -> counts in CATS order, empty cells left out."""
+        return {k: [cnt[c] for c in CATS] for k, cnt in sorted(cells[who].items()) if sum(cnt.values())}
     teams_sorted = sorted(t for t in team_line_9 if t != "MLB")
     assert len(teams_sorted) == 30, teams_sorted
 
@@ -242,20 +263,36 @@ def main(season):
         if n == 0:
             continue
         # counts feed the rates; the official PA (with IBB, bunts, interference) is for display
-        players.append([b, name_of.get(b, str(b)), player_last[b][1], [cnt[c] for c in CATS], player_line[b].c["PA"]])
+        players.append([b, name_of.get(b, str(b)), player_last[b][1], [cnt[c] for c in CATS], player_line[b].c["PA"],
+                        cells_of(("batter", b)), bats_of.get(b, "")])
     players.sort(key=lambda p: -sum(p[3]))
 
     # --- pitchers ----------------------------------------------------------------------
     # counts feed the matchups; batters faced (official, with IBB and bunts) is for display
     pitchers = [[pid, name_of.get(pid, str(pid)), pitcher_last[pid][1], pitcher_throws[pid], [cnt[c] for c in CATS],
-                 pitcher_bf[pid], starts[pid], start_outs[pid]]
+                 pitcher_bf[pid], starts[pid], start_outs[pid], cells_of(("pitcher", pid))]
                 for pid, cnt in pitcher_counts.items() if sum(cnt.values())]
     pitchers.sort(key=lambda p: -sum(p[4]))
     league = collections.Counter()
     for cnt in pitcher_counts.values():
         league.update(cnt)
     assert league == sum(player_counts.values(), collections.Counter())
-    pitching = {"league": [league[c] for c in CATS], "relief": [relief[c] for c in CATS]}
+    pitching = {"league": [league[c] for c in CATS], "relief": [relief[c] for c in CATS],
+                "cells": cells_of("league"), "relief_cells": cells_of("relief")}
+    # every split adds back up to its whole
+    total = lambda table: [sum(v[i] for v in table.values()) for i in range(len(CATS))]  # noqa: E731
+    assert total(pitching["cells"]) == pitching["league"] and total(pitching["relief_cells"]) == pitching["relief"]
+    for row in players:
+        assert total(row[5]) == row[3], row[:2]
+    # a switch hitter bats left against right-handers and right against left-handers
+    sw = [row for row in players if row[6] == "S"]
+    odd = sum(v for row in sw for k, c in row[5].items() if k in ("RR", "LL") for v in [sum(c)])
+    print(f"{len(sw)} switch hitters; {odd} of their {sum(sum(row[3]) for row in sw)} PA from the same side as the pitcher")
+    for row in pitchers:
+        assert total(row[8]) == row[4], row[:2]
+    relief_pa = {k: sum(v) for k, v in pitching["relief_cells"].items()}
+    print("platoon cells (PA):", {k: sum(v) for k, v in pitching["cells"].items()},
+          f"; relievers' LHP share {(relief_pa.get('LL', 0) + relief_pa.get('LR', 0)) / sum(relief_pa.values()):.1%}")
     n_league, n_relief = sum(league.values()), sum(relief.values())
     print(f"{len(pitchers)} pitchers; relievers faced {n_relief / n_league:.1%} of plate appearances, "
           f"K {relief['K'] / n_relief:.1%} vs {league['K'] / n_league:.1%} overall; "
@@ -285,7 +322,9 @@ def main(season):
         for s in range(1, 10):
             cnt = spot_counts[(team, s)]
             top = spot_players[(team, s)].most_common(4)
-            out.append({"counts": [cnt[c] for c in CATS], "top": [[pid, n] for pid, n in top]})
+            out.append({"counts": [cnt[c] for c in CATS], "top": [[pid, n] for pid, n in top],
+                        "cells": cells_of(("spot", team, s))})
+            assert total(out[-1]["cells"]) == out[-1]["counts"], (team, s)
         return out
 
     teams = []

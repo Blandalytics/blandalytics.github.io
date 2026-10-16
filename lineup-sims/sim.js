@@ -95,8 +95,13 @@ export function prepare(data) {
 // A hitter's outcome probabilities (cumulative, in CATS order) from counts. `regress`
 // adds that many plate appearances at `prior` rates (MLB average) to small samples.
 export function rates(counts, prior = null, regress = 0) {
+  return cumulative(chances(counts, prior, regress));
+}
+
+// rates(), not cumulative: the chance of each outcome
+export function chances(counts, prior = null, regress = 0) {
   const n = counts.reduce((s, x) => s + x, 0);
-  return cumulative(counts.map((x, i) => (regress && prior ? (x + regress * prior[i]) / (n + regress) : x / n)));
+  return counts.map((x, i) => (regress && prior ? (x + regress * prior[i]) / (n + regress) : x / n));
 }
 
 export function cumulative(probs) {
@@ -114,6 +119,116 @@ export function log5(b, p, l) {
   const t = q.reduce((s, x) => s + x, 0);
   // only when every outcome the hitter has is one the pitcher never allowed
   return t > 0 ? q.map((x) => x / t) : Array.from(b);
+}
+
+// ---- platoon splits: building facing()'s hitters and pitching from the data file ----
+//
+// Counts by "cell": the pitcher's hand and the side the batter hit from ("RL" is a lefty
+// batting against a right-hander). `league` is { all, cells }: the league's chances overall
+// and in each cell, the baselines log5 needs. Modes:
+//   "own"     each player's 2026 rates in each split (Small samples adds `regress` PA at
+//             his "league" rates for that split, below, so a thin split leans on the rest
+//             of his season rather than on the league)
+//   "league"  each player's overall rates, moved by the league's platoon gap: in each
+//             cell, times the league's rate there over the league's rate for the mix of
+//             matchups the player had (steadier where a split is a small sample)
+//   "off"     overall rates for everyone, as before
+// A split with no plate appearances at all falls back to "league".
+const HANDS = ["R", "L"], SIDES = ["L", "R"];
+const sumOf = (c) => (c ? c.reduce((s, x) => s + x, 0) : 0);
+const scaled = (x) => {
+  const t = x.reduce((s, v) => s + v, 0);
+  return x.map((v) => v / t);
+};
+// `all` moved from the league's mix of the given cells (weights) to cell k
+const gapped = (all, mix, cell) => scaled(all.map((x, i) => (mix[i] > 0 ? (x * cell[i]) / mix[i] : 0)));
+function mixOf(league, weights) {
+  const n = Object.values(weights).reduce((s, x) => s + x, 0);
+  const m = new Array(CATS.length).fill(0);
+  for (const [k, x] of Object.entries(weights)) league.cells[k].forEach((v, i) => { m[i] += (x / n) * v; });
+  return m;
+}
+
+// A hitter or a pooled lineup spot, for facing(). cells: { RL: counts, ... }; bats "L", "R",
+// "S" or "" (for which side he'd bat from in a split he has no plate appearances in).
+export function hitterOf(counts, cells, { mode = "off", league, regress = 0, bats = "" } = {}) {
+  const all = chances(counts, league.all, regress);
+  if (mode === "off" || !cells) return { all };
+  const pa = Object.fromEntries(Object.entries(cells).map(([k, c]) => [k, sumOf(c)]));
+  const mix = mixOf(league, pa);
+  const lefty = (pa.RL ?? 0) + (pa.LL ?? 0), righty = (pa.RR ?? 0) + (pa.LR ?? 0);
+  const usual = bats === "L" || bats === "R" ? bats : lefty > righty ? "L" : "R";
+  const parts = {};
+  for (const hand of HANDS) {
+    const sides = SIDES.filter((s) => pa[hand + s] > 0);
+    const n = sides.reduce((t, s) => t + pa[hand + s], 0);
+    if (!n) {
+      const side = bats === "S" ? (hand === "R" ? "L" : "R") : usual;
+      parts[hand] = [{ w: 1, side, b: gapped(all, mix, league.cells[hand + side]) }];
+      continue;
+    }
+    parts[hand] = sides.map((side) => {
+      const k = hand + side;
+      return { w: pa[k] / n, side,
+        b: mode === "own" ? chances(cells[k], gapped(all, mix, league.cells[k]), regress) : gapped(all, mix, league.cells[k]) };
+    });
+  }
+  return { all, parts };
+}
+
+// A pitcher, as facing()'s pitching: cells by batter side ({ L: counts, R: counts }).
+export function pitcherOf(counts, cells, hand, { mode = "off", league, regress = 0 } = {}) {
+  const all = chances(counts, league.all, regress);
+  if (mode === "off" || !cells) return [{ w: 1, hand: "", p: { "": all }, l: { "": league.all } }];
+  const h = hand === "L" ? "L" : "R";
+  const mix = mixOf(league, Object.fromEntries(SIDES.map((s) => [h + s, sumOf(cells[s])])));
+  const p = {}, l = {};
+  for (const side of SIDES) {
+    const k = h + side;
+    l[side] = league.cells[k];
+    const gap = gapped(all, mix, league.cells[k]);
+    p[side] = mode === "own" && sumOf(cells[side]) ? chances(cells[side], gap, regress) : gap;
+  }
+  return [{ w: 1, hand: h, p, l }];
+}
+
+// The bullpen, as facing()'s pitching: every reliever pooled, right- and left-handers
+// in the shares they pitched (cells keyed hand + side, as the league's).
+export function bullpenOf(counts, cells, { mode = "off", league } = {}) {
+  if (mode === "off" || !cells) return [{ w: 1, hand: "", p: { "": scaled(counts) }, l: { "": league.all } }];
+  const n = sumOf(counts);
+  return HANDS.map((h) => ({
+    w: SIDES.reduce((t, s) => t + sumOf(cells[h + s]), 0) / n, hand: h,
+    p: Object.fromEntries(SIDES.map((s) => [s, scaled(cells[h + s])])),
+    l: Object.fromEntries(SIDES.map((s) => [s, league.cells[h + s]])),
+  }));
+}
+
+// A hitter's outcome chances against one stretch of pitching (the starter, or the bullpen).
+//
+// hitter: { all, parts }. `all` is his chances overall. `parts`, for platoon splits, holds
+// his chances against each pitcher hand, split by the side he batted from:
+// parts.R = [{ w, b, side }] against right-handers (w: the share of those PAs, b: chances,
+// side: "L" or "R"), and parts.L the same against left-handers. A pooled lineup spot has a
+// part for each side; most hitters have one.
+// pitching: [{ w, hand, p, l }], one entry per pitcher hand in the mix (a starter has one;
+// a bullpen has a right- and a left-handed share): w its share, hand "R", "L", or "" with
+// platoon splits off, p the pitcher's chances against each batter side (p.L, p.R; p[""]
+// with splits off), and l the league's for the same matchups.
+// null pitching is MLB-average pitching: the hitter as he is. `theta` moves every part
+// along the contact-power axis first (tilt).
+export function facing(hitter, pitching, theta = 0, perSd = null) {
+  const mv = (b) => (theta ? tilt(b, perSd, theta) : b);
+  if (!pitching) return mv(hitter.all);
+  const q = new Array(CATS.length).fill(0);
+  for (const c of pitching) {
+    const parts = (c.hand && hitter.parts?.[c.hand]) || [{ w: 1, b: hitter.all, side: "" }];
+    for (const part of parts) {
+      const x = log5(mv(part.b), c.p[part.side], c.l[part.side]);
+      for (let i = 0; i < x.length; i++) q[i] += c.w * part.w * x[i];
+    }
+  }
+  return q;
 }
 
 // Move an outcome profile (counts or rates, in CATS order) along the contact-power axis

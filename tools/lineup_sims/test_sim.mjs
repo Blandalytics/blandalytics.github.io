@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import assert from "node:assert/strict";
-import { CATS, cumulative, log5, prepare, rates, simulate, summarize, tilt } from "../../lineup-sims/sim.js";
+import { CATS, bullpenOf, chances, cumulative, facing, hitterOf, log5, pitcherOf, prepare, rates, simulate, summarize, tilt } from "../../lineup-sims/sim.js";
 import { chainTables, expectedLine, expectedRuns, hitterBlock, lineupRuns, matchup, optimize } from "../../lineup-sims/markov.js";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -112,12 +112,13 @@ check("exact expected runs agree with the simulation", () => {
 });
 
 check("the optimizer matches brute force: settings of three spots with the total fixed", () => {
-  const lineup = data.mlb.spots.map((s) => ({ base: s.counts, theta: 0 }));
+  const lineup = data.mlb.spots.map((s) => ({ all: probs(s.counts), theta: 0 }));
+  const lim = Math.round(T.range * 10);
   let best = -1;
-  for (let a = -30; a <= 30; a++) {
-    for (let b = -30; b <= 30; b++) {
+  for (let a = -lim; a <= lim; a++) {
+    for (let b = -lim; b <= lim; b++) {
       const c = -a - b;
-      if (c < -30 || c > 30) continue;
+      if (c < -lim || c > lim) continue;
       const th = [0, a, b, c, 0, 0, 0, 0, 0];
       best = Math.max(best, exact(data.mlb.spots.map((s, i) => tilt(s.counts, T.per_sd, th[i] / 10))));
     }
@@ -127,8 +128,8 @@ check("the optimizer matches brute force: settings of three spots with the total
 });
 
 check("the optimizer matches brute force: batting order of five spots", () => {
-  const team = data.teams.find((t) => t.abbr === "NYY").spots.map((s) => ({ probs: probs(s.counts) }));
-  const blocks = team.map((h) => hitterBlock(chain, h.probs));
+  const team = data.teams.find((t) => t.abbr === "NYY").spots.map((s) => ({ all: probs(s.counts) }));
+  const blocks = team.map((h) => hitterBlock(chain, h.all));
   let best = -1;
   const perm = (arr, k = 0) => {
     if (k === arr.length) {
@@ -147,7 +148,7 @@ check("the optimizer matches brute force: batting order of five spots", () => {
 });
 
 check("the optimizer keeps locked spots, the total setting, and the sliders' range", () => {
-  const start = data.mlb.spots.map((s, i) => ({ base: s.counts, theta: [0.5, -1, 0, 2, 0, 0, -0.5, 1, 0][i] }));
+  const start = data.mlb.spots.map((s, i) => ({ all: probs(s.counts), theta: [0.5, -1, 0, 2, 0, 0, -0.5, 1, 0][i] }));
   const total = start.reduce((t, h) => t + h.theta, 0);
   const r = optimize(chain, start, { order: true, tilt: true, mix: "same", locked: [0, 3], ...axis });
   assert.equal(r.slot[0], 0);
@@ -162,67 +163,129 @@ check("the optimizer keeps locked spots, the total setting, and the sliders' ran
   assert.ok(free.after >= r.after - 1e-9, "free can only do better than the same mix");
 });
 
-// ---- the opposing pitcher: log5 matchups, a starter's hook and the bullpen ----
-const league = probs(data.pitching.league), relief = probs(data.pitching.relief);
+// ---- the opposing pitcher: log5 matchups, platoon splits, a starter's hook and the bullpen ----
+const league = { all: probs(data.pitching.league),
+  cells: Object.fromEntries(Object.entries(data.pitching.cells).map(([k, c]) => [k, probs(c)])) };
+const relief = probs(data.pitching.relief);
 const ace = data.pitchers.find((p) => p[6] >= 25 && p[5] >= 600); // a full-time starter
+const lefty = data.pitchers.find((p) => p[3] === "L" && p[6] >= 25); // a left-handed one
 const aceP = probs(ace[4]);
 const mlbP = data.mlb.spots.map((s) => probs(s.counts));
 const close = (a, b, tol, what) => assert.ok(Math.abs(a - b) < tol, `${what}: ${a} vs ${b}`);
+const wv = [0, data.weights.wBB, data.weights.wHBP, data.weights.w1B, data.weights.w2B, data.weights.w3B, data.weights.wHR, 0, 0, 0, 0];
+const woba = (q) => q.reduce((s, x, i) => s + x * wv[i], 0) / q.reduce((s, x) => s + x, 0);
+// the pitching the page builds, for a pitcher row of the data file
+const vsOf = (row, mode, hook = 27) => ({ sp: pitcherOf(row[4], row[8], row[3], { mode, league }),
+  pen: hook < 27 ? bullpenOf(data.pitching.relief, data.pitching.relief_cells, { mode, league }) : null, hook });
+// an MLB-average pitcher of one hand: every 2026 pitcher of that hand pooled
+const pooled = (hand) => {
+  const cells = { L: data.pitching.cells[hand + "L"], R: data.pitching.cells[hand + "R"] };
+  return [0, "MLB-average", "", hand, cells.L.map((x, i) => x + cells.R[i]), 0, 0, 0, cells];
+};
+const spotOf = (s, mode) => hitterOf(s.counts, s.cells, { mode, league });
 
 check("log5: a league-average pitcher changes nothing, and a league-average hitter takes the pitcher's rates", () => {
   for (const b of mlbP) {
-    log5(b, league, league).forEach((x, i) => close(x, b[i], 1e-12, `spot outcome ${i}`));
-    const q = log5(b, aceP, league);
+    log5(b, league.all, league.all).forEach((x, i) => close(x, b[i], 1e-12, `spot outcome ${i}`));
+    const q = log5(b, aceP, league.all);
     close(q.reduce((s, x) => s + x, 0), 1, 1e-12, "sums to 1");
   }
-  log5(league, aceP, league).forEach((x, i) => close(x, aceP[i], 1e-12, `outcome ${i}`));
+  log5(league.all, aceP, league.all).forEach((x, i) => close(x, aceP[i], 1e-12, `outcome ${i}`));
   // more strikeouts against a pitcher who strikes out more than the league
   const ks = probs(data.pitchers.reduce((a, p) => (p[5] >= 400 && p[4][0] / p[5] > a[4][0] / a[5] ? p : a), ace)[4]);
-  assert.ok(log5(mlbP[3], ks, league)[0] > mlbP[3][0], "K against a strikeout pitcher");
+  assert.ok(log5(mlbP[3], ks, league.all)[0] > mlbP[3][0], "K against a strikeout pitcher");
+});
+
+check("platoon data: every split adds up, and the league has the usual platoon gap", () => {
+  const sum = (cells) => CATS.map((_, i) => Object.values(cells).reduce((t, c) => t + c[i], 0));
+  for (const row of data.players) assert.deepEqual(sum(row[5]), row[3], `${row[1]}`);
+  for (const row of data.pitchers) assert.deepEqual(sum(row[8]), row[4], `${row[1]}`);
+  for (const s of [...data.mlb.spots, ...data.teams.flatMap((t) => t.spots)]) assert.deepEqual(sum(s.cells), s.counts);
+  const c = league.cells;
+  // hitters do worse against a pitcher of their own hand, and strike out more
+  assert.ok(woba(c.LL) < woba(c.RL) - 0.015 && woba(c.RR) < woba(c.LR) - 0.01, "wOBA, same hand vs opposite");
+  assert.ok(c.LL[0] > c.RL[0] && c.RR[0] > c.LR[0], "K%, same hand vs opposite");
+  // switch hitters (nearly all of them; the splits use the side actually batted from) bat
+  // from the other side to the pitcher
+  const sw = data.players.filter((r) => r[6] === "S" && r[3].reduce((a, b) => a + b, 0) > 200);
+  const opposite = sw.filter((row) => {
+    const pa = (k) => (row[5][k] ?? []).reduce((a, b) => a + b, 0);
+    return pa("RL") + pa("LR") > 0.95 * (pa("RL") + pa("LR") + pa("RR") + pa("LL"));
+  });
+  assert.ok(sw.length > 20 && opposite.length >= 0.9 * sw.length, `${opposite.length} of ${sw.length}`);
+});
+
+check("platoon builders: an MLB-average right-hander leaves every spot at its own rates against righties", () => {
+  const R = pooled("R"), vsR = pitcherOf(R[4], R[8], "R", { mode: "own", league });
+  for (const s of data.mlb.spots) {
+    const own = probs(CATS.map((_, i) => (s.cells.RL?.[i] ?? 0) + (s.cells.RR?.[i] ?? 0)));
+    facing(spotOf(s, "own"), vsR).forEach((x, i) => close(x, own[i], 1e-12, `outcome ${i}`));
+  }
+  // with splits off, a pitcher is his overall rates against the hitter's overall rates, as before
+  const off = facing(spotOf(data.mlb.spots[0], "off"), vsOf(ace, "off").sp);
+  log5(mlbP[0], aceP, league.all).forEach((x, i) => close(x, off[i], 1e-12, `off, outcome ${i}`));
+  // league-average gaps: averaged over the matchups he had, a pitcher is about his overall self
+  const lg = vsOf(lefty, "league").sp[0], n = (s) => lefty[8][s].reduce((a, b) => a + b, 0);
+  const avg = CATS.map((_, i) => (n("L") * lg.p.L[i] + n("R") * lg.p.R[i]) / (n("L") + n("R")));
+  probs(lefty[4]).forEach((x, i) => close(avg[i], x, 0.003, `league gaps, outcome ${i}`));
+  // a switch hitter with no plate appearances against lefties is taken to bat right against them
+  const sw = hitterOf([10, 5, 0, 15, 5, 0, 3, 20, 7, 12, 3], { RL: [10, 5, 0, 15, 5, 0, 3, 20, 7, 12, 3] }, { mode: "own", league, bats: "S" });
+  assert.equal(sw.parts.L[0].side, "R");
+  assert.equal(sw.parts.R[0].side, "L");
+  // Small samples pulls a thin split toward the player's own season (with the league's gap),
+  // not toward the league: a right-handed regular with 500 PA against righties and 3
+  // strikeouts in 3 PA against lefties
+  const rr = league.cells.RR.map((x) => Math.round(x * 500)), lr = [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const thin = (mode) => hitterOf(rr.map((x, i) => x + lr[i]), { RR: rr, LR: lr }, { mode, league, regress: 200, bats: "R" }).parts.L[0].b;
+  const own = thin("own"), gap = thin("league");
+  own.forEach((x, i) => close(x, gap[i], 0.02, `thin split, outcome ${i}`));
+  assert.ok(own[0] > gap[0] && own[0] < 0.25, "the 3 strikeouts count for a little");
 });
 
 check("the exact line (expectedLine) agrees with expectedRuns and with the simulated MLB lineup", () => {
   const w = data.weights;
-  const line = expectedLine(chain, mlbP.map((p) => matchup(chain, p, null, true)), null, w);
+  const line = expectedLine(chain, mlbP.map((p) => matchup(chain, { all: p }, null, true)), 27, w);
   close(line.R, exact(mlbP), 1e-9, "runs");
   for (const k of ["AVG", "OBP", "SLG", "wOBA"]) close(line[k], data.sims.mlb[k], 0.002, k);
   for (const k of ["H", "HR", "K", "BB", "PA27"]) close(line[k] / data.sims.mlb[k], 1, 0.01, k);
 });
 
-check("against a pitcher, exact and simulated agree: all nine innings, and a starter's hook with the bullpen after", () => {
+check("against a pitcher, exact and simulated agree: splits off and on, nine innings or a hook and the bullpen", () => {
   const w = data.weights;
-  const whole = { p: aceP, pen: null, league, hook: 27 };
-  const start = { p: aceP, pen: relief, league, hook: Math.round(ace[7] / ace[6]) };
-  for (const vs of [whole, start]) {
-    const sim = simulate(model, mlbP.map((p) => cumulative(log5(p, vs.p, league))), 100000, 11,
-      vs.pen ? mlbP.map((p) => cumulative(log5(p, vs.pen, league))) : null, vs.hook);
+  const hook = Math.round(ace[7] / ace[6]);
+  for (const [mode, h] of [["off", 27], ["off", hook], ["own", 27], ["own", hook], ["league", hook]]) {
+    const vs = vsOf(mode === "off" ? ace : lefty, mode, h);
+    const hs = data.mlb.spots.map((s) => spotOf(s, mode));
+    const sim = simulate(model, hs.map((x) => cumulative(facing(x, vs.sp))), 100000, 11,
+      vs.pen ? hs.map((x) => cumulative(facing(x, vs.pen))) : null, vs.hook);
     const s = summarize(sim.totals, w);
-    const ex = expectedLine(chain, mlbP.map((p) => matchup(chain, p, vs, true)), vs, w);
-    close(ex.R, lineupRuns(chain, mlbP.map((p) => matchup(chain, p, vs)), vs), 1e-9, "line vs runs");
-    close(s.R, ex.R, 0.05, `R, hook ${vs.hook}`);
-    for (const k of ["AVG", "OBP", "SLG", "wOBA"]) close(s[k], ex[k], 0.002, `${k}, hook ${vs.hook}`);
-    close(s.K, ex.K, 0.06, `K, hook ${vs.hook}`);
+    const ex = expectedLine(chain, hs.map((x) => matchup(chain, x, vs, true)), vs.hook, w);
+    close(ex.R, lineupRuns(chain, hs.map((x) => matchup(chain, x, vs)), vs.hook), 1e-9, `line vs runs, ${mode} ${h}`);
+    close(s.R, ex.R, 0.05, `R, ${mode} ${h}`);
+    for (const k of ["AVG", "OBP", "SLG", "wOBA"]) close(s[k], ex[k], 0.002, `${k}, ${mode} ${h}`);
+    close(s.K, ex.K, 0.06, `K, ${mode} ${h}`);
   }
   // the hook's edge cases: after the last out is the same as no bullpen; at 0, all bullpen
-  const m = mlbP.map((p) => matchup(chain, p, start));
+  const vs = vsOf(lefty, "own", 16);
+  const m = data.mlb.spots.map((s) => matchup(chain, spotOf(s, "own"), vs));
   const sp = m.map((x) => x.sp), pen = m.map((x) => x.pen);
   close(expectedRuns(chain, sp, 9, pen, 27), expectedRuns(chain, sp), 1e-12, "hook 27");
   close(expectedRuns(chain, sp, 9, pen, 0), expectedRuns(chain, pen), 1e-12, "hook 0");
-  // a later hook means more of the ace and fewer runs
+  // a later hook means more of a good starter and fewer runs
   assert.ok(expectedRuns(chain, sp, 9, pen, 18) < expectedRuns(chain, sp, 9, pen, 17), "17 vs 18 outs");
   // a league-average pitcher is no pitcher at all
-  close(lineupRuns(chain, mlbP.map((p) => matchup(chain, p, { p: league, pen: null, league, hook: 27 })),
-    { p: league, pen: null, league, hook: 27 }), exact(mlbP), 1e-9, "league-average pitcher");
+  const flat = { sp: [{ w: 1, hand: "", p: { "": league.all }, l: { "": league.all } }], pen: null, hook: 27 };
+  close(lineupRuns(chain, mlbP.map((p) => matchup(chain, { all: p }, flat)), 27), exact(mlbP), 1e-9, "league-average pitcher");
 });
 
-check("against a pitcher, the optimizer matches brute force: batting order of five spots", () => {
-  const vs = { p: aceP, pen: relief, league, hook: 16 };
-  const team = data.teams.find((t) => t.abbr === "LAD").spots.map((s) => ({ probs: probs(s.counts) }));
-  const ms = team.map((h) => matchup(chain, h.probs, vs));
+check("against a pitcher, the optimizer matches brute force: batting order of five spots, with platoon splits", () => {
+  const vs = vsOf(lefty, "own", 16);
+  const team = data.teams.find((t) => t.abbr === "LAD").spots.map((s) => spotOf(s, "own"));
+  const ms = team.map((h) => matchup(chain, h, vs));
   let best = -1;
   const perm = (arr, k = 0) => {
     if (k === arr.length) {
-      best = Math.max(best, lineupRuns(chain, [0, 1, ...arr, 7, 8].map((h) => ms[h]), vs));
+      best = Math.max(best, lineupRuns(chain, [0, 1, ...arr, 7, 8].map((h) => ms[h]), vs.hook));
       return;
     }
     for (let i = k; i < arr.length; i++) {
@@ -234,7 +297,13 @@ check("against a pitcher, the optimizer matches brute force: batting order of fi
   perm([2, 3, 4, 5, 6]);
   const r = optimize(chain, team, { order: true, tilt: false, locked: [0, 1, 7, 8], vs, ...axis });
   assert.ok(r.after >= best - 1e-9, `optimizer ${r.after} vs brute force ${best}`);
-  close(r.before, lineupRuns(chain, ms, vs), 1e-12, "the search's starting value");
+  close(r.before, lineupRuns(chain, ms, vs.hook), 1e-12, "the search's starting value");
+  // and a movable spot is tilted inside the search exactly as facing() tilts it
+  const mv = data.mlb.spots.map((s, i) => ({ ...spotOf(s, "own"), theta: i === 2 ? 1.5 : null }));
+  const t = optimize(chain, mv, { order: false, tilt: true, mix: "free", locked: [0, 1, 3, 4, 5, 6, 7, 8], vs, ...axis });
+  const th = t.theta[2];
+  const want = lineupRuns(chain, mv.map((h, i) => matchup(chain, h, vs, false, i === 2 ? th : 0, T.per_sd)), vs.hook);
+  close(t.after, want, 1e-12, "tilted inside the search");
 });
 
 console.log(`${n} checks passed`);
