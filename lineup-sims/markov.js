@@ -11,11 +11,11 @@
 // same hitter due up next inning), then the hitter's outcome and the runners' moves.
 //
 // Against a given pitcher, each hitter's chances are first combined with the pitcher's by
-// log5, platoon splits and all (facing() in sim.js). A starter who leaves after a set
-// number of outs hands over to the bullpen: innings before that use the hitters against
-// him, innings after use them against the bullpen, and the inning he leaves in uses him
-// while fewer than that many outs are made in it.
-import { facing, summarize } from "./sim.js?v=4";
+// log5, platoon splits and all (facing() in sim.js). The pitching comes in stages: the
+// starter, then whoever takes over at a set number of outs into the game (a follower, the
+// bullpen). An inning one of them has to himself uses the hitters against him; an inning
+// with a change in it uses, from each state, whoever is pitching at that state's outs.
+import { facing, summarize } from "./sim.js?v=5";
 
 const NS = 24;
 const NY = 13; // a plate appearance's tallies for expectedLine: PA, the eleven outcomes, sacrifice flies
@@ -96,29 +96,33 @@ export function hitterBlock(tab, probs, line = false) {
 
 // A hitter's blocks against the pitching the lineup faces. `hitter` is as for facing()
 // ({ all, parts }); `vs` is null for MLB-average pitching, or { sp: the starter's pitching,
-// pen: the bullpen's (null when he pitches the whole game), hook: outs into the game when
-// the bullpen takes over }, each pitching as facing() takes it. `theta` moves the hitter
-// along the contact-power axis (perSd) first.
+// relief: [{ from, pitching }] }: who takes over later, in order, each at `from` outs into
+// the game (empty when he pitches the whole game), every pitching as facing() takes it.
+// `theta` moves the hitter along the contact-power axis (perSd) first. The blocks:
+// { sp, relief: [{ from, block }] }.
 export function matchup(tab, hitter, vs = null, line = false, theta = 0, perSd = null) {
   return { sp: hitterBlock(tab, facing(hitter, vs?.sp ?? null, theta, perSd), line),
-    pen: vs?.pen ? hitterBlock(tab, facing(hitter, vs.pen, theta, perSd), line) : null };
+    relief: (vs?.relief ?? []).map((r) => ({ from: r.from, block: hitterBlock(tab, facing(hitter, r.pitching, theta, perSd), line) })) };
 }
 
-// Exact expected runs for nine hitters' matchup() blocks in batting order; the bullpen
-// (when the blocks have one) takes over after `hook` outs.
-export function lineupRuns(tab, ms, hook = 27) {
-  return expectedRuns(tab, ms.map((m) => m.sp), 9, ms[0].pen ? ms.map((m) => m.pen) : null, hook);
+// the relief stages of nine hitters' matchup() blocks, as expectedRuns() takes them
+const reliefOf = (ms) => (ms[0].relief ?? []).map((r, i) => ({ from: r.from, blocks: ms.map((m) => m.relief[i].block) }));
+
+// Exact expected runs for nine hitters' matchup() blocks in batting order, relief and all.
+export function lineupRuns(tab, ms) {
+  return expectedRuns(tab, ms.map((m) => m.sp), 9, reliefOf(ms));
 }
 
-// Expected runs over `innings` innings for nine hitter blocks in batting order, and with
-// `pen` (the nine against the bullpen) the bullpen taking over once `hook` outs are made.
-// Within an inning: V_k = R_k + Q_k V_(k+1) (expected runs to the inning's end with
-// hitter k due up) and N_k, the chance each hitter leads off the next inning, solved by
-// sweeping round the order until nothing moves. Then innings chain through N.
-export function expectedRuns(tab, blocks, innings = 9, pen = null, hook = innings * 3) {
+// Expected runs over `innings` innings for nine hitter blocks in batting order, against
+// the starter and then each of `relief` ([{ from, blocks }], the nine against that pitching)
+// from `from` outs into the game. Within an inning: V_k = R_k + Q_k V_(k+1) (expected runs
+// to the inning's end with hitter k due up) and N_k, the chance each hitter leads off the
+// next inning, solved by sweeping round the order until nothing moves. Then innings chain
+// through N.
+export function expectedRuns(tab, blocks, innings = 9, relief = []) {
   let lead = new Float64Array(9), total = 0;
   lead[0] = 1;
-  for (const { V, N } of byInning(tab, blocks, innings, pen, hook, solve)) {
+  for (const { V, N } of byInning(tab, [{ from: 0, blocks }, ...relief], innings, solve)) {
     const next = new Float64Array(9);
     for (let k = 0; k < 9; k++) {
       if (!lead[k]) continue;
@@ -130,26 +134,35 @@ export function expectedRuns(tab, blocks, innings = 9, pen = null, hook = inning
   return total;
 }
 
-// The solved inning for each inning of the game: the starter's until the inning the hook
-// falls in, that inning split at the hook, then the bullpen's.
-function byInning(tab, blocks, innings, pen, hook, solver) {
-  const k = pen ? Math.max(0, Math.min(innings, Math.floor(hook / 3))) : innings, j = pen ? hook % 3 : 0;
-  const sp = k > 0 ? solver(tab, blocks) : null;
-  const bp = k < innings ? solver(tab, pen) : null;
-  const mid = j && k < innings ? solver(tab, blocks.map((b, h) => splitBlock(b, pen[h], j))) : null;
-  return Array.from({ length: innings }, (_, i) => (i < k ? sp : i === k && mid ? mid : bp));
+// The solved inning for each inning of the game. `stages`: the pitching in order, each
+// { from, blocks } (the first from 0), a stage taking over from the plate appearance that
+// starts with `from` outs made in the game, as in the simulation. An inning one stage has
+// to itself is solved on its blocks; an inning with a change in it, on blocks that step
+// from each state by whoever pitches at its outs. Innings alike are solved once.
+function byInning(tab, stages, innings, solver) {
+  const at = (o) => stages.reduce((k, st, i) => (o >= st.from ? i : k), 0);
+  const solved = new Map();
+  return Array.from({ length: innings }, (_, i) => {
+    const ks = [0, 1, 2].map((j) => at(i * 3 + j));
+    const key = ks.join();
+    if (!solved.has(key)) {
+      solved.set(key, solver(tab, ks[0] === ks[2] ? stages[ks[0]].blocks
+        : stages[0].blocks.map((_, h) => splitBlock(ks.map((k) => stages[k].blocks[h])))));
+    }
+    return solved.get(key);
+  });
 }
 
-// a hitter's step against the starter from states with fewer than j outs, the bullpen from the rest
-function splitBlock(a, b, j) {
-  const Q = Float64Array.from(b.Q), A = Float64Array.from(b.A), R = Float64Array.from(b.R);
-  const Y = b.Y ? Float64Array.from(b.Y) : null;
+// a hitter's step from each state against whoever pitches at its outs: bs[j] from states with j outs
+function splitBlock(bs) {
+  const Q = new Float64Array(NS * NS), A = new Float64Array(NS), R = new Float64Array(NS);
+  const Y = bs[0].Y ? new Float64Array(NS * NY) : null;
   for (let s = 0; s < NS; s++) {
-    if (s % 3 >= j) continue;
-    Q.set(a.Q.subarray(s * NS, (s + 1) * NS), s * NS);
-    A[s] = a.A[s];
-    R[s] = a.R[s];
-    if (Y) Y.set(a.Y.subarray(s * NY, (s + 1) * NY), s * NY);
+    const b = bs[s % 3];
+    Q.set(b.Q.subarray(s * NS, (s + 1) * NS), s * NS);
+    A[s] = b.A[s];
+    R[s] = b.R[s];
+    if (Y) Y.set(b.Y.subarray(s * NY, (s + 1) * NY), s * NY);
   }
   return { Q, A, R, Y };
 }
@@ -222,11 +235,11 @@ function solveLine(tab, blocks) {
 
 // The expected nine-inning line of a lineup, exactly: summarize()'s numbers for nine
 // matchup() blocks built with `line`, as a simulation would average them over endless games.
-export function expectedLine(tab, ms, hook, w, innings = 9) {
+export function expectedLine(tab, ms, w, innings = 9) {
   const tot = new Float64Array(NV);
   let lead = new Float64Array(9);
   lead[0] = 1;
-  const plan = byInning(tab, ms.map((m) => m.sp), innings, ms[0].pen ? ms.map((m) => m.pen) : null, hook ?? innings * 3, solveLine);
+  const plan = byInning(tab, [{ from: 0, blocks: ms.map((m) => m.sp) }, ...reliefOf(ms)], innings, solveLine);
   for (const { V, N } of plan) {
     const next = new Float64Array(9);
     for (let k = 0; k < 9; k++) {
@@ -242,11 +255,11 @@ export function expectedLine(tab, ms, hook, w, innings = 9) {
 }
 
 // expectedLine for several lineups whose matchups are already worked out: nine
-// { sp, pen } each, the hitter's chances against the starter and the bullpen (pen null
-// when the starter goes nine)
-export function expectedLines(tab, lineups, hook, w) {
+// { sp, relief } each, the hitter's chances against the starter and against each relief
+// stage in turn (relief empty when the starter goes nine), which take over at `from` outs
+export function expectedLines(tab, lineups, from, w) {
   return lineups.map((l) => expectedLine(tab, l.map((x) => ({ sp: hitterBlock(tab, x.sp, true),
-    pen: x.pen ? hitterBlock(tab, x.pen, true) : null })), hook, w));
+    relief: x.relief.map((p, i) => ({ from: from[i], block: hitterBlock(tab, p, true) })) })), w));
 }
 
 // Best batting order and contact-power settings by exact expected runs.
@@ -293,7 +306,6 @@ function search(tab, hitters, opts, progress) {
   const { order = true, tilt: doTilt = true, mix = "same", locked = [], perSd, range, vs = null } = opts;
   const lim = Math.round(range * 10);
   const tenth = hitters.map((h) => (h.theta != null ? Math.round(h.theta * 10) : null));
-  const hook = vs?.hook ?? 27;
   const slot = hitters.map((_, i) => i); // slot -> hitter
   const free = slot.filter((s) => !locked.includes(s));
   const movable = free.filter((s) => tenth[s] != null); // hitters; locked slots never move
@@ -308,7 +320,7 @@ function search(tab, hitters, opts, progress) {
   };
   const value = () => {
     if (++evals % 250 === 0) progress(evals);
-    return lineupRuns(tab, slot.map(block), hook);
+    return lineupRuns(tab, slot.map(block));
   };
   const start = value();
   let best = start;
@@ -385,5 +397,5 @@ function search(tab, hitters, opts, progress) {
     if (!a && !b) break;
   }
   return { slot, theta: tenth.map((t) => (t == null ? null : t / 10)), before: start,
-    after: lineupRuns(tab, slot.map(block), hook), evals };
+    after: lineupRuns(tab, slot.map(block)), evals };
 }

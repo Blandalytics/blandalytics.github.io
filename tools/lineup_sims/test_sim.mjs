@@ -163,7 +163,7 @@ check("the optimizer keeps locked spots, the total setting, and the sliders' ran
   assert.ok(free.after >= r.after - 1e-9, "free can only do better than the same mix");
 });
 
-// ---- the opposing pitcher: log5 matchups, platoon splits, a starter's hook and the bullpen ----
+// ---- the opposing pitcher: log5 matchups, platoon splits, and who takes over when ----
 const league = { all: probs(data.pitching.league),
   cells: Object.fromEntries(Object.entries(data.pitching.cells).map(([k, c]) => [k, probs(c)])) };
 const relief = probs(data.pitching.relief);
@@ -174,9 +174,14 @@ const mlbP = data.mlb.spots.map((s) => probs(s.counts));
 const close = (a, b, tol, what) => assert.ok(Math.abs(a - b) < tol, `${what}: ${a} vs ${b}`);
 const wv = [0, data.weights.wBB, data.weights.wHBP, data.weights.w1B, data.weights.w2B, data.weights.w3B, data.weights.wHR, 0, 0, 0, 0];
 const woba = (q) => q.reduce((s, x, i) => s + x * wv[i], 0) / q.reduce((s, x) => s + x, 0);
-// the pitching the page builds, for a pitcher row of the data file
+// the pitching the page builds, for a pitcher row of the data file: him, then (with a hook
+// under 27 outs) MLB's bullpen
 const vsOf = (row, mode, hook = 27) => ({ sp: pitcherOf(row[4], row[8], row[3], { mode, league }),
-  pen: hook < 27 ? bullpenOf(data.pitching.relief, data.pitching.relief_cells, { mode, league }) : null, hook });
+  relief: hook < 27 ? [{ from: hook, pitching: bullpenOf(data.pitching.relief, data.pitching.relief_cells, { mode, league }) }] : [] });
+// a bullpen (a team's, or bulk relief) from its cells, as the page builds it
+const penOf = (cells, mode) => bullpenOf(CATS.map((_, i) => Object.values(cells).reduce((t, c) => t + c[i], 0)), cells, { mode, league });
+// the lineup against each relief stage, for simulate()
+const reliefSim = (hs, vs) => vs.relief.map((r) => ({ from: r.from, lineup: hs.map((x) => cumulative(facing(x, r.pitching))) }));
 // an MLB-average pitcher of one hand: every 2026 pitcher of that hand pooled
 const pooled = (hand) => {
   const cells = { L: data.pitching.cells[hand + "L"], R: data.pitching.cells[hand + "R"] };
@@ -244,7 +249,7 @@ check("platoon builders: an MLB-average right-hander leaves every spot at its ow
 
 check("the exact line (expectedLine) agrees with expectedRuns and with the simulated MLB lineup", () => {
   const w = data.weights;
-  const line = expectedLine(chain, mlbP.map((p) => matchup(chain, { all: p }, null, true)), 27, w);
+  const line = expectedLine(chain, mlbP.map((p) => matchup(chain, { all: p }, null, true)), w);
   close(line.R, exact(mlbP), 1e-9, "runs");
   for (const k of ["AVG", "OBP", "SLG", "wOBA"]) close(line[k], data.sims.mlb[k], 0.002, k);
   for (const k of ["H", "HR", "K", "BB", "PA27"]) close(line[k] / data.sims.mlb[k], 1, 0.01, k);
@@ -256,11 +261,10 @@ check("against a pitcher, exact and simulated agree: splits off and on, nine inn
   for (const [mode, h] of [["off", 27], ["off", hook], ["own", 27], ["own", hook], ["league", hook]]) {
     const vs = vsOf(mode === "off" ? ace : lefty, mode, h);
     const hs = data.mlb.spots.map((s) => spotOf(s, mode));
-    const sim = simulate(model, hs.map((x) => cumulative(facing(x, vs.sp))), 100000, 11,
-      vs.pen ? hs.map((x) => cumulative(facing(x, vs.pen))) : null, vs.hook);
+    const sim = simulate(model, hs.map((x) => cumulative(facing(x, vs.sp))), 100000, 11, reliefSim(hs, vs));
     const s = summarize(sim.totals, w);
-    const ex = expectedLine(chain, hs.map((x) => matchup(chain, x, vs, true)), vs.hook, w);
-    close(ex.R, lineupRuns(chain, hs.map((x) => matchup(chain, x, vs)), vs.hook), 1e-9, `line vs runs, ${mode} ${h}`);
+    const ex = expectedLine(chain, hs.map((x) => matchup(chain, x, vs, true)), w);
+    close(ex.R, lineupRuns(chain, hs.map((x) => matchup(chain, x, vs))), 1e-9, `line vs runs, ${mode} ${h}`);
     close(s.R, ex.R, 0.05, `R, ${mode} ${h}`);
     for (const k of ["AVG", "OBP", "SLG", "wOBA"]) close(s[k], ex[k], 0.002, `${k}, ${mode} ${h}`);
     close(s.K, ex.K, 0.06, `K, ${mode} ${h}`);
@@ -268,14 +272,15 @@ check("against a pitcher, exact and simulated agree: splits off and on, nine inn
   // the hook's edge cases: after the last out is the same as no bullpen; at 0, all bullpen
   const vs = vsOf(lefty, "own", 16);
   const m = data.mlb.spots.map((s) => matchup(chain, spotOf(s, "own"), vs));
-  const sp = m.map((x) => x.sp), pen = m.map((x) => x.pen);
-  close(expectedRuns(chain, sp, 9, pen, 27), expectedRuns(chain, sp), 1e-12, "hook 27");
-  close(expectedRuns(chain, sp, 9, pen, 0), expectedRuns(chain, pen), 1e-12, "hook 0");
+  const sp = m.map((x) => x.sp), pen = m.map((x) => x.relief[0].block);
+  const at = (from) => expectedRuns(chain, sp, 9, [{ from, blocks: pen }]);
+  close(at(27), expectedRuns(chain, sp), 1e-12, "hook 27");
+  close(at(0), expectedRuns(chain, pen), 1e-12, "hook 0");
   // a later hook means more of a good starter and fewer runs
-  assert.ok(expectedRuns(chain, sp, 9, pen, 18) < expectedRuns(chain, sp, 9, pen, 17), "17 vs 18 outs");
+  assert.ok(at(18) < at(17), "17 vs 18 outs");
   // a league-average pitcher is no pitcher at all
-  const flat = { sp: [{ w: 1, hand: "", p: { "": league.all }, l: { "": league.all } }], pen: null, hook: 27 };
-  close(lineupRuns(chain, mlbP.map((p) => matchup(chain, { all: p }, flat)), 27), exact(mlbP), 1e-9, "league-average pitcher");
+  const flat = { sp: [{ w: 1, hand: "", p: { "": league.all }, l: { "": league.all } }], relief: [] };
+  close(lineupRuns(chain, mlbP.map((p) => matchup(chain, { all: p }, flat))), exact(mlbP), 1e-9, "league-average pitcher");
 });
 
 check("against a pitcher, the optimizer matches brute force: batting order of five spots, with platoon splits", () => {
@@ -285,7 +290,7 @@ check("against a pitcher, the optimizer matches brute force: batting order of fi
   let best = -1;
   const perm = (arr, k = 0) => {
     if (k === arr.length) {
-      best = Math.max(best, lineupRuns(chain, [0, 1, ...arr, 7, 8].map((h) => ms[h]), vs.hook));
+      best = Math.max(best, lineupRuns(chain, [0, 1, ...arr, 7, 8].map((h) => ms[h])));
       return;
     }
     for (let i = k; i < arr.length; i++) {
@@ -297,13 +302,50 @@ check("against a pitcher, the optimizer matches brute force: batting order of fi
   perm([2, 3, 4, 5, 6]);
   const r = optimize(chain, team, { order: true, tilt: false, locked: [0, 1, 7, 8], vs, ...axis });
   assert.ok(r.after >= best - 1e-9, `optimizer ${r.after} vs brute force ${best}`);
-  close(r.before, lineupRuns(chain, ms, vs.hook), 1e-12, "the search's starting value");
+  close(r.before, lineupRuns(chain, ms), 1e-12, "the search's starting value");
   // and a movable spot is tilted inside the search exactly as facing() tilts it
   const mv = data.mlb.spots.map((s, i) => ({ ...spotOf(s, "own"), theta: i === 2 ? 1.5 : null }));
   const t = optimize(chain, mv, { order: false, tilt: true, mix: "free", locked: [0, 1, 3, 4, 5, 6, 7, 8], vs, ...axis });
   const th = t.theta[2];
-  const want = lineupRuns(chain, mv.map((h, i) => matchup(chain, h, vs, false, i === 2 ? th : 0, T.per_sd)), vs.hook);
+  const want = lineupRuns(chain, mv.map((h, i) => matchup(chain, h, vs, false, i === 2 ? th : 0, T.per_sd)));
   close(t.after, want, 1e-12, "tilted inside the search");
+});
+
+check("pitching data for openers: team bullpens add up to MLB's, and openers, followers and bulk relief look right", () => {
+  const P = data.pitching, sum = (cells) => CATS.map((_, i) => Object.values(cells).reduce((t, c) => t + c[i], 0));
+  assert.equal(Object.keys(P.teams).length, 30);
+  assert.deepEqual(CATS.map((_, i) => Object.values(P.teams).reduce((t, c) => t + sum(c)[i], 0)), P.relief, "team bullpens");
+  assert.ok(P.opener.games >= 50 && P.opener.outs >= 1 && P.opener.outs <= 6, `opener ${JSON.stringify(P.opener)}`);
+  assert.ok(P.follower.games >= 30 && P.follower.games <= P.opener.games && P.follower.outs >= 9, `follower ${JSON.stringify(P.follower)}`);
+  assert.ok(P.bulk.outings >= P.follower.games && sum(P.bulk.cells).reduce((a, b) => a + b, 0) > 5000, "bulk relief");
+  // a bullpen's hand shares add to 1; full-time starters have the most bulk outings
+  for (const cells of [P.teams.DET, P.bulk.cells]) close(penOf(cells, "own").reduce((t, c) => t + c.w, 0), 1, 1e-12, "hand shares");
+  const top = [...data.pitchers].sort((a, b) => b[9] - a[9]).slice(0, 20);
+  assert.ok(top.every((r) => r[6] >= 20), "the top bulk arms are starters");
+});
+
+check("opener, follower, bullpen: exact and simulated agree, and stages behave at their edges", () => {
+  const w = data.weights, mode = "own";
+  const hs = data.mlb.spots.map((s) => spotOf(s, mode));
+  const opener = pitcherOf(lefty[4], lefty[8], lefty[3], { mode, league });
+  const follow = pitcherOf(ace[4], ace[8], ace[3], { mode, league });
+  const pen = penOf(data.pitching.teams.DET, mode);
+  // a typical opener and follower, and two changes inside one inning (after the 4th and 5th outs)
+  for (const [f, b] of [[data.pitching.opener.outs, data.pitching.opener.outs + data.pitching.follower.outs], [4, 5]]) {
+    const vs = { sp: opener, relief: [{ from: f, pitching: follow }, { from: b, pitching: pen }] };
+    const sim = summarize(simulate(model, hs.map((x) => cumulative(facing(x, vs.sp))), 100000, 13, reliefSim(hs, vs)).totals, w);
+    const ex = expectedLine(chain, hs.map((x) => matchup(chain, x, vs, true)), w);
+    close(ex.R, lineupRuns(chain, hs.map((x) => matchup(chain, x, vs))), 1e-9, `line vs runs, ${f}/${b}`);
+    close(sim.R, ex.R, 0.05, `R, ${f}/${b}`);
+    for (const k of ["AVG", "OBP", "SLG", "wOBA"]) close(sim[k], ex[k], 0.002, `${k}, ${f}/${b}`);
+  }
+  const ms = (relief) => hs.map((x) => matchup(chain, x, { sp: opener, relief }));
+  const two = lineupRuns(chain, ms([{ from: 3, pitching: pen }]));
+  // a follower who never gets an out in is no follower; one taking over at 27 never pitches
+  close(lineupRuns(chain, ms([{ from: 3, pitching: follow }, { from: 3, pitching: pen }])), two, 1e-12, "zero-length follower");
+  close(lineupRuns(chain, ms([{ from: 3, pitching: pen }, { from: 27, pitching: follow }])), two, 1e-12, "a stage at 27");
+  // and a follower who is the bullpen is the bullpen
+  close(lineupRuns(chain, ms([{ from: 3, pitching: pen }, { from: 16, pitching: pen }])), two, 1e-12, "follower = bullpen");
 });
 
 console.log(`${n} checks passed`);

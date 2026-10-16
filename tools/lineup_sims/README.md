@@ -75,16 +75,22 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
   even. `test_sim.mjs` checks it against brute force on smaller problems.
 * **Opposing pitcher**: `build.py` also counts every pitcher's batters faced in the same
   eleven outcomes (`pitchers`: id, name, team, hand, counts, batters faced, starts, outs
-  recorded in those starts) and the league's and relievers' totals (`pitching.league`,
-  `pitching.relief`). The page combines hitter and pitcher by log5, outcome by outcome
-  (hitter × pitcher / league, scaled to sum to 1: `log5()` in `sim.js`). The pitcher goes
-  nine innings, or his average start rounded to the nearest out, after which the bullpen
-  pitches at the relievers' rates (`simulate()`'s `pen` and `hook`; in `markov.js` the inning
-  the hook falls in is split by outs). Against a pitcher, the page's team comparison,
-  contact-power curve and optimizer are exact Markov-chain results against him
-  (`expectedLine()`), worked out in the page's worker. `test_sim.mjs` checks log5's
-  identities, exact against simulated with and without a bullpen, and the optimizer against
-  brute force.
+  recorded in those starts, cells, outings of 3+ innings) and the league's and relievers'
+  totals (`pitching.league`, `pitching.relief`), each team's relievers (`pitching.teams`),
+  bulk relief (`pitching.bulk`: relief outings of 3+ innings) and how long openers and their
+  followers went (`pitching.opener`, `pitching.follower`: an opener is a starter who
+  recorded 6 outs or fewer and made under half his appearances as a starter; his follower is
+  the next pitcher when he went 3+ innings; the page uses the medians). The page combines
+  hitter and pitcher by log5, outcome by outcome (hitter × pitcher / league, scaled to sum to
+  1: `log5()` in `sim.js`). He pitches nine innings; his average start, then his team's
+  bullpen or MLB's; a bullpen day (opener, then his team's bullpen); or opener, follower
+  (picked, or bulk relief), then his team's bullpen. `simulate()` takes the later stages as
+  `relief: [{ from, lineup }]`; `markov.js` splits any inning with a change in it by outs.
+  Against a pitcher, the page's team comparison, contact-power curve and optimizer are exact
+  Markov-chain results against him (`expectedLine()`), worked out in the page's worker.
+  `test_sim.mjs` checks log5's identities, exact against simulated with and without a
+  bullpen and with an opener and follower, stage edge cases, the opener data, and the
+  optimizer against brute force.
 * **Platoon splits**: the same counts by cell, the pitcher's hand plus the side the batter
   hit from (`RL`: a lefty against a right-hander; switch hitters by the side they batted
   from), for players (`players[i][5]`, bat side in `[6]`), lineup spots (`cells`), the league
