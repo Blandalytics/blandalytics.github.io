@@ -1083,6 +1083,27 @@ function settingsChart(before, after, wasSlot) {
   $("opt_chart").replaceChildren(svg);
 }
 
+// ---------- reset ----------
+// Everything back to how the page first opens: the MLB-average lineup spots, every
+// option at its default (as written in index.html), sliders at 0, no spots kept as
+// they are, and no search result. The link (URL hash) follows.
+function resetSettings() {
+  const toDefault = (sel) => { sel.selectedIndex = Math.max(0, [...sel.options].findIndex((o) => o.defaultSelected)); };
+  ["team", "kind", "games", "regress", "opt_mix"].forEach((id) => toDefault($(id)));
+  ["opt_order", "opt_tilt"].forEach((id) => { $(id).checked = $(id).defaultChecked; });
+  basis = "actual";
+  document.querySelectorAll(".basis button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.basis === basis)));
+  setMaster(0);
+  locked.clear();
+  document.querySelectorAll("#opt_locks button").forEach((b) => b.setAttribute("aria-pressed", "false"));
+  optJob = null; // a search still running is dropped
+  optDone = null;
+  $("opt_status").textContent = "";
+  sortKey = { k: "R", dir: -1 };
+  $("teams_details").open = false;
+  loadPreset();
+}
+
 // ---------- URL state ----------
 function writeHash() {
   const p = new URLSearchParams({ l: lineup.join(","), g: $("games").value, r: $("regress").value, b: basis,
@@ -1164,6 +1185,7 @@ async function boot() {
     lineup.forEach((_, i) => setTilt(i, 0));
     run();
   });
+  $("reset_all").addEventListener("click", resetSettings);
 
   if (saved) {
     $("kind").querySelector("[value=most_used]").disabled = $("team").value === "MLB";
