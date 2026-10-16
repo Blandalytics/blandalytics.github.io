@@ -540,6 +540,52 @@ function renderPitcher() {
   }
 }
 
+// ---------- Oops! All Ohtanis! ----------
+// Every lineup spot is Shohei Ohtani, and so is the pitcher. Turning it off puts back the
+// lineup and pitching that were there; changing a hitter or the pitcher turns it off.
+const OHTANI = 660271;
+let ohtani = false, beforeOhtani = null;
+const allOhtani = () => lineup.every((id) => id === `p${OHTANI}`) && pitcher?.mlbam === OHTANI;
+function ohtaniNote() {
+  const h = entries.get(`p${OHTANI}`), sp = pitchers.get(`P${OHTANI}`);
+  return `Oops! All Ohtanis! Nine Shohei Ohtanis (${h.pa.toLocaleString()} PA, ${fmtRate(wobaOf(h.counts))} wOBA) against `
+    + `Shohei Ohtani on the mound (${sp.pa.toLocaleString()} batters faced, ${fmtRate(wobaOf(sp.counts))} wOBA against).`;
+}
+
+function setOhtani(on) {
+  if (on === ohtani) return;
+  if (on) {
+    beforeOhtani = { lineup: [...lineup], pitcher, mode, edited, loadedNote, basis, kind: $("kind").value };
+    ohtani = true;
+    // contact vs power works on MLB spots, not hitters
+    if (mode === "tradeoff") mode = $("kind").value = "spots";
+    lineup = Array(9).fill(`p${OHTANI}`);
+    pitcher = pitchers.get(`P${OHTANI}`);
+    edited = false;
+    loadedNote = ohtaniNote();
+    basis = "sim"; // the teams' spots against him too
+  } else {
+    ohtani = false;
+    const b = beforeOhtani;
+    beforeOhtani = null;
+    if (!b) {
+      // turned on by a link: back to no pitcher and the preset the selects name
+      pitcher = null;
+      renderPitcher();
+      loadPreset();
+      return;
+    }
+    ({ mode, edited, loadedNote, basis } = b);
+    lineup = b.lineup;
+    pitcher = b.pitcher;
+    $("kind").value = b.kind;
+  }
+  paintBasis();
+  renderPitcher();
+  renderLineup();
+  run();
+}
+
 // ---------- simulation ----------
 // Runs go to a module worker (sim-worker.js) so the page keeps responding while a long
 // run works. A run can't be stopped partway, so a newer request replaces a busy worker.
@@ -571,6 +617,11 @@ function startWorker() {
 }
 
 function run() {
+  if (ohtani && !allOhtani()) {
+    ohtani = false;
+    beforeOhtani = null;
+  }
+  $("ohtani").checked = ohtani;
   const key = vsKey(), vs = vsOf();
   if (optJob && (lineup.join() !== optJob.ids.join() || key !== optJob.key)) {
     stopSearch(`Search stopped: the ${key !== optJob.key ? "pitching" : "lineup"} changed. Optimize again for this one.`);
@@ -1364,6 +1415,8 @@ function resetSettings() {
   ["team", "kind", "games", "regress", "opt_mix", "p_hook", "platoon"].forEach((id) => toDefault($(id)));
   ["opt_order", "opt_tilt"].forEach((id) => { $(id).checked = $(id).defaultChecked; });
   pitcher = null;
+  ohtani = false;
+  beforeOhtani = null;
   renderPitcher();
   basis = "actual";
   paintBasis();
@@ -1387,6 +1440,7 @@ function writeHash() {
     if ($("p_hook").value === "start") p.set("h", "start");
     if ($("platoon").value !== "own") p.set("pl", $("platoon").value);
   }
+  if (ohtani) p.set("o", "1");
   history.replaceState(null, "", `#${p}`);
 }
 
@@ -1410,7 +1464,7 @@ function readHash() {
   const a = Number(p.get("a"));
   if (Number.isFinite(a)) setMaster(Math.max(-R, Math.min(R, a)));
   if (ids.length === 9 && ids.every((id) => entryOf(id))) {
-    return { ids, edited: p.get("e") === "1" };
+    return { ids, edited: p.get("e") === "1", ohtani: p.get("o") === "1" };
   }
   return null;
 }
@@ -1498,12 +1552,22 @@ async function boot() {
     run();
   });
   $("reset_all").addEventListener("click", resetSettings);
+  // another season's data might not have him both ways
+  $("ohtani_box").hidden = !entries.has(`p${OHTANI}`) || !pitchers.has(`P${OHTANI}`);
+  $("ohtani").addEventListener("change", () => setOhtani($("ohtani").checked));
 
   if (saved) {
     $("kind").querySelector("[value=most_used]").disabled = $("team").value === "MLB";
     lineup = saved.ids;
     edited = saved.edited;
     mode = $("kind").value;
+    if (saved.ohtani && allOhtani()) {
+      ohtani = true;
+      loadedNote = ohtaniNote();
+      renderLineup();
+      run();
+      return;
+    }
     if (!edited && mode !== "tradeoff") { loadPreset(); return; }
     loadedNote = mode === "tradeoff" ? TRADEOFF_NOTE : "";
     renderLineup();
