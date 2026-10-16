@@ -1,5 +1,5 @@
-import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=4";
-import { chainTables, expectedLines, lineupRuns, matchup, optimize } from "./markov.js?v=3";
+import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=5";
+import { chainTables, expectedLines, lineupRuns, matchup, optimize } from "./markov.js?v=4";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -22,7 +22,7 @@ const C = Object.fromEntries(CATS.map((c, i) => [c, i]));
 
 let data, model, prior;     // prior: MLB-average outcome chances, for small samples and log5
 const entries = new Map(); // id -> { id, kind, name, sub, team, counts, pa, search }
-const pitchers = new Map(); // "P<id>" -> { id, mlbam, kind: "pitcher", name, team, throws, counts, cells, pa (BF), gs, startOuts, search }
+const pitchers = new Map(); // "P<id>" -> { id, mlbam, kind: "pitcher", name, team, throws, counts, cells, pa (BF), gs, startOuts, bulk, search }
 let pitcher = null;        // the opposing pitcher; null is MLB-average pitching
 let league = null;         // { all, cells }: MLB's outcome chances overall and in each platoon cell ("RL": LHB vs RHP)
 const tilted = new Map();  // "sMLB-3@-1.5" -> that spot moved 1.5 SD toward contact
@@ -129,8 +129,9 @@ function buildEntries() {
   const totals = data.mlb.spots.reduce((acc, s) => acc.map((x, i) => x + s.counts[i]), CATS.map(() => 0));
   const n = totals.reduce((s, x) => s + x, 0);
   prior = totals.map((x) => x / n);
-  for (const [id, name, team, throws, counts, bf, gs, startOuts, cells] of data.pitchers) {
-    pitchers.set(`P${id}`, { id: `P${id}`, mlbam: id, kind: "pitcher", name, team, throws, counts, cells, pa: bf, gs, startOuts,
+  // bulk: his outings of 3+ innings (starts or relief), for the follower box
+  for (const [id, name, team, throws, counts, bf, gs, startOuts, cells, bulk] of data.pitchers) {
+    pitchers.set(`P${id}`, { id: `P${id}`, mlbam: id, kind: "pitcher", name, team, throws, counts, cells, pa: bf, gs, startOuts, bulk,
       search: fold(`${name} ${team}`) });
   }
   const scaled = (c) => { const t = c.reduce((a, x) => a + x, 0); return c.map((x) => x / t); };
@@ -142,7 +143,7 @@ function buildEntries() {
     const own = data.pitchers.filter((r) => r[3] === hand);
     pitchers.set(`P${hand}HP`, { id: `P${hand}HP`, mlbam: `${hand}HP`, kind: "pitcher", generic: true, name: `MLB-average ${hand}HP`,
       team: "MLB", throws: hand, counts, cells, pa: counts.reduce((a, x) => a + x, 0),
-      gs: own.reduce((t, r) => t + r[6], 0), startOuts: own.reduce((t, r) => t + r[7], 0),
+      gs: own.reduce((t, r) => t + r[6], 0), startOuts: own.reduce((t, r) => t + r[7], 0), bulk: 0,
       search: fold(`mlb average ${hand}hp ${hand === "R" ? "right handed righty" : "left handed lefty"} pitcher`) });
   }
 }
@@ -377,7 +378,9 @@ const smallOf = (e) => (e.kind === "player" ? `${e.team} · ${e.pa} PA · ${fmtR
 
 // A search box with a list of suggestions: find(query) gives [heading, entries] sections,
 // choose(entry) takes one, current() is what the box shows when it isn't being typed in.
-function wireSuggest(input, list, { find, choose: take, current }) {
+// With browse, focusing the box lists find("") before anything is typed; small(entry)
+// is the caption beside each name.
+function wireSuggest(input, list, { find, choose: take, current, browse = false, small = smallOf }) {
   let items = [], active = -1;
   const close = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); active = -1; };
   const choose = (e) => {
@@ -392,7 +395,7 @@ function wireSuggest(input, list, { find, choose: take, current }) {
     });
   };
   const open = () => {
-    const sections = find(input.value);
+    const sections = find(browse && input.value === current() ? "" : input.value);
     items = sections.flatMap(([, arr]) => arr);
     list.replaceChildren();
     const section = (title, arr) => {
@@ -407,9 +410,9 @@ function wireSuggest(input, list, { find, choose: take, current }) {
         li.setAttribute("role", "option");
         const name = document.createElement("span");
         name.textContent = e.name;
-        const small = document.createElement("small");
-        small.textContent = smallOf(e);
-        li.append(name, small);
+        const cap = document.createElement("small");
+        cap.textContent = small(e);
+        li.append(name, cap);
         li.addEventListener("pointerdown", (ev) => { ev.preventDefault(); choose(e); });
         list.append(li);
       }
@@ -420,7 +423,10 @@ function wireSuggest(input, list, { find, choose: take, current }) {
     active = items.length ? 0 : -1;
     paint();
   };
-  input.addEventListener("focus", () => input.select());
+  input.addEventListener("focus", () => {
+    input.select();
+    if (browse) open();
+  });
   // a phone's keyboard covers the bottom half, and the list opens below the box: bring the box to the top
   input.addEventListener("focus", () => {
     if (matchMedia("(pointer: coarse)").matches) setTimeout(() => input.scrollIntoView({ block: "start" }), 300);
@@ -444,25 +450,62 @@ function wireSuggest(input, list, { find, choose: take, current }) {
 }
 
 // ---------- the opposing pitcher ----------
-// He pitches until `hook` outs into the game (27: all nine innings), then the bullpen.
-const hookOf = () => (pitcher && $("p_hook").value === "start" && pitcher.gs > 0 ? Math.round(pitcher.startOuts / pitcher.gs) : 27);
+// He starts, and "He pitches" says who takes over and when (outs into the game):
+//   game       he pitches all nine innings
+//   start      his average 2026 start, then his team's bullpen (start_mlb: MLB's bullpen)
+//   bullpen    a bullpen day: he opens for a typical 2026 opener's outs, then his team's bullpen
+//   follower   he opens, a follower (picked, or MLB-average bulk relief) pitches a typical
+//              follower's outs, then his team's bullpen
+// An MLB-average RHP or LHP has MLB's bullpen. data.pitching has the typical outs, each
+// team's relievers and the bulk relief.
+let follower = null;       // the follower picked for "follower"; null is MLB-average bulk relief
 const fmtIP = (outs) => `${Math.floor(outs / 3)}.${outs % 3}`;
+const startOutsOf = (e) => Math.round(e.startOuts / e.gs);
+const penTeam = () => (pitcher && !pitcher.generic && data.pitching.teams[pitcher.team] ? pitcher.team : "MLB");
+const cellsTotal = (cells) => Object.values(cells).reduce((t, c) => t.map((x, i) => x + c[i]), CATS.map(() => 0));
+// [{ who: "pen" | "mlb" | "follower", from }], in order; empty for all nine innings
+function planOf() {
+  const m = pitcher ? $("p_hook").value : "game", op = data.pitching.opener.outs;
+  if ((m === "start" || m === "start_mlb") && pitcher.gs) return [{ who: m === "start" ? "pen" : "mlb", from: startOutsOf(pitcher) }];
+  if (m === "bullpen") return [{ who: "pen", from: op }];
+  if (m === "follower") return [{ who: "follower", from: op }, { who: "pen", from: op + data.pitching.follower.outs }];
+  return [];
+}
+// The pitching in words: "Skubal for 6.0 innings, then the Tigers bullpen", "Skubal opening
+// (1.0 IP), then Mize (4.1 IP), then the Tigers bullpen"; short: "Skubal + Mize + bullpen".
+function planWords(full = false) {
+  if (!pitcher) return { words: "MLB-average pitching", short: "MLB-average pitching" };
+  const who = full ? pitcher.name : lastName(pitcher.name), plan = planOf();
+  const pen = (st) => (st.who === "mlb" || penTeam() === "MLB" ? "the MLB bullpen" : `the ${teamOf(penTeam()).short} bullpen`);
+  if (!plan.length) return { words: `${who} for all nine innings`, short: who };
+  if (plan[0].who === "follower") {
+    const f = follower ? (full ? follower.name : lastName(follower.name)) : "MLB bulk relief";
+    return { words: `${who} opening (${fmtIP(plan[0].from)} IP), then ${f} (${fmtIP(plan[1].from - plan[0].from)} IP), then ${pen(plan[1])}`,
+      short: `${who} + ${follower ? lastName(follower.name) : "bulk"} + bullpen` };
+  }
+  return { words: $("p_hook").value === "bullpen" ? `${who} opening (${fmtIP(plan[0].from)} IP), then ${pen(plan[0])}`
+    : `${who} for ${fmtIP(plan[0].from)} innings, then ${pen(plan[0])}`, short: `${who} + bullpen` };
+}
 const handOf = (e) => ({ L: "LHP", R: "RHP" })[e.throws] ?? "P";
 const countOf = (c) => (c ? c.reduce((a, x) => a + x, 0) : 0);
 // platoon splits only come into it once a pitcher (and so a hand) is picked
 const platoonOf = () => (pitcher ? $("platoon").value : "off");
 
-// What the matchups need (markov.js's `vs`): the starter's pitching and the bullpen's as
-// facing() takes them (sim.js), or null against MLB-average pitching. Small samples adds
-// MLB-average batters faced to the pitcher as it adds PA to a hitter.
+// What the matchups need (markov.js's `vs`): the starter's pitching, and each later stage's
+// from the outs it takes over at, as facing() takes them (sim.js); null against MLB-average
+// pitching. Small samples adds MLB-average batters faced to a pitcher as it adds PA to a hitter.
 function vsOf() {
   if (!pitcher) return null;
-  const mode = $("platoon").value, hook = hookOf(), regress = pitcher.generic ? 0 : Number($("regress").value);
-  return { sp: pitcherOf(pitcher.counts, pitcher.cells, pitcher.throws, { mode, league, regress }),
-    pen: hook < 27 ? bullpenOf(data.pitching.relief, data.pitching.relief_cells, { mode, league }) : null, hook };
+  const mode = $("platoon").value, regress = Number($("regress").value);
+  const arm = (e) => pitcherOf(e.counts, e.cells, e.throws, { mode, league, regress: e.generic ? 0 : regress });
+  const pen = (cells) => bullpenOf(cellsTotal(cells), cells, { mode, league });
+  const of = { pen: () => pen(penTeam() === "MLB" ? data.pitching.relief_cells : data.pitching.teams[penTeam()]),
+    mlb: () => pen(data.pitching.relief_cells), follower: () => (follower ? arm(follower) : pen(data.pitching.bulk.cells)) };
+  return { sp: arm(pitcher), relief: planOf().map((st) => ({ from: st.from, pitching: of[st.who]() })) };
 }
 // everything vsOf() depends on: results computed against one key don't fit another
-const vsKey = () => (pitcher ? `${pitcher.id}|${hookOf()}|${$("regress").value}|${$("platoon").value}` : "");
+const vsKey = () => (pitcher ? [pitcher.id, planOf().map((st) => `${st.who}@${st.from}`).join(","),
+  $("p_hook").value === "follower" ? follower?.id ?? "bulk" : "", $("regress").value, $("platoon").value].join("|") : "");
 
 // A lineup entry as facing() takes it: its own outcome chances (Small samples applied to
 // hitters), split by platoon cell once a pitcher is picked. A tilted MLB spot comes moved
@@ -491,8 +534,28 @@ function findPitchers(q) {
   return [["2026 pitchers", list.slice(0, 25)]];
 }
 
+// The follower box: the opener's team's bulk arms first (most outings of 3+ innings; all of
+// MLB's for an MLB-average RHP or LHP), then any 2026 pitcher that matches.
+function findFollowers(q) {
+  const team = penTeam(), f = fold(q.trim()), words = f ? f.split(/\s+/) : [];
+  const arms = [...pitchers.values()].filter((e) => !e.generic && e !== pitcher && e.bulk > 0 && (team === "MLB" || e.team === team)
+    && words.every((w) => e.search.includes(w))).sort((a, b) => b.bulk - a.bulk).slice(0, f ? 10 : 25);
+  const head = `${team === "MLB" ? "MLB" : teamOf(team).short} bulk arms · outings of 3+ IP`;
+  if (!f) return [[head, arms]];
+  return [[head, arms], ["2026 pitchers", (findPitchers(q)[0]?.[1] ?? []).filter((e) => !e.generic && e !== pitcher && !arms.includes(e))]];
+}
+const followerSmall = (e) => `${e.team} · ${e.bulk} of 3+ IP · ${fmtRate(wobaOf(e.counts))}`;
+
+function setFollower(e) {
+  follower = e;
+  renderPitcher();
+  run();
+}
+
 function setPitcher(e) {
   pitcher = e;
+  // a follower stays with an opener from his own team (or an MLB-average one)
+  if (follower && (!e || follower === e || (!e.generic && e.team !== follower.team))) follower = null;
   // like for like: the teams' lineup spots against him too
   if (e && basis !== "sim") {
     basis = "sim";
@@ -506,31 +569,47 @@ function setPitcher(e) {
 function renderPitcher() {
   $("p_in").value = pitcher ? pitcher.name : "";
   $("p_clear").hidden = !pitcher;
-  const sel = $("p_hook"), start = sel.querySelector("[value=start]");
+  // every pitcher can open; an average start needs starts, and "then MLB bullpen" a team bullpen to differ from
+  const sel = $("p_hook"), opt = (v) => sel.querySelector(`[value=${v}]`);
+  const team = pitcher && penTeam() !== "MLB" ? teamOf(penTeam()).short : null, pen = `${team ?? "MLB"} bullpen`;
+  const ip = pitcher?.gs ? ` (${fmtIP(startOutsOf(pitcher))} IP)` : "";
+  const op = fmtIP(data.pitching.opener.outs), fo = fmtIP(data.pitching.follower.outs);
   sel.disabled = !pitcher;
-  start.disabled = !pitcher?.gs;
-  if (start.disabled && sel.value === "start") sel.value = "game";
-  start.textContent = pitcher?.gs ? `Average start (${fmtIP(Math.round(pitcher.startOuts / pitcher.gs))} IP), then bullpen`
-    : "Average start, then bullpen";
+  opt("start").textContent = `Average start${ip}, then ${pen}`;
+  opt("start_mlb").textContent = `Average start${ip}, then MLB bullpen`;
+  opt("bullpen").textContent = `Bullpen day: opener (${op} IP), then ${pen}`;
+  opt("follower").textContent = `Opener with follower (${op} + ${fo} IP), then ${pen}`;
+  opt("start").disabled = !pitcher?.gs;
+  opt("start_mlb").disabled = opt("start_mlb").hidden = !pitcher?.gs || !team;
+  if (opt(sel.value).disabled) sel.value = sel.value === "start_mlb" && !opt("start").disabled ? "start" : "game";
   $("platoon").disabled = !pitcher;
-  // his 2026 line in numbers; the lineup table shows each hitter against him
+  const following = !!pitcher && sel.value === "follower";
+  $("f_field").hidden = !following;
+  $("f_in").value = follower?.name ?? "";
+  $("f_clear").hidden = !follower;
+  // his 2026 line in numbers (and a picked follower's); the lineup table shows each hitter against him
   const note = $("p_note");
   note.classList.remove("warn");
   note.title = "";
   note.hidden = !pitcher;
   if (!pitcher) return;
-  const l = lineOf(pitcher.counts), e = pitcher, mode = $("platoon").value;
-  // his wOBA against each side, where he faced it
-  const sides = ["L", "R"].filter((s) => countOf(e.cells?.[s])).map((s) => `${fmtRate(wobaOf(e.cells[s]))} v ${s}HB`);
-  note.textContent = [e.generic ? `Every 2026 ${handOf(e)} pooled` : `${e.team} · ${handOf(e)}`,
-    `${e.pa.toLocaleString()} BF`, `K ${pct(l.K)}`, `BB ${pct(l.BB)}`,
-    `${fmtRate(l.wOBA)} wOBA against${mode === "off" || !sides.length ? "" : ` (${sides.join(", ")})`}`].join(" · ");
-  const thin = ["L", "R"].filter((s) => countOf(e.cells?.[s]) < 60);
-  if (!e.generic && (e.pa < 100 || (mode === "own" && thin.length))) {
-    note.textContent += e.pa >= 100 ? ` · small sample v ${thin.map((s) => `${s}HB`).join(" and ")}` : " · small sample";
-    note.title = "Sim settings can add MLB-average plate appearances, or use league-average platoon gaps";
-    note.classList.add("warn");
-  }
+  const mode = $("platoon").value;
+  const lineFor = (e) => {
+    const l = lineOf(e.counts);
+    // his wOBA against each side, where he faced it
+    const sides = ["L", "R"].filter((s) => countOf(e.cells?.[s])).map((s) => `${fmtRate(wobaOf(e.cells[s]))} v ${s}HB`);
+    let text = [e.generic ? `Every 2026 ${handOf(e)} pooled` : `${e.team} · ${handOf(e)}`,
+      `${e.pa.toLocaleString()} BF`, `K ${pct(l.K)}`, `BB ${pct(l.BB)}`,
+      `${fmtRate(l.wOBA)} wOBA against${mode === "off" || !sides.length ? "" : ` (${sides.join(", ")})`}`].join(" · ");
+    const thin = ["L", "R"].filter((s) => countOf(e.cells?.[s]) < 60);
+    if (!e.generic && (e.pa < 100 || (mode === "own" && thin.length))) {
+      text += e.pa >= 100 ? ` · small sample v ${thin.map((s) => `${s}HB`).join(" and ")}` : " · small sample";
+      note.title = "Sim settings can add MLB-average plate appearances, or use league-average platoon gaps";
+      note.classList.add("warn");
+    }
+    return text;
+  };
+  note.textContent = lineFor(pitcher) + (following && follower ? `\nFollower: ${lineFor(follower)}` : "");
 }
 
 // ---------- Oops! All Ohtanis! ----------
@@ -587,7 +666,7 @@ let worker = null;
 let useWorker = typeof Worker !== "undefined";
 
 function startWorker() {
-  const w = new Worker(new URL("./sim-worker.js?v=4", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./sim-worker.js?v=5", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
   w.onmessage = ({ data: msg }) => {
     if (job && msg.id === job.id) finish(job, msg.res, msg.ms, msg.ref, msg.lines);
@@ -616,21 +695,22 @@ function run() {
   const games = Number($("games").value);
   const specs = lineup.map((id) => specOf(entryOf(id)));
   const cums = specs.map((h) => cumulative(facing(h, vs?.sp ?? null)));
-  const pen = vs?.pen ? specs.map((h) => cumulative(facing(h, vs.pen))) : null;
+  const relief = (vs?.relief ?? []).map((r) => ({ from: r.from, lineup: specs.map((h) => cumulative(facing(h, r.pitching))) }));
   let ref = null, lines = null;
   if (vs && versus.key !== key) {
-    // each lineup's hitters matched against the starter and the bullpen here; the worker
-    // only needs the chances
+    // each lineup's hitters matched against the starter and each relief stage here; the
+    // worker only needs the chances
     const spots = (abbr) => Array.from({ length: 9 }, (_, i) => specOf(entries.get(`s${abbr}-${i + 1}`)));
     const matched = (hs, theta = 0) => hs.map((h) => ({ sp: facing(h, vs.sp, theta, data.tradeoff.per_sd),
-      pen: vs.pen ? facing(h, vs.pen, theta, data.tradeoff.per_sd) : null }));
+      relief: vs.relief.map((r) => facing(h, r.pitching, theta, data.tradeoff.per_sd)) }));
     const mlb = spots("MLB"), m0 = matched(mlb);
-    ref = { lineup: m0.map((x) => cumulative(x.sp)), pen: vs.pen ? m0.map((x) => cumulative(x.pen)) : null, games: REF_GAMES };
-    lines = { w: data.weights, lineups: [m0, ...data.teams.map((t) => matched(spots(t.abbr))),
+    ref = { lineup: m0.map((x) => cumulative(x.sp)), games: REF_GAMES,
+      relief: vs.relief.map((r, i) => ({ from: r.from, lineup: m0.map((x) => cumulative(x.relief[i])) })) };
+    lines = { w: data.weights, from: vs.relief.map((r) => r.from), lineups: [m0, ...data.teams.map((t) => matched(spots(t.abbr))),
       ...data.sims.tradeoff.points.map((pt) => matched(mlb, pt.theta))] };
   }
   const busy = job != null;
-  job = { id: ++jobs, cums, pen, hook: vs?.hook ?? 27, games, ids: [...lineup], key, vs, name: pitcher?.name, ref, lines };
+  job = { id: ++jobs, cums, relief, games, ids: [...lineup], key, vs, name: pitcher?.name, ...planWords(), ref, lines };
   $("status").textContent = "simulating…";
   $("out").style.opacity = last ? ".55" : "";
   writeHash();
@@ -645,7 +725,7 @@ function run() {
     useWorker = false; // no module workers here
     return runHere(job);
   }
-  worker.postMessage({ id: job.id, lineup: cums, pen, hook: job.hook, games, seed: SEED, ref, lines });
+  worker.postMessage({ id: job.id, lineup: cums, relief, games, seed: SEED, ref, lines });
 }
 
 function runHere(j) {
@@ -653,10 +733,10 @@ function runHere(j) {
   setTimeout(() => {
     if (job !== j) return;
     const t0 = performance.now();
-    const res = simulate(model, j.cums, j.games, SEED, j.pen, j.hook);
+    const res = simulate(model, j.cums, j.games, SEED, j.relief);
     const ms = performance.now() - t0;
-    const ref = j.ref && simulate(model, j.ref.lineup, j.ref.games, SEED, j.ref.pen, j.hook).runDist;
-    const lines = j.lines && expectedLines((chain ??= chainTables(model)), j.lines.lineups, j.hook, j.lines.w);
+    const ref = j.ref && simulate(model, j.ref.lineup, j.ref.games, SEED, j.ref.relief).runDist;
+    const lines = j.lines && expectedLines((chain ??= chainTables(model)), j.lines.lineups, j.lines.from, j.lines.w);
     finish(j, res, ms, ref, lines);
   }, 30);
 }
@@ -669,7 +749,7 @@ function finish(j, res, ms, ref, lines) {
       tradeoff: data.sims.tradeoff.points.map((pt, i) => ({ theta: pt.theta, ...lines[1 + n + i] })) } };
   }
   last = { res, sum: summarize(res.totals, data.weights), games: j.games, lineup: j.ids, key: j.key, vs: j.vs, name: j.name,
-    hook: j.hook, ctx: j.vs ? versus.ctx : null };
+    words: j.words, short: j.short, ctx: j.vs ? versus.ctx : null };
   $("out").hidden = false;
   $("out").style.opacity = "";
   $("status").textContent = "";
@@ -691,8 +771,8 @@ function compareSet(k) {
   return { teams: data.teams.map((t) => ({ abbr: t.abbr, v: data.sims.teams[t.abbr].spots[k] })), mlb: data.sims.mlb[k] };
 }
 
-// "Skubal for 5.2 innings, then the bullpen" / "Skubal for all nine innings"
-const vsWords = (l) => `${lastName(l.name)} for ${l.hook < 27 ? `${fmtIP(l.hook)} innings, then the bullpen` : "all nine innings"}`;
+// the pitching a run or a search was against, in words (planWords() when it started)
+const vsWords = (l) => l.words;
 
 // a rank among the 30 teams, for words: 31 is behind every one of them
 const placeOf = (r) => (r > 30 ? "behind all 30 teams" : `${ordinal(r)} of 30 teams`);
@@ -723,12 +803,12 @@ function renderResults() {
   if (last.vs) {
     // the pitcher's effect on this lineup, exactly: against him and against MLB-average pitching
     const avg = exactRuns(last.lineup, null), d = exactRuns(last.lineup, last.vs) - avg;
-    second = kpi("Against MLB-average pitching", avg.toFixed(2), `${lastName(last.name)}: ${d > 0 ? "+" : "−"}${Math.abs(d).toFixed(2)} runs per 9 (exact)`);
+    second = kpi("Against MLB-average pitching", avg.toFixed(2), `${last.short}: ${d > 0 ? "+" : "−"}${Math.abs(d).toFixed(2)} runs per 9 (exact)`);
   } else {
     second = kpi("Over 162 games", Math.round(s.R * 162).toLocaleString(), `MLB ${Math.round(r.mlb * 162).toLocaleString()}`);
   }
   $("kpis").replaceChildren(
-    kpi(last.vs ? `Runs per 9 vs ${lastName(last.name)}` : "Runs per 9 innings", s.R.toFixed(2), `±${moe.toFixed(2)} (95%) · ${placeOf(rankOf(s.R, r.teams, 1))}`),
+    kpi(last.vs ? `Runs per 9 vs ${last.short}` : "Runs per 9 innings", s.R.toFixed(2), `±${moe.toFixed(2)} (95%) · ${placeOf(rankOf(s.R, r.teams, 1))}`),
     second,
     kpi("wOBA", fmtRate(s.wOBA), `${placeOf(rankOf(s.wOBA, w.teams, 1)).replace(" teams", "")} · MLB ${fmtRate(w.mlb)}`),
   );
@@ -764,8 +844,8 @@ function renderResults() {
   }
   $("basis_sim").title = last.ctx ? `Each team's nine lineup spots against ${vsWords(last)}, worked out exactly`
     : `Each team's nine lineup spots run through the same simulation, ${data.sims.games.toLocaleString()} games each`;
-  $("basis_sim").textContent = last.ctx ? `Teams' lineup spots vs ${lastName(last.name)}` : "Teams' lineup spots, simulated";
-  $("runs_mlb_key").textContent = last.ctx ? `MLB lineup spots vs ${lastName(last.name)} (simulated)` : "MLB lineup (simulated)";
+  $("basis_sim").textContent = last.ctx ? `Teams' lineup spots vs ${last.short}` : "Teams' lineup spots, simulated";
+  $("runs_mlb_key").textContent = last.ctx ? `MLB lineup spots vs ${last.short} (simulated)` : "MLB lineup (simulated)";
 
   runsChart(dist, games);
   renderTradeoff(moe);
@@ -1060,7 +1140,7 @@ function renderTradeoff(moe) {
     }));
   tradeoffChart(pts, avg, last.sum.R, moe);
   // the saved and copied image is the curve alone
-  tradeoffShare = { pts, vs: last.ctx ? { name: last.name, hook: last.hook } : null };
+  tradeoffShare = { pts, vs: last.ctx ? { name: last.name, words: last.words } : null };
 
   // table view of the curve at whole steps
   const cols = pts.filter((p) => Number.isInteger(p.theta) || Math.abs(p.theta) === data.tradeoff.range);
@@ -1167,7 +1247,7 @@ const locked = new Set();  // lineup slots (0-8) the search leaves alone
 // exact expected runs per nine innings, against `vs` (by default the pitching now picked)
 function exactRuns(ids, vs = vsOf()) {
   chain ??= chainTables(model);
-  return lineupRuns(chain, ids.map((id) => matchup(chain, specOf(entryOf(id)), vs)), vs?.hook ?? 27);
+  return lineupRuns(chain, ids.map((id) => matchup(chain, specOf(entryOf(id)), vs)));
 }
 
 const shortName = (e) => (e.kind === "spot" && e.team === "MLB" ? `${e.name.split(" · ")[1].replace(" spot", "")}-spot hitter` : e.name);
@@ -1231,7 +1311,7 @@ function startOptimize() {
     const e = entryOf(id);
     return opts.tilt && e.theta != null ? { ...specOf(e, false), theta: e.theta } : specOf(e);
   });
-  optJob = { id: ++optJobs, ids, opts, key: vsKey(), name: pitcher?.name, hook: hookOf() };
+  optJob = { id: ++optJobs, ids, opts, key: vsKey(), name: pitcher?.name, words: planWords().words };
   $("opt_status").textContent = "searching…";
   renderOptimizer();
   const j = optJob;
@@ -1243,7 +1323,7 @@ function startOptimize() {
   if (!useWorker) return here();
   try {
     if (!optWorker) {
-      optWorker = new Worker(new URL("./sim-worker.js?v=4", import.meta.url), { type: "module" });
+      optWorker = new Worker(new URL("./sim-worker.js?v=5", import.meta.url), { type: "module" });
       optWorker.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
     }
   } catch {
@@ -1290,7 +1370,7 @@ function optFinish(j, result, ms) {
     return result.theta[h] != null ? tiltId(e.base, result.theta[h]) : j.ids[h];
   });
   $("opt_status").textContent = "";
-  optDone = { before: j.ids, after, result, opts: j.opts, key: j.key, name: j.name, hook: j.hook };
+  optDone = { before: j.ids, after, result, opts: j.opts, key: j.key, name: j.name, words: j.words };
   if (after.join() !== lineup.join()) {
     lineup = [...after]; // a copy: edits to the lineup mustn't rewrite the search's record
     edited = true;
@@ -1398,6 +1478,7 @@ function resetSettings() {
   ["team", "kind", "games", "regress", "opt_mix", "p_hook", "platoon"].forEach((id) => toDefault($(id)));
   ["opt_order", "opt_tilt"].forEach((id) => { $(id).checked = $(id).defaultChecked; });
   pitcher = null;
+  follower = null;
   ohtani = false;
   beforeOhtani = null;
   renderPitcher();
@@ -1651,7 +1732,8 @@ function writeHash() {
     t: $("team").value, k: mode, e: edited ? "1" : "0", a: $("tilt_all").value });
   if (pitcher) {
     p.set("p", pitcher.mlbam);
-    if ($("p_hook").value === "start") p.set("h", "start");
+    if ($("p_hook").value !== "game") p.set("h", $("p_hook").value);
+    if ($("p_hook").value === "follower" && follower) p.set("f", follower.mlbam);
     if ($("platoon").value !== "own") p.set("pl", $("platoon").value);
   }
   if (ohtani) p.set("o", "1");
@@ -1672,7 +1754,9 @@ function readHash() {
   }
   if (p.get("b") === "sim") basis = "sim";
   pitcher = pitchers.get(`P${p.get("p")}`) ?? null;
-  if (pitcher && p.get("h") === "start") $("p_hook").value = "start";
+  const h = p.get("h");
+  if (pitcher && h && [...$("p_hook").options].some((o) => o.value === h)) $("p_hook").value = h;
+  follower = pitchers.get(`P${p.get("f")}`) ?? null;
   const pl = p.get("pl");
   if (pl && [...$("platoon").options].some((o) => o.value === pl)) $("platoon").value = pl;
   const a = Number(p.get("a"));
@@ -1706,8 +1790,7 @@ function renderSummary() {
     : edited ? "Custom lineup"
     : mode === "tradeoff" ? "MLB spots (contact–power)"
     : mode === "most_used" ? `${team}: most-used order` : `${team}: lineup spots`;
-  const vs = !pitcher ? "MLB-average pitching" : pitcher.name + ($("p_hook").value === "start" ? ", then bullpen" : "");
-  $("sum_what").textContent = `${what} vs ${vs}`;
+  $("sum_what").textContent = `${what} vs ${planWords(true).words}`;
   // then the nine, unless they're a team's spots in order (all at one setting, for contact-power)
   const es = lineup.map(entryOf).filter(Boolean);
   let who = es.map((e, i) => {
@@ -1725,7 +1808,7 @@ function renderSummary() {
 
 async function boot() {
   try {
-    const r = await fetch(`data/${SEASON}.json?v=4`);
+    const r = await fetch(`data/${SEASON}.json?v=5`);
     if (!r.ok) throw new Error(`data ${r.status}`);
     data = await r.json();
   } catch (e) {
@@ -1755,6 +1838,10 @@ async function boot() {
   $("relief_k").textContent = `${pct(data.pitching.relief[C.K] / rn)} of hitters, against ${pct(data.pitching.league[C.K] / ln)} overall`;
   const rc = data.pitching.relief_cells, lc = data.pitching.cells;
   $("relief_l").textContent = pct((countOf(rc.LL) + countOf(rc.LR)) / rn);
+  const P = data.pitching;
+  $("opener_n").textContent = `${P.opener.games} games in ${SEASON}; the median opener recorded ${P.opener.outs} out${P.opener.outs === 1 ? "" : "s"} (${fmtIP(P.opener.outs)} IP)`;
+  $("follower_n").textContent = `${P.follower.games} games; the median follower recorded ${P.follower.outs} outs (${fmtIP(P.follower.outs)} IP)`;
+  $("bulk_n").textContent = `every ${SEASON} relief outing of three innings or more, ${P.bulk.outings} of them`;
   $("platoon_gap").textContent = `a ${fmtRate(wobaOf(lc.LL))} wOBA for left-handed batters against left-handers (${fmtRate(wobaOf(lc.RL))} against `
     + `right-handers) and ${fmtRate(wobaOf(lc.RR))} for right-handed batters against right-handers (${fmtRate(wobaOf(lc.LR))} against left-handers)`;
   const saved = readHash(); // before wiring controls: it sets their values, `basis` and `pitcher`
@@ -1772,6 +1859,12 @@ async function boot() {
   $("p_clear").addEventListener("click", () => {
     setPitcher(null);
     $("p_in").focus();
+  });
+  wireSuggest($("f_in"), $("f_sug"), { find: findFollowers, choose: setFollower, current: () => follower?.name ?? "",
+    browse: true, small: followerSmall });
+  $("f_clear").addEventListener("click", () => {
+    setFollower(null);
+    $("f_in").focus();
   });
   $("p_hook").addEventListener("change", () => {
     renderPitcher();

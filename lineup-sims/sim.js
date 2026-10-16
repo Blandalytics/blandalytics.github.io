@@ -192,8 +192,9 @@ export function pitcherOf(counts, cells, hand, { mode = "off", league, regress =
   return [{ w: 1, hand: h, p, l }];
 }
 
-// The bullpen, as facing()'s pitching: every reliever pooled, right- and left-handers
-// in the shares they pitched (cells keyed hand + side, as the league's).
+// A bullpen, as facing()'s pitching: its relievers pooled, right- and left-handers in the
+// shares they pitched (cells keyed hand + side, as the league's). MLB's bullpen, a team's,
+// or MLB's bulk relief (relief outings of 3+ innings).
 export function bullpenOf(counts, cells, { mode = "off", league } = {}) {
   if (mode === "off" || !cells) return [{ w: 1, hand: "", p: { "": scaled(counts) }, l: { "": league.all } }];
   const n = sumOf(counts);
@@ -204,7 +205,7 @@ export function bullpenOf(counts, cells, { mode = "off", league } = {}) {
   }));
 }
 
-// A hitter's outcome chances against one stretch of pitching (the starter, or the bullpen).
+// A hitter's outcome chances against one stretch of pitching (the starter, a follower, or the bullpen).
 //
 // hitter: { all, parts }. `all` is his chances overall. `parts`, for platoon splits, holds
 // his chances against each pitcher hand, split by the side he batted from:
@@ -274,9 +275,10 @@ const MAX_INNING_PA = 60;
 
 // Simulate `games` 9-inning games for a lineup of 9 cumulative-rate arrays.
 // Returns season-style totals plus the per-game run distribution and per-spot lines.
-// `pen`, another 9 arrays, is the lineup against the bullpen, which takes over from the
-// plate appearance that starts with `hook` outs made in the game (the starter's last out).
-export function simulate(model, lineup, games, seed = 1, pen = null, hook = 27) {
+// `relief` is who pitches after the starter, in order: [{ from, lineup }], `lineup` another
+// 9 arrays (the lineup against that pitching), taking over from the plate appearance that
+// starts with `from` outs made in the game. A follower and then the bullpen are two.
+export function simulate(model, lineup, games, seed = 1, relief = []) {
   const rand = rng(seed);
   const { running, advance } = model;
   const t = { G: games, PA: 0, AB: 0, H: 0, "1B": 0, "2B": 0, "3B": 0, HR: 0, BB: 0, HBP: 0, K: 0, SF: 0, R: 0, outs: 0 };
@@ -294,7 +296,8 @@ export function simulate(model, lineup, games, seed = 1, pen = null, hook = 27) 
       while (outs < 3) {
         if (++pas > MAX_INNING_PA) { capped++; break; }
         // who's pitching is settled as the plate appearance starts, before any running
-        const bat = pen && inning * 3 + outs >= hook ? pen : lineup;
+        let bat = lineup;
+        for (let r = 0; r < relief.length; r++) if (inning * 3 + outs >= relief[r].from) bat = relief[r].lineup;
         let mask = maskOf(bases);
         if (mask) {
           const cr = running[mask * 3 + outs];

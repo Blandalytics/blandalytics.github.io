@@ -14,10 +14,12 @@ Output, all for the regular season:
     mlb         the same spots and actuals for the whole league
     running     league-average running game before a plate appearance, by base-out state
     advance     league-average runner advancement on each outcome, by base-out state
-    pitchers    every pitcher's batters faced by simulator outcome, with starts and the
-                outs recorded in them
+    pitchers    every pitcher's batters faced by simulator outcome, with starts, the
+                outs recorded in them, and his outings of 3+ innings (bulk outings)
     pitching    the outcome counts of every plate appearance (the league baseline for
-                log5 matchups) and of those against relievers (the bullpen)
+                log5 matchups) and of those against relievers (the bullpen), each team's
+                relievers (its bullpen), relief outings of 3+ innings (bulk relief), and how
+                long openers and their followers typically went
 
 Platoon splits: players, lineup spots, the league and relievers also carry `cells`, the
 same counts by the pitcher's hand and the side the batter hit from, keyed hand + side
@@ -173,6 +175,8 @@ def main(season):
     relief = collections.Counter()                                  # cat counts against relievers
     # platoon cells, keyed pitcher hand + batter side ("RL": a lefty batting against a righty)
     cells = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))  # who -> cell -> cat counts
+    # every game side's pitchers in the order they came in: (starter, [(pitcher, {outs, cells})])
+    game_apps = []
     skipped = 0
 
     for g in pbp.load_games(season, CACHE):
@@ -190,6 +194,7 @@ def main(season):
             starters = sorted((int(code), int(pid)) for pid, code in g["order"][side].items() if int(code) % 100 == 0)
             if len(starters) == 9:
                 starting[abbr[side]][tuple(pid for _, pid in starters)] += 1
+        apps_in = {"away": {}, "home": {}}  # batting side -> the pitchers it faced, in order
         for r in pbp.replay(g):
             if "skip" in r:
                 skipped += 1
@@ -206,6 +211,8 @@ def main(season):
             in_start = pid == starter[r["side"]]
             if in_start:
                 start_outs[pid] += r["run_outs"] + r["event_outs"]
+            app = apps_in[r["side"]].setdefault(pid, {"outs": 0, "cells": collections.defaultdict(collections.Counter)})
+            app["outs"] += r["run_outs"] + r["event_outs"]
             if not r["is_pa"]:
                 continue
             b = r["batter"]
@@ -221,9 +228,11 @@ def main(season):
             hs = r["throws"] + r["stand"]
             cells[("pitcher", pid)][r["stand"]][cat] += 1
             cells["league"][hs][cat] += 1
+            app["cells"][hs][cat] += 1
             if not in_start:
                 relief[cat] += 1
                 cells["relief"][hs][cat] += 1
+                cells[("relief", fielding[r["side"]])][hs][cat] += 1
             spot = spot_of[r["side"]].get(b)
             player_counts[b][cat] += 1
             cells[("batter", b)][hs][cat] += 1
@@ -235,6 +244,9 @@ def main(season):
             if r["inning"] <= 9:
                 code = r["event_code"] + ("s" if r["event"] in ("sac_fly", "sac_fly_double_play") else "")
                 advance["%s,%d,%d" % ((cat,) + r["state1"])][code] += 1
+        for side in ("away", "home"):
+            if apps_in[side]:
+                game_apps.append((starter[side], list(apps_in[side].items())))
 
     print(f"{skipped} half-innings skipped (did not reconcile with the feed)")
 
@@ -267,10 +279,36 @@ def main(season):
                         cells_of(("batter", b)), bats_of.get(b, "")])
     players.sort(key=lambda p: -sum(p[3]))
 
+    # --- openers, followers and bulk relief ---------------------------------------------
+    # An opener is a game's starter who recorded 6 outs or fewer and pitched mostly in
+    # relief (under half his appearances were starts), which leaves out regular starters
+    # knocked out early. His follower is the next pitcher, when he went 3 innings or more.
+    # Bulk relief is every relief outing of 3+ innings, followers included: MLB-average
+    # pitching for a follower nobody picked.
+    BULK = 9  # outs
+    appearances = collections.Counter(pid for _, seq in game_apps for pid, _ in seq)
+    bulk_outings = collections.Counter(pid for _, seq in game_apps for pid, a in seq if a["outs"] >= BULK)
+    opener_outs, follower_outs, n_bulk = [], [], 0
+    for sp, seq in game_apps:
+        assert seq[0][0] == sp, "the starter is the first pitcher in"
+        for _, a in seq[1:]:
+            if a["outs"] >= BULK:
+                n_bulk += 1
+                for hs, cnt in a["cells"].items():
+                    cells["bulk"][hs].update(cnt)
+        if seq[0][1]["outs"] <= 6 and starts[sp] < appearances[sp] / 2:
+            opener_outs.append(seq[0][1]["outs"])
+            if len(seq) > 1 and seq[1][1]["outs"] >= BULK:
+                follower_outs.append(seq[1][1]["outs"])
+    typical = lambda outs: int(round(float(np.median(outs))))  # noqa: E731
+    print(f"openers: {len(opener_outs)} games, median {typical(opener_outs)} outs (mean {np.mean(opener_outs):.2f}); "
+          f"followers: {len(follower_outs)} games, median {typical(follower_outs)} outs (mean {np.mean(follower_outs):.2f}); "
+          f"bulk relief: {n_bulk} outings, {sum(sum(c.values()) for c in cells['bulk'].values())} PA")
+
     # --- pitchers ----------------------------------------------------------------------
     # counts feed the matchups; batters faced (official, with IBB and bunts) is for display
     pitchers = [[pid, name_of.get(pid, str(pid)), pitcher_last[pid][1], pitcher_throws[pid], [cnt[c] for c in CATS],
-                 pitcher_bf[pid], starts[pid], start_outs[pid], cells_of(("pitcher", pid))]
+                 pitcher_bf[pid], starts[pid], start_outs[pid], cells_of(("pitcher", pid)), bulk_outings[pid]]
                 for pid, cnt in pitcher_counts.items() if sum(cnt.values())]
     pitchers.sort(key=lambda p: -sum(p[4]))
     league = collections.Counter()
@@ -278,10 +316,16 @@ def main(season):
         league.update(cnt)
     assert league == sum(player_counts.values(), collections.Counter())
     pitching = {"league": [league[c] for c in CATS], "relief": [relief[c] for c in CATS],
-                "cells": cells_of("league"), "relief_cells": cells_of("relief")}
+                "cells": cells_of("league"), "relief_cells": cells_of("relief"),
+                # each team's bullpen, by the team the relievers pitched for
+                "teams": {t: cells_of(("relief", t)) for t in teams_sorted},
+                "opener": {"games": len(opener_outs), "outs": typical(opener_outs)},
+                "follower": {"games": len(follower_outs), "outs": typical(follower_outs)},
+                "bulk": {"outings": n_bulk, "cells": cells_of("bulk")}}
     # every split adds back up to its whole
     total = lambda table: [sum(v[i] for v in table.values()) for i in range(len(CATS))]  # noqa: E731
     assert total(pitching["cells"]) == pitching["league"] and total(pitching["relief_cells"]) == pitching["relief"]
+    assert [sum(x) for x in zip(*(total(c) for c in pitching["teams"].values()))] == pitching["relief"]
     for row in players:
         assert total(row[5]) == row[3], row[:2]
     # a switch hitter bats left against right-handers and right against left-handers
