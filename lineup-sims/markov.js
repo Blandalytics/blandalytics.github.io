@@ -9,9 +9,16 @@
 // States within an inning are s = mask * 3 + outs (24), as in sim.js's tables. One step
 // is one plate appearance: the running game first (which can end the inning with the
 // same hitter due up next inning), then the hitter's outcome and the runners' moves.
-import { tilt } from "./sim.js?v=2";
+//
+// Against a given pitcher, each hitter's chances are first combined with the pitcher's by
+// log5 (sim.js). A starter who leaves after a set number of outs hands over to the
+// bullpen: innings before that use the hitters against him, innings after use them
+// against the bullpen, and the inning he leaves in uses him while fewer than that many
+// outs are made in it.
+import { log5, summarize, tilt } from "./sim.js?v=3";
 
 const NS = 24;
+const NY = 13; // a plate appearance's tallies for expectedLine: PA, the eleven outcomes, sacrifice flies
 const probsOf = (cell) => Array.from(cell.cum, (c, i) => c - (i ? cell.cum[i - 1] : 0));
 const maskOf = (digits) => digits.reduce((m, d) => (d >= 1 && d <= 3 ? m | (1 << (d - 1)) : m), 0);
 
@@ -21,11 +28,13 @@ const maskOf = (digits) => digits.reduce((m, d) => (d >= 1 && d <= 3 ? m | (1 <<
 //   T[c][s*24+t]    chance of reaching state t after a plate appearance ending in outcome c
 //   endPA[c][s]     chance outcome c ends the inning
 //   runsPA[c][s]    expected runs scored on outcome c (weighted by reaching the PA at all)
+//   sfPA[c][s]      chance outcome c is a sacrifice fly (weighted the same way)
 export function chainTables(model, ncats = 11) {
   const endRun = new Float64Array(NS), runRuns = new Float64Array(NS);
   const T = Array.from({ length: ncats }, () => new Float64Array(NS * NS));
   const endPA = Array.from({ length: ncats }, () => new Float64Array(NS));
   const runsPA = Array.from({ length: ncats }, () => new Float64Array(NS));
+  const sfPA = Array.from({ length: ncats }, () => new Float64Array(NS));
   for (let mask = 0; mask < 8; mask++) {
     for (let outs = 0; outs < 3; outs++) {
       const s = mask * 3 + outs;
@@ -46,6 +55,7 @@ export function chainTables(model, ncats = 11) {
           cell.codes.forEach((o, i) => {
             const pr = pm * p[i];
             runsPA[c][s] += pr * o.runs;
+            if (o.sf) sfPA[c][s] += pr;
             if (o1 + o.outs >= 3) endPA[c][s] += pr;
             else T[c][s * NS + maskOf(o.digits) * 3 + o1 + o.outs] += pr;
           });
@@ -53,11 +63,13 @@ export function chainTables(model, ncats = 11) {
       }
     }
   }
-  return { endRun, runRuns, T, endPA, runsPA, ncats };
+  return { endRun, runRuns, T, endPA, runsPA, sfPA, ncats };
 }
 
 // One hitter's step through the chain, from that hitter's outcome chances (summing to 1).
-export function hitterBlock(tab, probs) {
+// With `line`, also Y: the plate appearances, outcomes and sacrifice flies a step from
+// each state is expected to add (for expectedLine).
+export function hitterBlock(tab, probs, line = false) {
   const Q = new Float64Array(NS * NS), A = new Float64Array(NS), R = Float64Array.from(tab.runRuns);
   for (let c = 0; c < tab.ncats; c++) {
     const q = probs[c];
@@ -69,14 +81,78 @@ export function hitterBlock(tab, probs) {
       R[s] += q * Rc[s];
     }
   }
-  return { Q, A, R };
+  if (!line) return { Q, A, R };
+  const Y = new Float64Array(NS * NY);
+  for (let s = 0; s < NS; s++) {
+    const reach = 1 - tab.endRun[s], row = s * NY;
+    Y[row] = reach;
+    for (let c = 0; c < tab.ncats; c++) {
+      Y[row + 1 + c] = reach * probs[c];
+      Y[row + 1 + tab.ncats] += probs[c] * tab.sfPA[c][s];
+    }
+  }
+  return { Q, A, R, Y };
 }
 
-// Expected runs over `innings` innings for nine hitter blocks in batting order.
+// A hitter's blocks against the pitching the lineup faces. `vs` is null for league-average
+// pitching, or { p: the pitcher's chances, pen: the bullpen's (null when he pitches the
+// whole game), league: the league's, hook: outs into the game when the bullpen takes over }.
+export function matchup(tab, probs, vs = null, line = false) {
+  if (!vs) return { sp: hitterBlock(tab, probs, line), pen: null };
+  return { sp: hitterBlock(tab, log5(probs, vs.p, vs.league), line),
+    pen: vs.pen ? hitterBlock(tab, log5(probs, vs.pen, vs.league), line) : null };
+}
+
+// Exact expected runs for nine hitters' matchup() blocks in batting order.
+export function lineupRuns(tab, ms, vs = null) {
+  return expectedRuns(tab, ms.map((m) => m.sp), 9, vs?.pen ? ms.map((m) => m.pen) : null, vs?.hook ?? 27);
+}
+
+// Expected runs over `innings` innings for nine hitter blocks in batting order, and with
+// `pen` (the nine against the bullpen) the bullpen taking over once `hook` outs are made.
 // Within an inning: V_k = R_k + Q_k V_(k+1) (expected runs to the inning's end with
 // hitter k due up) and N_k, the chance each hitter leads off the next inning, solved by
 // sweeping round the order until nothing moves. Then innings chain through N.
-export function expectedRuns(tab, blocks, innings = 9) {
+export function expectedRuns(tab, blocks, innings = 9, pen = null, hook = innings * 3) {
+  let lead = new Float64Array(9), total = 0;
+  lead[0] = 1;
+  for (const { V, N } of byInning(tab, blocks, innings, pen, hook, solve)) {
+    const next = new Float64Array(9);
+    for (let k = 0; k < 9; k++) {
+      if (!lead[k]) continue;
+      total += lead[k] * V[k * NS];
+      for (let j = 0; j < 9; j++) next[j] += lead[k] * N[k * NS * 9 + j];
+    }
+    lead = next;
+  }
+  return total;
+}
+
+// The solved inning for each inning of the game: the starter's until the inning the hook
+// falls in, that inning split at the hook, then the bullpen's.
+function byInning(tab, blocks, innings, pen, hook, solver) {
+  const k = pen ? Math.max(0, Math.min(innings, Math.floor(hook / 3))) : innings, j = pen ? hook % 3 : 0;
+  const sp = k > 0 ? solver(tab, blocks) : null;
+  const bp = k < innings ? solver(tab, pen) : null;
+  const mid = j && k < innings ? solver(tab, blocks.map((b, h) => splitBlock(b, pen[h], j))) : null;
+  return Array.from({ length: innings }, (_, i) => (i < k ? sp : i === k && mid ? mid : bp));
+}
+
+// a hitter's step against the starter from states with fewer than j outs, the bullpen from the rest
+function splitBlock(a, b, j) {
+  const Q = Float64Array.from(b.Q), A = Float64Array.from(b.A), R = Float64Array.from(b.R);
+  const Y = b.Y ? Float64Array.from(b.Y) : null;
+  for (let s = 0; s < NS; s++) {
+    if (s % 3 >= j) continue;
+    Q.set(a.Q.subarray(s * NS, (s + 1) * NS), s * NS);
+    A[s] = a.A[s];
+    R[s] = a.R[s];
+    if (Y) Y.set(a.Y.subarray(s * NY, (s + 1) * NY), s * NY);
+  }
+  return { Q, A, R, Y };
+}
+
+function solve(tab, blocks) {
   const V = new Float64Array(9 * NS), N = new Float64Array(9 * NS * 9), acc = new Float64Array(9);
   for (let sweep = 0; sweep < 200; sweep++) {
     let delta = 0;
@@ -103,18 +179,69 @@ export function expectedRuns(tab, blocks, innings = 9) {
     }
     if (delta < 1e-13) break;
   }
-  let lead = new Float64Array(9), total = 0;
+  return { V, N };
+}
+
+// solve(), with every tally a plate appearance adds carried alongside the runs: V holds
+// 1 + NY values per (hitter, state), runs first. Blocks need Y (hitterBlock's `line`).
+const NV = 1 + NY;
+function solveLine(tab, blocks) {
+  const V = new Float64Array(9 * NS * NV), N = new Float64Array(9 * NS * 9);
+  const acc = new Float64Array(9), v = new Float64Array(NV);
+  for (let sweep = 0; sweep < 200; sweep++) {
+    let delta = 0;
+    for (let k = 8; k >= 0; k--) {
+      const { Q, A, R, Y } = blocks[k], nk = (k + 1) % 9;
+      for (let s = 0; s < NS; s++) {
+        v[0] = R[s];
+        v.set(Y.subarray(s * NY, (s + 1) * NY), 1);
+        acc.fill(0);
+        acc[k] += tab.endRun[s];
+        acc[nk] += A[s];
+        const row = s * NS;
+        for (let t = 0; t < NS; t++) {
+          const q = Q[row + t];
+          if (!q) continue;
+          const vb = (nk * NS + t) * NV;
+          for (let y = 0; y < NV; y++) v[y] += q * V[vb + y];
+          const base = (nk * NS + t) * 9;
+          for (let j = 0; j < 9; j++) acc[j] += q * N[base + j];
+        }
+        const at = k * NS + s;
+        for (let y = 0; y < NV; y++) delta = Math.max(delta, Math.abs(v[y] - V[at * NV + y]));
+        V.set(v, at * NV);
+        N.set(acc, at * 9);
+      }
+    }
+    if (delta < 1e-12) break;
+  }
+  return { V, N };
+}
+
+// The expected nine-inning line of a lineup, exactly: summarize()'s numbers for nine
+// matchup() blocks built with `line`, as a simulation would average them over endless games.
+export function expectedLine(tab, ms, vs, w, innings = 9) {
+  const tot = new Float64Array(NV);
+  let lead = new Float64Array(9);
   lead[0] = 1;
-  for (let inning = 0; inning < innings; inning++) {
+  const plan = byInning(tab, ms.map((m) => m.sp), innings, vs?.pen ? ms.map((m) => m.pen) : null, vs?.hook ?? innings * 3, solveLine);
+  for (const { V, N } of plan) {
     const next = new Float64Array(9);
     for (let k = 0; k < 9; k++) {
       if (!lead[k]) continue;
-      total += lead[k] * V[k * NS];
+      for (let y = 0; y < NV; y++) tot[y] += lead[k] * V[k * NS * NV + y];
       for (let j = 0; j < 9; j++) next[j] += lead[k] * N[k * NS * 9 + j];
     }
     lead = next;
   }
-  return total;
+  const [R, PA, K, BB, HBP, b1, b2, b3, HR] = tot, SF = tot[NV - 1];
+  const H = b1 + b2 + b3 + HR;
+  return summarize({ outs: innings * 3, R, PA, K, BB, HBP, "1B": b1, "2B": b2, "3B": b3, HR, H, SF, AB: PA - BB - HBP - SF }, w);
+}
+
+// expectedLine for several lineups of raw outcome chances (nine arrays each) against `vs`
+export function expectedLines(tab, lineups, vs, w) {
+  return lineups.map((l) => expectedLine(tab, l.map((p) => matchup(tab, p, vs, true)), vs, w));
 }
 
 // Best batting order and contact-power settings by exact expected runs.
@@ -128,6 +255,8 @@ export function expectedRuns(tab, blocks, innings = 9) {
 //           the lineup's average setting) stays where it is; "free": each goes anywhere
 //   locked  slots whose hitter and setting stay put
 //   perSd, range  the axis and its reach (data.tradeoff)
+//   vs      the pitching faced, as for matchup(); hitters' chances are their own, and
+//           the search combines them with the pitcher's
 // Settings are searched in whole tenths. "free": each hitter in turn takes the best
 // value on a half-step grid, then the best tenth around it. "same": moves of 1, 0.5,
 // 0.2 or 0.1 from one hitter to another, taken whenever they help. Order: the best swap
@@ -156,7 +285,7 @@ export function optimize(tab, hitters, opts, progress = () => {}) {
 }
 
 function search(tab, hitters, opts, progress) {
-  const { order = true, tilt: doTilt = true, mix = "same", locked = [], perSd, range } = opts;
+  const { order = true, tilt: doTilt = true, mix = "same", locked = [], perSd, range, vs = null } = opts;
   const lim = Math.round(range * 10);
   const tenth = hitters.map((h) => (h.base ? Math.round(h.theta * 10) : null));
   const slot = hitters.map((_, i) => i); // slot -> hitter
@@ -168,13 +297,13 @@ function search(tab, hitters, opts, progress) {
     const key = tenth[h] == null ? `${h}` : `${h}@${tenth[h]}`;
     if (!cache.has(key)) {
       const p = tenth[h] == null ? hitters[h].probs : tilt(hitters[h].base, perSd, tenth[h] / 10);
-      cache.set(key, hitterBlock(tab, p));
+      cache.set(key, matchup(tab, p, vs));
     }
     return cache.get(key);
   };
   const value = () => {
     if (++evals % 250 === 0) progress(evals);
-    return expectedRuns(tab, slot.map(block));
+    return lineupRuns(tab, slot.map(block), vs);
   };
   const start = value();
   let best = start;
@@ -251,5 +380,5 @@ function search(tab, hitters, opts, progress) {
     if (!a && !b) break;
   }
   return { slot, theta: tenth.map((t) => (t == null ? null : t / 10)), before: start,
-    after: expectedRuns(tab, slot.map(block)), evals };
+    after: lineupRuns(tab, slot.map(block), vs), evals };
 }

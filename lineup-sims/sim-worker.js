@@ -3,8 +3,12 @@
 // sends the season's baserunning tables once ("init"), then one job per message: a
 // lineup to simulate, or ("optimize") a lineup to improve. A job can't be stopped
 // partway; when the page wants a newer one it replaces the whole worker.
-import { prepare, simulate } from "./sim.js?v=2";
-import { chainTables, optimize } from "./markov.js?v=1";
+//
+// Against a pitcher, a simulation job can also carry what the page compares it with:
+// `ref`, MLB's lineup spots to simulate against him too (for the runs-per-game chart),
+// and `lines`, lineups whose exact expected lines (markov.js) the page needs.
+import { prepare, simulate } from "./sim.js?v=3";
+import { chainTables, expectedLines, optimize } from "./markov.js?v=2";
 
 let model = null, chain = null;
 
@@ -20,6 +24,9 @@ self.onmessage = ({ data: msg }) => {
     self.postMessage({ id: msg.id, result, ms: performance.now() - t0 });
     return;
   }
-  const res = simulate(model, msg.lineup, msg.games, msg.seed);
-  self.postMessage({ id: msg.id, res, ms: performance.now() - t0 });
+  const res = simulate(model, msg.lineup, msg.games, msg.seed, msg.pen, msg.hook);
+  const ms = performance.now() - t0;
+  const ref = msg.ref ? simulate(model, msg.ref.lineup, msg.ref.games, msg.seed, msg.ref.pen, msg.hook).runDist : null;
+  const lines = msg.lines ? expectedLines((chain ??= chainTables(model)), msg.lines.lineups, msg.lines.vs, msg.lines.w) : null;
+  self.postMessage({ id: msg.id, res, ms, ref, lines });
 };
