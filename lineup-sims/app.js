@@ -1077,6 +1077,7 @@ function renderTradeoff(moe) {
     + (avg == null ? "" : thetas.length < 9 ? " This lineup is plotted at the average setting of its MLB spots."
       : " This lineup is plotted at its spots' average setting.");
   tradeoffChart(pts, avg, last.sum.R, moe);
+  tradeoffShare = { pts, avg, R: last.sum.R, moe, vs: last.ctx ? { name: last.name, hook: last.hook } : null };
 
   // table view of the curve at whole steps
   const cols = pts.filter((p) => Number.isInteger(p.theta) || Math.abs(p.theta) === data.tradeoff.range);
@@ -1465,13 +1466,7 @@ async function optTileBlob() {
   const g = cv.getContext("2d");
   g.fillStyle = OPT_TILE.bg;
   g.fillRect(0, 0, W, W);
-  // shrink a line's font until it fits
-  const fit = (text, weight, size, family, width) => {
-    for (; size > 11; size--) {
-      g.font = `${weight} ${size}px ${family}`;
-      if (g.measureText(text).width <= width) break;
-    }
-  };
+  const fit = (text, weight, size, family, width) => fitFont(g, text, weight, size, family, width);
   // title, subtitle, wordmark
   g.font = '700 36px "DM Sans"';
   g.fillStyle = OPT_TILE.cyan;
@@ -1555,8 +1550,22 @@ async function optTileBlob() {
     g.fillText(fmtTheta(t), t < 0 ? x1 - 10 : x1 + 10, y + 1);
   });
 
-  // the footer: what the spots are and what one step is (per 100 PA, from data.tradeoff.per_sd, as
-  // the page's own axis note has it)
+  tileFooter(g);
+  return new Promise((res) => cv.toBlob(res, "image/png"));
+}
+
+// shrink a line's font until it fits
+function fitFont(g, text, weight, size, family, width) {
+  for (; size > 11; size--) {
+    g.font = `${weight} ${size}px ${family}`;
+    if (g.measureText(text).width <= width) break;
+  }
+}
+
+// both images' footer: what the spots are and what one step is (per 100 PA, from
+// data.tradeoff.per_sd, as the page's own axis note has it)
+function tileFooter(g) {
+  const W = OPT_TILE.W;
   const d = Object.fromEntries(CATS.map((c, i) => [c, data.tradeoff.per_sd[i] * 100]));
   const f = (v) => `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`;
   const step = `A step toward Power is: K ${f(d.K)}, BB ${f(d.BB)}, HR ${f(d.HR)}, 1B ${f(d["1B"])}, 2B ${f(d["2B"])}, `
@@ -1564,10 +1573,111 @@ async function optTileBlob() {
   g.textAlign = "left";
   g.textBaseline = "alphabetic";
   g.fillStyle = OPT_TILE.sub;
-  fit("Lineup Spots are MLB-average wOBA for that spot.", 400, 16, '"DM Sans"', W - 96);
+  fitFont(g, "Lineup Spots are MLB-average wOBA for that spot.", 400, 16, '"DM Sans"', W - 96);
   g.fillText("Lineup Spots are MLB-average wOBA for that spot.", 48, 836);
-  fit(step, 400, 16, '"DM Sans"', W - 96);
+  fitFont(g, step, 400, 16, '"DM Sans"', W - 96);
   g.fillText(step, 48, 862);
+}
+
+// ---------- the contact-vs-power curve as an image ----------
+// The curve above in the same style: runs per nine with every MLB spot moved together, the line
+// on the sliders' teal-white-amber scale, and this lineup at its spots' average setting with its
+// 95% range.
+let tradeoffShare = null;   // what the chart on screen shows: { pts, avg, R, moe, vs }
+const tradeoffFileName = () => `lineup_sim_contact_vs_power${tradeoffShare?.vs ? `_vs_${fold(lastName(tradeoffShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
+
+async function tradeoffTileBlob() {
+  const { pts, avg, R, moe, vs } = tradeoffShare;
+  await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"',
+    '600 19px "JetBrains Mono"', '600 17px "JetBrains Mono"'].map((f) => document.fonts.load(f)));
+  const logo = await loadLogo();
+  const { W } = OPT_TILE, range = data.tradeoff.range;
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = W;
+  const g = cv.getContext("2d");
+  g.fillStyle = OPT_TILE.bg;
+  g.fillRect(0, 0, W, W);
+  // title, subtitle, wordmark
+  g.font = '700 36px "DM Sans"';
+  g.fillStyle = OPT_TILE.cyan;
+  g.fillText("Contact vs Power", 48, 64);
+  g.font = '400 21px "DM Sans"';
+  g.fillStyle = OPT_TILE.sub;
+  g.fillText(vs ? "Runs per 9, every MLB spot moved together" : "Runs per 9 at the same wOBA, every MLB spot moved together", 48, 100);
+  g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
+  const ctx = (vs ? `vs ${vsWords(vs)}` : "vs MLB-average pitching")
+    + (avg == null ? "" : ` · this lineup ${R.toFixed(2)} ±${moe.toFixed(2)} at its average setting (${fmtTheta(avg)})`);
+  fitFont(g, ctx, 400, 18, '"DM Sans"', W - 96);
+  g.fillStyle = OPT_TILE.axis;
+  g.fillText(ctx, 48, 136);
+
+  // the plot
+  const L = 118, Rt = W - 48, T = 196, B = 708;
+  const ys = pts.map((p) => p.R).concat(avg == null ? [] : [R - moe, R + moe]);
+  const span = Math.max(...ys) - Math.min(...ys);
+  const step = span > 0.45 ? 0.1 : 0.05;
+  const y0 = Math.floor(Math.min(...ys) / step) * step, y1 = Math.ceil(Math.max(...ys) / step) * step;
+  const x = (t) => L + ((t + range) / (2 * range)) * (Rt - L);
+  const y = (v) => T + (1 - (v - y0) / (y1 - y0)) * (B - T);
+  g.font = '400 17px "DM Sans"';
+  g.textAlign = "right";
+  g.textBaseline = "middle";
+  for (let v = y0; v <= y1 + 1e-9; v += step) {
+    g.strokeStyle = OPT_TILE.grid;
+    g.lineWidth = 1;
+    g.beginPath(); g.moveTo(L, y(v)); g.lineTo(Rt, y(v)); g.stroke();
+    g.fillStyle = OPT_TILE.axis;
+    g.fillText(v.toFixed(2), L - 14, y(v));
+  }
+  g.textAlign = "center";
+  g.textBaseline = "alphabetic";
+  g.strokeStyle = OPT_TILE.zero;
+  g.lineWidth = 2;
+  g.beginPath(); g.moveTo(x(0), T - 10); g.lineTo(x(0), B); g.stroke();
+  g.fillStyle = OPT_TILE.axis;
+  g.fillText("MLB", x(0), T - 18);
+  for (let t = -Math.floor(range); t <= Math.floor(range); t++) g.fillText(fmtStep(t), x(t), B + 30);
+  g.font = '400 16px "DM Sans"';
+  g.textAlign = "left";
+  g.fillStyle = tiltColor(-range);
+  g.fillText("← Contact", L, B + 58);
+  g.textAlign = "right";
+  g.fillStyle = tiltColor(range);
+  g.fillText("Power →", Rt, B + 58);
+  // the curve, colored by setting along the axis
+  const grad = g.createLinearGradient(x(-range), 0, x(range), 0);
+  grad.addColorStop(0, tiltColor(-range)); grad.addColorStop(0.5, "#fff"); grad.addColorStop(1, tiltColor(range));
+  g.strokeStyle = grad;
+  g.lineWidth = 6;
+  g.lineJoin = g.lineCap = "round";
+  g.beginPath();
+  pts.forEach((p, i) => (i ? g.lineTo(x(p.theta), y(p.R)) : g.moveTo(x(p.theta), y(p.R))));
+  g.stroke();
+  // its ends and its middle, labeled
+  g.font = '600 17px "JetBrains Mono"';
+  const lo = pts[0], hi = pts[pts.length - 1], mid = pts.find((p) => p.theta === 0);
+  // the middle one up and to the right, clear of this lineup's mark at its average setting
+  for (const [p, align, dx] of [[lo, "left", 10], [mid, "left", 16], [hi, "right", -10]]) {
+    if (!p) continue;
+    const color = tiltColor(p.theta), above = p.R >= (lo.R + hi.R) / 2 || p === mid;
+    g.beginPath(); g.arc(x(p.theta), y(p.R), 7, 0, 2 * Math.PI);
+    g.fillStyle = color; g.fill();
+    g.lineWidth = 3; g.strokeStyle = OPT_TILE.bg; g.stroke();
+    g.textAlign = align;
+    g.fillStyle = color;
+    g.fillText(p.R.toFixed(2), x(p.theta) + dx, y(p.R) + (p === mid ? -22 : above ? -18 : 32));
+  }
+  // this lineup, with its 95% range
+  if (avg != null) {
+    g.strokeStyle = "#fff";
+    g.lineWidth = 3;
+    g.lineCap = "round";
+    g.beginPath(); g.moveTo(x(avg), y(R - moe)); g.lineTo(x(avg), y(R + moe)); g.stroke();
+    g.beginPath(); g.arc(x(avg), y(R), 9, 0, 2 * Math.PI);
+    g.fillStyle = "#fff"; g.fill();
+    g.lineWidth = 3; g.strokeStyle = OPT_TILE.bg; g.stroke();
+  }
+  tileFooter(g);
   return new Promise((res) => cv.toBlob(res, "image/png"));
 }
 
@@ -1693,8 +1803,10 @@ async function boot() {
   });
   $("reset_all").addEventListener("click", resetSettings);
   // the optimizer chart's Share image button (shared/share-image.js)
-  if (window.ShareImage) ShareImage.image($("opt_share"), optTileBlob, optFileName);
-  else $("opt_share").hidden = true;
+  if (window.ShareImage) {
+    ShareImage.image($("opt_share"), optTileBlob, optFileName);
+    ShareImage.image($("tradeoff_share"), tradeoffTileBlob, tradeoffFileName);
+  } else $("opt_share").hidden = $("tradeoff_share").hidden = true;
   // another season's data might not have him both ways
   $("ohtani_box").hidden = !entries.has(`p${OHTANI}`) || !pitchers.has(`P${OHTANI}`);
   $("ohtani").addEventListener("change", () => setOhtani($("ohtani").checked));
