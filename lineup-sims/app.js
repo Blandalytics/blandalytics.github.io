@@ -789,7 +789,7 @@ function renderResults() {
   $("runs_mlb_key").textContent = last.ctx ? `MLB lineup spots vs ${lastName(last.name)} (simulated)` : "MLB lineup (simulated)";
 
   runsChart(dist, games);
-  renderTradeoff(moe);
+  renderTradeoff();
   renderSpots();
   renderTeams();
   renderOptimizer();
@@ -1057,13 +1057,11 @@ function setupTradeoff() {
     + `${-T.ends[0][2] > T.ends[T.ends.length - 1][2] ? "power" : "contact"} end.`;
 }
 
-function renderTradeoff(moe) {
+function renderTradeoff() {
   const box = $("tradeoff_out");
   box.hidden = mode !== "tradeoff";
   if (box.hidden) return;
   const pts = last.ctx ? last.ctx.tradeoff : data.sims.tradeoff.points;
-  const thetas = last.lineup.map((id) => entryOf(id)?.theta).filter((t) => t != null);
-  const avg = thetas.length ? thetas.reduce((s, t) => s + t, 0) / thetas.length : null;
   const base = pts.find((p) => p.theta === 0), lo = pts[0], hi = pts[pts.length - 1];
   const dR = (p) => `${p.R >= base.R ? "+" : "−"}${Math.abs(p.R - base.R).toFixed(2)}`;
   $("tradeoff_note").textContent = (last.ctx
@@ -1073,11 +1071,9 @@ function renderTradeoff(moe) {
       + `${fmtRate(lo.wOBA)} at the contact end, ${fmtRate(base.wOBA)} at 0, ${fmtRate(hi.wOBA)} at the power end. The curve is exact, not simulated.`
     : `With every spot moved together, the contact end (${fmtTheta(lo.theta)}) scores ${dR(lo)} runs per nine innings `
       + `against the MLB lineup and the power end (${fmtTheta(hi.theta)}) ${dR(hi)}, with wOBA at ${fmtRate(lo.wOBA)} to ${fmtRate(hi.wOBA)} throughout. `
-      + `Each point is ${data.sims.tradeoff.games.toLocaleString()} games on the same random seed, which keeps the curve smooth.`)
-    + (avg == null ? "" : thetas.length < 9 ? " This lineup is plotted at the average setting of its MLB spots."
-      : " This lineup is plotted at its spots' average setting.");
-  tradeoffChart(pts, avg, last.sum.R, moe);
-  tradeoffShare = { pts, avg, R: last.sum.R, moe, vs: last.ctx ? { name: last.name, hook: last.hook } : null };
+      + `Each point is ${data.sims.tradeoff.games.toLocaleString()} games on the same random seed, which keeps the curve smooth.`);
+  tradeoffChart(pts);
+  tradeoffShare = { pts, vs: last.ctx ? { name: last.name, hook: last.hook } : null };
 
   // table view of the curve at whole steps
   const cols = pts.filter((p) => Number.isInteger(p.theta) || Math.abs(p.theta) === data.tradeoff.range);
@@ -1110,10 +1106,11 @@ function renderTradeoff(moe) {
   }
 }
 
-function tradeoffChart(pts, avg, R, moe) {
+// the curve alone: runs per nine innings with every MLB spot at the same setting
+function tradeoffChart(pts) {
   const W = chartWidth("tradeoff_chart"), H = 240, L = 44, Rt = 14, T = 22, B = 44;
   const range = data.tradeoff.range;
-  const ys = pts.map((p) => p.R).concat(avg == null ? [] : [R - moe, R + moe]);
+  const ys = pts.map((p) => p.R);
   const span = Math.max(...ys) - Math.min(...ys);
   const step = span > 0.45 ? 0.1 : 0.05;
   const y0 = Math.floor(Math.min(...ys) / step) * step, y1 = Math.ceil(Math.max(...ys) / step) * step;
@@ -1146,10 +1143,6 @@ function tradeoffChart(pts, avg, R, moe) {
     W < 400 ? "SDs of 2026 hitters" : "standard deviations of 2026 hitters"); // a phone's chart has room for the short one
   el("path", { d: pts.map((p, i) => `${i ? "L" : "M"}${x(p.theta)},${y(p.R)}`).join(" "), fill: "none",
     stroke: "var(--s-mlb)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" });
-  if (avg != null) {
-    el("line", { x1: x(avg), x2: x(avg), y1: y(R - moe), y2: y(R + moe), stroke: "var(--s-lineup)", "stroke-width": 2, "stroke-linecap": "round" });
-    el("circle", { cx: x(avg), cy: y(R), r: 5, fill: "var(--s-lineup)", stroke: "var(--surface)", "stroke-width": 2 });
-  }
   const cross = el("line", { x1: 0, x2: 0, y1: T, y2: H - B, stroke: "var(--muted)", "stroke-width": 1, visibility: "hidden" });
   const hit = el("rect", { x: L, y: T, width: W - L - Rt, height: H - T - B, fill: "transparent" });
   const hideCross = () => { cross.setAttribute("visibility", "hidden"); hideTip(); };
@@ -1162,7 +1155,6 @@ function tradeoffChart(pts, avg, R, moe) {
     cross.setAttribute("visibility", "visible");
     const rows = [["var(--s-mlb)", p.R.toFixed(2), "runs / 9"], ["transparent", `${fmtRate(p.AVG)} / ${fmtRate(p.SLG)}`, "AVG / SLG"],
       ["transparent", `${p.K.toFixed(1)} / ${p.BB.toFixed(1)}`, "K / BB per 9"], ["transparent", fmtRate(p.wOBA), "wOBA"]];
-    if (avg != null && Math.abs(avg - p.theta) < 0.25) rows.splice(1, 0, ["var(--s-lineup)", `${R.toFixed(2)} ±${moe.toFixed(2)}`, "this lineup"]);
     showTip(ev, rows, p.theta === 0 ? "MLB spots" : `All spots ${fmtTheta(p.theta)}`);
   }, hideCross);
   $("tradeoff_chart").replaceChildren(svg);
@@ -1583,11 +1575,11 @@ function tileFooter(g) {
 // The curve above in the same style: runs per nine with every MLB spot moved together, the line
 // on the sliders' teal-white-amber scale, and this lineup at its spots' average setting with its
 // 95% range.
-let tradeoffShare = null;   // what the chart on screen shows: { pts, avg, R, moe, vs }
+let tradeoffShare = null;   // what the chart on screen shows: { pts, vs }
 const tradeoffFileName = () => `lineup_sim_contact_vs_power${tradeoffShare?.vs ? `_vs_${fold(lastName(tradeoffShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
 
 async function tradeoffTileBlob() {
-  const { pts, avg, R, moe, vs } = tradeoffShare;
+  const { pts, vs } = tradeoffShare;
   await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"',
     '600 19px "JetBrains Mono"', '600 17px "JetBrains Mono"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
@@ -1605,15 +1597,14 @@ async function tradeoffTileBlob() {
   g.fillStyle = OPT_TILE.sub;
   g.fillText(vs ? "Runs per 9, every MLB spot moved together" : "Runs per 9 at the same wOBA, every MLB spot moved together", 48, 100);
   g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
-  const ctx = (vs ? `vs ${vsWords(vs)}` : "vs MLB-average pitching")
-    + (avg == null ? "" : ` · this lineup ${R.toFixed(2)} ±${moe.toFixed(2)} at its average setting (${fmtTheta(avg)})`);
+  const ctx = vs ? `vs ${vsWords(vs)}` : "vs MLB-average pitching";
   fitFont(g, ctx, 400, 18, '"DM Sans"', W - 96);
   g.fillStyle = OPT_TILE.axis;
   g.fillText(ctx, 48, 136);
 
   // the plot
   const L = 118, Rt = W - 48, T = 196, B = 708;
-  const ys = pts.map((p) => p.R).concat(avg == null ? [] : [R - moe, R + moe]);
+  const ys = pts.map((p) => p.R);
   const span = Math.max(...ys) - Math.min(...ys);
   const step = span > 0.45 ? 0.1 : 0.05;
   const y0 = Math.floor(Math.min(...ys) / step) * step, y1 = Math.ceil(Math.max(...ys) / step) * step;
@@ -1656,8 +1647,8 @@ async function tradeoffTileBlob() {
   // its ends and its middle, labeled
   g.font = '600 17px "JetBrains Mono"';
   const lo = pts[0], hi = pts[pts.length - 1], mid = pts.find((p) => p.theta === 0);
-  // the middle one up and to the right, clear of this lineup's mark at its average setting
-  for (const [p, align, dx] of [[lo, "left", 10], [mid, "left", 16], [hi, "right", -10]]) {
+  // the middle one centered above its point
+  for (const [p, align, dx] of [[lo, "left", 10], [mid, "center", 0], [hi, "right", -10]]) {
     if (!p) continue;
     const color = tiltColor(p.theta), above = p.R >= (lo.R + hi.R) / 2 || p === mid;
     g.beginPath(); g.arc(x(p.theta), y(p.R), 7, 0, 2 * Math.PI);
@@ -1665,17 +1656,7 @@ async function tradeoffTileBlob() {
     g.lineWidth = 3; g.strokeStyle = OPT_TILE.bg; g.stroke();
     g.textAlign = align;
     g.fillStyle = color;
-    g.fillText(p.R.toFixed(2), x(p.theta) + dx, y(p.R) + (p === mid ? -22 : above ? -18 : 32));
-  }
-  // this lineup, with its 95% range
-  if (avg != null) {
-    g.strokeStyle = "#fff";
-    g.lineWidth = 3;
-    g.lineCap = "round";
-    g.beginPath(); g.moveTo(x(avg), y(R - moe)); g.lineTo(x(avg), y(R + moe)); g.stroke();
-    g.beginPath(); g.arc(x(avg), y(R), 9, 0, 2 * Math.PI);
-    g.fillStyle = "#fff"; g.fill();
-    g.lineWidth = 3; g.strokeStyle = OPT_TILE.bg; g.stroke();
+    g.fillText(p.R.toFixed(2), x(p.theta) + dx, y(p.R) + (above ? -18 : 32));
   }
   tileFooter(g);
   return new Promise((res) => cv.toBlob(res, "image/png"));
