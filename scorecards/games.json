@@ -1,5 +1,5 @@
 {
- "built": "2026-10-15T14:44:27Z",
+ "built": "2026-10-16T14:38:54Z",
  "games": {
   "822678": {
    "away": "New York Mets",
@@ -34021,6 +34021,20 @@
    "title": "Brewers 2, Dodgers 1",
    "venue": "American Family Field"
   },
+  "849810": {
+   "away": "Milwaukee Brewers",
+   "away_abbr": "MIL",
+   "away_nick": "Brewers",
+   "away_r": 6,
+   "date": "2026-10-15",
+   "file": "games/849810.html",
+   "home": "Los Angeles Dodgers",
+   "home_abbr": "LAD",
+   "home_nick": "Dodgers",
+   "home_r": 4,
+   "title": "Brewers 6, Dodgers 4",
+   "venue": "UNIQLO Field at Dodger Stadium"
+  },
   "849811": {
    "away": "Milwaukee Brewers",
    "away_abbr": "MIL",
@@ -34062,6 +34076,20 @@
    "home_r": 3,
    "title": "Rays 3, Guardians 1",
    "venue": "Tropicana Field"
+  },
+  "849818": {
+   "away": "Tampa Bay Rays",
+   "away_abbr": "TB",
+   "away_nick": "Rays",
+   "away_r": 2,
+   "date": "2026-10-15",
+   "file": "games/849818.html",
+   "home": "Cleveland Guardians",
+   "home_abbr": "CLE",
+   "home_nick": "Guardians",
+   "home_r": 3,
+   "title": "Guardians 3, Rays 2",
+   "venue": "Progressive Field"
   },
   "849819": {
    "away": "Los Angeles Dodgers",
