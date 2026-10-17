@@ -687,7 +687,7 @@ let jobs = 0;
 let versus = { key: "", ctx: null };
 const REF_GAMES = 20000;
 // This lineup against MLB-average pitching, simulated (REF_GAMES games) for the runs image's
-// white bars. Only the image asks for it, so runs and slider moves never pay for it: it runs
+// white lines. Only the image asks for it, so runs and slider moves never pay for it: it runs
 // then, in a worker of its own (the run worker is left alone), and is kept per lineup and Small
 // samples. A run with no pitcher picked is it already. base: { key, cums }, from run().
 let baseRun = { key: "", dist: null, games: 0 };
@@ -1803,7 +1803,7 @@ async function tradeoffTileBlob() {
 // ---------- the runs-per-game chart as an image ----------
 // The chart above in the same style: this lineup's share of games by runs scored (teal bars)
 // against MLB's lineup spots facing the same pitching (amber lines) and, with a pitcher picked,
-// this lineup against MLB-average pitching (white bars); the lineup down the left, the pitching
+// this lineup against MLB-average pitching (white lines); the lineup down the left, the pitching
 // as the subtitle, and runs per 9 with the comparisons' numbers in a box over the high-run end.
 let runsShare = null;   // what the chart on screen shows: { mine, amber, white: async () => shares, R, subs: [[label, runs, color]], games, ids, team, ohtani, vs }
 const runsFileName = () => `lineup_sim_runs_per_game${runsShare?.vs ? `_vs_${fold(lastName(runsShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
@@ -1875,7 +1875,7 @@ async function runsTileBlob() {
   g.textAlign = "left";
   g.textBaseline = "middle"; // the gridlines' labels sit on their lines
 
-  // the chart: gridlines and shares, teal bars (white beside them), amber steps for MLB's spots. Runs per 9 and the
+  // the chart: gridlines and shares, teal bars, steps for the comparisons (white, then amber over it). Runs per 9 and the
   // smaller numbers stack in a rounded box over the 7, 8, 9 and 10+ columns (the short high-run
   // end), a third of the y-axis tall, with the scale raised if those columns would reach it.
   const widthOf = (font, text) => { g.font = font; return g.measureText(text).width; };
@@ -1900,30 +1900,29 @@ async function runsTileBlob() {
     g.fillStyle = OPT_TILE.axis;
     g.fillText(`${Math.round(v * 100)}%`, P0 - 12, y(v));
   }
-  // a bar, rounded at the top; teal alone is wide, teal and white side by side split the band
-  const bar = (v, x0, x1, color) => {
+  const bw = band * 0.62;
+  g.fillStyle = TEAL;
+  mine.forEach((v, i) => {
     const h = y(0) - y(v);
     if (h < 0.5) return;
-    const r = Math.min(6, h / 2, (x1 - x0) * 0.3);
-    g.fillStyle = color;
+    const r = Math.min(6, h / 2, bw / 2), x0 = cx(i) - bw / 2, x1 = cx(i) + bw / 2;
     g.beginPath();
     g.moveTo(x0, y(0)); g.lineTo(x0, y(v) + r); g.quadraticCurveTo(x0, y(v), x0 + r, y(v));
     g.lineTo(x1 - r, y(v)); g.quadraticCurveTo(x1, y(v), x1, y(v) + r); g.lineTo(x1, y(0));
     g.closePath();
     g.fill();
+  });
+  // a comparison as a step across each band
+  const steps = (shares, color) => {
+    g.strokeStyle = color;
+    g.lineWidth = 4;
+    g.lineCap = "round";
+    shares.forEach((v, i) => {
+      g.beginPath(); g.moveTo(P0 + band * i + 4, y(v)); g.lineTo(P0 + band * (i + 1) - 4, y(v)); g.stroke();
+    });
   };
-  const bw = white ? band * 0.36 : band * 0.62, gap = band * 0.06;
-  mine.forEach((v, i) => {
-    if (!white) return bar(v, cx(i) - bw / 2, cx(i) + bw / 2, TEAL);
-    bar(v, cx(i) - gap / 2 - bw, cx(i) - gap / 2, TEAL);
-    bar(white[i], cx(i) + gap / 2, cx(i) + gap / 2 + bw, WHITE);
-  });
-  g.strokeStyle = GOLD;
-  g.lineWidth = 4;
-  g.lineCap = "round";
-  amber?.forEach((v, i) => {
-    g.beginPath(); g.moveTo(P0 + band * i + 4, y(v)); g.lineTo(P0 + band * (i + 1) - 4, y(v)); g.stroke();
-  });
+  if (white) steps(white, WHITE);
+  if (amber) steps(amber, GOLD);
   g.textAlign = "center";
   g.textBaseline = "alphabetic";
   g.fillStyle = OPT_TILE.axis;
@@ -1974,7 +1973,7 @@ async function runsTileBlob() {
   // the key, in the box's order: a row, or two when it doesn't fit, the last row where one was
   const keys = [["bar", TEAL, vs ? `This lineup vs ${vs.short}` : "This lineup"],
     ...(amber ? [["line", GOLD, vs ? `MLB lineup spots vs ${vs.short}` : "MLB lineup spots"]] : []),
-    ...(white ? [["bar", WHITE, "This lineup vs MLB-average pitching"]] : [])];
+    ...(white ? [["line", WHITE, "This lineup vs MLB-average pitching"]] : [])];
   g.textAlign = "left";
   g.font = '400 16px "DM Sans"';
   const keyRows = [[]];
