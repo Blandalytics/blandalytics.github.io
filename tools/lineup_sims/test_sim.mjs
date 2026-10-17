@@ -459,6 +459,78 @@ if (existsSync(pitchFile)) {
     const avg = lineupRuns(chain, hs.map((x) => matchup(chain, x, null)));
     close(avg, data.mlb.actual.R, 0.35, "MLB spots vs average, R/9");
   });
+
+  // ---- the hypothetical pitcher (data/<season>-quality.json, pipeline/quality_axis.py) ----
+  const qualityFile = join(repo, "lineup-sims", "data", `${process.argv[2] ?? "2026"}-quality.json`);
+  if (existsSync(qualityFile)) {
+    const Q = JSON.parse(readFileSync(qualityFile, "utf8")), R = Q.range;
+    const w = data.weights, wv = [0, w.wBB, w.wHBP, w.w1B, w.w2B, w.w3B, w.wHR, 0, 0, 0, 0];
+    const woba = (c) => c.reduce((t, x, i) => t + x * wv[i], 0) / c.reduce((t, x) => t + x, 0);
+    // the page's MLB-average RHP, moved: his rates and each cell's by q steps (app.js hypothetical())
+    const moved = (c, q) => tilt(c, Q.pa.per_sd, q).map((x) => x * c.reduce((t, y) => t + y, 0));
+    const rhp = (q, mode) => {
+      const cells = { L: moved(data.pitching.cells.RL, q), R: moved(data.pitching.cells.RR, q) };
+      return pitcherOf(cells.L.map((x, i) => x + cells.R[i]), cells, "R", { mode, league });
+    };
+    // and with the per-pitch model, his ratios (app.js hypoRatios())
+    const ratiosAt = (q) => { const s = Q.pitch.steps[Math.round((q + R) * 10)]; return Q.pitch.slope.map((x) => Math.exp(s * x)); };
+    const pitchRhp = (q, mode) => pitcherOf(data.pitching.league, data.pitching.cells, "R", { mode, league })
+      .map((c) => ({ ...c, pitch: q ? { all: ratiosAt(q), gap: ratiosAt(q), cells: null } : side(null, mode) }));
+
+    check("quality: the per-PA axis keeps a profile adding up to 1, moves wOBA allowed a talent SD a step, and keeps every MLB-average cell at or above 0", () => {
+      close(Q.pa.per_sd.reduce((t, x) => t + x, 0), 0, 1e-12, "sum");
+      close(Q.pa.per_sd.reduce((t, x, i) => t + x * wv[i], 0), -Q.pa.sd, 1e-12, "wOBA per step");
+      assert.ok(Q.pa.sd > 0.01 && Q.pa.sd < Q.pa.observed_sd, `talent SD ${Q.pa.sd} under the observed ${Q.pa.observed_sd}`);
+      for (const k of ["RL", "RR", "LL", "LR"]) for (const q of [-R, R]) {
+        const c = data.pitching.cells[k], n = c.reduce((t, x) => t + x, 0);
+        c.forEach((x, i) => assert.ok(x / n + q * Q.pa.per_sd[i] >= 0, `${k} at ${q}: ${CATS[i]}`));
+      }
+    });
+
+    check("quality: the per-pitch steps put the count chain's wOBA allowed as many talent SDs from average, tenth by tenth", () => {
+      const avg = woba(pitchChances(tables.all, null, null));
+      close(avg, Q.pitch.woba, 1e-9, "average");
+      assert.equal(Q.pitch.steps.length, Math.round(R * 20) + 1);
+      for (let k = 0; k < Q.pitch.steps.length; k++) {
+        const q = k / 10 - R;
+        close(woba(pitchChances(tables.all, null, ratiosAt(q))), avg - q * Q.pa.sd, 1e-6, `at ${q.toFixed(1)}`);
+      }
+    });
+
+    check("quality: in both models a pitcher toward the Ace end strikes out more, allows less and holds MLB's spots to fewer runs", () => {
+      const mode = "own", spots = data.mlb.spots.map((s) => spotOf(s, mode)), pspots = Array.from({ length: 9 }, (_, i) => pitchSpot("MLB", i, mode));
+      const runs = (hs, sp) => lineupRuns(chain, hs.map((h) => matchup(chain, h, { sp, relief: [] })));
+      let prev = null;
+      for (const q of [-R, -1, 0, 1, R]) {
+        const pa = rhp(q, mode), pp = pitchRhp(q, mode), h = spotOf(data.mlb.spots[3], mode), hp = pitchSpot("MLB", 3, mode);
+        const now = { paR: runs(spots, pa), pitchR: runs(pspots, pp), paK: facing(h, pa)[0], pitchK: facing(hp, pp)[0] };
+        if (prev) for (const k of Object.keys(now)) assert.ok(k.endsWith("R") ? now[k] < prev[k] : now[k] > prev[k], `${k} at ${q}: ${now[k]} vs ${prev[k]}`);
+        // the same quality in both: runs within a few tenths of each other at every setting
+        close(now.pitchR, now.paR, 0.4, `per-pitch vs per-PA runs at ${q}`);
+        prev = now;
+      }
+    });
+
+    check("quality: at 0 the hypothetical pitcher is today's MLB-average arm, in both models", () => {
+      // (the page hands over the MLB-average entry itself at 0; moved by 0, or at the 0 step, he's the same)
+      close(Q.pitch.steps[Math.round(R * 10)], 0, 1e-12, "the per-pitch step at 0");
+      for (const hand of ["R", "L"]) {
+        const cl = data.pitching.cells[hand + "L"], cr = data.pitching.cells[hand + "R"];
+        for (const mode of ["off", "league", "own"]) {
+          const base = pitcherOf(cl.map((x, i) => x + cr[i]), { L: cl, R: cr }, hand, { mode, league });
+          const cells = { L: moved(cl, 0), R: moved(cr, 0) }, zero = pitcherOf(cells.L.map((x, i) => x + cells.R[i]), cells, hand, { mode, league });
+          const none = side(null, mode), at0 = { all: ratiosAt(0), gap: ratiosAt(0), cells: null };
+          for (let i = 0; i < 9; i++) {
+            const h = spotOf(data.mlb.spots[i], mode), hp = pitchSpot("MLB", i, mode);
+            const a = facing(h, base), b = facing(h, zero);
+            a.forEach((x, k) => close(b[k], x, 1e-12, `per-PA ${hand}HP ${mode} spot ${i + 1} ${CATS[k]}`));
+            const c = facing(hp, base.map((x) => ({ ...x, pitch: none }))), d = facing(hp, base.map((x) => ({ ...x, pitch: at0 })));
+            c.forEach((x, k) => close(d[k], x, 1e-12, `per-pitch ${hand}HP ${mode} spot ${i + 1} ${CATS[k]}`));
+          }
+        }
+      }
+    });
+  }
 }
 
 // ---- the modeled hook (data/<season>-hook.json, pipeline/hook_model.py) ----

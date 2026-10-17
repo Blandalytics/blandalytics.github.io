@@ -34,13 +34,16 @@ python -I tools/lineup_sims/pitch_model.py 2026 --pitches <projections>/data/int
 #       interim/transactions.parquet
 #     and writes only lineup-sims/data/<season>-hook.json
 python -I tools/lineup_sims/hook_model.py 2026 --projections <projections>/data
+# 3d. the hypothetical pitcher's quality axes (Scrub - Average - Ace), from the data files of steps 3
+#     and 3b; run it again whenever either changes
+python -I tools/lineup_sims/quality_axis.py 2026
 # 4. every team's lineups and the contact-power curve, simulated into the data file (~1 min)
 node tools/lineup_sims/precompute.mjs 2026 100000
 # 5. engine checks against the new file
 node tools/lineup_sims/test_sim.mjs 2026
 ```
 
-Then bump `data/2026.json?v=` (and `data/2026-pitch.json?v=` or `data/2026-hook.json?v=`, if step 3b or 3c ran) in
+Then bump `data/2026.json?v=` (and `data/2026-pitch.json?v=`, `data/2026-hook.json?v=` or `data/2026-quality.json?v=`, if step 3b, 3c or 3d ran) in
 `lineup-sims/app.js` and `app.js?v=` in `lineup-sims/index.html`; browsers and the edge
 hold them for hours.
 
@@ -111,6 +114,19 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
   matchup: each player's own splits, league-average platoon gaps on his overall rates, or
   off. `build.py` and `test_sim.mjs` check every split adds up to its whole; the tests also
   check the platoon identities and exact against simulated with splits on.
+* **Hypothetical pitcher** (`quality_axis.py`, `data/<season>-quality.json`, the MLB-average RHP or LHP
+  with the Pitcher quality slider, Scrub to Ace): steps are standard deviations of 2026 pitchers'
+  talent in wOBA allowed. Per-PA: the covariance of pitchers' eleven rates (100+ batters faced,
+  weighted by them) less sampling's (one PA's multinomial covariance at the league's rates over each
+  pitcher's batters faced) is talent's, T; a step toward Ace moves his rates, and each platoon
+  cell's, by -T wv / sqrt(wv' T wv), which sums to 0 and moves wOBA allowed one talent SD. Per-Pitch:
+  the per-pitch model's pitchers' 13 log ratios regressed on the chain's wOBA allowed against an
+  MLB-average hitter; a setting is exp(s * slope), s found for each tenth so the chain's wOBA allowed
+  is that many talent SDs from average. The reach is as far as 2026 regulars (300+ batters faced,
+  their wOBA allowed shrunk by its reliability) go toward the nearer end, and no MLB-average cell
+  goes below 0. `test_sim.mjs` checks the axis's sums, the steps against the page's chain, and that
+  both models' pitchers get better (more strikeouts, fewer runs) toward Ace, within .4 R/9 of each
+  other.
 * **Modeled hook** (`hook_model.py`, `data/<season>-hook.json`, He pitches → Modeled hook): when
   a starter comes out. A boundary is the end of one of his plate appearances (does he face his
   team's next batter?); a LightGBM model of 120 trees, 31 leaves, fit on every start from 2022
@@ -154,5 +170,6 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
 | `build.py` | builds the data file and runs the cross-checks |
 | `pitch_model.py` | builds the per-pitch model's data file |
 | `hook_model.py` | builds the hook model's data file |
+| `quality_axis.py` | builds the hypothetical pitcher's quality axes |
 | `precompute.mjs` | team simulations, the contact-power curve, the calibration report |
 | `test_sim.mjs` | engine, optimizer and pitcher-matchup checks |
