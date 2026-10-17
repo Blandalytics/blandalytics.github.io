@@ -687,7 +687,7 @@ let jobs = 0;
 let versus = { key: "", ctx: null };
 const REF_GAMES = 20000;
 // This lineup against MLB-average pitching, simulated (REF_GAMES games) for the runs image's
-// white lines. Only the image asks for it, so runs and slider moves never pay for it: it runs
+// white curve. Only the image asks for it, so runs and slider moves never pay for it: it runs
 // then, in a worker of its own (the run worker is left alone), and is kept per lineup and Small
 // samples. A run with no pitcher picked is it already. base: { key, cums }, from run().
 let baseRun = { key: "", dist: null, games: 0 };
@@ -1031,15 +1031,16 @@ function runsChart(dist, games, runs, avg) {
   const mlb = last.ctx ? share(last.ctx.refDist, REF_GAMES) : share(data.sims.mlb.runDist, 1);
   // The image's colors mean one thing whatever's picked: teal is this lineup against the pitching
   // picked (runs per 9, the headline), amber MLB's lineup spots against that pitching, white this
-  // lineup against MLB-average pitching. Each has its bars or lines and its number in the box, in
-  // its color. One that would repeat teal goes: amber when the lineup is MLB's spots as they are,
-  // white with no pitcher picked.
+  // lineup against MLB-average pitching. Teal is bars, amber and white curves over their share of
+  // games by run total (every total, not 10+), and each has its number in the box in its color.
+  // One that would repeat teal goes: amber when the lineup is MLB's spots as they are, white with
+  // no pitcher picked.
   const average = averageLineup(last.lineup);
-  const amber = average ? null : mlb;
+  const amber = average ? null : last.ctx ? Array.from(last.ctx.refDist, (c) => c / REF_GAMES) : Array.from(data.sims.mlb.runDist);
   // (white only once the image is made: MLB's spots as they are have it in data.sims.mlb already)
   const base = last.base;
-  const white = !last.vs ? null : average ? async () => share(data.sims.mlb.runDist, 1)
-    : async () => { const b = await baseDist(base); return share(b.dist, b.games); };
+  const white = !last.vs ? null : average ? async () => Array.from(data.sims.mlb.runDist)
+    : async () => { const b = await baseDist(base); return Array.from(b.dist, (c) => c / b.games); };
   const subs = [...(average ? [] : [[last.vs ? `MLB vs ${lastName(last.name)}` : "MLB", last.vs ? last.ctx.mlb.R : data.sims.mlb.R, "amber"]]),
     ...(last.vs ? [["Lineup vs MLB", avg, "white"]] : [])];
   // a team's lineup (its spots or its most-used order, edited or not) leads the subtitle with its abbreviation
@@ -1802,10 +1803,11 @@ async function tradeoffTileBlob() {
 
 // ---------- the runs-per-game chart as an image ----------
 // The chart above in the same style: this lineup's share of games by runs scored (teal bars)
-// against MLB's lineup spots facing the same pitching (amber lines) and, with a pitcher picked,
-// this lineup against MLB-average pitching (white lines); the lineup down the left, the pitching
+// against MLB's lineup spots facing the same pitching (an amber curve) and, with a pitcher picked,
+// this lineup against MLB-average pitching (a white curve); the lineup down the left, the pitching
 // as the subtitle, and runs per 9 with the comparisons' numbers in a box over the high-run end.
-let runsShare = null;   // what the chart on screen shows: { mine, amber, white: async () => shares, R, subs: [[label, runs, color]], games, ids, team, ohtani, vs }
+// mine: shares by run total, 10+ last; amber and white (async): shares by run total, every one
+let runsShare = null;   // what the chart on screen shows: { mine, amber, white, R, subs: [[label, runs, color]], games, ids, team, ohtani, vs }
 const runsFileName = () => `lineup_sim_runs_per_game${runsShare?.vs ? `_vs_${fold(lastName(runsShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
 
 async function runsTileBlob() {
@@ -1818,7 +1820,6 @@ async function runsTileBlob() {
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
   const TEAL = css("--contact"), GOLD = css("--power"), WHITE = "#fff";
   const COLOR = { amber: GOLD, white: WHITE };
-  const series = [mine, amber, white].filter(Boolean);
   const cv = document.createElement("canvas");
   cv.width = cv.height = W;
   const g = cv.getContext("2d");
@@ -1875,9 +1876,9 @@ async function runsTileBlob() {
   g.textAlign = "left";
   g.textBaseline = "middle"; // the gridlines' labels sit on their lines
 
-  // the chart: gridlines and shares, teal bars, steps for the comparisons (white, then amber over it). Runs per 9 and the
+  // the chart: gridlines and shares, teal bars, curves for the comparisons (white, then amber over it). Runs per 9 and the
   // smaller numbers stack in a rounded box over the 7, 8, 9 and 10+ columns (the short high-run
-  // end), a third of the y-axis tall, with the scale raised if those columns would reach it.
+  // end), a third of the y-axis tall, with the scale raised if the bars or curves there would reach it.
   const widthOf = (font, text) => { g.font = font; return g.measureText(text).width; };
   const band = (P1 - P0) / n, first = n - 4, pad = 12;
   const boxH = (B - T) / 3, boxW = band * 4;
@@ -1886,8 +1887,18 @@ async function runsTileBlob() {
     widthOf(`400 ${size}px "DM Sans"`, label) + 10 + widthOf(`600 ${size + 4}px "JetBrains Mono"`, v.toFixed(2))));
   let subSize = 15;
   while (subSize > 11 && rowW(subSize) > boxW - 2 * pad) subSize--;
-  const high = Math.max(...series.flatMap((s) => s.slice(first)));
-  const top = Math.max(...series.flat()), step = top > 0.16 ? 0.05 : 0.04;
+  // A curve is a Gaussian kernel density over the shares (0.6 runs wide, mirrored at the 0 column's
+  // left edge so none of it falls below 0 runs), in share per run like the bars, sampled across the
+  // columns. Over 10+ it shows games of about 10 runs, not 10 or more.
+  const BW = 0.6, K = (u) => Math.exp(-0.5 * (u / BW) ** 2) / (BW * Math.sqrt(2 * Math.PI));
+  const curve = (shares) => Array.from({ length: n * 20 + 1 }, (_, j) => {
+    const x = -0.5 + j / 20;
+    return [x, shares.reduce((t, sh, k) => t + sh * (K(x - k) + K(x + 1 + k)), 0)];
+  });
+  const curves = [[white, WHITE], [amber, GOLD]].filter(([sh]) => sh).map(([sh, color]) => ({ pts: curve(sh), color }));
+  const reach = (from) => curves.flatMap((c) => c.pts.filter(([x]) => x >= from - 0.5).map(([, v]) => v));
+  const high = Math.max(...mine.slice(first), ...reach(first));
+  const top = Math.max(...mine, ...reach(0)), step = top > 0.16 ? 0.05 : 0.04;
   const yMax = Math.ceil(Math.max(top, high / (1 - (boxH + 12) / (B - T))) / step - 1e-9) * step;
   const y = (v) => T + (1 - v / yMax) * (B - T);
   const cx = (i) => P0 + band * i + band / 2;
@@ -1912,17 +1923,14 @@ async function runsTileBlob() {
     g.closePath();
     g.fill();
   });
-  // a comparison as a step across each band
-  const steps = (shares, color) => {
+  for (const { pts, color } of curves) {
     g.strokeStyle = color;
     g.lineWidth = 4;
-    g.lineCap = "round";
-    shares.forEach((v, i) => {
-      g.beginPath(); g.moveTo(P0 + band * i + 4, y(v)); g.lineTo(P0 + band * (i + 1) - 4, y(v)); g.stroke();
-    });
-  };
-  if (white) steps(white, WHITE);
-  if (amber) steps(amber, GOLD);
+    g.lineCap = g.lineJoin = "round";
+    g.beginPath();
+    pts.forEach(([x, v], j) => (j ? g.lineTo : g.moveTo).call(g, P0 + band * (x + 0.5), y(v)));
+    g.stroke();
+  }
   g.textAlign = "center";
   g.textBaseline = "alphabetic";
   g.fillStyle = OPT_TILE.axis;
