@@ -939,7 +939,8 @@ function renderResults() {
   $("basis_sim").title = last.ctx ? `Each team's nine lineup spots against ${vsWords(last)}, worked out exactly`
     : `Each team's nine lineup spots run through the same simulation, ${data.sims.games.toLocaleString()} games each`;
   $("basis_sim").textContent = last.ctx ? `Teams' lineup spots vs ${last.short}` : "Teams' lineup spots, simulated";
-  $("runs_mlb_key").textContent = last.ctx ? `MLB lineup spots vs ${last.short} (simulated)` : "MLB lineup (simulated)";
+  // the legend's names: "Avg Lineup" for MLB's lineup spots, "Avg Pitching" for MLB-average pitching
+  $("runs_mlb_key").textContent = last.ctx ? `Avg Lineup vs ${last.vs ? last.short : "Avg Pitching"} (simulated)` : "Avg Lineup (simulated)";
 
   runsChart(dist, games, s.R, avg);
   renderTradeoff(moe);
@@ -1086,7 +1087,7 @@ addEventListener("resize", () => {
 // runs: runs per 9, the share image's headline; avg: this lineup against MLB-average pitching
 // (with a pitcher picked), one of its smaller numbers
 function runsChart(dist, games, runs, avg) {
-  const MAX = 10; // last bucket is 10+
+  const MAX = 12; // last bucket is 12+
   const share = (arr, total) => {
     const out = arr.slice(0, MAX).map((n) => n / total);
     out.push(arr.slice(MAX).reduce((s, n) => s + n, 0) / total);
@@ -1097,7 +1098,7 @@ function runsChart(dist, games, runs, avg) {
   // The image's colors mean one thing whatever's picked: teal is this lineup against the pitching
   // picked (runs per 9, the headline), amber MLB's lineup spots against that pitching, white this
   // lineup against MLB-average pitching. Teal is bars, amber and white curves over their share of
-  // games by run total (every total, not 10+), and each has its number in the box in its color.
+  // games by run total (every total, not 12+), and each has its number in the box in its color.
   // One that would repeat teal goes: amber when the lineup is MLB's spots as they are, white with
   // no pitcher picked.
   const average = averageLineup(last.lineup);
@@ -1874,7 +1875,7 @@ async function tradeoffTileBlob() {
 // against MLB's lineup spots facing the same pitching (an amber curve) and, with a pitcher picked,
 // this lineup against MLB-average pitching (a white curve); the lineup down the left, the pitching
 // as the subtitle, and runs per 9 with the comparisons' numbers in a box over the high-run end.
-// mine: shares by run total, 10+ last; amber and white (async): shares by run total, every one
+// mine: shares by run total, 12+ last; amber and white (async): shares by run total, every one
 let runsShare = null;   // what the chart on screen shows: { mine, amber, white, R, subs: [[label, runs, color]], games, ids, team, ohtani, vs }
 const runsFileName = () => `lineup_sim_runs_per_game${runsShare?.vs ? `_vs_${fold(lastName(runsShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
 
@@ -1945,11 +1946,11 @@ async function runsTileBlob() {
   g.textBaseline = "middle"; // the gridlines' labels sit on their lines
 
   // the chart: gridlines and shares, teal bars, curves for the comparisons (white, then amber over it). Runs per 9 and the
-  // smaller numbers stack in a rounded box over the 7, 8, 9 and 10+ columns (the short high-run
+  // smaller numbers stack in a rounded box over the last five columns, 8 to 12+ (the short high-run
   // end), a third of the y-axis tall, with the scale raised if the bars or curves there would reach it.
   const widthOf = (font, text) => { g.font = font; return g.measureText(text).width; };
-  const band = (P1 - P0) / n, first = n - 4, pad = 12;
-  const boxH = (B - T) / 3, boxW = band * 4;
+  const band = (P1 - P0) / n, first = n - 5, pad = 12;
+  const boxH = (B - T) / 3, boxW = band * 5;
   // the smaller numbers a row each, label left and value right, their type shrunk until the longest fits
   const rowW = (size) => Math.max(0, ...subs.map(([label, v]) =>
     widthOf(`400 ${size}px "DM Sans"`, label) + 10 + widthOf(`600 ${size + 4}px "JetBrains Mono"`, v.toFixed(2))));
@@ -1957,7 +1958,7 @@ async function runsTileBlob() {
   while (subSize > 11 && rowW(subSize) > boxW - 2 * pad) subSize--;
   // A curve is a Gaussian kernel density over the shares (0.6 runs wide, mirrored at the 0 column's
   // left edge so none of it falls below 0 runs), in share per run like the bars, sampled across the
-  // columns. Over 10+ it shows games of about 10 runs, not 10 or more.
+  // columns. Over 12+ it shows games of about 12 runs, not 12 or more.
   const BW = 0.6, K = (u) => Math.exp(-0.5 * (u / BW) ** 2) / (BW * Math.sqrt(2 * Math.PI));
   const curve = (shares) => Array.from({ length: n * 20 + 1 }, (_, j) => {
     const x = -0.5 + j / 20;
@@ -2048,8 +2049,8 @@ async function runsTileBlob() {
 
   // the key, in the box's order: a row, or two when it doesn't fit, the last row where one was
   const keys = [["bar", TEAL, vs ? `This lineup vs ${vs.short}` : "This lineup"],
-    ...(amber ? [["line", GOLD, vs ? `MLB lineup spots vs ${vs.short}` : "MLB lineup spots"]] : []),
-    ...(white ? [["line", WHITE, "This lineup vs MLB-average pitching"]] : [])];
+    ...(amber ? [["line", GOLD, vs ? `Avg Lineup vs ${vs.short}` : "Avg Lineup"]] : []),
+    ...(white ? [["line", WHITE, "This lineup vs Avg Pitching"]] : [])];
   g.textAlign = "left";
   g.font = '400 16px "DM Sans"';
   const keyRows = [[]];
