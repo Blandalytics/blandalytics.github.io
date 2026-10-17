@@ -308,36 +308,59 @@ export function pitchChances(tables, h, p) {
 // against the league in the cells he played in (`gap`), and in each cell as the mode has it
 // (`cells`: his own, or none for the league's gap); `theta` his contact-power setting. Each
 // pitching entry's `pitch` is the same for the pitcher's side ({ all, gap, cells }), or null
-// for MLB average. `theta` and `perSd` as for facing(); the setting moves the outcomes after the
-// count chain, not the hitter before it.
-// The chain doesn't depend on the setting, so each hitter's outcomes against each pitching are
-// kept (the optimizer tries setting after setting against the same pitching).
+// for MLB average. `theta` and `perSd` as for facing().
+// The setting moves him as log5 does with the per-PA model (log5(tilt(b), p, l)): in each cell,
+// his chances against the pitching are scaled, outcome by outcome, by how far the setting moves
+// his chances against MLB-average pitching in that cell (tilt(a) / a), then renormalized. So a
+// power setting costs more strikeouts against a strikeout pitcher than against an average one,
+// and against MLB-average pitching it is the tilt itself. It's worked as tilt(a) times the
+// pitching's effect (q / a), which stays finite where a is tiny; where a is (nearly) 0 the
+// effect is taken as none, so the tilt itself.
+// The chains don't depend on the setting, so each hitter's are kept per pitching (the optimizer
+// tries setting after setting against the same pitching).
 const chained = new WeakMap();
+const TINY = 1e-12;
 function facingByPitch(hitter, pitching, theta, perSd) {
   const hp = hitter.pitch, th = (hp.theta ?? 0) + theta;
   let seen = chained.get(hp);
   if (!seen) chained.set(hp, (seen = new Map()));
-  let q = seen.get(pitching);
-  if (!q) seen.set(pitching, (q = chainFacing(hitter, pitching)));
-  return th ? tilt(q, perSd ?? hp.perSd, th) : q.slice();
-}
-function chainFacing(hitter, pitching) {
-  const hp = hitter.pitch;
-  if (!pitching) return pitchChances(hp.tables.all, hp.all, null);
+  let ch = seen.get(pitching);
+  if (!ch) seen.set(pitching, (ch = chainParts(hitter, pitching)));
+  if (!th) return ch.q.slice();
+  const per = perSd ?? hp.perSd;
+  if (!pitching) return tilt(ch.q, per, th);
   const q = new Array(CATS.length).fill(0);
-  const add = (w, x) => { for (let i = 0; i < x.length; i++) q[i] += w * x[i]; };
-  for (const c of pitching) {
-    const parts = c.hand && hitter.parts?.[c.hand];
-    if (!parts) {
-      add(c.w, pitchChances(hp.tables.all, hp.all, c.pitch?.all ?? null));
-      continue;
-    }
-    for (const part of parts) {
-      const k = c.hand + part.side, pp = c.pitch;
-      add(c.w * part.w, pitchChances(hp.tables[k], hp.cells?.[k] ?? hp.gap, pp ? pp.cells?.[k] ?? pp.gap : null));
-    }
+  for (const { w, q: x, a } of ch.parts) {
+    const t = tilt(a, per, th), y = t.map((v, i) => (a[i] > TINY ? v * (x[i] / a[i]) : v));
+    const sum = y.reduce((s, v) => s + v, 0);
+    for (let i = 0; i < y.length; i++) q[i] += w * (sum > 0 ? y[i] / sum : x[i]);
   }
   return q;
+}
+// a hitter's chains against the pitching: by part (pitcher hand and batter side, as facing()
+// splits them) his chances against it (q) and against MLB-average pitching in the same cell (a),
+// with the part's weight; and q, all parts together
+function chainParts(hitter, pitching) {
+  const hp = hitter.pitch;
+  if (!pitching) {
+    const a = pitchChances(hp.tables.all, hp.all, null);
+    return { q: a, parts: [{ w: 1, q: a, a }] };
+  }
+  const parts = [];
+  for (const c of pitching) {
+    const cell = c.hand && hitter.parts?.[c.hand];
+    if (!cell) {
+      parts.push({ w: c.w, q: pitchChances(hp.tables.all, hp.all, c.pitch?.all ?? null), a: pitchChances(hp.tables.all, hp.all, null) });
+      continue;
+    }
+    for (const part of cell) {
+      const k = c.hand + part.side, pp = c.pitch, own = hp.cells?.[k] ?? hp.gap;
+      parts.push({ w: c.w * part.w, q: pitchChances(hp.tables[k], own, pp ? pp.cells?.[k] ?? pp.gap : null), a: pitchChances(hp.tables[k], own, null) });
+    }
+  }
+  const q = new Array(CATS.length).fill(0);
+  for (const { w, q: x } of parts) for (let i = 0; i < x.length; i++) q[i] += w * x[i];
+  return { q, parts };
 }
 
 // Move an outcome profile (counts or rates, in CATS order) along the contact-power axis

@@ -11,8 +11,8 @@
 // With the modeled hook, the page sends the model's trees and other fixed parts once ("hook"),
 // then each job carries only the starter's before-the-game values (`hookX`), and its relief
 // stage's `from` is "hook": the lines then average over where MLB's spots' games took him out.
-import { prepare, simulate } from "./sim.js?v=7";
-import { chainTables, expectedLines, expectedLinesMix, hookMix, optimize } from "./markov.js?v=6";
+import { prepare, simulate } from "./sim.js?v=8";
+import { chainTables, expectedLines, expectedLinesMix, hookMix, optimize } from "./markov.js?v=7";
 
 let model = null, chain = null, hookFixed = null;
 

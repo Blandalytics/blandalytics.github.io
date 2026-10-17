@@ -15,7 +15,7 @@
 // starter, then whoever takes over at a set number of outs into the game (a follower, the
 // bullpen). An inning one of them has to himself uses the hitters against him; an inning
 // with a change in it uses, from each state, whoever is pitching at that state's outs.
-import { facing, summarize } from "./sim.js?v=7";
+import { facing, summarize } from "./sim.js?v=8";
 
 const NS = 24;
 const NY = 13; // a plate appearance's tallies for expectedLine: PA, the eleven outcomes, sacrifice flies

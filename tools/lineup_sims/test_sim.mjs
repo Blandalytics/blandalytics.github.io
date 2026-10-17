@@ -357,6 +357,7 @@ if (existsSync(pitchFile)) {
   // a lineup spot or hitter as the page builds it with the per-pitch model
   const pitchSpot = (abbr, i, mode) => ({ ...spotOf((abbr === "MLB" ? data.mlb : data.teams.find((t) => t.abbr === abbr)).spots[i], mode),
     pitch: { tables, ...side(pd.spots[`${abbr}-${i + 1}`], mode), theta: 0, perSd: data.tradeoff.per_sd } });
+  const C_HBP = CATS.indexOf("HBP");
   const pitchArm = (row, mode) => pitcherOf(row[4], row[8], row[3], { mode, league }).map((c) => ({ ...c, pitch: side(pd.pitchers[row[0]], mode) }));
 
   check("per-pitch: the page's count chain matches the pipeline's, matchup by matchup", () => {
@@ -378,12 +379,71 @@ if (existsSync(pitchFile)) {
     }
   });
 
-  check("per-pitch: a setting moves the chain's outcomes along the contact-power axis, and facing() keeps nothing between calls", () => {
-    const h = pitchSpot("MLB", 0, "own"), vs = pitchArm(ace, "own");
-    const q0 = facing(h, vs), q1 = facing(h, vs, 1, data.tradeoff.per_sd);
-    tilt(q0, data.tradeoff.per_sd, 1).forEach((x, i) => close(q1[i], x, 1e-12, `tilted ${CATS[i]}`));
+  check("per-pitch: a setting moves him as log5 does with the per-PA model, and facing() keeps nothing between calls", () => {
+    const per = data.tradeoff.per_sd;
+    // against a pitcher (splits off: one part) his chances scaled by tilt(a) / a, renormalized:
+    // log5's identity, log5(tilt(b), p, l) = log5(b, p, l) * tilt(b) / b, renormalized
+    const off = pitchSpot("MLB", 0, "off"), vs = pitchArm(ace, "off"), a0 = facing(off, null), q0 = facing(off, vs);
+    const t = tilt(a0, per, 1.5), y = q0.map((x, i) => (x * t[i]) / a0[i]), n = y.reduce((s, x) => s + x, 0);
+    const q1 = facing(off, vs, 1.5, per);
+    y.forEach((x, i) => close(q1[i], x / n, 1e-12, `vs ${ace[1]}, tilted ${CATS[i]}`));
+    close(q1.reduce((s, x) => s + x, 0), 1, 1e-12, "sum");
     q0[0] = 99; // a caller writing into the result
-    close(facing(h, vs)[0], q1[0] - data.tradeoff.per_sd[0], 1e-12, "a fresh copy");
+    close(facing(off, vs)[0], facing(off, vs.map((c) => ({ ...c })))[0], 1e-12, "a fresh copy");
+  });
+
+  check("per-pitch: against MLB-average pitching a setting does what it did before (the tilt of the chain's outcomes)", () => {
+    const per = data.tradeoff.per_sd;
+    // MLB-average pitching (null), and an arm of each hand and a bullpen with no ratios of their own
+    const none = { all: null, gap: null, cells: null };
+    const avgArms = [null, ...["R", "L"].map((t) => pitcherOf(data.pitching.league, data.pitching.cells, t, { mode: "own", league }).map((c) => ({ ...c, pitch: none }))),
+      penOf(data.pitching.relief_cells, "own").map((c) => ({ ...c, pitch: none }))];
+    for (const mode of ["off", "league", "own"]) {
+      for (let i = 0; i < 9; i++) {
+        const h = pitchSpot("MLB", i, mode);
+        for (const arm of avgArms) {
+          for (const th of [-2, -0.7, 0.4, 2]) {
+            // as the page had it: the chain's outcomes against the pitching, then tilted
+            const was = tilt(facing(h, arm), per, th), now = facing(h, arm, th, per);
+            was.forEach((x, k) => close(now[k], x, 1e-12, `${mode} MLB-${i + 1} ${arm ? arm.length + " hands" : "null"} ${th} ${CATS[k]}`));
+          }
+        }
+      }
+    }
+  });
+
+  check("per-pitch: a power setting's strikeouts against strikeout and contact pitchers go the way log5's do", () => {
+    const per = data.tradeoff.per_sd, h = pitchSpot("MLB", 0, "own"), a = facing(h, null);
+    const b = hitterOf(data.mlb.spots[0].counts, null, { mode: "off", league }).all, l = probs(data.pitching.league);
+    const kRate = (r) => r[4][0] / r[4].reduce((s, x) => s + x, 0);
+    const starters = data.pitchers.filter((r) => r[6] >= 20 && pd.pitchers[r[0]]).sort((x, y) => kRate(y) - kRate(x));
+    const dAvg = facing(h, null, 2, per)[0] - a[0], relAvg = dAvg / a[0];
+    const dPaAvg = tilt(b, per, 2)[0] - b[0], relPaAvg = dPaAvg / b[0];
+    for (const [r, high] of [[starters[0], true], [starters[starters.length - 1], false]]) {
+      const arm = pitchArm(r, "own"), k0 = facing(h, arm)[0], dK = facing(h, arm, 2, per)[0] - k0;
+      const p = probs(r[4]), k0pa = log5(b, p, l)[0], dPa = log5(tilt(b, per, 2), p, l)[0] - k0pa;
+      const what = `${r[1]} (K ${(100 * kRate(r)).toFixed(1)}%): +${dK.toFixed(3)} K (${(100 * dK / k0).toFixed(0)}%) vs +${dAvg.toFixed(3)} (${(100 * relAvg).toFixed(0)}%) against average`;
+      // a strikeout pitcher: more strikeouts added, but a smaller share of what he already gets; a contact pitcher the reverse
+      assert.ok(high ? dK > dAvg && dK / k0 < relAvg : dK < dAvg && dK / k0 > relAvg, what);
+      assert.ok(high ? dPa > dPaAvg && dPa / k0pa < relPaAvg : dPa < dPaAvg && dPa / k0pa > relPaAvg, `per-PA, ${r[1]}`);
+      close(dK, dPa, 0.03, `${r[1]}: per-pitch vs per-PA, the setting's extra strikeouts`);
+    }
+  });
+
+  check("per-pitch: a setting stays finite where a cell's chance is 0 or tiny", () => {
+    const per = data.tradeoff.per_sd, vs = pitchArm(ace, "off");
+    for (const r of [0, 1e-14, 1e-7]) {
+      // a hitter who's never (or almost never) hit by a pitch: the take step's HBP-to-ball ratio
+      const base = pitchSpot("MLB", 0, "off"), ratios = Array.from(base.pitch.all ?? new Array(13).fill(1));
+      ratios[3] = r;
+      const h = { ...base, pitch: { ...base.pitch, all: ratios } };
+      for (const th of [-2.5, 2.5]) {
+        const q = facing(h, vs, th, per);
+        assert.ok(q.every((x) => Number.isFinite(x) && x >= 0), `ratio ${r}, ${th}: ${q}`);
+        close(q.reduce((s, x) => s + x, 0), 1, 1e-12, `ratio ${r}, ${th}: sum`);
+        assert.ok(q[C_HBP] < 1e-3, `ratio ${r}, ${th}: HBP ${q[C_HBP]}`);
+      }
+    }
   });
 
   check("per-pitch: exact expected runs agree with the simulation, with a starter and a bullpen", () => {
