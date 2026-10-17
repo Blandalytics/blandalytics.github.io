@@ -686,20 +686,39 @@ let jobs = 0;
 // runs-per-game chart. They're worked out with the first run for each vsKey() and kept.
 let versus = { key: "", ctx: null };
 const REF_GAMES = 20000;
-// This lineup against MLB-average pitching, simulated (REF_GAMES games) with a pitcher picked,
-// for the runs image's white bars. It depends only on the lineup and Small samples, so it's
-// kept while only the pitching changes; a run with no pitcher picked is it already.
+// This lineup against MLB-average pitching, simulated (REF_GAMES games) for the runs image's
+// white bars. Only the image asks for it, so runs and slider moves never pay for it: it runs
+// then, in a worker of its own (the run worker is left alone), and is kept per lineup and Small
+// samples. A run with no pitcher picked is it already. base: { key, cums }, from run().
 let baseRun = { key: "", dist: null, games: 0 };
+function baseDist({ key, cums }) {
+  if (baseRun.key === key) return Promise.resolve(baseRun);
+  const keep = (dist) => (baseRun = { key, dist, games: REF_GAMES });
+  const here = () => keep(simulate(model, cums, REF_GAMES, SEED).runDist);
+  if (!useWorker) return Promise.resolve(here());
+  return new Promise((resolve) => {
+    let w;
+    try {
+      w = new Worker(new URL("./sim-worker.js?v=7", import.meta.url), { type: "module" });
+    } catch {
+      return resolve(here());
+    }
+    w.onmessage = ({ data: msg }) => { w.terminate(); resolve(keep(msg.res.runDist)); };
+    w.onerror = (ev) => { ev.preventDefault(); w.terminate(); resolve(here()); };
+    w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
+    w.postMessage({ id: 0, lineup: cums, relief: [], games: REF_GAMES, seed: SEED });
+  });
+}
 // MLB's nine lineup spots in order, as they are (not moved along the contact-power axis)
 const averageLineup = (ids) => ids.every((id, i) => id.replace("@0.0", "") === `sMLB-${i + 1}`);
 let worker = null;
 let useWorker = typeof Worker !== "undefined";
 
 function startWorker() {
-  const w = new Worker(new URL("./sim-worker.js?v=6", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./sim-worker.js?v=7", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
   w.onmessage = ({ data: msg }) => {
-    if (job && msg.id === job.id) finish(job, msg.res, msg.ms, msg.ref, msg.lines, msg.base);
+    if (job && msg.id === job.id) finish(job, msg.res, msg.ms, msg.ref, msg.lines);
   };
   w.onerror = (ev) => {
     ev.preventDefault();
@@ -739,13 +758,10 @@ function run() {
     lines = { w: data.weights, from: vs.relief.map((r) => r.from), lineups: [m0, ...data.teams.map((t) => matched(spots(t.abbr))),
       ...data.sims.tradeoff.points.map((pt) => matched(mlb, pt.theta))] };
   }
-  // MLB's spots as they are against MLB-average pitching are data.sims.mlb, so they skip it
-  const baseKey = `${lineup.join()}|${$("regress").value}`;
-  const base = vs && baseRun.key !== baseKey && !averageLineup(lineup)
-    ? { lineup: specs.map((h) => cumulative(facing(h, null))), games: REF_GAMES } : null;
+  // this lineup against MLB-average pitching, as baseDist() simulates it (with no pitcher, the run itself)
+  const base = { key: `${lineup.join()}|${$("regress").value}`, cums: vs ? specs.map((h) => cumulative(facing(h, null))) : cums };
   const busy = job != null;
-  job = { id: ++jobs, cums, relief, games, ids: [...lineup], key, vs, name: pitcher?.name, ...planWords(), full: planWords(true).words, ref, lines,
-    base, baseKey };
+  job = { id: ++jobs, cums, relief, games, ids: [...lineup], key, vs, name: pitcher?.name, ...planWords(), full: planWords(true).words, ref, lines, base };
   $("status").textContent = "simulating…";
   $("out").style.opacity = last ? ".55" : "";
   writeHash();
@@ -760,7 +776,7 @@ function run() {
     useWorker = false; // no module workers here
     return runHere(job);
   }
-  worker.postMessage({ id: job.id, lineup: cums, relief, games, seed: SEED, ref, base, lines });
+  worker.postMessage({ id: job.id, lineup: cums, relief, games, seed: SEED, ref, lines });
 }
 
 function runHere(j) {
@@ -772,15 +788,13 @@ function runHere(j) {
     const ms = performance.now() - t0;
     const ref = j.ref && simulate(model, j.ref.lineup, j.ref.games, SEED, j.ref.relief).runDist;
     const lines = j.lines && expectedLines((chain ??= chainTables(model)), j.lines.lineups, j.lines.from, j.lines.w);
-    const base = j.base && simulate(model, j.base.lineup, j.base.games, SEED).runDist;
-    finish(j, res, ms, ref, lines, base);
+    finish(j, res, ms, ref, lines);
   }, 30);
 }
 
-function finish(j, res, ms, ref, lines, base) {
+function finish(j, res, ms, ref, lines) {
   job = null;
-  if (base) baseRun = { key: j.baseKey, dist: base, games: j.base.games };
-  else if (!j.vs) baseRun = { key: j.baseKey, dist: res.runDist, games: j.games };
+  if (!j.vs) baseRun = { key: j.base.key, dist: res.runDist, games: j.games };
   if (lines) {
     const n = data.teams.length;
     versus = { key: j.key, ctx: { refDist: ref, mlb: lines[0], teams: Object.fromEntries(data.teams.map((t, i) => [t.abbr, lines[1 + i]])),
@@ -788,7 +802,7 @@ function finish(j, res, ms, ref, lines, base) {
   }
   last = { res, sum: summarize(res.totals, data.weights), games: j.games, lineup: j.ids, key: j.key, vs: j.vs, name: j.name,
     words: j.words, short: j.short, full: j.full, ctx: j.vs ? versus.ctx : null,
-    base: j.vs && baseRun.key === j.baseKey ? baseRun : null };
+    base: j.base };
   $("out").hidden = false;
   $("out").style.opacity = "";
   $("status").textContent = "";
@@ -1022,7 +1036,10 @@ function runsChart(dist, games, runs, avg) {
   // white with no pitcher picked.
   const average = averageLineup(last.lineup);
   const amber = average ? null : mlb;
-  const white = !last.vs ? null : average ? share(data.sims.mlb.runDist, 1) : last.base && share(last.base.dist, last.base.games);
+  // (white only once the image is made: MLB's spots as they are have it in data.sims.mlb already)
+  const base = last.base;
+  const white = !last.vs ? null : average ? async () => share(data.sims.mlb.runDist, 1)
+    : async () => { const b = await baseDist(base); return share(b.dist, b.games); };
   const subs = [...(average ? [] : [[last.vs ? `MLB vs ${lastName(last.name)}` : "MLB", last.vs ? last.ctx.mlb.R : data.sims.mlb.R, "amber"]]),
     ...(last.vs ? [["Lineup vs MLB", avg, "white"]] : [])];
   // a team's lineup (its spots or its most-used order, edited or not) leads the subtitle with its abbreviation
@@ -1380,7 +1397,7 @@ function startOptimize() {
   if (!useWorker) return here();
   try {
     if (!optWorker) {
-      optWorker = new Worker(new URL("./sim-worker.js?v=6", import.meta.url), { type: "module" });
+      optWorker = new Worker(new URL("./sim-worker.js?v=7", import.meta.url), { type: "module" });
       optWorker.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
     }
   } catch {
@@ -1788,11 +1805,12 @@ async function tradeoffTileBlob() {
 // against MLB's lineup spots facing the same pitching (amber lines) and, with a pitcher picked,
 // this lineup against MLB-average pitching (white bars); the lineup down the left, the pitching
 // as the subtitle, and runs per 9 with the comparisons' numbers in a box over the high-run end.
-let runsShare = null;   // what the chart on screen shows: { mine, amber, white, R, subs: [[label, runs, color]], games, ids, team, ohtani, vs }
+let runsShare = null;   // what the chart on screen shows: { mine, amber, white: async () => shares, R, subs: [[label, runs, color]], games, ids, team, ohtani, vs }
 const runsFileName = () => `lineup_sim_runs_per_game${runsShare?.vs ? `_vs_${fold(lastName(runsShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
 
 async function runsTileBlob() {
-  const { mine, amber, white, R, subs, games, ids, team, ohtani: allOhtanis, vs } = runsShare;
+  const { mine, amber, white: whiteOf, R, subs, games, ids, team, ohtani: allOhtanis, vs } = runsShare;
+  const white = whiteOf ? await whiteOf() : null;
   await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 15px "DM Sans"',
     '600 48px "JetBrains Mono"', '600 20px "JetBrains Mono"', '400 17px "JetBrains Mono"', '400 15px "DM Sans"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
