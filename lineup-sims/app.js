@@ -1,4 +1,4 @@
-import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=8";
+import { CATS, bullpenOf, cumulative, facing, hitterOf, pitchChances, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=8";
 import { chainTables, expectedLines, expectedLinesMix, hookMix, lineupRuns, matchup, optimize } from "./markov.js?v=7";
 
 const SEASON = 2026;
@@ -171,6 +171,38 @@ async function loadPitchData() {
 // No ratios at all is MLB average.
 const NO_RATIOS = { all: null, gap: null, cells: null };
 const pitchSide = (r, mode) => (r ? { all: r.a, gap: r.g, cells: mode === "own" && r.c ? r.c : null } : NO_RATIOS);
+
+// ---------- the hypothetical pitcher (Scrub - Average - Ace) ----------
+// data/<season>-quality.json (pipeline/quality_axis.py): each model's pitcher-quality axis, in
+// standard deviations of 2026 pitchers' talent (wOBA allowed, net of luck; the ace end +). An
+// MLB-average RHP or LHP moved along it ("quality"): with the per-PA model his rates, and each
+// platoon cell's, move by quality times pa.per_sd; with the per-pitch model he's the ratios
+// exp(s * pitch.slope), s set for each tenth so that the count chain's wOBA allowed is as many
+// talent SDs from average. At 0 he's the MLB-average pitcher, unmoved.
+let quality = null;
+const hypos = new Map();    // "PRHP@1.5" -> the MLB-average RHP moved 1.5 toward the Ace end: "Hypothetical RHP (Ace 1.5)"
+function hypothetical(hand, q) {
+  const base = pitchers.get(`P${hand}HP`);
+  if (!quality || Math.abs(q) < 0.05) return base;
+  const id = `${base.id}@${q.toFixed(1)}`;
+  if (!hypos.has(id)) {
+    const move = (c) => tilt(c, quality.pa.per_sd, q).map((x) => x * countOf(c));
+    hypos.set(id, { ...base, id, quality: Math.round(q * 10) / 10, name: `Hypothetical ${hand}HP (${q > 0 ? "Ace" : "Scrub"} ${Math.abs(q).toFixed(1)})`,
+      counts: move(base.counts), cells: { L: move(base.cells.L), R: move(base.cells.R) } });
+  }
+  return hypos.get(id);
+}
+// his per-pitch ratios (null: MLB average)
+function hypoRatios(e) {
+  if (!e.quality) return null;
+  const P = quality.pitch, s = P.steps[Math.round((e.quality + quality.range) * 10)];
+  const a = P.slope.map((x) => Math.exp(s * x));
+  return { a, g: a, c: null };
+}
+// a pitcher's name in short: his surname, or an MLB-average or hypothetical one's hand (and setting)
+// a file name's piece: "RHP (Ace 1.5)" -> "rhp_ace_1_5"
+const slug = (s) => fold(s).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+const pShort = (name) => (/^(MLB-average|Hypothetical) /.test(name) ? name.replace(/^(MLB-average|Hypothetical) /, "") : lastName(name));
 
 // ---------- data ----------
 function buildEntries() {
@@ -544,7 +576,7 @@ function planOf() {
 // (1.0 IP), then Mize (4.1 IP), then the Tigers bullpen"; short: "Skubal + Mize + bullpen".
 function planWords(full = false) {
   if (!pitcher) return { words: "MLB-average pitching", short: "MLB-average pitching" };
-  const who = full ? pitcher.name : lastName(pitcher.name), plan = planOf();
+  const who = full ? pitcher.name : pShort(pitcher.name), plan = planOf();
   const pen = (st) => (st.who === "mlb" || penTeam() === "MLB" ? "the MLB bullpen" : `the ${teamOf(penTeam()).short} bullpen`);
   if (!plan.length) return { words: `${who} for all nine innings`, short: who };
   if (plan[0].who === "follower") {
@@ -570,7 +602,7 @@ function vsOf() {
   // with the per-pitch model, each stretch of pitching carries its ratios too (r: () => them)
   const withPitch = (pitching, r) => (byPitch ? pitching.map((c) => ({ ...c, pitch: pitchSide(r(), mode) })) : pitching);
   const arm = (e) => withPitch(pitcherOf(e.counts, e.cells, e.throws, { mode, league, regress: e.generic ? 0 : regress }),
-    () => (e.generic ? null : pitchData.pitchers[e.mlbam]));
+    () => (e.generic ? hypoRatios(e) : pitchData.pitchers[e.mlbam]));
   const pen = (cells, key) => withPitch(bullpenOf(cellsTotal(cells), cells, { mode, league }), () => pitchData.pens[key]);
   const of = { pen: () => pen(penTeam() === "MLB" ? data.pitching.relief_cells : data.pitching.teams[penTeam()], penTeam()),
     mlb: () => pen(data.pitching.relief_cells, "MLB"), follower: () => (follower ? arm(follower) : pen(data.pitching.bulk.cells, "bulk")) };
@@ -606,7 +638,7 @@ function shownOf(e, vs = vsOf()) {
 
 function findPitchers(q) {
   const f = fold(q.trim());
-  if (!f) return [];
+  if (!f) return quality ? [["Hypothetical pitcher · Scrub to Ace", ["R", "L"].map((h) => pitchers.get(`P${h}HP`))]] : [];
   const words = f.split(/\s+/);
   const list = [...pitchers.values()].filter((e) => words.every((w) => e.search.includes(w)));
   const starts = (e) => (e.search.split(" ").some((w) => w.startsWith(words[0])) ? 0 : 1);
@@ -630,6 +662,28 @@ function setFollower(e) {
   follower = e;
   renderPitcher();
   run();
+}
+
+// the hypothetical pitcher's slider: him at `q`, the table's rates against him with it
+function setQuality(q) {
+  if (!pitcher?.generic) return;
+  pitcher = hypothetical(pitcher.throws, q);
+  renderPitcher();
+  renderLineup();
+}
+// How it works: the quality axes in numbers
+function fillQualityWords() {
+  const per = (v) => ["K", "BB", "HR", "1B"].map((k) => `${v[C[k]] > 0 ? "+" : "−"}${Math.abs(100 * v[C[k]]).toFixed(1)} ${k}`).join(", ");
+  const ends = (list) => list.map(([, name, score], i) => (i ? lastName(name) : `${lastName(name)} (${fmtTheta(score)})`)).join(", ");
+  const w = quality.pa.woba, sd = quality.pa.sd, R = quality.range;
+  $("q_n").textContent = quality.pa.pitchers.toLocaleString();
+  $("q_obs").textContent = fmtRate(quality.pa.observed_sd).replace(/^0/, "");
+  $("q_sd").textContent = fmtRate(sd).replace(/^0/, "");
+  $("q_pa").textContent = per(quality.pa.per_sd);
+  $("q_pitch").textContent = per(quality.pitch.per_sd);
+  $("q_range").textContent = R.toFixed(1);
+  $("q_ace").textContent = `a ${fmtRate(w - R * sd)} wOBA allowed, near ${ends(quality.ends.ace)}`;
+  $("q_scrub").textContent = `${fmtRate(w + R * sd)}, near ${ends(quality.ends.scrub)}`;
 }
 
 function setPitcher(e) {
@@ -695,9 +749,24 @@ function renderPitcher() {
   note.classList.remove("warn");
   note.title = "";
   note.hidden = !pitcher;
+  const hypo = !!pitcher?.generic && !!quality;
+  $("quality_ctl").hidden = !hypo;
+  if (hypo) {
+    const q = pitcher.quality ?? 0;
+    if (Number($("quality").value) !== q) $("quality").value = q;
+    $("quality_out").textContent = fmtTheta(q);
+  }
   if (!pitcher) return;
   const mode = $("platoon").value;
   const lineFor = (e) => {
+    // a hypothetical pitcher: what the model makes of him against an MLB-average hitter (at Average
+    // with the per-PA model, the MLB-average arm's own line, below)
+    if (e.generic && quality && (e.quality || byPitch)) {
+      const c = byPitch ? pitchChances(pitchData.tables.all, null, hypoRatios(e)?.a ?? null) : e.counts, l = lineOf(c), q = e.quality ?? 0;
+      const sides = byPitch || mode === "off" ? "" : ` (${["L", "R"].map((s) => `${fmtRate(wobaOf(e.cells[s]))} v ${s}HB`).join(", ")})`;
+      return [q ? `Every 2026 ${handOf(e)} pooled, ${Math.abs(q).toFixed(1)} SD toward ${q > 0 ? "Ace" : "Scrub"}` : `Every 2026 ${handOf(e)} pooled`,
+        `${byPitch ? "Per-Pitch" : "Per-PA"}: K ${pct(l.K)}`, `BB ${pct(l.BB)}`, `HR ${pct(c[C.HR] / countOf(c))}`, `${fmtRate(l.wOBA)} wOBA against${sides}`].join(" · ");
+    }
     const l = lineOf(e.counts);
     // his wOBA against each side, where he faced it
     const sides = ["L", "R"].filter((s) => countOf(e.cells?.[s])).map((s) => `${fmtRate(wobaOf(e.cells[s]))} v ${s}HB`);
@@ -1080,6 +1149,7 @@ async function setModel(pitch) {
   }
   byPitch = pitch;
   paintModel();
+  renderPitcher(); // a hypothetical pitcher's line is the model's
   renderLineup(); // the table's rates are the model's
   run();
 }
@@ -1176,7 +1246,7 @@ function runsChart(dist, games, runs, avg) {
   const base = last.base;
   const white = !last.vs ? null : average && !last.byPitch ? async () => Array.from(data.sims.mlb.runDist)
     : async () => { const b = await baseDist(base); return Array.from(b.dist, (c) => c / b.games); };
-  const subs = [...(average ? [] : [[last.vs ? `MLB vs ${lastName(last.name)}` : "MLB", last.ctx ? last.ctx.mlb.R : data.sims.mlb.R, "amber"]]),
+  const subs = [...(average ? [] : [[last.vs ? `MLB vs ${pShort(last.name)}` : "MLB", last.ctx ? last.ctx.mlb.R : data.sims.mlb.R, "amber"]]),
     ...(last.vs ? [["Lineup vs MLB", avg, "white"]] : [])];
   // a team's lineup (its spots or its most-used order, edited or not) leads the subtitle with its abbreviation
   const team = $("team").value !== "MLB" && !ohtani && mode !== "tradeoff" ? $("team").value : null;
@@ -1724,7 +1794,7 @@ const loadLogo = () => logoImg || (logoImg = new Promise((res, rej) => {
   im.onerror = rej;
   im.src = "logo.png";
 }));
-const optFileName = () => `lineup_sim_contact_power${optDone?.name ? `_vs_${fold(lastName(optDone.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
+const optFileName = () => `lineup_sim_contact_power${optDone?.name ? `_vs_${slug(pShort(optDone.name))}` : ""}.png`;
 
 async function optTileBlob() {
   const { before, after, wasSlot } = optShare;
@@ -1857,7 +1927,7 @@ function tileFooter(g, byPitch) {
 // on the sliders' teal-white-amber scale, with its ends and its middle labeled. The page's chart
 // also marks this lineup; the image leaves it off.
 let tradeoffShare = null;   // the curve the chart on screen shows: { pts, vs }
-const tradeoffFileName = () => `lineup_sim_contact_vs_power${tradeoffShare?.vs ? `_vs_${fold(lastName(tradeoffShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
+const tradeoffFileName = () => `lineup_sim_contact_vs_power${tradeoffShare?.vs ? `_vs_${slug(pShort(tradeoffShare.vs.name))}` : ""}.png`;
 
 async function tradeoffTileBlob() {
   const { pts, vs } = tradeoffShare;
@@ -1950,7 +2020,7 @@ async function tradeoffTileBlob() {
 // as the subtitle, and runs per 9 with the comparisons' numbers in a box over the high-run end.
 // mine: shares by run total, 12+ last; amber and white (async): shares by run total, every one
 let runsShare = null;   // what the chart on screen shows: { mine, amber, white, R, subs: [[label, runs, color]], games, ids, team, ohtani, vs }
-const runsFileName = () => `lineup_sim_runs_per_game${runsShare?.vs ? `_vs_${fold(lastName(runsShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
+const runsFileName = () => `lineup_sim_runs_per_game${runsShare?.vs ? `_vs_${slug(pShort(runsShare.vs.name))}` : ""}.png`;
 
 async function runsTileBlob() {
   const { mine, amber, white: whiteOf, R, subs, games, ids, team, ohtani: allOhtanis, vs, byPitch: pitchModel } = runsShare;
@@ -2162,6 +2232,7 @@ function writeHash() {
     if ($("p_hook").value !== "game") p.set("h", $("p_hook").value);
     if ($("p_hook").value === "follower" && follower) p.set("f", follower.mlbam);
     if ($("platoon").value !== "own") p.set("pl", $("platoon").value);
+    if (pitcher.quality) p.set("pq", pitcher.quality.toFixed(1));
   }
   if (ohtani) p.set("o", "1");
   if (byPitch) p.set("m", "pitch");
@@ -2182,6 +2253,8 @@ function readHash() {
   }
   if (p.get("b") === "sim") basis = "sim";
   pitcher = pitchers.get(`P${p.get("p")}`) ?? null;
+  const pq = Number(p.get("pq"));
+  if (pitcher?.generic && quality && pq) pitcher = hypothetical(pitcher.throws, Math.max(-quality.range, Math.min(quality.range, pq)));
   const h = p.get("h");
   if (pitcher && h && [...$("p_hook").options].some((o) => o.value === h)) $("p_hook").value = h;
   follower = pitchers.get(`P${p.get("f")}`) ?? null;
@@ -2236,10 +2309,13 @@ function renderSummary() {
 }
 
 async function boot() {
+  // the hypothetical pitcher's axes, small; without them there's no quality slider
+  const qualityFile = fetch(`data/${SEASON}-quality.json?v=1`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   try {
     const r = await fetch(`data/${SEASON}.json?v=5`);
     if (!r.ok) throw new Error(`data ${r.status}`);
     data = await r.json();
+    quality = await qualityFile;
   } catch (e) {
     $("status").textContent = `Couldn't load the ${SEASON} data (${e.message}).`;
     $("status").classList.add("err");
@@ -2304,7 +2380,23 @@ async function boot() {
       if (last) renderResults();
     });
   });
-  wireSuggest($("p_in"), $("p_sug"), { find: findPitchers, choose: setPitcher, current: () => pitcher?.name ?? "" });
+  // opening the box lists the hypothetical pitchers; picking the other hand keeps the setting
+  wireSuggest($("p_in"), $("p_sug"), { find: findPitchers, current: () => pitcher?.name ?? "", browse: !!quality,
+    choose: (e) => setPitcher(e.generic && pitcher?.generic ? hypothetical(e.throws, pitcher.quality ?? 0) : e),
+    small: (e) => (e.generic ? `Every 2026 ${handOf(e)} · quality slider` : smallOf(e)) });
+  if (quality) {
+    $("quality").min = -quality.range;
+    $("quality").max = quality.range;
+    $("quality").addEventListener("input", () => {
+      setQuality(Number($("quality").value));
+      scheduleRun();
+    });
+    $("quality_reset").addEventListener("click", () => {
+      setQuality(0);
+      run();
+    });
+    fillQualityWords();
+  }
   $("p_clear").addEventListener("click", () => {
     setPitcher(null);
     $("p_in").focus();
