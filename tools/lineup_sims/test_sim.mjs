@@ -1,11 +1,11 @@
 // Checks on the simulation engine (lineup-sims/sim.js) against the built data file.
 //
 //   node tools/lineup_sims/test_sim.mjs 2026
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import assert from "node:assert/strict";
-import { CATS, bullpenOf, chances, cumulative, facing, hitterOf, log5, pitcherOf, prepare, rates, simulate, summarize, tilt } from "../../lineup-sims/sim.js";
+import { CATS, bullpenOf, chances, cumulative, facing, hitterOf, log5, pitchChances, pitcherOf, prepare, rates, simulate, summarize, tilt } from "../../lineup-sims/sim.js";
 import { chainTables, expectedLine, expectedRuns, hitterBlock, lineupRuns, matchup, optimize } from "../../lineup-sims/markov.js";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -347,5 +347,58 @@ check("opener, follower, bullpen: exact and simulated agree, and stages behave a
   // and a follower who is the bullpen is the bullpen
   close(lineupRuns(chain, ms([{ from: 3, pitching: pen }, { from: 16, pitching: pen }])), two, 1e-12, "follower = bullpen");
 });
+
+// ---- the per-pitch model (data/<season>-pitch.json, pipeline/pitch_model.py) ----
+const pitchFile = join(repo, "lineup-sims", "data", `${process.argv[2] ?? "2026"}-pitch.json`);
+if (existsSync(pitchFile)) {
+  const pd = JSON.parse(readFileSync(pitchFile, "utf8"));
+  const tables = Object.fromEntries(Object.entries(pd.tables).map(([k, steps]) => [k, steps.map((t) => Float64Array.from(t))]));
+  const side = (r, mode) => (r ? { all: r.a, gap: r.g, cells: mode === "own" && r.c ? r.c : null } : { all: null, gap: null, cells: null });
+  // a lineup spot or hitter as the page builds it with the per-pitch model
+  const pitchSpot = (abbr, i, mode) => ({ ...spotOf((abbr === "MLB" ? data.mlb : data.teams.find((t) => t.abbr === abbr)).spots[i], mode),
+    pitch: { tables, ...side(pd.spots[`${abbr}-${i + 1}`], mode), theta: 0, perSd: data.tradeoff.per_sd } });
+  const pitchArm = (row, mode) => pitcherOf(row[4], row[8], row[3], { mode, league }).map((c) => ({ ...c, pitch: side(pd.pitchers[row[0]], mode) }));
+
+  check("per-pitch: the page's count chain matches the pipeline's, matchup by matchup", () => {
+    assert.ok(pd.checks.length >= 4, "checks");
+    for (const c of pd.checks) {
+      const pick = (r) => (r == null ? null : c.use === "c" ? r.c[c.cell] : r.a);
+      const out = pitchChances(tables[c.cell], pick(pd.hitters[c.hitter]), pick(pd.pitchers[c.pitcher]));
+      out.forEach((x, i) => close(x, c.out[i], 1e-8, `${c.hitter} vs ${c.pitcher} ${c.cell} ${CATS[i]}`));
+    }
+  });
+
+  check("per-pitch: outcomes add up to 1, and MLB average reproduces the league's PA rates", () => {
+    const lg = pitchChances(tables.all, null, null), actual = probs(data.pitching.league);
+    close(lg.reduce((t, x) => t + x, 0), 1, 1e-9, "sum");
+    lg.forEach((x, i) => close(x, actual[i], 0.003, `league ${CATS[i]}`));
+    for (const mode of ["off", "league", "own"]) {
+      const q = facing(pitchSpot("NYY", 3, mode), pitchArm(ace, mode));
+      close(q.reduce((t, x) => t + x, 0), 1, 1e-9, `sum, ${mode}`);
+    }
+  });
+
+  check("per-pitch: a setting moves the chain's outcomes along the contact-power axis, and facing() keeps nothing between calls", () => {
+    const h = pitchSpot("MLB", 0, "own"), vs = pitchArm(ace, "own");
+    const q0 = facing(h, vs), q1 = facing(h, vs, 1, data.tradeoff.per_sd);
+    tilt(q0, data.tradeoff.per_sd, 1).forEach((x, i) => close(q1[i], x, 1e-12, `tilted ${CATS[i]}`));
+    q0[0] = 99; // a caller writing into the result
+    close(facing(h, vs)[0], q1[0] - data.tradeoff.per_sd[0], 1e-12, "a fresh copy");
+  });
+
+  check("per-pitch: exact expected runs agree with the simulation, with a starter and a bullpen", () => {
+    const mode = "own", w = data.weights;
+    const hs = Array.from({ length: 9 }, (_, i) => pitchSpot("MLB", i, mode));
+    const pen = penOf(data.pitching.teams.DET, mode).map((c) => ({ ...c, pitch: side(pd.pens.DET, mode) }));
+    const vs = { sp: pitchArm(ace, mode), relief: [{ from: 18, pitching: pen }] };
+    const sim = summarize(simulate(model, hs.map((x) => cumulative(facing(x, vs.sp))), 100000, 17, reliefSim(hs, vs)).totals, w);
+    const ex = expectedLine(chain, hs.map((x) => matchup(chain, x, vs, true)), w);
+    close(sim.R, ex.R, 0.05, "R");
+    for (const k of ["AVG", "OBP", "SLG", "wOBA"]) close(sim[k], ex[k], 0.002, k);
+    // and against MLB-average pitching the model's MLB spots score like 2026's
+    const avg = lineupRuns(chain, hs.map((x) => matchup(chain, x, null)));
+    close(avg, data.mlb.actual.R, 0.35, "MLB spots vs average, R/9");
+  });
+}
 
 console.log(`${n} checks passed`);

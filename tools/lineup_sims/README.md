@@ -24,14 +24,18 @@ python -I tools/lineup_sims/fetch_pbp.py 2026
 # 3. outcome counts (hitters and pitchers, whole and by platoon cell), lineup spots,
 #    baserunning tables, team actuals, contact-power axis
 python -I tools/lineup_sims/build.py 2026
+# 3b. the per-pitch model (the page's "Per-Pitch (modeled)" option), from every tracked pitch:
+#     the projections project's pitch file for the season, joined to the cached play-by-play
+python -I tools/lineup_sims/pitch_model.py 2026 --pitches <projections>/data/interim/pitch_scores/mlb_2026.parquet
 # 4. every team's lineups and the contact-power curve, simulated into the data file (~1 min)
 node tools/lineup_sims/precompute.mjs 2026 100000
 # 5. engine checks against the new file
 node tools/lineup_sims/test_sim.mjs 2026
 ```
 
-Then bump `data/2026.json?v=` in `lineup-sims/app.js` and `app.js?v=` in
-`lineup-sims/index.html`; browsers and the edge hold both for hours.
+Then bump `data/2026.json?v=` (and `data/2026-pitch.json?v=`, if step 3b ran) in
+`lineup-sims/app.js` and `app.js?v=` in `lineup-sims/index.html`; browsers and the edge
+hold them for hours.
 
 `cache/` (git-ignored) holds the FanGraphs extract, the reduced per-game play-by-play and
 the Stats API player and team lists.
@@ -100,6 +104,20 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
   matchup: each player's own splits, league-average platoon gaps on his overall rates, or
   off. `build.py` and `test_sim.mjs` check every split adds up to its whole; the tests also
   check the platoon identities and exact against simulated with splits on.
+* **Per-pitch model** (`pitch_model.py`, `data/<season>-pitch.json`, the page's toggle): a
+  plate appearance built pitch by pitch. In each of the 12 counts a pitch goes through
+  seven steps (zone; swing; a take's ball, called strike or HBP; contact; fair; in play, a
+  home run or not; the other seven batted balls), each the league's chances in that count
+  (and zone), in that platoon cell, times the hitter's and the pitcher's ratios to the
+  league, each shrunk by its own prior in pitches (tuned on 2026: fit before June 26, best
+  at predicting every later PA). `pitchChances()` in `sim.js` walks the counts to the same
+  eleven outcomes, so `facing()` hands the rest of the engine nothing new. Ratios are kept
+  for hitters, pitchers, lineup spots and bullpens (`a`: overall; `g`: against the league
+  in the cells played; `c`: own splits). `pitch_model.py` writes a few matchups it worked
+  out (`checks`), and `test_sim.mjs` checks the page's chain against them, that MLB average
+  reproduces the league's PA rates, and exact against simulated. Its input is the
+  projections project's per-pitch file (count, location against the zone, outcome class),
+  joined here by game and at-bat index; a PA's last pitch takes its class from the PA.
 
 ## Files
 
@@ -109,5 +127,6 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
 | `fetch_pbp.py` | Stats API play-by-play, reduced and cached per game |
 | `pbp.py` | replays plays into base-out states and coded runner outcomes |
 | `build.py` | builds the data file and runs the cross-checks |
+| `pitch_model.py` | builds the per-pitch model's data file |
 | `precompute.mjs` | team simulations, the contact-power curve, the calibration report |
 | `test_sim.mjs` | engine, optimizer and pitcher-matchup checks |
