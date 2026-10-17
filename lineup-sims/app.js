@@ -686,14 +686,20 @@ let jobs = 0;
 // runs-per-game chart. They're worked out with the first run for each vsKey() and kept.
 let versus = { key: "", ctx: null };
 const REF_GAMES = 20000;
+// This lineup against MLB-average pitching, simulated (REF_GAMES games) with a pitcher picked,
+// for the runs image's white bars. It depends only on the lineup and Small samples, so it's
+// kept while only the pitching changes; a run with no pitcher picked is it already.
+let baseRun = { key: "", dist: null, games: 0 };
+// MLB's nine lineup spots in order, as they are (not moved along the contact-power axis)
+const averageLineup = (ids) => ids.every((id, i) => id.replace("@0.0", "") === `sMLB-${i + 1}`);
 let worker = null;
 let useWorker = typeof Worker !== "undefined";
 
 function startWorker() {
-  const w = new Worker(new URL("./sim-worker.js?v=5", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./sim-worker.js?v=6", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
   w.onmessage = ({ data: msg }) => {
-    if (job && msg.id === job.id) finish(job, msg.res, msg.ms, msg.ref, msg.lines);
+    if (job && msg.id === job.id) finish(job, msg.res, msg.ms, msg.ref, msg.lines, msg.base);
   };
   w.onerror = (ev) => {
     ev.preventDefault();
@@ -733,8 +739,13 @@ function run() {
     lines = { w: data.weights, from: vs.relief.map((r) => r.from), lineups: [m0, ...data.teams.map((t) => matched(spots(t.abbr))),
       ...data.sims.tradeoff.points.map((pt) => matched(mlb, pt.theta))] };
   }
+  // MLB's spots as they are against MLB-average pitching are data.sims.mlb, so they skip it
+  const baseKey = `${lineup.join()}|${$("regress").value}`;
+  const base = vs && baseRun.key !== baseKey && !averageLineup(lineup)
+    ? { lineup: specs.map((h) => cumulative(facing(h, null))), games: REF_GAMES } : null;
   const busy = job != null;
-  job = { id: ++jobs, cums, relief, games, ids: [...lineup], key, vs, name: pitcher?.name, ...planWords(), full: planWords(true).words, ref, lines };
+  job = { id: ++jobs, cums, relief, games, ids: [...lineup], key, vs, name: pitcher?.name, ...planWords(), full: planWords(true).words, ref, lines,
+    base, baseKey };
   $("status").textContent = "simulating…";
   $("out").style.opacity = last ? ".55" : "";
   writeHash();
@@ -749,7 +760,7 @@ function run() {
     useWorker = false; // no module workers here
     return runHere(job);
   }
-  worker.postMessage({ id: job.id, lineup: cums, relief, games, seed: SEED, ref, lines });
+  worker.postMessage({ id: job.id, lineup: cums, relief, games, seed: SEED, ref, base, lines });
 }
 
 function runHere(j) {
@@ -761,19 +772,23 @@ function runHere(j) {
     const ms = performance.now() - t0;
     const ref = j.ref && simulate(model, j.ref.lineup, j.ref.games, SEED, j.ref.relief).runDist;
     const lines = j.lines && expectedLines((chain ??= chainTables(model)), j.lines.lineups, j.lines.from, j.lines.w);
-    finish(j, res, ms, ref, lines);
+    const base = j.base && simulate(model, j.base.lineup, j.base.games, SEED).runDist;
+    finish(j, res, ms, ref, lines, base);
   }, 30);
 }
 
-function finish(j, res, ms, ref, lines) {
+function finish(j, res, ms, ref, lines, base) {
   job = null;
+  if (base) baseRun = { key: j.baseKey, dist: base, games: j.base.games };
+  else if (!j.vs) baseRun = { key: j.baseKey, dist: res.runDist, games: j.games };
   if (lines) {
     const n = data.teams.length;
     versus = { key: j.key, ctx: { refDist: ref, mlb: lines[0], teams: Object.fromEntries(data.teams.map((t, i) => [t.abbr, lines[1 + i]])),
       tradeoff: data.sims.tradeoff.points.map((pt, i) => ({ theta: pt.theta, ...lines[1 + n + i] })) } };
   }
   last = { res, sum: summarize(res.totals, data.weights), games: j.games, lineup: j.ids, key: j.key, vs: j.vs, name: j.name,
-    words: j.words, short: j.short, full: j.full, ctx: j.vs ? versus.ctx : null };
+    words: j.words, short: j.short, full: j.full, ctx: j.vs ? versus.ctx : null,
+    base: j.vs && baseRun.key === j.baseKey ? baseRun : null };
   $("out").hidden = false;
   $("out").style.opacity = "";
   $("status").textContent = "";
@@ -1000,18 +1015,19 @@ function runsChart(dist, games, runs, avg) {
   };
   const mine = share(dist, games);
   const mlb = last.ctx ? share(last.ctx.refDist, REF_GAMES) : share(data.sims.mlb.runDist, 1);
-  // the image's smaller numbers: MLB's spots against the same pitching, and this lineup against
-  // MLB-average pitching (with no pitcher picked, that's the headline itself, so MLB's spots alone).
-  // When the lineup is MLB's spots as they are, MLB's number is the headline too, and goes.
-  const average = last.lineup.every((id, i) => id.replace("@0.0", "") === `sMLB-${i + 1}`);
-  const subs = (last.vs ? [[`MLB vs ${lastName(last.name)}`, last.ctx.mlb.R], ["Lineup vs MLB", avg]] : [["MLB", data.sims.mlb.R]])
-    .filter(([label]) => !(average && label.startsWith("MLB")));
-  // its gold lines: MLB's spots against the same pitching, or, when they're the lineup (the bars
-  // already), against MLB-average pitching
-  const goldVs = last.vs && !average ? last.short : null;
+  // The image's colors mean one thing whatever's picked: teal is this lineup against the pitching
+  // picked (runs per 9, the headline), amber MLB's lineup spots against that pitching, white this
+  // lineup against MLB-average pitching. Each has its bars or lines and its number in the box, in
+  // its color. One that would repeat teal goes: amber when the lineup is MLB's spots as they are,
+  // white with no pitcher picked.
+  const average = averageLineup(last.lineup);
+  const amber = average ? null : mlb;
+  const white = !last.vs ? null : average ? share(data.sims.mlb.runDist, 1) : last.base && share(last.base.dist, last.base.games);
+  const subs = [...(average ? [] : [[last.vs ? `MLB vs ${lastName(last.name)}` : "MLB", last.vs ? last.ctx.mlb.R : data.sims.mlb.R, "amber"]]),
+    ...(last.vs ? [["Lineup vs MLB", avg, "white"]] : [])];
   // a team's lineup (its spots or its most-used order, edited or not) leads the subtitle with its abbreviation
   const team = $("team").value !== "MLB" && !ohtani && mode !== "tradeoff" ? $("team").value : null;
-  runsShare = { mine, mlb: goldVs || !last.vs ? mlb : share(data.sims.mlb.runDist, 1), goldVs, R: runs, subs, games, ids: last.lineup,
+  runsShare = { mine, amber, white, R: runs, subs, games, ids: last.lineup,
     team, ohtani, vs: last.vs ? { name: last.name, full: last.full, short: last.short } : null };
   const W = chartWidth("runs_chart"), H = 230, L = 40, R = 8, T = 10, B = 34;
   drawnWidth = $("runs_chart").clientWidth;
@@ -1364,7 +1380,7 @@ function startOptimize() {
   if (!useWorker) return here();
   try {
     if (!optWorker) {
-      optWorker = new Worker(new URL("./sim-worker.js?v=5", import.meta.url), { type: "module" });
+      optWorker = new Worker(new URL("./sim-worker.js?v=6", import.meta.url), { type: "module" });
       optWorker.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
     }
   } catch {
@@ -1769,20 +1785,22 @@ async function tradeoffTileBlob() {
 
 // ---------- the runs-per-game chart as an image ----------
 // The chart above in the same style: this lineup's share of games by runs scored (teal bars)
-// against MLB's lineup spots facing the same pitching (gold lines), the lineup down the left,
-// the pitching as the subtitle, and its runs per 9 as a headline number inside the chart, in
-// whichever top corner its bars leave clear.
-let runsShare = null;   // what the chart on screen shows: { mine, mlb (gold), goldVs, R, subs: [[label, runs]], games, ids, team, vs }
+// against MLB's lineup spots facing the same pitching (amber lines) and, with a pitcher picked,
+// this lineup against MLB-average pitching (white bars); the lineup down the left, the pitching
+// as the subtitle, and runs per 9 with the comparisons' numbers in a box over the high-run end.
+let runsShare = null;   // what the chart on screen shows: { mine, amber, white, R, subs: [[label, runs, color]], games, ids, team, ohtani, vs }
 const runsFileName = () => `lineup_sim_runs_per_game${runsShare?.vs ? `_vs_${fold(lastName(runsShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
 
 async function runsTileBlob() {
-  const { mine, mlb, goldVs, R, subs, games, ids, team, ohtani: allOhtanis, vs } = runsShare;
+  const { mine, amber, white, R, subs, games, ids, team, ohtani: allOhtanis, vs } = runsShare;
   await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 15px "DM Sans"',
     '600 48px "JetBrains Mono"', '600 20px "JetBrains Mono"', '400 17px "JetBrains Mono"', '400 15px "DM Sans"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
   const { W } = OPT_TILE, n = mine.length;
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-  const TEAL = css("--contact"), GOLD = css("--power");
+  const TEAL = css("--contact"), GOLD = css("--power"), WHITE = "#fff";
+  const COLOR = { amber: GOLD, white: WHITE };
+  const series = [mine, amber, white].filter(Boolean);
   const cv = document.createElement("canvas");
   cv.width = cv.height = W;
   const g = cv.getContext("2d");
@@ -1839,19 +1857,19 @@ async function runsTileBlob() {
   g.textAlign = "left";
   g.textBaseline = "middle"; // the gridlines' labels sit on their lines
 
-  // the chart: gridlines and shares, teal bars, gold steps for MLB's spots. Runs per 9 and the
+  // the chart: gridlines and shares, teal bars (white beside them), amber steps for MLB's spots. Runs per 9 and the
   // smaller numbers stack in a rounded box over the 7, 8, 9 and 10+ columns (the short high-run
   // end), a third of the y-axis tall, with the scale raised if those columns would reach it.
   const widthOf = (font, text) => { g.font = font; return g.measureText(text).width; };
-  const band = (P1 - P0) / n, bw = band * 0.62, first = n - 4, pad = 12;
+  const band = (P1 - P0) / n, first = n - 4, pad = 12;
   const boxH = (B - T) / 3, boxW = band * 4;
   // the smaller numbers a row each, label left and value right, their type shrunk until the longest fits
   const rowW = (size) => Math.max(0, ...subs.map(([label, v]) =>
     widthOf(`400 ${size}px "DM Sans"`, label) + 10 + widthOf(`600 ${size + 4}px "JetBrains Mono"`, v.toFixed(2))));
   let subSize = 15;
   while (subSize > 11 && rowW(subSize) > boxW - 2 * pad) subSize--;
-  const high = Math.max(...mine.slice(first), ...mlb.slice(first));
-  const top = Math.max(...mine, ...mlb), step = top > 0.16 ? 0.05 : 0.04;
+  const high = Math.max(...series.flatMap((s) => s.slice(first)));
+  const top = Math.max(...series.flat()), step = top > 0.16 ? 0.05 : 0.04;
   const yMax = Math.ceil(Math.max(top, high / (1 - (boxH + 12) / (B - T))) / step - 1e-9) * step;
   const y = (v) => T + (1 - v / yMax) * (B - T);
   const cx = (i) => P0 + band * i + band / 2;
@@ -1864,21 +1882,28 @@ async function runsTileBlob() {
     g.fillStyle = OPT_TILE.axis;
     g.fillText(`${Math.round(v * 100)}%`, P0 - 12, y(v));
   }
-  g.fillStyle = TEAL;
-  mine.forEach((v, i) => {
+  // a bar, rounded at the top; teal alone is wide, teal and white side by side split the band
+  const bar = (v, x0, x1, color) => {
     const h = y(0) - y(v);
     if (h < 0.5) return;
-    const r = Math.min(6, h / 2, bw / 2), x0 = cx(i) - bw / 2, x1 = cx(i) + bw / 2;
+    const r = Math.min(6, h / 2, (x1 - x0) * 0.3);
+    g.fillStyle = color;
     g.beginPath();
     g.moveTo(x0, y(0)); g.lineTo(x0, y(v) + r); g.quadraticCurveTo(x0, y(v), x0 + r, y(v));
     g.lineTo(x1 - r, y(v)); g.quadraticCurveTo(x1, y(v), x1, y(v) + r); g.lineTo(x1, y(0));
     g.closePath();
     g.fill();
+  };
+  const bw = white ? band * 0.36 : band * 0.62, gap = band * 0.06;
+  mine.forEach((v, i) => {
+    if (!white) return bar(v, cx(i) - bw / 2, cx(i) + bw / 2, TEAL);
+    bar(v, cx(i) - gap / 2 - bw, cx(i) - gap / 2, TEAL);
+    bar(white[i], cx(i) + gap / 2, cx(i) + gap / 2 + bw, WHITE);
   });
   g.strokeStyle = GOLD;
   g.lineWidth = 4;
   g.lineCap = "round";
-  mlb.forEach((v, i) => {
+  amber?.forEach((v, i) => {
     g.beginPath(); g.moveTo(P0 + band * i + 4, y(v)); g.lineTo(P0 + band * (i + 1) - 4, y(v)); g.stroke();
   });
   g.textAlign = "center";
@@ -1889,7 +1914,7 @@ async function runsTileBlob() {
   g.font = '400 16px "DM Sans"';
   g.fillText("Runs", (P0 + P1) / 2, B + 58);
 
-  // the box: runs per 9 centered, then the smaller numbers
+  // the box: runs per 9 centered, then the smaller numbers, each number in its series' color
   const x0 = P0 + band * first, y0 = T, mid = x0 + boxW / 2, rad = 14;
   g.beginPath();
   g.moveTo(x0 + rad, y0);
@@ -1910,13 +1935,13 @@ async function runsTileBlob() {
   g.fillStyle = OPT_TILE.sub;
   g.fillText("Runs per 9", mid, y0 + 26 + lift);
   g.font = '600 48px "JetBrains Mono"';
-  g.fillStyle = "#fff";
+  g.fillStyle = TEAL;
   g.fillText(R.toFixed(2), mid, y0 + 72 + lift);
   g.strokeStyle = "#4b5075";
   g.lineWidth = 1;
   if (subs.length) { g.beginPath(); g.moveTo(x0 + pad, y0 + 88); g.lineTo(x0 + boxW - pad, y0 + 88); g.stroke(); }
   const subH = (boxH - 88) / subs.length;
-  subs.forEach(([label, v], k) => {
+  subs.forEach(([label, v, color], k) => {
     const yb = y0 + 88 + subH * (k + 0.5) + 6;
     g.textAlign = "left";
     g.font = `400 ${subSize}px "DM Sans"`;
@@ -1924,24 +1949,39 @@ async function runsTileBlob() {
     g.fillText(label, x0 + pad, yb);
     g.textAlign = "right";
     g.font = `600 ${subSize + 4}px "JetBrains Mono"`;
-    g.fillStyle = OPT_TILE.axis;
+    g.fillStyle = COLOR[color];
     g.fillText(v.toFixed(2), x0 + boxW - pad, yb);
   });
 
-  // the key
+  // the key, in the box's order: a row, or two when it doesn't fit, the last row where one was
+  const keys = [["bar", TEAL, vs ? `This lineup vs ${vs.short}` : "This lineup"],
+    ...(amber ? [["line", GOLD, vs ? `MLB lineup spots vs ${vs.short}` : "MLB lineup spots"]] : []),
+    ...(white ? [["bar", WHITE, "This lineup vs MLB-average pitching"]] : [])];
   g.textAlign = "left";
   g.font = '400 16px "DM Sans"';
-  g.fillStyle = TEAL;
-  g.fillRect(48, 824, 16, 16);
-  g.fillStyle = OPT_TILE.sub;
-  g.fillText("This lineup", 74, 838);
-  g.strokeStyle = GOLD;
-  g.lineWidth = 4;
-  g.beginPath(); g.moveTo(190, 832); g.lineTo(214, 832); g.stroke();
-  const key = goldVs ? `MLB lineup spots vs ${goldVs} (simulated)` : "MLB lineup spots vs MLB-average pitching (simulated)";
-  fitFont(g, key, 400, 16, '"DM Sans"', W - 48 - 226);
-  g.fillText(key, 226, 838);
-  g.font = '400 16px "DM Sans"';
+  const keyRows = [[]];
+  let kx = 48;
+  for (const [kind, color, text] of keys) {
+    const w = (kind === "bar" ? 26 : 34) + g.measureText(text).width;
+    if (kx > 48 && kx + w > W - 48) { keyRows.push([]); kx = 48; }
+    keyRows.at(-1).push({ kind, color, text, x: kx });
+    kx += w + 30;
+  }
+  keyRows.forEach((row, r) => {
+    const yb = 838 - 30 * (keyRows.length - 1 - r);
+    for (const { kind, color, text, x } of row) {
+      if (kind === "bar") {
+        g.fillStyle = color;
+        g.fillRect(x, yb - 14, 16, 16);
+      } else {
+        g.strokeStyle = color;
+        g.lineWidth = 4;
+        g.beginPath(); g.moveTo(x + 2, yb - 6); g.lineTo(x + 22, yb - 6); g.stroke();
+      }
+      g.fillStyle = OPT_TILE.sub;
+      g.fillText(text, x + (kind === "bar" ? 26 : 34), yb);
+    }
+  });
   g.fillText(`${games.toLocaleString()} simulated games`, 48, 868);
   return new Promise((res) => cv.toBlob(res, "image/png"));
 }
