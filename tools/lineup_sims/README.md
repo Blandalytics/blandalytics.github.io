@@ -27,8 +27,12 @@ python -I tools/lineup_sims/build.py 2026
 # 3b. the per-pitch model (the page's "Per-Pitch (modeled)" option), from every tracked pitch:
 #     the projections project's pitch file for the season, joined to the cached play-by-play
 python -I tools/lineup_sims/pitch_model.py 2026 --pitches <projections>/data/interim/pitch_scores/mlb_2026.parquet
-# 3c. the hook model (the page's "Modeled hook" option), from every MLB pitch 2022 on: the projections
-#     project's data directory, read only (raw/statfast/pitches and games, interim/transactions.parquet)
+# 3c. the hook model (the page's "Modeled hook" option), from every MLB pitch 2022 on. It reads, and
+#     never writes, these files under the projections project's data directory:
+#       raw/statfast/pitches/mlb_<year>.parquet   (2022 through the season)
+#       raw/statfast/games/mlb_<year>.parquet     (2022 through the season)
+#       interim/transactions.parquet
+#     and writes only lineup-sims/data/<season>-hook.json
 python -I tools/lineup_sims/hook_model.py 2026 --projections <projections>/data
 # 4. every team's lineups and the contact-power curve, simulated into the data file (~1 min)
 node tools/lineup_sims/precompute.mjs 2026 100000

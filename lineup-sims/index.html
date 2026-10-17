@@ -372,7 +372,7 @@ button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
         <select id="regress">
           <option value="0" selected>2026 rates as they are</option>
           <option value="100">Add 100 PA of MLB average</option>
-          <option value="200">Add 200 PA of MLB average (most predictive per-PA option)</option>
+          <option value="200">Add 200 PA of MLB average</option>
         </select>
       </label>
       <label class="platoon" title="How hitters' and the pitcher's rates depend on each other's hand; applies once a pitcher is picked"><b>Platoon splits</b>
@@ -383,6 +383,7 @@ button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
         </select>
       </label>
       </div>
+      <p class="note" style="margin:10px 0 0">Adding 200 PA of MLB average is the most predictive per-PA option (How it works: Small samples and prediction).</p>
     </details>
     <button id="reset_all" type="button" title="Back to the MLB lineup spots and every option's default">Reset</button>
     </div>
@@ -521,6 +522,6 @@ button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
 <div id="tip" class="tip" hidden></div>
 <style>.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}</style>
 <script src="/shared/share-image.js?v=2"></script>
-<script type="module" src="app.js?v=40"></script>
+<script type="module" src="app.js?v=41"></script>
 </body>
 </html>
