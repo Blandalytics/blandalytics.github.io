@@ -780,7 +780,7 @@ function baseDist({ key, cums }) {
   return new Promise((resolve) => {
     let w;
     try {
-      w = new Worker(new URL("./sim-worker.js?v=9", import.meta.url), { type: "module" });
+      w = new Worker(new URL("./sim-worker.js?v=10", import.meta.url), { type: "module" });
     } catch {
       return resolve(here());
     }
@@ -797,7 +797,7 @@ let useWorker = typeof Worker !== "undefined";
 let workerHook = false;    // the run worker has the hook model's trees (sent once, the first job that needs them)
 
 function startWorker() {
-  const w = new Worker(new URL("./sim-worker.js?v=9", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./sim-worker.js?v=10", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
   workerHook = false;
   w.onmessage = ({ data: msg }) => {
@@ -1537,7 +1537,7 @@ function startOptimize() {
   if (!useWorker) return here();
   try {
     if (!optWorker) {
-      optWorker = new Worker(new URL("./sim-worker.js?v=9", import.meta.url), { type: "module" });
+      optWorker = new Worker(new URL("./sim-worker.js?v=10", import.meta.url), { type: "module" });
       optWorker.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
     }
   } catch {
