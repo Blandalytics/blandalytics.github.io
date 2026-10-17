@@ -15,7 +15,7 @@
 // starter, then whoever takes over at a set number of outs into the game (a follower, the
 // bullpen). An inning one of them has to himself uses the hitters against him; an inning
 // with a change in it uses, from each state, whoever is pitching at that state's outs.
-import { facing, summarize } from "./sim.js?v=6";
+import { facing, summarize } from "./sim.js?v=7";
 
 const NS = 24;
 const NY = 13; // a plate appearance's tallies for expectedLine: PA, the eleven outcomes, sacrifice flies
@@ -260,6 +260,30 @@ export function expectedLine(tab, ms, w, innings = 9) {
 export function expectedLines(tab, lineups, from, w) {
   return lineups.map((l) => expectedLine(tab, l.map((x) => ({ sp: hitterBlock(tab, x.sp, true),
     relief: x.relief.map((p, i) => ({ from: from[i], block: hitterBlock(tab, p, true) })) })), w));
+}
+
+// expectedLines() when a relief stage takes over at "hook" (the hook model's, so at no set out):
+// averaged over the outs it takes over at, mix [{ p, at }] (chances adding up to 1; at 27 he
+// finishes the game). Each hitter's blocks are worked out once.
+export function expectedLinesMix(tab, lineups, from, w, mix) {
+  return lineups.map((l) => {
+    const ms = l.map((x) => ({ sp: hitterBlock(tab, x.sp, true), relief: x.relief.map((p) => hitterBlock(tab, p, true)) }));
+    const acc = {};
+    for (const { p, at } of mix) {
+      const line = expectedLine(tab, ms.map((m) => ({ sp: m.sp, relief: m.relief.map((block, i) => ({ from: from[i] === "hook" ? at : from[i], block })) })), w);
+      for (const key in line) acc[key] = (acc[key] ?? 0) + p * line[key];
+    }
+    return acc;
+  });
+}
+// a hook's outs, simulated ([outs 0..27] counts), as the mix expectedLinesMix() takes: outs that
+// came up at least `min` of the time (2%: about a dozen, which moves runs per 9 by under .01 from
+// every one), scaled to add up to 1
+export function hookMix(outs, min = 0.02) {
+  const n = outs.reduce((s, x) => s + x, 0);
+  const kept = outs.map((c, at) => ({ p: c / n, at })).filter((m) => m.p >= min);
+  const t = kept.reduce((s, m) => s + m.p, 0);
+  return kept.map((m) => ({ p: m.p / t, at: m.at }));
 }
 
 // Best batting order and contact-power settings by exact expected runs.

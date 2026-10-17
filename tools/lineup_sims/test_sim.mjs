@@ -5,8 +5,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import assert from "node:assert/strict";
-import { CATS, bullpenOf, chances, cumulative, facing, hitterOf, log5, pitchChances, pitcherOf, prepare, rates, simulate, summarize, tilt } from "../../lineup-sims/sim.js";
-import { chainTables, expectedLine, expectedRuns, hitterBlock, lineupRuns, matchup, optimize } from "../../lineup-sims/markov.js";
+import { CATS, bullpenOf, chances, cumulative, facing, hitterOf, hookChance, log5, pitchChances, pitcherOf, prepare, rates, simulate, summarize, tilt } from "../../lineup-sims/sim.js";
+import { chainTables, expectedLine, expectedLines, expectedLinesMix, expectedRuns, hitterBlock, hookMix, lineupRuns, matchup, optimize } from "../../lineup-sims/markov.js";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const data = JSON.parse(readFileSync(join(repo, "lineup-sims", "data", `${process.argv[2] ?? "2026"}.json`), "utf8"));
@@ -398,6 +398,60 @@ if (existsSync(pitchFile)) {
     // and against MLB-average pitching the model's MLB spots score like 2026's
     const avg = lineupRuns(chain, hs.map((x) => matchup(chain, x, null)));
     close(avg, data.mlb.actual.R, 0.35, "MLB spots vs average, R/9");
+  });
+}
+
+// ---- the modeled hook (data/<season>-hook.json, pipeline/hook_model.py) ----
+const hookFile = join(repo, "lineup-sims", "data", `${process.argv[2] ?? "2026"}-hook.json`);
+if (existsSync(hookFile)) {
+  const H = JSON.parse(readFileSync(hookFile, "utf8"));
+  const t = H.trees;
+  const T = { feat: Int32Array.from(t.feat), thr: Float64Array.from(t.thr), dl: Uint8Array.from(t.dl), miss: Uint8Array.from(t.miss),
+    left: Int32Array.from(t.left), right: Int32Array.from(t.right), leaf: Float64Array.from(t.leaf), roots: Int32Array.from(t.roots) };
+  const pitchCum = CATS.map((c) => cumulative(probs(H.pitches[c])));
+  const hookFor = (row, trees = T) => {
+    const own = H.pitchers[row[0]], x = new Float64Array(H.features.length).fill(NaN);
+    const set = (k, v) => { x[H.features.indexOf(k)] = v; };
+    for (const [k, v] of Object.entries(H.defaults)) set(k, v);
+    set("team_start_outs", H.teams[own[4]]);
+    ["max3", "max5", "mean3", "starts_season"].forEach((k, i) => set(k, own[i]));
+    return { trees, features: H.features, x, pitches: pitchCum, runsPerInning: H.runs_per_inning };
+  };
+  const mode = "own", hs = data.mlb.spots.map((s) => spotOf(s, mode));
+  const sp = pitcherOf(ace[4], ace[8], ace[3], { mode, league }), pen = penOf(data.pitching.teams[ace[2]] ?? data.pitching.relief_cells, mode);
+  const cums = hs.map((x) => cumulative(facing(x, sp))), penCums = hs.map((x) => cumulative(facing(x, pen)));
+  // trees whose every leaf says the same thing: never take him out, or always
+  const flat = (v) => ({ ...T, leaf: T.leaf.map(() => v / T.roots.length) });
+
+  check("hook: the page's trees give the model's own answers", () => {
+    for (const c of H.checks) close(hookChance(T, Float64Array.from(c.x, (v) => (v == null ? NaN : v))), c.p, 1e-12, "a check row");
+  });
+
+  check("hook: a starter never taken out pitches the game, one always taken out faces one batter", () => {
+    const never = simulate(model, cums, 3000, 5, [{ from: "hook", lineup: penCums }], hookFor(ace, flat(-50)));
+    assert.equal(never.hook.outs[27], 3000);
+    const always = simulate(model, cums, 3000, 5, [{ from: "hook", lineup: penCums }], hookFor(ace, flat(50)));
+    assert.equal(always.hook.games, 3000);
+    assert.ok(always.hook.outs.slice(4).every((c) => c === 0), "gone within the first batter's outs");
+    assert.ok(always.hook.pitches / 3000 < 8, "one batter's pitches");
+    // and the game is the bullpen's: runs as if it pitched from the start, within noise
+    const pen0 = summarize(simulate(model, penCums, 30000, 9).totals, data.weights).R;
+    close(summarize(simulate(model, cums, 30000, 9, [{ from: "hook", lineup: penCums }], hookFor(ace, flat(50))).totals, data.weights).R, pen0, 0.1, "bullpen R/9");
+  });
+
+  check("hook: one hook point is that fixed stage, and a typical start lasts about as long as his 2026 starts did", () => {
+    const lineups = [hs.map((x) => ({ sp: facing(x, sp), relief: [facing(x, pen)] }))];
+    const one = expectedLinesMix(chain, lineups, ["hook"], data.weights, [{ p: 1, at: 16 }])[0];
+    const fixed = expectedLines(chain, lineups, [16], data.weights)[0];
+    for (const k of ["R", "AVG", "OBP", "SLG"]) close(one[k], fixed[k], 1e-12, k);
+    const res = simulate(model, cums, 20000, 3, [{ from: "hook", lineup: penCums }], hookFor(ace));
+    const outs = res.hook.outs.reduce((a, c, i) => a + c * i, 0) / res.hook.games, own = H.pitchers[ace[0]];
+    close(outs, own[6], 2.5, `${ace[1]}: outs per start`);
+    close(res.hook.pitches / res.hook.games, own[5], 12, `${ace[1]}: pitches per start`);
+    // the exact runs averaged over his simulated hook points come close to the simulation's (the hook
+    // depends on how the game is going, which the average leaves out)
+    const mixR = expectedLinesMix(chain, lineups, ["hook"], data.weights, hookMix(res.hook.outs))[0].R;
+    close(mixR, summarize(res.totals, data.weights).R, 0.25, "exact over the hook points vs simulated");
   });
 }
 

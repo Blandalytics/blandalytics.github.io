@@ -27,13 +27,16 @@ python -I tools/lineup_sims/build.py 2026
 # 3b. the per-pitch model (the page's "Per-Pitch (modeled)" option), from every tracked pitch:
 #     the projections project's pitch file for the season, joined to the cached play-by-play
 python -I tools/lineup_sims/pitch_model.py 2026 --pitches <projections>/data/interim/pitch_scores/mlb_2026.parquet
+# 3c. the hook model (the page's "Modeled hook" option), from every MLB pitch 2022 on: the projections
+#     project's data directory, read only (raw/statfast/pitches and games, interim/transactions.parquet)
+python -I tools/lineup_sims/hook_model.py 2026 --projections <projections>/data
 # 4. every team's lineups and the contact-power curve, simulated into the data file (~1 min)
 node tools/lineup_sims/precompute.mjs 2026 100000
 # 5. engine checks against the new file
 node tools/lineup_sims/test_sim.mjs 2026
 ```
 
-Then bump `data/2026.json?v=` (and `data/2026-pitch.json?v=`, if step 3b ran) in
+Then bump `data/2026.json?v=` (and `data/2026-pitch.json?v=` or `data/2026-hook.json?v=`, if step 3b or 3c ran) in
 `lineup-sims/app.js` and `app.js?v=` in `lineup-sims/index.html`; browsers and the edge
 hold them for hours.
 
@@ -104,6 +107,24 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
   matchup: each player's own splits, league-average platoon gaps on his overall rates, or
   off. `build.py` and `test_sim.mjs` check every split adds up to its whole; the tests also
   check the platoon identities and exact against simulated with splits on.
+* **Modeled hook** (`hook_model.py`, `data/<season>-hook.json`, He pitches → Modeled hook): when
+  a starter comes out. A boundary is the end of one of his plate appearances (does he face his
+  team's next batter?); a LightGBM model of 120 trees, 31 leaves, fit on every start from 2022
+  (9-inning games), looks at what the simulation can track (pitches so far and by inning,
+  batters faced, outs, hits, walks, homers, strikeouts, runs, recent baserunners, inning, outs,
+  runners, times through the order, the score) and what's set before the game (his previous
+  starts' most pitches, starts, his team's starters' outs and bullpen load, rest, recent
+  outings, an injured-list activation). Fit on 2022-2025 and tested on 2026 it scored .0871 log
+  loss per boundary against .109 for pitches, outs and inning alone. `simulate()` takes it as
+  `hook`, with a relief stage whose `from` is "hook": after each of the starter's plate
+  appearances it draws the PA's pitch count from 2026's pitches per PA for the outcome, fills
+  in the features and draws against `hookChance()` (the trees, flattened). A start goes in as
+  a typical one of his (medians over his 2026 starts), at normal rest. Exact numbers average
+  over the simulated hook outs (`expectedLinesMix()`, `hookMix()`); the optimizer takes the
+  hook at the lineup's average out. Across 2026's 153 starters with 15+ starts it averages
+  15.6 outs and 85 pitches a start against an actual 16.0 and 87 (r = .84). `test_sim.mjs`
+  checks the trees against the pipeline's predictions, never/always-hook limits, the mix
+  against a fixed stage, and a starter's simulated starts against his real ones.
 * **Per-pitch model** (`pitch_model.py`, `data/<season>-pitch.json`, the page's toggle): a
   plate appearance built pitch by pitch. In each of the 12 counts a pitch goes through
   seven steps (zone; swing; a take's ball, called strike or HBP; contact; fair; in play, a
@@ -128,5 +149,6 @@ league's actual innings 1-9 per 27 outs (2026: 4.43 R/9 against 4.47; AVG/OBP/SL
 | `pbp.py` | replays plays into base-out states and coded runner outcomes |
 | `build.py` | builds the data file and runs the cross-checks |
 | `pitch_model.py` | builds the per-pitch model's data file |
+| `hook_model.py` | builds the hook model's data file |
 | `precompute.mjs` | team simulations, the contact-power curve, the calibration report |
 | `test_sim.mjs` | engine, optimizer and pitcher-matchup checks |
