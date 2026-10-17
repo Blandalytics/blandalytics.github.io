@@ -8,8 +8,8 @@
 // `ref`, MLB's lineup spots to simulate against him too (for the runs-per-game chart),
 // and `lines`, lineups whose exact expected lines (markov.js) the page needs, each hitter
 // already matched against the starter and each relief stage (a follower, the bullpen).
-import { prepare, simulate } from "./sim.js?v=5";
-import { chainTables, expectedLines, optimize } from "./markov.js?v=4";
+import { prepare, simulate } from "./sim.js?v=6";
+import { chainTables, expectedLines, optimize } from "./markov.js?v=5";
 
 let model = null, chain = null;
 

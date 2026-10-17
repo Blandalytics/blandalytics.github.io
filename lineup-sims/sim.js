@@ -218,7 +218,9 @@ export function bullpenOf(counts, cells, { mode = "off", league } = {}) {
 // with splits off), and l the league's for the same matchups.
 // null pitching is MLB-average pitching: the hitter as he is. `theta` moves every part
 // along the contact-power axis first (tilt).
+// A hitter with `pitch` set is the per-pitch model's instead (facingByPitch(), below).
 export function facing(hitter, pitching, theta = 0, perSd = null) {
+  if (hitter.pitch) return facingByPitch(hitter, pitching, theta, perSd);
   const mv = (b) => (theta ? tilt(b, perSd, theta) : b);
   if (!pitching) return mv(hitter.all);
   const q = new Array(CATS.length).fill(0);
@@ -227,6 +229,112 @@ export function facing(hitter, pitching, theta = 0, perSd = null) {
     for (const part of parts) {
       const x = log5(mv(part.b), c.p[part.side], c.l[part.side]);
       for (let i = 0; i < x.length; i++) q[i] += c.w * part.w * x[i];
+    }
+  }
+  return q;
+}
+
+// ---- the per-pitch model ("Per-Pitch (modeled)"; pipeline/pitch_model.py) ----
+//
+// A plate appearance built pitch by pitch. In each of the 12 counts a pitch goes through a
+// chain of steps: in the zone or not; swing or take; a take's ball, called strike or HBP; a
+// swing's contact or whiff; contact in play or foul; in play, a home run or not, then the other
+// seven batted balls. Each step's chances are the league's in that count (and zone), in that
+// platoon cell, times the hitter's and the pitcher's ratios to the league, scaled to add up to 1
+// (log5 a step at a time). Walking the counts, where three balls and a ball is a walk, two strikes
+// and a strike a strikeout, and a two-strike foul leaves the count as it was, gives the eleven
+// outcomes facing() returns.
+// tables: a cell's (or "all"'s) seven step tables, each [context][class] flat (contexts: the
+// count, or count * 2 + zone). h, p: the hitter's and the pitcher's 13 ratios, each step's
+// classes after the first over its first, in step order; null is MLB average.
+const STEP_K = [2, 2, 3, 2, 2, 2, 7];               // zone swing take contact fair hr inplay
+const STEP_AT = [0, 1, 2, 4, 5, 6, 7];              // where each step's ratios start among the 13
+const COUNT_ORDER = [0, 1, 3, 2, 4, 6, 5, 7, 9, 8, 10, 11]; // balls * 3 + strikes, each after the counts that lead to it
+const REST_AT = [3, 4, 5, 7, 8, 9, 10];             // the inplay step's 1B 2B 3B GB LD FB PU in CATS
+const scratch = STEP_K.map((k) => new Float64Array(k));
+function stepAt(tables, h, p, s, ctx) {
+  const K = STEP_K[s], t = tables[s], o = STEP_AT[s] - 1, out = scratch[s];
+  let sum = 0;
+  for (let k = 0; k < K; k++) {
+    const x = t[ctx * K + k] * (k ? (h ? h[o + k] : 1) * (p ? p[o + k] : 1) : 1);
+    out[k] = x;
+    sum += x;
+  }
+  for (let k = 0; k < K; k++) out[k] /= sum;
+  return out;
+}
+export function pitchChances(tables, h, p) {
+  const pB = new Float64Array(12), pCS = new Float64Array(12), pSS = new Float64Array(12), pF = new Float64Array(12);
+  const pX = new Float64Array(12), pH = new Float64Array(12), pHR = new Float64Array(12), rest = [];
+  for (let c = 0; c < 12; c++) {
+    const pz = stepAt(tables, h, p, 0, c)[1];
+    for (let z = 0; z < 2; z++) {
+      const wz = z ? pz : 1 - pz, ctx = c * 2 + z;
+      const sw = stepAt(tables, h, p, 1, ctx)[1];
+      const tk = stepAt(tables, h, p, 2, ctx);
+      const take = wz * (1 - sw), swing = wz * sw;
+      pB[c] += take * tk[0];
+      pCS[c] += take * tk[1];
+      pH[c] += take * tk[2];
+      const con = stepAt(tables, h, p, 3, ctx)[1], fair = stepAt(tables, h, p, 4, ctx)[1];
+      pSS[c] += swing * (1 - con);
+      pF[c] += swing * con * (1 - fair);
+      pX[c] += swing * con * fair;
+    }
+    pHR[c] = stepAt(tables, h, p, 5, c)[1];
+    rest.push(Float64Array.from(stepAt(tables, h, p, 6, c)));
+  }
+  const arrive = new Float64Array(12), out = new Array(CATS.length).fill(0);
+  arrive[0] = 1;
+  for (const c of COUNT_ORDER) {
+    const b = Math.floor(c / 3), s = c % 3;
+    // with two strikes a foul loops back: the count is left, on average, 1 / (1 - foul) pitches later
+    const v = s === 2 ? arrive[c] / (1 - Math.min(pF[c], 0.999)) : arrive[c];
+    if (b === 3) out[C.BB] += v * pB[c];
+    else arrive[c + 3] += v * pB[c];
+    const strike = pCS[c] + pSS[c] + (s < 2 ? pF[c] : 0);
+    if (s === 2) out[C.K] += v * strike;
+    else arrive[c + 1] += v * strike;
+    out[C.HBP] += v * pH[c];
+    const x = v * pX[c];
+    out[C.HR] += x * pHR[c];
+    for (let j = 0; j < 7; j++) out[REST_AT[j]] += x * (1 - pHR[c]) * rest[c][j];
+  }
+  return out;
+}
+
+// facing() for the per-pitch model. hitter.pitch: { tables, all, gap, cells, theta, perSd }:
+// the league's tables ({ all, RR, RL, LR, LL }); his ratios with platoon splits off (`all`),
+// against the league in the cells he played in (`gap`), and in each cell as the mode has it
+// (`cells`: his own, or none for the league's gap); `theta` his contact-power setting. Each
+// pitching entry's `pitch` is the same for the pitcher's side ({ all, gap, cells }), or null
+// for MLB average. `theta` and `perSd` as for facing(); the setting moves the outcomes after the
+// count chain, not the hitter before it.
+// The chain doesn't depend on the setting, so each hitter's outcomes against each pitching are
+// kept (the optimizer tries setting after setting against the same pitching).
+const chained = new WeakMap();
+function facingByPitch(hitter, pitching, theta, perSd) {
+  const hp = hitter.pitch, th = (hp.theta ?? 0) + theta;
+  let seen = chained.get(hp);
+  if (!seen) chained.set(hp, (seen = new Map()));
+  let q = seen.get(pitching);
+  if (!q) seen.set(pitching, (q = chainFacing(hitter, pitching)));
+  return th ? tilt(q, perSd ?? hp.perSd, th) : q.slice();
+}
+function chainFacing(hitter, pitching) {
+  const hp = hitter.pitch;
+  if (!pitching) return pitchChances(hp.tables.all, hp.all, null);
+  const q = new Array(CATS.length).fill(0);
+  const add = (w, x) => { for (let i = 0; i < x.length; i++) q[i] += w * x[i]; };
+  for (const c of pitching) {
+    const parts = c.hand && hitter.parts?.[c.hand];
+    if (!parts) {
+      add(c.w, pitchChances(hp.tables.all, hp.all, c.pitch?.all ?? null));
+      continue;
+    }
+    for (const part of parts) {
+      const k = c.hand + part.side, pp = c.pitch;
+      add(c.w * part.w, pitchChances(hp.tables[k], hp.cells?.[k] ?? hp.gap, pp ? pp.cells?.[k] ?? pp.gap : null));
     }
   }
   return q;

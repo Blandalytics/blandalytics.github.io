@@ -1,5 +1,5 @@
-import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=5";
-import { chainTables, expectedLines, lineupRuns, matchup, optimize } from "./markov.js?v=4";
+import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=6";
+import { chainTables, expectedLines, lineupRuns, matchup, optimize } from "./markov.js?v=5";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -105,6 +105,29 @@ function tintRange(range, theta) {
 }
 
 const labelOf = (e) => (e.theta ? `${e.name}, ${e.theta < 0 ? "contact" : "power"} ${Math.abs(e.theta).toFixed(1)}` : e.name);
+
+// ---------- the per-pitch model ----------
+// "Per-PA (observed)", the default, draws each plate appearance from the hitter's and pitcher's
+// 2026 rates (log5). "Per-Pitch (modeled)" builds it pitch by pitch, count by count (sim.js
+// pitchChances()), from data/<season>-pitch.json (pipeline/pitch_model.py): the league's chances
+// at each step and each player's ratios to them. That file loads the first time it's picked.
+const MODELS = { pa: "Per-PA (observed)", pitch: "Per-Pitch (modeled)" };
+let byPitch = false;
+let wantPitch = false;      // the link asked for it (readHash), before the file is loaded
+let pitchData = null;
+async function loadPitchData() {
+  if (pitchData) return;
+  const r = await fetch(`data/${SEASON}-pitch.json?v=1`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const d = await r.json();
+  d.tables = Object.fromEntries(Object.entries(d.tables).map(([k, steps]) => [k, steps.map((t) => Float64Array.from(t))]));
+  pitchData = d;
+}
+// A hitter's, spot's, pitcher's or bullpen's ratios as facing() takes them: overall, against the
+// league in the cells he played in, and (with each player's own splits) in each cell he played in.
+// No ratios at all is MLB average.
+const NO_RATIOS = { all: null, gap: null, cells: null };
+const pitchSide = (r, mode) => (r ? { all: r.a, gap: r.g, cells: mode === "own" && r.c ? r.c : null } : NO_RATIOS);
 
 // ---------- data ----------
 function buildEntries() {
@@ -497,31 +520,41 @@ const platoonOf = () => (pitcher ? $("platoon").value : "off");
 function vsOf() {
   if (!pitcher) return null;
   const mode = $("platoon").value, regress = Number($("regress").value);
-  const arm = (e) => pitcherOf(e.counts, e.cells, e.throws, { mode, league, regress: e.generic ? 0 : regress });
-  const pen = (cells) => bullpenOf(cellsTotal(cells), cells, { mode, league });
-  const of = { pen: () => pen(penTeam() === "MLB" ? data.pitching.relief_cells : data.pitching.teams[penTeam()]),
-    mlb: () => pen(data.pitching.relief_cells), follower: () => (follower ? arm(follower) : pen(data.pitching.bulk.cells)) };
+  // with the per-pitch model, each stretch of pitching carries its ratios too (r: () => them)
+  const withPitch = (pitching, r) => (byPitch ? pitching.map((c) => ({ ...c, pitch: pitchSide(r(), mode) })) : pitching);
+  const arm = (e) => withPitch(pitcherOf(e.counts, e.cells, e.throws, { mode, league, regress: e.generic ? 0 : regress }),
+    () => (e.generic ? null : pitchData.pitchers[e.mlbam]));
+  const pen = (cells, key) => withPitch(bullpenOf(cellsTotal(cells), cells, { mode, league }), () => pitchData.pens[key]);
+  const of = { pen: () => pen(penTeam() === "MLB" ? data.pitching.relief_cells : data.pitching.teams[penTeam()], penTeam()),
+    mlb: () => pen(data.pitching.relief_cells, "MLB"), follower: () => (follower ? arm(follower) : pen(data.pitching.bulk.cells, "bulk")) };
   return { sp: arm(pitcher), relief: planOf().map((st) => ({ from: st.from, pitching: of[st.who]() })) };
 }
-// everything vsOf() depends on: results computed against one key don't fit another
+// everything vsOf() depends on, and the model: results computed against one key don't fit another
 const vsKey = () => (pitcher ? [pitcher.id, planOf().map((st) => `${st.who}@${st.from}`).join(","),
-  $("p_hook").value === "follower" ? follower?.id ?? "bulk" : "", $("regress").value, $("platoon").value].join("|") : "");
+  $("p_hook").value === "follower" ? follower?.id ?? "bulk" : "", $("regress").value, $("platoon").value, byPitch ? "pitch" : "pa"].join("|")
+  : byPitch ? "pitch" : "");
 
 // A lineup entry as facing() takes it: its own outcome chances (Small samples applied to
 // hitters), split by platoon cell once a pitcher is picked. A tilted MLB spot comes moved
-// along the contact-power axis, or, with tilted false, as the spot is at 0.
+// along the contact-power axis, or, with tilted false, as the spot is at 0. With the per-pitch
+// model it carries its ratios (`pitch`), and its setting moves the chain's outcomes instead.
 function specOf(e, tilted = true) {
   const b = e.base ? entries.get(e.base) : e;
   const h = hitterOf(b.counts, b.cells, { mode: platoonOf(), league, regress: b.kind === "player" ? Number($("regress").value) : 0, bats: b.bats });
+  if (byPitch) {
+    const r = (b.kind === "player" ? pitchData.hitters : pitchData.spots)[b.id.slice(1)];
+    return { ...h, pitch: { tables: pitchData.tables, ...pitchSide(r, platoonOf()), theta: tilted ? e.theta ?? 0 : 0,
+      perSd: data.tradeoff.per_sd } };
+  }
   if (!tilted || !e.theta) return h;
   const mv = (x) => tilt(x, data.tradeoff.per_sd, e.theta);
   return { all: mv(h.all), parts: h.parts && Object.fromEntries(Object.entries(h.parts).map(([k, ps]) => [k, ps.map((q) => ({ ...q, b: mv(q.b) }))])) };
 }
 
-// a hitter's outcomes as the lineup table shows them: 2026 rates, or against the
-// pitcher (his own innings, not the bullpen's)
+// a hitter's outcomes as the lineup table shows them: 2026 rates (the per-pitch model's, against
+// MLB-average pitching), or against the pitcher (his own innings, not the bullpen's)
 function shownOf(e, vs = vsOf()) {
-  return vs ? facing(specOf(e), vs.sp) : e.counts;
+  return vs || byPitch ? facing(specOf(e), vs?.sp ?? null) : e.counts;
 }
 
 function findPitchers(q) {
@@ -699,7 +732,7 @@ function baseDist({ key, cums }) {
   return new Promise((resolve) => {
     let w;
     try {
-      w = new Worker(new URL("./sim-worker.js?v=7", import.meta.url), { type: "module" });
+      w = new Worker(new URL("./sim-worker.js?v=8", import.meta.url), { type: "module" });
     } catch {
       return resolve(here());
     }
@@ -715,7 +748,7 @@ let worker = null;
 let useWorker = typeof Worker !== "undefined";
 
 function startWorker() {
-  const w = new Worker(new URL("./sim-worker.js?v=7", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./sim-worker.js?v=8", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
   w.onmessage = ({ data: msg }) => {
     if (job && msg.id === job.id) finish(job, msg.res, msg.ms, msg.ref, msg.lines);
@@ -739,29 +772,35 @@ function run() {
   renderSummary(); // every change to the lineup or the pitching comes through here
   const key = vsKey(), vs = vsOf();
   if (optJob && (lineup.join() !== optJob.ids.join() || key !== optJob.key)) {
-    stopSearch(`Search stopped: the ${key !== optJob.key ? "pitching" : "lineup"} changed. Optimize again for this one.`);
+    const what = optJob.byPitch !== byPitch ? "model" : key !== optJob.key ? "pitching" : "lineup";
+    stopSearch(`Search stopped: the ${what} changed. Optimize again for this one.`);
   }
   const games = Number($("games").value);
   const specs = lineup.map((id) => specOf(entryOf(id)));
   const cums = specs.map((h) => cumulative(facing(h, vs?.sp ?? null)));
   const relief = (vs?.relief ?? []).map((r) => ({ from: r.from, lineup: specs.map((h) => cumulative(facing(h, r.pitching))) }));
   let ref = null, lines = null;
-  if (vs && versus.key !== key) {
+  // (the data file's comparisons are the per-PA model's, so with the per-pitch model they're
+  // worked out here even against MLB-average pitching)
+  if ((vs || byPitch) && versus.key !== key) {
     // each lineup's hitters matched against the starter and each relief stage here; the
     // worker only needs the chances
+    const stages = vs?.relief ?? [];
     const spots = (abbr) => Array.from({ length: 9 }, (_, i) => specOf(entries.get(`s${abbr}-${i + 1}`)));
-    const matched = (hs, theta = 0) => hs.map((h) => ({ sp: facing(h, vs.sp, theta, data.tradeoff.per_sd),
-      relief: vs.relief.map((r) => facing(h, r.pitching, theta, data.tradeoff.per_sd)) }));
+    const matched = (hs, theta = 0) => hs.map((h) => ({ sp: facing(h, vs?.sp ?? null, theta, data.tradeoff.per_sd),
+      relief: stages.map((r) => facing(h, r.pitching, theta, data.tradeoff.per_sd)) }));
     const mlb = spots("MLB"), m0 = matched(mlb);
     ref = { lineup: m0.map((x) => cumulative(x.sp)), games: REF_GAMES,
-      relief: vs.relief.map((r, i) => ({ from: r.from, lineup: m0.map((x) => cumulative(x.relief[i])) })) };
-    lines = { w: data.weights, from: vs.relief.map((r) => r.from), lineups: [m0, ...data.teams.map((t) => matched(spots(t.abbr))),
+      relief: stages.map((r, i) => ({ from: r.from, lineup: m0.map((x) => cumulative(x.relief[i])) })) };
+    lines = { w: data.weights, from: stages.map((r) => r.from), lineups: [m0, ...data.teams.map((t) => matched(spots(t.abbr))),
       ...data.sims.tradeoff.points.map((pt) => matched(mlb, pt.theta))] };
   }
   // this lineup against MLB-average pitching, as baseDist() simulates it (with no pitcher, the run itself)
-  const base = { key: `${lineup.join()}|${$("regress").value}`, cums: vs ? specs.map((h) => cumulative(facing(h, null))) : cums };
+  const base = { key: `${lineup.join()}|${$("regress").value}|${byPitch ? "pitch" : "pa"}`,
+    cums: vs ? specs.map((h) => cumulative(facing(h, null))) : cums };
   const busy = job != null;
-  job = { id: ++jobs, cums, relief, games, ids: [...lineup], key, vs, name: pitcher?.name, ...planWords(), full: planWords(true).words, ref, lines, base };
+  job = { id: ++jobs, cums, relief, games, ids: [...lineup], key, vs, name: pitcher?.name, ...planWords(), full: planWords(true).words, ref, lines, base,
+    byPitch };
   $("status").textContent = "simulating…";
   $("out").style.opacity = last ? ".55" : "";
   writeHash();
@@ -801,8 +840,8 @@ function finish(j, res, ms, ref, lines) {
       tradeoff: data.sims.tradeoff.points.map((pt, i) => ({ theta: pt.theta, ...lines[1 + n + i] })) } };
   }
   last = { res, sum: summarize(res.totals, data.weights), games: j.games, lineup: j.ids, key: j.key, vs: j.vs, name: j.name,
-    words: j.words, short: j.short, full: j.full, ctx: j.vs ? versus.ctx : null,
-    base: j.base };
+    words: j.words, short: j.short, full: j.full, ctx: j.vs || j.byPitch ? versus.ctx : null,
+    base: j.base, byPitch: j.byPitch };
   $("out").hidden = false;
   $("out").style.opacity = "";
   $("status").textContent = "";
@@ -949,8 +988,34 @@ function strip(st, v, mlb, teams) {
   return svg;
 }
 
+// the model toggle; Small samples is the per-PA model's (the per-pitch one shrinks step by step)
+function paintModel() {
+  document.querySelectorAll("#model_toggle button").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.model === "pitch") === byPitch)));
+  $("regress").disabled = byPitch;
+  $("regress").closest("label").title = byPitch ? "Per-PA only: the per-pitch model has small-sample shrinkage of its own, step by step"
+    : "Applies to individual hitters and the opposing pitcher, not to lineup spots";
+}
+async function setModel(pitch) {
+  if (pitch === byPitch) return;
+  if (pitch) {
+    $("status").classList.remove("err");
+    $("status").textContent = "loading the per-pitch model…";
+    try {
+      await loadPitchData();
+    } catch (e) {
+      $("status").textContent = `Couldn't load the per-pitch model (${e.message}).`;
+      $("status").classList.add("err");
+      return;
+    }
+  }
+  byPitch = pitch;
+  paintModel();
+  renderLineup(); // the table's rates are the model's
+  run();
+}
+
 function paintBasis() {
-  document.querySelectorAll(".basis button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.basis === basis)));
+  document.querySelectorAll(".basis button[data-basis]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.basis === basis)));
 }
 
 function showTip(ev, rows, title) {
@@ -1039,14 +1104,14 @@ function runsChart(dist, games, runs, avg) {
   const amber = average ? null : last.ctx ? Array.from(last.ctx.refDist, (c) => c / REF_GAMES) : Array.from(data.sims.mlb.runDist);
   // (white only once the image is made: MLB's spots as they are have it in data.sims.mlb already)
   const base = last.base;
-  const white = !last.vs ? null : average ? async () => Array.from(data.sims.mlb.runDist)
+  const white = !last.vs ? null : average && !last.byPitch ? async () => Array.from(data.sims.mlb.runDist)
     : async () => { const b = await baseDist(base); return Array.from(b.dist, (c) => c / b.games); };
-  const subs = [...(average ? [] : [[last.vs ? `MLB vs ${lastName(last.name)}` : "MLB", last.vs ? last.ctx.mlb.R : data.sims.mlb.R, "amber"]]),
+  const subs = [...(average ? [] : [[last.vs ? `MLB vs ${lastName(last.name)}` : "MLB", last.ctx ? last.ctx.mlb.R : data.sims.mlb.R, "amber"]]),
     ...(last.vs ? [["Lineup vs MLB", avg, "white"]] : [])];
   // a team's lineup (its spots or its most-used order, edited or not) leads the subtitle with its abbreviation
   const team = $("team").value !== "MLB" && !ohtani && mode !== "tradeoff" ? $("team").value : null;
   runsShare = { mine, amber, white, R: runs, subs, games, ids: last.lineup,
-    team, ohtani, vs: last.vs ? { name: last.name, full: last.full, short: last.short } : null };
+    team, ohtani, vs: last.vs ? { name: last.name, full: last.full, short: last.short } : null, byPitch: !!last.byPitch };
   const W = chartWidth("runs_chart"), H = 230, L = 40, R = 8, T = 10, B = 34;
   drawnWidth = $("runs_chart").clientWidth;
   const n = mine.length, band = (W - L - R) / n, bw = Math.min(24, band * 0.62);
@@ -1215,7 +1280,7 @@ function renderTradeoff(moe) {
     }));
   tradeoffChart(pts, avg, last.sum.R, moe);
   // the saved and copied image is the curve alone
-  tradeoffShare = { pts, vs: last.ctx ? { name: last.name, words: last.words } : null };
+  tradeoffShare = { pts, vs: last.vs ? { name: last.name, words: last.words } : null, byPitch: !!last.byPitch };
 
   // table view of the curve at whole steps
   const cols = pts.filter((p) => Number.isInteger(p.theta) || Math.abs(p.theta) === data.tradeoff.range);
@@ -1386,7 +1451,7 @@ function startOptimize() {
     const e = entryOf(id);
     return opts.tilt && e.theta != null ? { ...specOf(e, false), theta: e.theta } : specOf(e);
   });
-  optJob = { id: ++optJobs, ids, opts, key: vsKey(), name: pitcher?.name, words: planWords().words };
+  optJob = { id: ++optJobs, ids, opts, key: vsKey(), name: pitcher?.name, words: planWords().words, byPitch };
   $("opt_status").textContent = "searching…";
   renderOptimizer();
   const j = optJob;
@@ -1398,7 +1463,7 @@ function startOptimize() {
   if (!useWorker) return here();
   try {
     if (!optWorker) {
-      optWorker = new Worker(new URL("./sim-worker.js?v=7", import.meta.url), { type: "module" });
+      optWorker = new Worker(new URL("./sim-worker.js?v=8", import.meta.url), { type: "module" });
       optWorker.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
     }
   } catch {
@@ -1445,7 +1510,7 @@ function optFinish(j, result, ms) {
     return result.theta[h] != null ? tiltId(e.base, result.theta[h]) : j.ids[h];
   });
   $("opt_status").textContent = "";
-  optDone = { before: j.ids, after, result, opts: j.opts, key: j.key, name: j.name, words: j.words };
+  optDone = { before: j.ids, after, result, opts: j.opts, key: j.key, name: j.name, words: j.words, byPitch: j.byPitch };
   if (after.join() !== lineup.join()) {
     lineup = [...after]; // a copy: edits to the lineup mustn't rewrite the search's record
     edited = true;
@@ -1485,7 +1550,7 @@ function renderOptResult() {
 
 // the optimized setting of each slot's hitter (bar) against where that hitter was (tick)
 function settingsChart(before, after, wasSlot) {
-  optShare = { before, after, wasSlot };
+  optShare = { before, after, wasSlot, byPitch: !!optDone?.byPitch };
   const range = data.tradeoff.range;
   // G: room either side of the plot for a value label past a bar that reaches the end
   const W = chartWidth("opt_chart"), rowH = 26, L = Math.min(150, Math.round(W * 0.36)), G = 38, T = 6, B = 40;
@@ -1556,6 +1621,8 @@ function resetSettings() {
   follower = null;
   ohtani = false;
   beforeOhtani = null;
+  byPitch = false;
+  paintModel();
   renderPitcher();
   basis = "actual";
   paintBasis();
@@ -1575,7 +1642,7 @@ function resetSettings() {
 // homepage tiles': the Pitcher List Stats ground, a cyan title, the wordmark top right), to copy
 // or download with the Share image button (shared/share-image.js).
 const OPT_TILE = { W: 900, bg: "rgb(41,44,66)", cyan: "rgb(4,209,249)", sub: "#9aa0b8", axis: "#c0c4d3", grid: "#3a3e5a", zero: "#6d7290" };
-let optShare = null;   // what the chart on screen shows: { before, after, wasSlot }
+let optShare = null;   // what the chart on screen shows: { before, after, wasSlot, byPitch }
 let logoImg = null;
 const loadLogo = () => logoImg || (logoImg = new Promise((res, rej) => {
   const im = new Image();
@@ -1681,7 +1748,7 @@ async function optTileBlob() {
     g.fillText(fmtTheta(t), t < 0 ? x1 - 10 : x1 + 10, y + 1);
   });
 
-  tileFooter(g);
+  tileFooter(g, optShare.byPitch);
   return new Promise((res) => cv.toBlob(res, "image/png"));
 }
 
@@ -1693,9 +1760,9 @@ function fitFont(g, text, weight, size, family, width) {
   }
 }
 
-// both images' footer: what the spots are and what one step is (per 100 PA, from
-// data.tradeoff.per_sd, as the page's own axis note has it)
-function tileFooter(g) {
+// both images' footer: what the spots are, the model (byPitch: the per-pitch one) and what one
+// step is (per 100 PA, from data.tradeoff.per_sd, as the page's own axis note has it)
+function tileFooter(g, byPitch) {
   const W = OPT_TILE.W;
   const d = Object.fromEntries(CATS.map((c, i) => [c, data.tradeoff.per_sd[i] * 100]));
   const f = (v) => `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`;
@@ -1704,8 +1771,9 @@ function tileFooter(g) {
   g.textAlign = "left";
   g.textBaseline = "alphabetic";
   g.fillStyle = OPT_TILE.sub;
-  fitFont(g, "Lineup Spots are MLB-average wOBA for that spot.", 400, 16, '"DM Sans"', W - 96);
-  g.fillText("Lineup Spots are MLB-average wOBA for that spot.", 48, 836);
+  const spots = `Lineup Spots are MLB-average wOBA for that spot. · ${MODELS[byPitch ? "pitch" : "pa"]}`;
+  fitFont(g, spots, 400, 16, '"DM Sans"', W - 96);
+  g.fillText(spots, 48, 836);
   fitFont(g, step, 400, 16, '"DM Sans"', W - 96);
   g.fillText(step, 48, 862);
 }
@@ -1797,7 +1865,7 @@ async function tradeoffTileBlob() {
     g.fillStyle = color;
     g.fillText(p.R.toFixed(2), x(p.theta) + dx, y(p.R) + (above ? -18 : 32));
   }
-  tileFooter(g);
+  tileFooter(g, tradeoffShare.byPitch);
   return new Promise((res) => cv.toBlob(res, "image/png"));
 }
 
@@ -1811,7 +1879,7 @@ let runsShare = null;   // what the chart on screen shows: { mine, amber, white,
 const runsFileName = () => `lineup_sim_runs_per_game${runsShare?.vs ? `_vs_${fold(lastName(runsShare.vs.name)).replace(/[^a-z0-9]+/g, "_")}` : ""}.png`;
 
 async function runsTileBlob() {
-  const { mine, amber, white: whiteOf, R, subs, games, ids, team, ohtani: allOhtanis, vs } = runsShare;
+  const { mine, amber, white: whiteOf, R, subs, games, ids, team, ohtani: allOhtanis, vs, byPitch: pitchModel } = runsShare;
   const white = whiteOf ? await whiteOf() : null;
   await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 15px "DM Sans"',
     '600 48px "JetBrains Mono"', '600 20px "JetBrains Mono"', '400 17px "JetBrains Mono"', '400 15px "DM Sans"'].map((f) => document.fonts.load(f)));
@@ -2007,7 +2075,7 @@ async function runsTileBlob() {
       g.fillText(text, x + (kind === "bar" ? 26 : 34), yb);
     }
   });
-  g.fillText(`${games.toLocaleString()} simulated games`, 48, 868);
+  g.fillText(`${games.toLocaleString()} simulated games · ${MODELS[pitchModel ? "pitch" : "pa"]}`, 48, 868);
   return new Promise((res) => cv.toBlob(res, "image/png"));
 }
 
@@ -2022,6 +2090,7 @@ function writeHash() {
     if ($("platoon").value !== "own") p.set("pl", $("platoon").value);
   }
   if (ohtani) p.set("o", "1");
+  if (byPitch) p.set("m", "pitch");
   history.replaceState(null, "", `#${p}`);
 }
 
@@ -2044,6 +2113,7 @@ function readHash() {
   follower = pitchers.get(`P${p.get("f")}`) ?? null;
   const pl = p.get("pl");
   if (pl && [...$("platoon").options].some((o) => o.value === pl)) $("platoon").value = pl;
+  wantPitch = p.get("m") === "pitch";
   const a = Number(p.get("a"));
   if (Number.isFinite(a)) setMaster(Math.max(-R, Math.min(R, a)));
   if (ids.length === 9 && ids.every((id) => entryOf(id))) {
@@ -2130,11 +2200,21 @@ async function boot() {
   $("platoon_gap").textContent = `a ${fmtRate(wobaOf(lc.LL))} wOBA for left-handed batters against left-handers (${fmtRate(wobaOf(lc.RL))} against `
     + `right-handers) and ${fmtRate(wobaOf(lc.RR))} for right-handed batters against right-handers (${fmtRate(wobaOf(lc.LR))} against left-handers)`;
   const saved = readHash(); // before wiring controls: it sets their values, `basis` and `pitcher`
+  if (wantPitch) {
+    try {
+      await loadPitchData();
+      byPitch = true;
+    } catch (e) {
+      $("status").textContent = `Couldn't load the per-pitch model (${e.message}), so this is Per-PA.`;
+    }
+  }
+  paintModel();
+  document.querySelectorAll("#model_toggle button").forEach((b) => b.addEventListener("click", () => setModel(b.dataset.model === "pitch")));
   renderPitcher();
   if (window.ResizeObserver) new ResizeObserver(() => fitHookLabels()).observe($("p_hook"));
   document.fonts?.ready.then(fitHookLabels); // measured in DM Sans, not a fallback
   paintBasis();
-  document.querySelectorAll(".basis button").forEach((b) => {
+  document.querySelectorAll(".basis button[data-basis]").forEach((b) => {
     b.addEventListener("click", () => {
       basis = b.dataset.basis;
       paintBasis();
