@@ -8,16 +8,21 @@
 // `ref`, MLB's lineup spots to simulate against him too (for the runs-per-game chart),
 // and `lines`, lineups whose exact expected lines (markov.js) the page needs, each hitter
 // already matched against the starter and each relief stage (a follower, the bullpen).
-// With the modeled hook, `hook` (sim.js simulate()) goes with the job, and its relief stage's
-// `from` is "hook": the lines then average over where MLB's spots' games took him out.
+// With the modeled hook, the page sends the model's trees and other fixed parts once ("hook"),
+// then each job carries only the starter's before-the-game values (`hookX`), and its relief
+// stage's `from` is "hook": the lines then average over where MLB's spots' games took him out.
 import { prepare, simulate } from "./sim.js?v=7";
 import { chainTables, expectedLines, expectedLinesMix, hookMix, optimize } from "./markov.js?v=6";
 
-let model = null, chain = null;
+let model = null, chain = null, hookFixed = null;
 
 self.onmessage = ({ data: msg }) => {
   if (msg.type === "init") {
     model = prepare(msg.tables);
+    return;
+  }
+  if (msg.type === "hook") {
+    hookFixed = msg.fixed;
     return;
   }
   const t0 = performance.now();
@@ -27,9 +32,10 @@ self.onmessage = ({ data: msg }) => {
     self.postMessage({ id: msg.id, result, ms: performance.now() - t0 });
     return;
   }
-  const res = simulate(model, msg.lineup, msg.games, msg.seed, msg.relief, msg.hook);
+  const hook = msg.hookX ? { ...hookFixed, x: msg.hookX } : null;
+  const res = simulate(model, msg.lineup, msg.games, msg.seed, msg.relief, hook);
   const ms = performance.now() - t0;
-  const refRes = msg.ref ? simulate(model, msg.ref.lineup, msg.ref.games, msg.seed, msg.ref.relief, msg.hook) : null;
+  const refRes = msg.ref ? simulate(model, msg.ref.lineup, msg.ref.games, msg.seed, msg.ref.relief, hook) : null;
   chain ??= chainTables(model);
   // with the modeled hook (a stage from "hook"), MLB's spots' games say where he goes out, for every lineup
   const lines = msg.lines ? (msg.lines.from.includes("hook")

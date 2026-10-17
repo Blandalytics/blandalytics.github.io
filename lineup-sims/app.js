@@ -118,10 +118,11 @@ async function loadHookData() {
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const d = await r.json();
   const t = d.trees;
-  d.compiled = { feat: Int32Array.from(t.feat), thr: Float64Array.from(t.thr), dl: Uint8Array.from(t.dl), miss: Uint8Array.from(t.miss),
-    left: Int32Array.from(t.left), right: Int32Array.from(t.right), leaf: Float64Array.from(t.leaf), roots: Int32Array.from(t.roots) };
   const probs = (c) => { const n = c.reduce((a, x) => a + x, 0); return c.map((x) => x / n); };
-  d.cum = CATS.map((c) => cumulative(probs(d.pitches[c])));
+  // the parts of simulate()'s `hook` that are the same for every starter (a worker gets them once)
+  d.fixed = { trees: { feat: Int32Array.from(t.feat), thr: Float64Array.from(t.thr), dl: Uint8Array.from(t.dl), miss: Uint8Array.from(t.miss),
+    left: Int32Array.from(t.left), right: Int32Array.from(t.right), leaf: Float64Array.from(t.leaf), roots: Int32Array.from(t.roots) },
+    features: d.features, pitches: CATS.map((c) => cumulative(probs(d.pitches[c]))), runsPerInning: d.runs_per_inning };
   const rows = Object.values(d.pitchers);
   d.avgPitches = rows.reduce((a, v) => a + v[5] * v[7], 0) / rows.reduce((a, v) => a + v[7], 0);
   hookData = d;
@@ -135,7 +136,7 @@ function hookOf(e) {
   for (const [k, v] of Object.entries(H.defaults)) set(k, v);
   set("team_start_outs", (own && H.teams[own[4]]) || H.league.team_start_outs);
   ["max3", "max5", "mean3", "starts_season"].forEach((k, i) => set(k, own ? own[i] : H.league[k]));
-  return { trees: H.compiled, features: H.features, x, pitches: H.cum, runsPerInning: H.runs_per_inning };
+  return { ...H.fixed, x };
 }
 const hooked = (vs) => !!vs?.relief.some((r) => r.from === "hook");
 // a run's own hook outs, as the exact numbers average over them
@@ -793,10 +794,12 @@ function baseDist({ key, cums }) {
 const averageLineup = (ids) => ids.every((id, i) => id.replace("@0.0", "") === `sMLB-${i + 1}`);
 let worker = null;
 let useWorker = typeof Worker !== "undefined";
+let workerHook = false;    // the run worker has the hook model's trees (sent once, the first job that needs them)
 
 function startWorker() {
   const w = new Worker(new URL("./sim-worker.js?v=9", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
+  workerHook = false;
   w.onmessage = ({ data: msg }) => {
     if (job && msg.id === job.id) finish(job, msg.res, msg.ms, msg.ref, msg.lines);
   };
@@ -863,7 +866,11 @@ function run() {
     useWorker = false; // no module workers here
     return runHere(job);
   }
-  worker.postMessage({ id: job.id, lineup: cums, relief, games, seed: SEED, ref, lines, hook });
+  if (hook && !workerHook) {
+    worker.postMessage({ type: "hook", fixed: hookData.fixed });
+    workerHook = true;
+  }
+  worker.postMessage({ id: job.id, lineup: cums, relief, games, seed: SEED, ref, lines, hookX: hook?.x ?? null });
 }
 
 function runHere(j) {

@@ -453,6 +453,15 @@ if (existsSync(hookFile)) {
     const mixR = expectedLinesMix(chain, lineups, ["hook"], data.weights, hookMix(res.hook.outs))[0].R;
     close(mixR, summarize(res.totals, data.weights).R, 0.25, "exact over the hook points vs simulated");
   });
+
+  check("hook: the same seed gives the same games (every hook, pitch-count and outcome draw is the seeded one)", () => {
+    const go = (seed) => simulate(model, cums, 2000, seed, [{ from: "hook", lineup: penCums }], hookFor(ace));
+    const a = go(7), b = go(7);
+    assert.deepEqual(a.hook, b.hook);
+    assert.deepEqual(a.totals, b.totals);
+    assert.deepEqual(Array.from(a.runDist), Array.from(b.runDist));
+    assert.notDeepEqual(go(8).hook.outs, a.hook.outs);
+  });
 }
 
 console.log(`${n} checks passed`);
