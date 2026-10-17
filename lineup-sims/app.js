@@ -1,5 +1,5 @@
-import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=7";
-import { chainTables, expectedLines, expectedLinesMix, hookMix, lineupRuns, matchup, optimize } from "./markov.js?v=6";
+import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=8";
+import { chainTables, expectedLines, expectedLinesMix, hookMix, lineupRuns, matchup, optimize } from "./markov.js?v=7";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -584,7 +584,7 @@ const vsKey = () => (pitcher ? [pitcher.id, planOf().map((st) => `${st.who}@${st
 // A lineup entry as facing() takes it: its own outcome chances (Small samples applied to
 // hitters), split by platoon cell once a pitcher is picked. A tilted MLB spot comes moved
 // along the contact-power axis, or, with tilted false, as the spot is at 0. With the per-pitch
-// model it carries its ratios (`pitch`), and its setting moves the chain's outcomes instead.
+// model it carries its ratios (`pitch`) and its setting, which facing() applies to the chain's outcomes.
 function specOf(e, tilted = true) {
   const b = e.base ? entries.get(e.base) : e;
   const h = hitterOf(b.counts, b.cells, { mode: platoonOf(), league, regress: b.kind === "player" ? Number($("regress").value) : 0, bats: b.bats });
@@ -780,7 +780,7 @@ function baseDist({ key, cums }) {
   return new Promise((resolve) => {
     let w;
     try {
-      w = new Worker(new URL("./sim-worker.js?v=10", import.meta.url), { type: "module" });
+      w = new Worker(new URL("./sim-worker.js?v=11", import.meta.url), { type: "module" });
     } catch {
       return resolve(here());
     }
@@ -797,7 +797,7 @@ let useWorker = typeof Worker !== "undefined";
 let workerHook = false;    // the run worker has the hook model's trees (sent once, the first job that needs them)
 
 function startWorker() {
-  const w = new Worker(new URL("./sim-worker.js?v=10", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./sim-worker.js?v=11", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
   workerHook = false;
   w.onmessage = ({ data: msg }) => {
@@ -1537,7 +1537,7 @@ function startOptimize() {
   if (!useWorker) return here();
   try {
     if (!optWorker) {
-      optWorker = new Worker(new URL("./sim-worker.js?v=10", import.meta.url), { type: "module" });
+      optWorker = new Worker(new URL("./sim-worker.js?v=11", import.meta.url), { type: "module" });
       optWorker.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
     }
   } catch {
