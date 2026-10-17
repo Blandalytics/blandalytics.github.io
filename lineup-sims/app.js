@@ -1,5 +1,5 @@
-import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=6";
-import { chainTables, expectedLines, lineupRuns, matchup, optimize } from "./markov.js?v=5";
+import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=7";
+import { chainTables, expectedLines, expectedLinesMix, hookMix, lineupRuns, matchup, optimize } from "./markov.js?v=6";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -105,6 +105,48 @@ function tintRange(range, theta) {
 }
 
 const labelOf = (e) => (e.theta ? `${e.name}, ${e.theta < 0 ? "contact" : "power"} ${Math.abs(e.theta).toFixed(1)}` : e.name);
+
+// ---------- the modeled hook ----------
+// data/<season>-hook.json (pipeline/hook_model.py): the hook model's trees, pitches per plate
+// appearance by outcome, and each 2026 starter's before-the-game values for a typical start of
+// his. Loaded the first time "Modeled hook" is picked. A start goes in at normal rest, with no
+// outings in the days before and not just back from the injured list.
+let hookData = null;
+async function loadHookData() {
+  if (hookData) return;
+  const r = await fetch(`data/${SEASON}-hook.json?v=1`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const d = await r.json();
+  const t = d.trees;
+  d.compiled = { feat: Int32Array.from(t.feat), thr: Float64Array.from(t.thr), dl: Uint8Array.from(t.dl), miss: Uint8Array.from(t.miss),
+    left: Int32Array.from(t.left), right: Int32Array.from(t.right), leaf: Float64Array.from(t.leaf), roots: Int32Array.from(t.roots) };
+  const probs = (c) => { const n = c.reduce((a, x) => a + x, 0); return c.map((x) => x / n); };
+  d.cum = CATS.map((c) => cumulative(probs(d.pitches[c])));
+  const rows = Object.values(d.pitchers);
+  d.avgPitches = rows.reduce((a, v) => a + v[5] * v[7], 0) / rows.reduce((a, v) => a + v[7], 0);
+  hookData = d;
+}
+// what simulate() takes as `hook` for a starter: his typical start's values (an MLB-average RHP
+// or LHP: the league's)
+function hookOf(e) {
+  const H = hookData, own = !e.generic && H.pitchers[e.mlbam];
+  const x = new Float64Array(H.features.length).fill(NaN);
+  const set = (k, v) => { x[H.features.indexOf(k)] = v; };
+  for (const [k, v] of Object.entries(H.defaults)) set(k, v);
+  set("team_start_outs", (own && H.teams[own[4]]) || H.league.team_start_outs);
+  ["max3", "max5", "mean3", "starts_season"].forEach((k, i) => set(k, own ? own[i] : H.league[k]));
+  return { trees: H.compiled, features: H.features, x, pitches: H.cum, runsPerInning: H.runs_per_inning };
+}
+const hooked = (vs) => !!vs?.relief.some((r) => r.from === "hook");
+// a run's own hook outs, as the exact numbers average over them
+const hookMixOf = (res) => (res?.hook ? hookMix(res.hook.outs) : null);
+// the pitching with the hook at a set out, for the optimizer: where this lineup's games took him out on average
+function hookFixed(vs) {
+  if (!hooked(vs)) return vs;
+  const h = last?.key === vsKey() ? last.res.hook : null;
+  const at = h ? Math.round(h.outs.reduce((a, c, i) => a + c * i, 0) / h.games) : startOutsOf(pitcher);
+  return { ...vs, relief: vs.relief.map((r) => (r.from === "hook" ? { ...r, from: at } : r)) };
+}
 
 // ---------- the per-pitch model ----------
 // "Per-PA (observed)", the default, draws each plate appearance from the hitter's and pitcher's
@@ -479,6 +521,8 @@ function wireSuggest(input, list, { find, choose: take, current, browse = false,
 //   bullpen    a bullpen day: he opens for a typical 2026 opener's outs, then his team's bullpen
 //   follower   he opens, a follower (picked, or MLB-average bulk relief) pitches a typical
 //              follower's outs, then his team's bullpen
+//   hook       he starts until the hook model takes him out (sim.js simulate()), then his
+//              team's bullpen; the exact numbers average over where the simulation took him out
 // An MLB-average RHP or LHP has MLB's bullpen. data.pitching has the typical outs, each
 // team's relievers and the bulk relief.
 let follower = null;       // the follower picked for "follower"; null is MLB-average bulk relief
@@ -492,6 +536,7 @@ function planOf() {
   if ((m === "start" || m === "start_mlb") && pitcher.gs) return [{ who: m === "start" ? "pen" : "mlb", from: startOutsOf(pitcher) }];
   if (m === "bullpen") return [{ who: "pen", from: op }];
   if (m === "follower") return [{ who: "follower", from: op }, { who: "pen", from: op + data.pitching.follower.outs }];
+  if (m === "hook" && pitcher.gs) return [{ who: "pen", from: "hook" }];
   return [];
 }
 // The pitching in words: "Skubal for 6.0 innings, then the Tigers bullpen", "Skubal opening
@@ -506,6 +551,7 @@ function planWords(full = false) {
     return { words: `${who} opening (${fmtIP(plan[0].from)} IP), then ${f} (${fmtIP(plan[1].from - plan[0].from)} IP), then ${pen(plan[1])}`,
       short: `${who} + ${follower ? lastName(follower.name) : "bulk"} + bullpen` };
   }
+  if (plan[0].from === "hook") return { words: `${who} until the modeled hook, then ${pen(plan[0])}`, short: `${who} + bullpen` };
   return { words: $("p_hook").value === "bullpen" ? `${who} opening (${fmtIP(plan[0].from)} IP), then ${pen(plan[0])}`
     : `${who} for ${fmtIP(plan[0].from)} innings, then ${pen(plan[0])}`, short: `${who} + bullpen` };
 }
@@ -617,6 +663,7 @@ function fitHookLabels() {
     start_mlb: [`Average start${ip}, then MLB bullpen`, "Average start, then MLB bullpen", "Average start, then MLB bullpen"],
     bullpen: [`Bullpen day: opener (${op} IP), then ${pen}`, `Bullpen day: opener, then ${pen}`, "Bullpen day"],
     follower: [`As opener, with follower (${op} + ${fo} IP), then ${pen}`, `As opener, with follower, then ${pen}`, "As opener, with follower"],
+    hook: [`Modeled hook, then ${pen}`, `Modeled hook, then ${pen}`, `Modeled hook, then ${team ? "team" : "MLB"} bullpen`],
   };
   measure ??= document.createElement("canvas").getContext("2d");
   const cs = getComputedStyle(sel);
@@ -634,7 +681,7 @@ function renderPitcher() {
   const team = pitcher && penTeam() !== "MLB" ? teamOf(penTeam()).short : null;
   sel.disabled = !pitcher;
   fitHookLabels();
-  opt("start").disabled = !pitcher?.gs;
+  opt("start").disabled = opt("hook").disabled = !pitcher?.gs;
   opt("start_mlb").disabled = opt("start_mlb").hidden = !pitcher?.gs || !team;
   if (opt(sel.value).disabled) sel.value = sel.value === "start_mlb" && !opt("start").disabled ? "start" : "game";
   $("platoon").disabled = !pitcher;
@@ -732,7 +779,7 @@ function baseDist({ key, cums }) {
   return new Promise((resolve) => {
     let w;
     try {
-      w = new Worker(new URL("./sim-worker.js?v=8", import.meta.url), { type: "module" });
+      w = new Worker(new URL("./sim-worker.js?v=9", import.meta.url), { type: "module" });
     } catch {
       return resolve(here());
     }
@@ -748,7 +795,7 @@ let worker = null;
 let useWorker = typeof Worker !== "undefined";
 
 function startWorker() {
-  const w = new Worker(new URL("./sim-worker.js?v=8", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./sim-worker.js?v=9", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
   w.onmessage = ({ data: msg }) => {
     if (job && msg.id === job.id) finish(job, msg.res, msg.ms, msg.ref, msg.lines);
@@ -799,8 +846,9 @@ function run() {
   const base = { key: `${lineup.join()}|${$("regress").value}|${byPitch ? "pitch" : "pa"}`,
     cums: vs ? specs.map((h) => cumulative(facing(h, null))) : cums };
   const busy = job != null;
+  const hook = hooked(vs) ? hookOf(pitcher) : null;
   job = { id: ++jobs, cums, relief, games, ids: [...lineup], key, vs, name: pitcher?.name, ...planWords(), full: planWords(true).words, ref, lines, base,
-    byPitch };
+    byPitch, hook };
   $("status").textContent = "simulating…";
   $("out").style.opacity = last ? ".55" : "";
   writeHash();
@@ -815,7 +863,7 @@ function run() {
     useWorker = false; // no module workers here
     return runHere(job);
   }
-  worker.postMessage({ id: job.id, lineup: cums, relief, games, seed: SEED, ref, lines });
+  worker.postMessage({ id: job.id, lineup: cums, relief, games, seed: SEED, ref, lines, hook });
 }
 
 function runHere(j) {
@@ -823,11 +871,15 @@ function runHere(j) {
   setTimeout(() => {
     if (job !== j) return;
     const t0 = performance.now();
-    const res = simulate(model, j.cums, j.games, SEED, j.relief);
+    const res = simulate(model, j.cums, j.games, SEED, j.relief, j.hook);
     const ms = performance.now() - t0;
-    const ref = j.ref && simulate(model, j.ref.lineup, j.ref.games, SEED, j.ref.relief).runDist;
-    const lines = j.lines && expectedLines((chain ??= chainTables(model)), j.lines.lineups, j.lines.from, j.lines.w);
-    finish(j, res, ms, ref, lines);
+    const refRes = j.ref && simulate(model, j.ref.lineup, j.ref.games, SEED, j.ref.relief, j.hook);
+    chain ??= chainTables(model);
+    // with the modeled hook, MLB's spots' games say where he goes out, for every comparison
+    const lines = j.lines && (j.lines.from.includes("hook")
+      ? expectedLinesMix(chain, j.lines.lineups, j.lines.from, j.lines.w, hookMix((refRes ?? res).hook.outs))
+      : expectedLines(chain, j.lines.lineups, j.lines.from, j.lines.w));
+    finish(j, res, ms, refRes?.runDist ?? null, lines);
   }, 30);
 }
 
@@ -896,10 +948,20 @@ function renderResults() {
   let second;
   if (last.vs) {
     // the pitcher's effect on this lineup, exactly: against him and against MLB-average pitching
-    const d = exactRuns(last.lineup, last.vs) - avg;
+    const d = exactRuns(last.lineup, last.vs, hookMixOf(last.res)) - avg;
     second = kpi("Against MLB-average pitching", avg.toFixed(2), `${last.short}: ${d > 0 ? "+" : "−"}${Math.abs(d).toFixed(2)} runs per 9 (exact)`);
   } else {
     second = kpi("Over 162 games", Math.round(s.R * 162).toLocaleString(), `MLB ${Math.round(r.mlb * 162).toLocaleString()}`);
+  }
+  // how long the modeled hook kept him in, against his 2026 starts
+  const hk = last.res.hook, note = $("hook_note");
+  note.hidden = !hk;
+  if (hk && hookData) {
+    const outs = hk.outs.reduce((a, c, i) => a + c * i, 0) / hk.games, own = pitcher && !pitcher.generic && hookData.pitchers[pitcher.mlbam];
+    const real = own ? `his 2026 starts averaged ${fmtIP(Math.round(own[6]))} and ${Math.round(own[5])}`
+      : `2026 starts averaged ${fmtIP(Math.round(hookData.league.team_start_outs))} and ${Math.round(hookData.avgPitches)}`;
+    note.textContent = `Modeled hook: ${last.short.replace(/ \+ bullpen$/, "")} went ${fmtIP(Math.round(outs))} innings and ${Math.round(hk.pitches / hk.games)} pitches `
+      + `on average, and pitched all nine in ${pct(hk.outs[27] / hk.games)} of these games; ${real}.`;
   }
   $("kpis").replaceChildren(
     kpi(last.vs ? `Runs per 9 vs ${last.short}` : "Runs per 9 innings", s.R.toFixed(2), `±${moe.toFixed(2)} (95%) · ${placeOf(rankOf(s.R, r.teams, 1))}`),
@@ -1385,10 +1447,14 @@ let optJobs = 0;
 let optDone = null;        // the last search: { before, after, result, ms } (lineup ids)
 const locked = new Set();  // lineup slots (0-8) the search leaves alone
 
-// exact expected runs per nine innings, against `vs` (by default the pitching now picked)
-function exactRuns(ids, vs = vsOf()) {
+// exact expected runs per nine innings, against `vs` (by default the pitching now picked); with
+// the modeled hook, averaged over `mix` ([{ p, at }]: where he went out, hookMix())
+function exactRuns(ids, vs = vsOf(), mix = null) {
   chain ??= chainTables(model);
-  return lineupRuns(chain, ids.map((id) => matchup(chain, specOf(entryOf(id)), vs)));
+  const ms = ids.map((id) => matchup(chain, specOf(entryOf(id)), vs));
+  if (!hooked(vs)) return lineupRuns(chain, ms);
+  return (mix ?? [{ p: 1, at: startOutsOf(pitcher) }]).reduce((a, { p, at }) => a + p * lineupRuns(chain,
+    ms.map((m) => ({ ...m, relief: m.relief.map((r) => (r.from === "hook" ? { ...r, from: at } : r)) }))), 0);
 }
 
 const shortName = (e) => (e.kind === "spot" && e.team === "MLB" ? `${e.name.split(" · ")[1].replace(" spot", "")}-spot hitter` : e.name);
@@ -1438,7 +1504,7 @@ function renderOptimizer() {
 function startOptimize() {
   const canTilt = lineup.some((id) => entryOf(id).theta != null);
   const opts = { order: $("opt_order").checked, tilt: canTilt && $("opt_tilt").checked, mix: $("opt_mix").value,
-    locked: [...locked], perSd: data.tradeoff.per_sd, range: data.tradeoff.range, vs: vsOf() };
+    locked: [...locked], perSd: data.tradeoff.per_sd, range: data.tradeoff.range, vs: hookFixed(vsOf()) };
   if (!opts.order && !opts.tilt) {
     $("opt_status").textContent = "Pick batting order, contact–power settings or both to search.";
     return;
@@ -1464,7 +1530,7 @@ function startOptimize() {
   if (!useWorker) return here();
   try {
     if (!optWorker) {
-      optWorker = new Worker(new URL("./sim-worker.js?v=8", import.meta.url), { type: "module" });
+      optWorker = new Worker(new URL("./sim-worker.js?v=9", import.meta.url), { type: "module" });
       optWorker.postMessage({ type: "init", tables: { running: data.running, advance: data.advance } });
     }
   } catch {
@@ -2211,6 +2277,14 @@ async function boot() {
   }
   paintModel();
   document.querySelectorAll("#model_toggle button").forEach((b) => b.addEventListener("click", () => setModel(b.dataset.model === "pitch")));
+  if ($("p_hook").value === "hook") {
+    try {
+      await loadHookData();
+    } catch (e) {
+      $("p_hook").value = "start";
+      $("status").textContent = `Couldn't load the hook model (${e.message}), so this is his average start.`;
+    }
+  }
   renderPitcher();
   if (window.ResizeObserver) new ResizeObserver(() => fitHookLabels()).observe($("p_hook"));
   document.fonts?.ready.then(fitHookLabels); // measured in DM Sans, not a fallback
@@ -2234,7 +2308,18 @@ async function boot() {
     setFollower(null);
     $("f_in").focus();
   });
-  $("p_hook").addEventListener("change", () => {
+  $("p_hook").addEventListener("change", async () => {
+    if ($("p_hook").value === "hook" && !hookData) {
+      $("status").classList.remove("err");
+      $("status").textContent = "loading the hook model…";
+      try {
+        await loadHookData();
+      } catch (e) {
+        $("p_hook").value = "start";
+        $("status").textContent = `Couldn't load the hook model (${e.message}).`;
+        $("status").classList.add("err");
+      }
+    }
     renderPitcher();
     run();
   });

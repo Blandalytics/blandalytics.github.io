@@ -381,12 +381,46 @@ const maskOf = (bases) => (bases[1] >= 0 ? 1 : 0) | (bases[2] >= 0 ? 2 : 0) | (b
 // Results report how many innings it happened in (`capped`).
 const MAX_INNING_PA = 60;
 
+// ---- the modeled hook ("Modeled hook"; pipeline/hook_model.py) ----
+// The chance the starter is taken out after a plate appearance, from the hook model's trees
+// (LightGBM's, flattened: a node's split feature, threshold, default-left, missing type 0 none,
+// 1 zero, 2 NaN, and children, a child below zero being leaf ~child) and x, the features in
+// the model's order (NaN for one it doesn't know).
+export function hookChance(T, x) {
+  let raw = 0;
+  for (let t = 0; t < T.roots.length; t++) {
+    let n = T.roots[t];
+    while (n >= 0) {
+      let v = x[T.feat[n]], left;
+      const mt = T.miss[n];
+      if (Number.isNaN(v)) {
+        if (mt === 2) left = T.dl[n] === 1;
+        else v = 0;
+      }
+      if (left === undefined) left = mt === 1 && v === 0 ? T.dl[n] === 1 : v <= T.thr[n];
+      n = left ? T.left[n] : T.right[n];
+    }
+    raw += T.leaf[~n];
+  }
+  return 1 / (1 + Math.exp(-raw));
+}
+const HOOK_IN_GAME = ["pc", "bf_so_far", "outs_so_far", "h_so_far", "hr_so_far", "bb_so_far", "k_so_far", "r_so_far", "tto_next",
+  "inning", "outs_in_inn", "inning_end", "runners_after", "margin", "inn_pitches", "inn_runs", "inn_reached", "max_inn_pitches",
+  "prev_inn_pitches", "last3_reached"];
+
 // Simulate `games` 9-inning games for a lineup of 9 cumulative-rate arrays.
 // Returns season-style totals plus the per-game run distribution and per-spot lines.
 // `relief` is who pitches after the starter, in order: [{ from, lineup }], `lineup` another
 // 9 arrays (the lineup against that pitching), taking over from the plate appearance that
 // starts with `from` outs made in the game. A follower and then the bullpen are two.
-export function simulate(model, lineup, games, seed = 1, relief = []) {
+// A stage with `from` "hook" takes over when the hook model takes the starter out. `hook` is then
+// { trees, features (names, in the model's order), x (a Float64Array of them, the before-the-game
+// ones filled in), pitches (each outcome's pitch count, cumulative, by CATS: index 0 is one
+// pitch), runsPerInning (his team's side of the score, which isn't played) }. After each of the
+// starter's plate appearances, and an inning ended on the bases, the game so far fills in the
+// rest of x and a draw against hookChance() says whether he goes; the result's `hook` counts the
+// outs he had made when he went (27: the whole game) and his pitches.
+export function simulate(model, lineup, games, seed = 1, relief = [], hook = null) {
   const rand = rng(seed);
   const { running, advance } = model;
   const t = { G: games, PA: 0, AB: 0, H: 0, "1B": 0, "2B": 0, "3B": 0, HR: 0, BB: 0, HBP: 0, K: 0, SF: 0, R: 0, outs: 0 };
@@ -395,24 +429,66 @@ export function simulate(model, lineup, games, seed = 1, relief = []) {
   const lead = [0, 0, 0, 0];
   const bases = [-1, -1, -1, -1]; // bases[1..3]: lineup slot of the runner, -1 empty
   let capped = 0;
+  const atHook = relief.map((r) => r.from === "hook");
+  const hooks = !!hook && atHook.some(Boolean);
+  const x = hooks ? Float64Array.from(hook.x) : null;
+  const F = hooks ? Object.fromEntries(HOOK_IN_GAME.map((key) => [key, hook.features.indexOf(key)])) : null;
+  const hookOuts = new Float64Array(28);
+  let hookPitches = 0;
+  // the starter's game so far
+  let gone = !hooks, pc = 0, bf = 0, made = 0, h = 0, hr = 0, bb = 0, k = 0, runs = 0;
+  let innPitches = 0, innRuns = 0, innReached = 0, maxInn = 0, prevInn = 0;
+  const last3 = [0, 0, 0];
+  const boundary = (inning, outs, end, gameRuns) => {
+    x[F.pc] = pc; x[F.bf_so_far] = bf; x[F.outs_so_far] = made; x[F.h_so_far] = h; x[F.hr_so_far] = hr;
+    x[F.bb_so_far] = bb; x[F.k_so_far] = k; x[F.r_so_far] = runs; x[F.tto_next] = Math.floor(bf / 9) + 1;
+    x[F.inning] = inning + 1; x[F.outs_in_inn] = end ? 0 : outs; x[F.inning_end] = end ? 1 : 0;
+    x[F.runners_after] = end ? 0 : (bases[1] >= 0) + (bases[2] >= 0) + (bases[3] >= 0);
+    // his team's runs aren't played: its share of a half-inning's runs per inning it has batted, on average
+    x[F.margin] = hook.runsPerInning * (inning + 0.5) - gameRuns;
+    x[F.inn_pitches] = innPitches; x[F.inn_runs] = innRuns; x[F.inn_reached] = innReached;
+    x[F.max_inn_pitches] = maxInn; x[F.prev_inn_pitches] = prevInn; x[F.last3_reached] = last3[0] + last3[1] + last3[2];
+    if (rand() < hookChance(hook.trees, x)) {
+      gone = true;
+      hookOuts[Math.min(inning * 3 + Math.min(outs, 3), 27)]++;
+      hookPitches += pc;
+    }
+  };
 
   for (let g = 0; g < games; g++) {
     let up = 0, gameRuns = 0;
+    if (hooks) {
+      gone = false;
+      pc = bf = made = h = hr = bb = k = runs = innPitches = innRuns = innReached = maxInn = prevInn = 0;
+      last3[0] = last3[1] = last3[2] = 0;
+    }
     for (let inning = 0; inning < 9; inning++) {
       let outs = 0, pas = 0;
       bases[1] = bases[2] = bases[3] = -1;
+      if (!gone && inning > 0) {
+        prevInn = innPitches;
+        innPitches = innRuns = innReached = 0;
+      }
       while (outs < 3) {
         if (++pas > MAX_INNING_PA) { capped++; break; }
         // who's pitching is settled as the plate appearance starts, before any running
         let bat = lineup;
-        for (let r = 0; r < relief.length; r++) if (inning * 3 + outs >= relief[r].from) bat = relief[r].lineup;
+        for (let r = 0; r < relief.length; r++) if (atHook[r] ? gone : inning * 3 + outs >= relief[r].from) bat = relief[r].lineup;
+        const starter = !gone, runs0 = gameRuns, outs0 = outs;
         let mask = maskOf(bases);
         if (mask) {
           const cr = running[mask * 3 + outs];
           const o = cr.codes[pick(cr.cum, rand())];
           gameRuns += move(bases, lead, o, -1, spotR);
           outs += o.outs;
-          if (outs >= 3) break; // the inning ended on the bases; this hitter leads off the next
+          if (outs >= 3) {
+            // the inning ended on the bases; this hitter leads off the next
+            if (starter) {
+              made += outs - outs0; runs += gameRuns - runs0; innRuns += gameRuns - runs0;
+              boundary(inning, outs, true, gameRuns);
+            }
+            break;
+          }
           mask = maskOf(bases);
         }
         const cat = pick(bat[up], rand());
@@ -420,6 +496,18 @@ export function simulate(model, lineup, games, seed = 1, relief = []) {
         const o = ca.codes[pick(ca.cum, rand())];
         gameRuns += move(bases, lead, o, up, spotR);
         outs += o.outs;
+        if (starter) {
+          const n = pick(hook.pitches[cat], rand()) + 1;
+          const reached = cat === C.BB || cat === C.HBP || cat === C["1B"] || cat === C["2B"] || cat === C["3B"] || cat === C.HR;
+          pc += n; innPitches += n; if (innPitches > maxInn) maxInn = innPitches;
+          bf++; made += outs - outs0; runs += gameRuns - runs0; innRuns += gameRuns - runs0;
+          if (cat === C.BB || cat === C.HBP) bb++;
+          else if (cat === C.K) k++;
+          else if (reached) { h++; if (cat === C.HR) hr++; }
+          if (reached) innReached++;
+          last3[bf % 3] = reached ? 1 : 0;
+          boundary(inning, outs, outs >= 3, gameRuns);
+        }
         spotPA[up]++;
         t.PA++;
         switch (cat) {
@@ -438,8 +526,13 @@ export function simulate(model, lineup, games, seed = 1, relief = []) {
     }
     t.R += gameRuns;
     runDist[Math.min(gameRuns, 30)]++;
+    if (hooks && !gone) {
+      hookOuts[27]++;
+      hookPitches += pc;
+    }
   }
-  return { totals: t, runDist: Array.from(runDist), spotPA: Array.from(spotPA), spotR: Array.from(spotR), capped };
+  return { totals: t, runDist: Array.from(runDist), spotPA: Array.from(spotPA), spotR: Array.from(spotR), capped,
+    ...(hooks && { hook: { outs: Array.from(hookOuts), pitches: hookPitches, games } }) };
 }
 
 // Per-game and rate stats from simulate()'s totals, using the season's wOBA weights.

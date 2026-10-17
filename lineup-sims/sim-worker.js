@@ -8,8 +8,10 @@
 // `ref`, MLB's lineup spots to simulate against him too (for the runs-per-game chart),
 // and `lines`, lineups whose exact expected lines (markov.js) the page needs, each hitter
 // already matched against the starter and each relief stage (a follower, the bullpen).
-import { prepare, simulate } from "./sim.js?v=6";
-import { chainTables, expectedLines, optimize } from "./markov.js?v=5";
+// With the modeled hook, `hook` (sim.js simulate()) goes with the job, and its relief stage's
+// `from` is "hook": the lines then average over where MLB's spots' games took him out.
+import { prepare, simulate } from "./sim.js?v=7";
+import { chainTables, expectedLines, expectedLinesMix, hookMix, optimize } from "./markov.js?v=6";
 
 let model = null, chain = null;
 
@@ -25,9 +27,13 @@ self.onmessage = ({ data: msg }) => {
     self.postMessage({ id: msg.id, result, ms: performance.now() - t0 });
     return;
   }
-  const res = simulate(model, msg.lineup, msg.games, msg.seed, msg.relief);
+  const res = simulate(model, msg.lineup, msg.games, msg.seed, msg.relief, msg.hook);
   const ms = performance.now() - t0;
-  const ref = msg.ref ? simulate(model, msg.ref.lineup, msg.ref.games, msg.seed, msg.ref.relief).runDist : null;
-  const lines = msg.lines ? expectedLines((chain ??= chainTables(model)), msg.lines.lineups, msg.lines.from, msg.lines.w) : null;
-  self.postMessage({ id: msg.id, res, ms, ref, lines });
+  const refRes = msg.ref ? simulate(model, msg.ref.lineup, msg.ref.games, msg.seed, msg.ref.relief, msg.hook) : null;
+  chain ??= chainTables(model);
+  // with the modeled hook (a stage from "hook"), MLB's spots' games say where he goes out, for every lineup
+  const lines = msg.lines ? (msg.lines.from.includes("hook")
+    ? expectedLinesMix(chain, msg.lines.lineups, msg.lines.from, msg.lines.w, hookMix((refRes ?? res).hook.outs))
+    : expectedLines(chain, msg.lines.lineups, msg.lines.from, msg.lines.w)) : null;
+  self.postMessage({ id: msg.id, res, ms, ref: refRes?.runDist ?? null, lines });
 };
