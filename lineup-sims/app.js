@@ -2222,7 +2222,8 @@ async function runsTileBlob() {
     k.lines = [k.lines[0].slice(0, i), k.lines[0].slice(i + 1)];
   }
   while (keySize > 12 && keyRowW() > K1 - K0) g.font = `400 ${--keySize}px "DM Sans"`;
-  const gap = keys.length > 1 ? (K1 - K0 - keysW()) / (keys.length - 1) : 0;
+  // (labels too long even then run past the chart's edge rather than into each other)
+  const gap = keys.length > 1 ? Math.max(12, (K1 - K0 - keysW()) / (keys.length - 1)) : 0;
   // the last line sits where the single row did; a one-line label beside two-line ones is centered on them
   const keyLh = keySize + 4, keyMid = keys.some((k) => k.lines.length > 1) ? 838 - keyLh / 2 : 838, cy = keyMid - keySize * 0.375;
   let kx = K0;
