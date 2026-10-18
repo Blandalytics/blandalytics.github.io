@@ -1,4 +1,4 @@
-import { CATS, bullpenOf, cumulative, facing, hitterOf, pitchChances, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=8";
+import { CATS, bullpenOf, chances, cumulative, facing, hitterOf, pitchChances, pitcherOf, prepare, simulate, summarize, tilt } from "./sim.js?v=8";
 import { chainTables, expectedLines, expectedLinesMix, hookMix, lineupRuns, matchup, optimize } from "./markov.js?v=7";
 
 const SEASON = 2026;
@@ -109,6 +109,47 @@ const CURVE_X = 1;
 // where the exact curve is worked out: the data file's settings (half steps to the ends, for the table and the
 // ends' runs) and the quarter steps inside ±CURVE_X, so the charts' stretch of it is smooth
 const curveThetas = () => [...new Set([...data.sims.tradeoff.points.map((p) => p.theta), -0.75, -0.25, 0.25, 0.75])].sort((a, b) => a - b);
+// runs per 9 on a curve ([{ theta, R }], in order) at any setting between its points
+function curveAt(pts, t) {
+  const j = Math.min(pts.length - 1, Math.max(1, pts.findIndex((p) => p.theta >= t))), a = pts[j - 1], b = pts[j];
+  return a.R + ((t - a.theta) / (b.theta - a.theta)) * (b.R - a.R);
+}
+
+// Where a hitter sits on the contact-power axis, as build.py places them: his outcome chances less what wOBA
+// explains about each (each fit on wOBA over 2026 hitters with min_pa or more PA, weighted by PA), along per_sd's
+// direction, in SDs of hitters. Moving an MLB spot along the axis moves it there by its setting.
+let shapeFit = null;
+function shapeOf(probs) {
+  if (!shapeFit) {
+    const T = data.tradeoff, wv = CATS.map((c) => data.weights[`w${c}`] ?? 0), dot = (a, b) => a.reduce((t, x, i) => t + x * b[i], 0);
+    let S = 0, Sx = 0, Sxx = 0;
+    const Sy = CATS.map(() => 0), Sxy = CATS.map(() => 0);
+    for (const [, , , counts] of data.players) {
+      const n = countOf(counts);
+      if (n < T.min_pa) continue;
+      const r = counts.map((c) => c / n), x = dot(r, wv);
+      S += n; Sx += n * x; Sxx += n * x * x;
+      r.forEach((v, k) => { Sy[k] += n * v; Sxy[k] += n * x * v; });
+    }
+    const b1 = Sxy.map((v, k) => (S * v - Sx * Sy[k]) / (S * Sxx - Sx * Sx)), b0 = Sy.map((v, k) => (v - b1[k] * Sx) / S);
+    const sd = Math.hypot(...T.per_sd);
+    shapeFit = { wv, dot, b0, b1, sd, axis: T.per_sd.map((v) => v / sd) };
+  }
+  const { wv, dot, b0, b1, sd, axis } = shapeFit, x = dot(probs, wv);
+  return probs.reduce((t, p, k) => t + (p - b0[k] - b1[k] * x) * axis[k], 0) / sd;
+}
+// a lineup entry's place: its chances as the simulation takes them (Small samples for players), plus its setting
+function entryShape(e) {
+  const b = e.base ? entries.get(e.base) : e;
+  return shapeOf(chances(b.counts, prior, b.kind === "player" ? Number($("regress").value) : 0)) + (e.theta ?? 0);
+}
+// A lineup's place on the curve: its nine's mean, less MLB's lineup spots' as they are (so they sit at 0, and
+// moved along the axis, at their setting)
+const MLB_SPOTS = Array.from({ length: 9 }, (_, i) => `sMLB-${i + 1}`);
+const shapeMean = (ids) => ids.reduce((t, id) => t + entryShape(entryOf(id)), 0) / ids.length;
+const lineupShape = (ids) => shapeMean(ids) - shapeMean(MLB_SPOTS);
+// MLB's nine lineup spots, in any order and at any settings: the curve's own lineup, which its slider moves
+const mlbSpotsLineup = (ids) => ids.map((id) => entryOf(id)?.base ?? id).sort().join() === [...MLB_SPOTS].sort().join();
 
 const labelOf = (e) => (e.theta ? `${e.name}, ${e.theta < 0 ? "contact" : "power"} ${Math.abs(e.theta).toFixed(1)}` : e.name);
 
@@ -428,6 +469,7 @@ function addTiltControl(tr, i) {
   out.textContent = fmtTheta(e.theta);
   range.addEventListener("input", () => {
     setTilt(i, Number(range.value));
+    tradeoffMove?.(lineupShape(lineup)); // the curve's dot follows the lineup's mean at once
     scheduleRun();
   });
   const line = document.createElement("span");
@@ -1098,7 +1140,7 @@ function renderResults() {
   $("runs_mlb_key").textContent = last.ctx ? `Avg Lineup vs ${last.vs ? last.short : "Avg Pitching"} (simulated)` : "Avg Lineup (simulated)";
 
   runsChart(dist, games, s.R, avg);
-  renderTradeoff(moe);
+  renderTradeoff();
   renderSpots();
   renderTeams();
   renderOptimizer();
@@ -1426,13 +1468,12 @@ function avgCurveOf() {
   return avgCurve;
 }
 
-function renderTradeoff(moe) {
-  const box = $("tradeoff_out");
-  box.hidden = mode !== "tradeoff";
-  if (box.hidden) return;
+function renderTradeoff() {
+  $("tradeoff_out").hidden = false;
   const pts = last.ctx ? last.ctx.tradeoff : avgCurveOf();
-  const thetas = last.lineup.map((id) => entryOf(id)?.theta).filter((t) => t != null);
-  const avg = thetas.length ? thetas.reduce((s, t) => s + t, 0) / thetas.length : null;
+  // this lineup's place on the curve; MLB's spots get the slider, whose setting leads while it's being dragged
+  const slide = mlbSpotsLineup(last.lineup), at = slide && tradeoffSliding ? Number($("tradeoff_at").value) : lineupShape(last.lineup);
+  $("tradeoff_key").textContent = slide ? "MLB spots: slide to move all nine" : "This lineup, by its hitters' mix of contact and power";
   // runs per nine with every spot at the contact end, at 0 and at the power end, in the sliders' colors
   const base = pts.find((p) => p.theta === 0), lo = pts[0], hi = pts[pts.length - 1];
   const dR = (p) => `${p.R >= base.R ? "+" : "−"}${Math.abs(p.R - base.R).toFixed(2)}`;
@@ -1450,7 +1491,7 @@ function renderTradeoff(moe) {
       }
       return d;
     }));
-  tradeoffChart(pts, avg, last.sum.R, moe);
+  tradeoffChart(pts, at, slide);
   // the saved and copied image is the curve alone
   tradeoffShare = { pts, vs: last.vs ? { name: last.name, words: last.words } : null, byPitch: !!last.byPitch };
 
@@ -1485,14 +1526,16 @@ function renderTradeoff(moe) {
   }
 }
 
-// the curve (runs per nine with every MLB spot at the same setting), and this lineup at
-// its spots' average setting with its 95% range when it has MLB spots
-function tradeoffChart(all, avg, R, moe) {
+// The curve (runs per nine with every MLB spot at the same setting), this lineup's place on it (at), and for
+// MLB's spots (slide) the slider under it that moves all nine.
+let tradeoffSliding = false; // the slider under the curve is being dragged
+let tradeoffMove = null;     // puts the dot at a setting at once, until the chart is drawn again
+function tradeoffChart(all, at, slide) {
   const W = chartWidth("tradeoff_chart"), H = 240, L = 44, Rt = 14, T = 22, B = 44;
-  // settings within ±CURVE_X, or as far as this lineup's (by half steps) so it stays on the chart
-  const range = Math.max(CURVE_X, avg == null ? 0 : Math.ceil(Math.abs(avg) * 2 - 1e-9) / 2);
+  // settings within ±CURVE_X, or as far as this lineup's (by half steps, up to the sliders' range) so it stays on the chart
+  const range = Math.min(data.tradeoff.range, Math.max(CURVE_X, Math.ceil(Math.abs(at) * 2 - 1e-9) / 2));
   const pts = all.filter((p) => Math.abs(p.theta) <= range + 1e-9), tick = range > CURVE_X ? 1 : 0.5;
-  const ys = pts.map((p) => p.R).concat(avg == null ? [] : [R - moe, R + moe]);
+  const ys = pts.map((p) => p.R);
   const span = Math.max(...ys) - Math.min(...ys);
   const step = span > 0.45 ? 0.1 : 0.05;
   const y0 = Math.floor(Math.min(...ys) / step) * step, y1 = Math.ceil(Math.max(...ys) / step) * step;
@@ -1525,10 +1568,22 @@ function tradeoffChart(all, avg, R, moe) {
     W < 400 ? "SDs of 2026 hitters" : "standard deviations of 2026 hitters"); // a phone's chart has room for the short one
   el("path", { d: pts.map((p, i) => `${i ? "L" : "M"}${x(p.theta)},${y(p.R)}`).join(" "), fill: "none",
     stroke: "var(--s-mlb)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" });
-  if (avg != null) {
-    el("line", { x1: x(avg), x2: x(avg), y1: y(R - moe), y2: y(R + moe), stroke: "var(--s-lineup)", "stroke-width": 2, "stroke-linecap": "round" });
-    el("circle", { cx: x(avg), cy: y(R), r: 5, fill: "var(--s-lineup)", stroke: "var(--surface)", "stroke-width": 2 });
-  }
+  // this lineup's dot on the curve, its setting above it (the slider's to a tenth)
+  const dot = el("circle", { r: 5, fill: "var(--s-lineup)", stroke: "var(--surface)", "stroke-width": 2 });
+  const tag = el("text", { fill: "var(--ink)", "font-size": 11, stroke: "var(--surface)", "stroke-width": 3, "paint-order": "stroke",
+    "font-family": '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace' });
+  tradeoffMove = (t) => {
+    // past this chart's ends: drawing it again widens it, up to the sliders' range; a lineup past that sits at its end
+    if (Math.abs(t) > range + 1e-9 && range < data.tradeoff.range) return;
+    const on = Math.max(-range, Math.min(range, t)), cx = x(on), cy = y(curveAt(pts, on)), d = slide ? 1 : 2;
+    dot.setAttribute("cx", cx);
+    dot.setAttribute("cy", cy);
+    tag.textContent = Math.abs(t) < 0.5 * 10 ** -d ? "0" : `${t > 0 ? "+" : "−"}${Math.abs(t).toFixed(d)}`;
+    tag.setAttribute("x", cx);
+    tag.setAttribute("y", cy - 11);
+    tag.setAttribute("text-anchor", cx < L + 24 ? "start" : cx > W - Rt - 24 ? "end" : "middle");
+  };
+  tradeoffMove(at);
   const cross = el("line", { x1: 0, x2: 0, y1: T, y2: H - B, stroke: "var(--muted)", "stroke-width": 1, visibility: "hidden" });
   const hit = el("rect", { x: L, y: T, width: W - L - Rt, height: H - T - B, fill: "transparent" });
   const hideCross = () => { cross.setAttribute("visibility", "hidden"); hideTip(); };
@@ -1541,10 +1596,28 @@ function tradeoffChart(all, avg, R, moe) {
     cross.setAttribute("visibility", "visible");
     const rows = [["var(--s-mlb)", p.R.toFixed(2), "runs / 9"], ["transparent", `${fmtRate(p.AVG)} / ${fmtRate(p.SLG)}`, "AVG / SLG"],
       ["transparent", `${p.K.toFixed(1)} / ${p.BB.toFixed(1)}`, "K / BB per 9"], ["transparent", fmtRate(p.wOBA), "wOBA"]];
-    if (avg != null && Math.abs(avg - p.theta) < 0.25) rows.splice(1, 0, ["var(--s-lineup)", `${R.toFixed(2)} ±${moe.toFixed(2)}`, "this lineup"]);
     showTip(ev, rows, p.theta === 0 ? "MLB spots" : `All spots ${fmtTheta(p.theta)}`);
   }, hideCross);
   $("tradeoff_chart").replaceChildren(svg);
+  // the slider, lined up with the x-axis (its thumb's middle, about 8 px in, at each end)
+  const r = $("tradeoff_at");
+  $("tradeoff_slide").hidden = !slide;
+  if (!slide) return;
+  r.min = -range;
+  r.max = range;
+  if (!tradeoffSliding) r.value = Math.round(at * 10) / 10;
+  tintRange(r, Number(r.value));
+  r.style.marginLeft = `${L - 8}px`;
+  r.style.width = `${W - L - Rt + 16}px`;
+}
+
+// MLB's lineup spots (in their order) as contact vs power's, for the slider under the curve
+function toTradeoff() {
+  $("team").value = "MLB";
+  mode = $("kind").value = "tradeoff";
+  lineup = lineup.map((id) => tiltId(entryOf(id).base ?? id, 0));
+  if (Number($("games").value) < 50000) $("games").value = "50000";
+  renderLineup();
 }
 
 // ---------- lineup optimizer ----------
@@ -2031,12 +2104,8 @@ async function tradeoffTileBlob() {
   g.fillStyle = tint(range);
   g.fillText("Power →", Rt, B + 58);
   // the band's label, just outside its left edge: at the top, or at the bottom when the curve runs through the top
-  // one (the curve's height between its points, across the label's width)
-  const label = "95% of lineups", lx = x(b0) - 10, lw = g.measureText(label).width;
-  const curveY = (t) => {
-    const j = Math.max(1, pts.findIndex((p) => p.theta >= t)), a = pts[j - 1], b = pts[j];
-    return y(a.R + ((t - a.theta) / (b.theta - a.theta)) * (b.R - a.R));
-  };
+  // one (across the label's width)
+  const label = "95% of lineups", lx = x(b0) - 10, lw = g.measureText(label).width, curveY = (t) => y(curveAt(pts, t));
   const clear = (ly) => Math.min(...Array.from({ length: 9 }, (_, i) => {
     const px = lx - lw + (i / 8) * lw;
     return Math.abs(curveY(((px - L) / (Rt - L)) * 2 * range - range) - ly);
@@ -2512,11 +2581,27 @@ async function boot() {
     const theta = Number($("tilt_all").value);
     setMaster(theta);
     lineup.forEach((_, i) => setTilt(i, theta));
+    tradeoffMove?.(lineupShape(lineup));
+    if (!$("tradeoff_slide").hidden) $("tradeoff_at").value = theta;
     scheduleRun();
   });
+  // the slider under the curve moves all nine MLB spots as the one above the lineup does, the dot with it at once;
+  // from MLB's lineup spots as they are, the first move makes them contact vs power's
+  $("tradeoff_at").addEventListener("input", () => {
+    const theta = Number($("tradeoff_at").value);
+    tradeoffSliding = true;
+    tintRange($("tradeoff_at"), theta);
+    tradeoffMove?.(theta);
+    if (mode !== "tradeoff") toTradeoff();
+    setMaster(theta);
+    lineup.forEach((_, i) => setTilt(i, theta));
+    scheduleRun();
+  });
+  $("tradeoff_at").addEventListener("change", () => { tradeoffSliding = false; });
   $("tilt_reset").addEventListener("click", () => {
     setMaster(0);
     lineup.forEach((_, i) => setTilt(i, 0));
+    tradeoffMove?.(lineupShape(lineup));
     run();
   });
   $("reset_all").addEventListener("click", resetSettings);
