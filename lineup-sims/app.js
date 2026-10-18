@@ -1939,6 +1939,9 @@ function tileFooter(g, byPitch) {
 // on the sliders' teal-white-amber scale, with its ends and its middle labeled. The page's chart
 // also marks this lineup; the image leaves it off.
 let tradeoffShare = null;   // the curve the chart on screen shows: { pts, vs }
+// The middle 95% of real starting lineups on this axis: 9,718 team-games of the 2025 and 2026 regular seasons, each
+// hitter at his season's rates plus 200 PA of MLB average, a lineup at its nine's mean (the image shades it)
+const LINEUP_BAND = [-0.41, 0.51];
 const tradeoffFileName = () => `lineup_sim_contact_vs_power${tradeoffShare?.vs ? `_vs_${slug(pShort(tradeoffShare.vs.name))}` : ""}.png`;
 
 async function tradeoffTileBlob() {
@@ -1973,6 +1976,10 @@ async function tradeoffTileBlob() {
   const y0 = Math.floor(Math.min(...ys) / step) * step, y1 = Math.ceil(Math.max(...ys) / step) * step;
   const x = (t) => L + ((t + range) / (2 * range)) * (Rt - L);
   const y = (v) => T + (1 - (v - y0) / (y1 - y0)) * (B - T);
+  // where real lineups sit, shaded under the gridlines
+  const [b0, b1] = LINEUP_BAND;
+  g.fillStyle = "rgba(255,255,255,0.08)";
+  g.fillRect(x(b0), T, x(b1) - x(b0), B - T);
   g.font = '400 17px "DM Sans"';
   g.textAlign = "right";
   g.textBaseline = "middle";
@@ -1998,6 +2005,22 @@ async function tradeoffTileBlob() {
   g.textAlign = "right";
   g.fillStyle = tiltColor(range);
   g.fillText("Power →", Rt, B + 58);
+  // the band's label, just outside its left edge: at the top, or at the bottom when the curve runs through the top
+  // one (the curve's height between its points, across the label's width)
+  const label = "95% of lineups", lx = x(b0) - 10, lw = g.measureText(label).width;
+  const curveY = (t) => {
+    const j = Math.max(1, pts.findIndex((p) => p.theta >= t)), a = pts[j - 1], b = pts[j];
+    return y(a.R + ((t - a.theta) / (b.theta - a.theta)) * (b.R - a.R));
+  };
+  const clear = (ly) => Math.min(...Array.from({ length: 9 }, (_, i) => {
+    const px = lx - lw + (i / 8) * lw;
+    return Math.abs(curveY(((px - L) / (Rt - L)) * 2 * range - range) - ly);
+  }));
+  const [top, bottom] = [T + 22, B - 22];
+  g.textBaseline = "middle";
+  g.fillStyle = OPT_TILE.axis;
+  g.fillText(label, lx, clear(top) >= 24 || clear(top) >= clear(bottom) ? top : bottom);
+  g.textBaseline = "alphabetic";
   // the curve, colored by setting along the axis
   const grad = g.createLinearGradient(x(-range), 0, x(range), 0);
   grad.addColorStop(0, tiltColor(-range)); grad.addColorStop(0.5, "#fff"); grad.addColorStop(1, tiltColor(range));
