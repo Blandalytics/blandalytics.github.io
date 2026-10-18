@@ -138,10 +138,11 @@ function shapeOf(probs) {
   const { wv, dot, b0, b1, sd, axis } = shapeFit, x = dot(probs, wv);
   return probs.reduce((t, p, k) => t + (p - b0[k] - b1[k] * x) * axis[k], 0) / sd;
 }
-// a lineup entry's place: its chances as the simulation takes them (Small samples for players), plus its setting
+// A lineup entry's place, plus its setting: a player's at his 2026 rates with 200 PA of MLB average added (as
+// LINEUP_BAND's lineups were placed, whatever Small samples says); a lineup spot, pooled already, as it is
 function entryShape(e) {
   const b = e.base ? entries.get(e.base) : e;
-  return shapeOf(chances(b.counts, prior, b.kind === "player" ? Number($("regress").value) : 0)) + (e.theta ?? 0);
+  return shapeOf(chances(b.counts, prior, b.kind === "player" ? 200 : 0)) + (e.theta ?? 0);
 }
 // A lineup's place on the curve: its nine's mean, less MLB's lineup spots' as they are (so they sit at 0, and
 // moved along the axis, at their setting)
@@ -1599,16 +1600,17 @@ function tradeoffChart(all, at, slide) {
     showTip(ev, rows, p.theta === 0 ? "MLB spots" : `All spots ${fmtTheta(p.theta)}`);
   }, hideCross);
   $("tradeoff_chart").replaceChildren(svg);
-  // the slider, lined up with the x-axis (its thumb's middle, about 8 px in, at each end)
-  const r = $("tradeoff_at");
+  // the slider, lined up with the x-axis (its thumb's middle, about 8 px in, at each end); the chart is drawn at
+  // least 300 wide, so on a narrower phone it's scaled down (k)
+  const r = $("tradeoff_at"), k = Math.min(1, $("tradeoff_chart").clientWidth / W || 1);
   $("tradeoff_slide").hidden = !slide;
   if (!slide) return;
   r.min = -range;
   r.max = range;
   if (!tradeoffSliding) r.value = Math.round(at * 10) / 10;
   tintRange(r, Number(r.value));
-  r.style.marginLeft = `${L - 8}px`;
-  r.style.width = `${W - L - Rt + 16}px`;
+  r.style.marginLeft = `${L * k - 8}px`;
+  r.style.width = `${(W - L - Rt) * k + 16}px`;
 }
 
 // MLB's lineup spots (in their order) as contact vs power's, for the slider under the curve
@@ -2602,6 +2604,7 @@ async function boot() {
     setMaster(0);
     lineup.forEach((_, i) => setTilt(i, 0));
     tradeoffMove?.(lineupShape(lineup));
+    if (!$("tradeoff_slide").hidden) $("tradeoff_at").value = 0;
     run();
   });
   $("reset_all").addEventListener("click", resetSettings);
