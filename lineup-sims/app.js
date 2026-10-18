@@ -141,11 +141,13 @@ function hookOf(e) {
 const hooked = (vs) => !!vs?.relief.some((r) => r.from === "hook");
 // a run's own hook outs, as the exact numbers average over them
 const hookMixOf = (res) => (res?.hook ? hookMix(res.hook.outs) : null);
+// where a run's games took him out on average, in outs
+const hookOuts = (h) => Math.round(h.outs.reduce((a, c, i) => a + c * i, 0) / h.games);
 // the pitching with the hook at a set out, for the optimizer: where this lineup's games took him out on average
 function hookFixed(vs) {
   if (!hooked(vs)) return vs;
   const h = last?.key === vsKey() ? last.res.hook : null;
-  const at = h ? Math.round(h.outs.reduce((a, c, i) => a + c * i, 0) / h.games) : startOutsOf(pitcher);
+  const at = h ? hookOuts(h) : startOutsOf(pitcher);
   return { ...vs, relief: vs.relief.map((r) => (r.from === "hook" ? { ...r, from: at } : r)) };
 }
 
@@ -574,7 +576,9 @@ function planOf() {
 }
 // The pitching in words: "Skubal for 6.0 innings, then the Tigers bullpen", "Skubal opening
 // (1.0 IP), then Mize (4.1 IP), then the Tigers bullpen"; short: "Skubal + Mize + bullpen".
-function planWords(full = false) {
+// With the modeled hook, hookAt (outs, once a run has them) is where he went out on average:
+// "Skubal (Modeled Start: ~5.2IP), then the Tigers bullpen".
+function planWords(full = false, hookAt = null) {
   if (!pitcher) return { words: "MLB-average pitching", short: "MLB-average pitching" };
   const who = full ? pitcher.name : pShort(pitcher.name), plan = planOf();
   const pen = (st) => (st.who === "mlb" || penTeam() === "MLB" ? "the MLB bullpen" : `the ${teamOf(penTeam()).short} bullpen`);
@@ -584,7 +588,10 @@ function planWords(full = false) {
     return { words: `${who} opening (${fmtIP(plan[0].from)} IP), then ${f} (${fmtIP(plan[1].from - plan[0].from)} IP), then ${pen(plan[1])}`,
       short: `${who} + ${follower ? lastName(follower.name) : "bulk"} + bullpen` };
   }
-  if (plan[0].from === "hook") return { words: `${who} until the modeled hook, then ${pen(plan[0])}`, short: `${who} + bullpen` };
+  if (plan[0].from === "hook") {
+    const start = hookAt == null ? "until the modeled hook," : `(Modeled Start: ~${fmtIP(hookAt)}IP),`;
+    return { words: `${who} ${start} then ${pen(plan[0])}`, short: `${who} + bullpen` };
+  }
   return { words: $("p_hook").value === "bullpen" ? `${who} opening (${fmtIP(plan[0].from)} IP), then ${pen(plan[0])}`
     : `${who} for ${fmtIP(plan[0].from)} innings, then ${pen(plan[0])}`, short: `${who} + bullpen` };
 }
@@ -967,8 +974,12 @@ function finish(j, res, ms, ref, lines) {
     versus = { key: j.key, ctx: { refDist: ref, mlb: lines[0], teams: Object.fromEntries(data.teams.map((t, i) => [t.abbr, lines[1 + i]])),
       tradeoff: data.sims.tradeoff.points.map((pt, i) => ({ theta: pt.theta, ...lines[1 + n + i] })) } };
   }
+  // with the modeled hook, the words say where this run's games took him out (only the current job finishes,
+  // so the pitching picked is still the job's)
+  const at = res.hook ? hookOuts(res.hook) : null;
   last = { res, sum: summarize(res.totals, data.weights), games: j.games, lineup: j.ids, key: j.key, vs: j.vs, name: j.name,
-    words: j.words, short: j.short, full: j.full, ctx: j.vs || j.byPitch ? versus.ctx : null,
+    words: at == null ? j.words : planWords(false, at).words, short: j.short, full: at == null ? j.full : planWords(true, at).words,
+    ctx: j.vs || j.byPitch ? versus.ctx : null,
     base: j.base, byPitch: j.byPitch };
   $("out").hidden = false;
   $("out").style.opacity = "";
@@ -1033,10 +1044,10 @@ function renderResults() {
   const hk = last.res.hook, note = $("hook_note");
   note.hidden = !hk;
   if (hk && hookData) {
-    const outs = hk.outs.reduce((a, c, i) => a + c * i, 0) / hk.games, own = pitcher && !pitcher.generic && hookData.pitchers[pitcher.mlbam];
+    const own = pitcher && !pitcher.generic && hookData.pitchers[pitcher.mlbam];
     const real = own ? `his 2026 starts averaged ${fmtIP(Math.round(own[6]))} and ${Math.round(own[5])}`
       : `2026 starts averaged ${fmtIP(Math.round(hookData.league.team_start_outs))} and ${Math.round(hookData.avgPitches)}`;
-    note.textContent = `Modeled hook: ${last.short.replace(/ \+ bullpen$/, "")} went ${fmtIP(Math.round(outs))} innings and ${Math.round(hk.pitches / hk.games)} pitches `
+    note.textContent = `Modeled hook: ${last.short.replace(/ \+ bullpen$/, "")} went ${fmtIP(hookOuts(hk))} innings and ${Math.round(hk.pitches / hk.games)} pitches `
       + `on average, and pitched all nine in ${pct(hk.outs[27] / hk.games)} of these games; ${real}.`;
   }
   $("kpis").replaceChildren(
@@ -1595,7 +1606,8 @@ function startOptimize() {
     const e = entryOf(id);
     return opts.tilt && e.theta != null ? { ...specOf(e, false), theta: e.theta } : specOf(e);
   });
-  optJob = { id: ++optJobs, ids, opts, key: vsKey(), name: pitcher?.name, words: planWords().words, byPitch };
+  // the words of the run the search builds on (with the modeled hook, they say where it took him out)
+  optJob = { id: ++optJobs, ids, opts, key: vsKey(), name: pitcher?.name, words: last?.key === vsKey() ? last.words : planWords().words, byPitch };
   $("opt_status").textContent = "searching…";
   renderOptimizer();
   const j = optJob;
@@ -2042,12 +2054,12 @@ async function runsTileBlob() {
   g.fillStyle = OPT_TILE.cyan;
   g.fillText("Runs per Game", 48, 64);
   g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
-  // the subtitle, led by a team lineup's abbreviation, breaks after its first comma: "CLE vs. Paul Skenes
-  // for 5.1 innings," / "then the Pirates bullpen"; both lines in one size, the largest at which each fits
-  // in Oops! All Ohtanis! mode it's that, then "9 Ohtanis vs Shohei Ohtani for all nine innings"
+  // the subtitle, led by a team lineup's abbreviation, breaks at its first comma, which the break replaces: "CLE vs.
+  // Paul Skenes (Modeled Start: ~5.1IP)" / "Then the Pirates bullpen"; both lines in one size, the largest at which
+  // each fits. In Oops! All Ohtanis! mode it's that, then "9 Ohtanis vs Shohei Ohtani for all nine innings"
   const sub = `${team ? `${team} ` : ""}vs. ${vs ? vs.full : "MLB-average pitching"}`, cut = sub.indexOf(", ");
   const subLines = allOhtanis ? ["Oops! All Ohtanis!", `9 Ohtanis vs ${vs?.full ?? "Shohei Ohtani"}`]
-    : cut < 0 ? [sub] : [sub.slice(0, cut + 1), sub.slice(cut + 2)];
+    : cut < 0 ? [sub] : [sub.slice(0, cut), sub[cut + 2].toUpperCase() + sub.slice(cut + 3)];
   let titleSize = 21;
   for (; titleSize > 12; titleSize--) {
     g.font = `400 ${titleSize}px "DM Sans"`;
@@ -2190,35 +2202,44 @@ async function runsTileBlob() {
     g.fillText(v.toFixed(2), x0 + boxW - pad, yb);
   });
 
-  // the key, in the box's order: a row, or two when it doesn't fit, the last row where one was
+  // the key, in the box's order, in one row spread evenly from the lineup's numbers to the chart's right
+  // edge: when that's too tight, labels break before "vs" onto a second line, the widest first ("Avg
+  // Lineup" / "vs Skenes + bullpen"), and only then does the type shrink
   const keys = [["bar", TEAL, vs ? `This lineup vs ${vs.short}` : "This lineup"],
     ...(amber ? [["line", GOLD, vs ? `Avg Lineup vs ${vs.short}` : "Avg Lineup"]] : []),
-    ...(white ? [["line", WHITE, "This lineup vs Avg Pitching"]] : [])];
+    ...(white ? [["line", WHITE, "This lineup vs Avg Pitching"]] : [])]
+    .map(([kind, color, text]) => ({ kind, color, lines: [text], swatch: kind === "bar" ? 26 : 34 }));
   g.textAlign = "left";
-  g.font = '400 16px "DM Sans"';
-  const keyRows = [[]];
-  let kx = 48;
-  for (const [kind, color, text] of keys) {
-    const w = (kind === "bar" ? 26 : 34) + g.measureText(text).width;
-    if (kx > 48 && kx + w > W - 48) { keyRows.push([]); kx = 48; }
-    keyRows.at(-1).push({ kind, color, text, x: kx });
-    kx += w + 30;
+  let keySize = 16;
+  g.font = `400 ${keySize}px "DM Sans"`;
+  const keyW = (k) => k.swatch + Math.max(...k.lines.map((l) => g.measureText(l).width));
+  const K0 = 48, K1 = P1, keysW = () => keys.reduce((a, k) => a + keyW(k), 0);
+  const keyRowW = () => keysW() + 30 * (keys.length - 1);
+  while (keyRowW() > K1 - K0) {
+    const k = keys.filter((k) => k.lines.length === 1 && k.lines[0].includes(" vs ")).sort((a, b) => keyW(b) - keyW(a))[0];
+    if (!k) break;
+    const i = k.lines[0].indexOf(" vs ");
+    k.lines = [k.lines[0].slice(0, i), k.lines[0].slice(i + 1)];
   }
-  keyRows.forEach((row, r) => {
-    const yb = 838 - 30 * (keyRows.length - 1 - r);
-    for (const { kind, color, text, x } of row) {
-      if (kind === "bar") {
-        g.fillStyle = color;
-        g.fillRect(x, yb - 14, 16, 16);
-      } else {
-        g.strokeStyle = color;
-        g.lineWidth = 4;
-        g.beginPath(); g.moveTo(x + 2, yb - 6); g.lineTo(x + 22, yb - 6); g.stroke();
-      }
-      g.fillStyle = OPT_TILE.sub;
-      g.fillText(text, x + (kind === "bar" ? 26 : 34), yb);
+  while (keySize > 12 && keyRowW() > K1 - K0) g.font = `400 ${--keySize}px "DM Sans"`;
+  const gap = keys.length > 1 ? (K1 - K0 - keysW()) / (keys.length - 1) : 0;
+  // the last line sits where the single row did; a one-line label beside two-line ones is centered on them
+  const keyLh = keySize + 4, keyMid = keys.some((k) => k.lines.length > 1) ? 838 - keyLh / 2 : 838, cy = keyMid - keySize * 0.375;
+  let kx = K0;
+  for (const k of keys) {
+    if (k.kind === "bar") {
+      g.fillStyle = k.color;
+      g.fillRect(kx, cy - 8, 16, 16);
+    } else {
+      g.strokeStyle = k.color;
+      g.lineWidth = 4;
+      g.beginPath(); g.moveTo(kx + 2, cy); g.lineTo(kx + 22, cy); g.stroke();
     }
-  });
+    g.fillStyle = OPT_TILE.sub;
+    k.lines.forEach((l, i) => g.fillText(l, kx + k.swatch, keyMid + keyLh * (i - (k.lines.length - 1) / 2)));
+    kx += keyW(k) + gap;
+  }
+  g.font = '400 16px "DM Sans"';
   g.fillText(`${games.toLocaleString()} simulated games · ${MODELS[pitchModel ? "pitch" : "pa"]}`, 48, 868);
   return new Promise((res) => cv.toBlob(res, "image/png"));
 }
