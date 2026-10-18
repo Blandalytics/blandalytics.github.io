@@ -131,6 +131,10 @@ label.check input{width:16px; height:16px; margin:0; accent-color:var(--accent)}
 .moves{display:flex; flex-wrap:wrap; gap:4px 18px; margin:8px 0 0; padding:0; list-style:none; font-size:13.5px}
 .moves li b{font-weight:500}
 .moves li span{color:var(--muted)}
+/* contact vs power: the slider under the curve (MLB's spots), lined up with its x-axis by app.js */
+.curve-slide{margin:4px 0 2px}
+.curve-slide input[type=range]{display:block; margin:0; accent-color:var(--accent)}
+@media (pointer:coarse){.curve-slide input[type=range]{min-height:32px}}
 /* contact vs power: the curve's ends and middle, as numbers */
 .ends{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:2px 0 6px}
 .ends div:nth-child(2){text-align:center} .ends div:last-child{text-align:right}
@@ -427,9 +431,12 @@ button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
       <h3>Contact vs power at the same wOBA</h3>
       <div class="ends" id="tradeoff_ends"></div>
       <div class="legend" aria-hidden="true">
-        <span><i class="key-dot" style="background:var(--s-lineup)"></i>This lineup, with its 95% range</span>
+        <span><i class="key-dot" style="background:var(--s-lineup)"></i><span id="tradeoff_key">This lineup</span></span>
       </div>
       <div class="chart" id="tradeoff_chart"></div>
+      <div class="curve-slide" id="tradeoff_slide" hidden>
+        <input id="tradeoff_at" type="range" min="-1" max="1" step="0.1" value="0" aria-label="Contact to power, all nine MLB spots">
+      </div>
       <div class="row" style="margin-top:10px"><button id="tradeoff_share" type="button">Share image ▾</button></div>
       <details class="minor">
         <summary>Every setting</summary>
@@ -530,6 +537,6 @@ button:not(.share-menu button):active:not(:disabled){transform:scale(.96)}
 <div id="tip" class="tip" hidden></div>
 <style>.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}</style>
 <script src="/shared/share-image.js?v=2"></script>
-<script type="module" src="app.js?v=46"></script>
+<script type="module" src="app.js?v=47"></script>
 </body>
 </html>
