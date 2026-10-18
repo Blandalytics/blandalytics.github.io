@@ -103,6 +103,12 @@ function tiltColor(theta) {
 function tintRange(range, theta) {
   range.style.accentColor = tiltColor(theta);
 }
+// The contact-power charts (the curve on the page and its image) show settings within ±CURVE_X, where real
+// lineups sit; the sliders still reach ±data.tradeoff.range.
+const CURVE_X = 1;
+// where the exact curve is worked out: the data file's settings (half steps to the ends, for the table and the
+// ends' runs) and the quarter steps inside ±CURVE_X, so the charts' stretch of it is smooth
+const curveThetas = () => [...new Set([...data.sims.tradeoff.points.map((p) => p.theta), -0.75, -0.25, 0.25, 0.75])].sort((a, b) => a - b);
 
 const labelOf = (e) => (e.theta ? `${e.name}, ${e.theta < 0 ? "contact" : "power"} ${Math.abs(e.theta).toFixed(1)}` : e.name);
 
@@ -919,7 +925,7 @@ function run() {
     ref = { lineup: m0.map((x) => cumulative(x.sp)), games: REF_GAMES,
       relief: stages.map((r, i) => ({ from: r.from, lineup: m0.map((x) => cumulative(x.relief[i])) })) };
     lines = { w: data.weights, from: stages.map((r) => r.from), lineups: [m0, ...data.teams.map((t) => matched(spots(t.abbr))),
-      ...data.sims.tradeoff.points.map((pt) => matched(mlb, pt.theta))] };
+      ...curveThetas().map((t) => matched(mlb, t))] };
   }
   // this lineup against MLB-average pitching, as baseDist() simulates it (with no pitcher, the run itself)
   const base = { key: `${lineup.join()}|${$("regress").value}|${byPitch ? "pitch" : "pa"}`,
@@ -972,7 +978,7 @@ function finish(j, res, ms, ref, lines) {
   if (lines) {
     const n = data.teams.length;
     versus = { key: j.key, ctx: { refDist: ref, mlb: lines[0], teams: Object.fromEntries(data.teams.map((t, i) => [t.abbr, lines[1 + i]])),
-      tradeoff: data.sims.tradeoff.points.map((pt, i) => ({ theta: pt.theta, ...lines[1 + n + i] })) } };
+      tradeoff: curveThetas().map((theta, i) => ({ theta, ...lines[1 + n + i] })) } };
   }
   // with the modeled hook, the words say where this run's games took him out (only the current job finishes,
   // so the pitching picked is still the job's)
@@ -1405,11 +1411,26 @@ function setupTradeoff() {
     + `${-T.ends[0][2] > T.ends[T.ends.length - 1][2] ? "power" : "contact"} end.`;
 }
 
+// The curve against MLB-average pitching with the per-PA model, worked out exactly here like every other curve
+// (the data file's points are simulated, and their wobble of a few thousandths shows within ±CURVE_X). It's MLB's
+// spots whatever the lineup, so once.
+let avgCurve = null;
+function avgCurveOf() {
+  if (!avgCurve) {
+    chain ??= chainTables(model);
+    const mlb = Array.from({ length: 9 }, (_, i) => specOf(entries.get(`sMLB-${i + 1}`))), thetas = curveThetas();
+    const lines = expectedLines(chain, thetas.map((t) => mlb.map((h) => ({ sp: facing(h, null, t, data.tradeoff.per_sd), relief: [] }))),
+      [], data.weights);
+    avgCurve = thetas.map((theta, i) => ({ theta, ...lines[i] }));
+  }
+  return avgCurve;
+}
+
 function renderTradeoff(moe) {
   const box = $("tradeoff_out");
   box.hidden = mode !== "tradeoff";
   if (box.hidden) return;
-  const pts = last.ctx ? last.ctx.tradeoff : data.sims.tradeoff.points;
+  const pts = last.ctx ? last.ctx.tradeoff : avgCurveOf();
   const thetas = last.lineup.map((id) => entryOf(id)?.theta).filter((t) => t != null);
   const avg = thetas.length ? thetas.reduce((s, t) => s + t, 0) / thetas.length : null;
   // runs per nine with every spot at the contact end, at 0 and at the power end, in the sliders' colors
@@ -1466,9 +1487,11 @@ function renderTradeoff(moe) {
 
 // the curve (runs per nine with every MLB spot at the same setting), and this lineup at
 // its spots' average setting with its 95% range when it has MLB spots
-function tradeoffChart(pts, avg, R, moe) {
+function tradeoffChart(all, avg, R, moe) {
   const W = chartWidth("tradeoff_chart"), H = 240, L = 44, Rt = 14, T = 22, B = 44;
-  const range = data.tradeoff.range;
+  // settings within ±CURVE_X, or as far as this lineup's (by half steps) so it stays on the chart
+  const range = Math.max(CURVE_X, avg == null ? 0 : Math.ceil(Math.abs(avg) * 2 - 1e-9) / 2);
+  const pts = all.filter((p) => Math.abs(p.theta) <= range + 1e-9), tick = range > CURVE_X ? 1 : 0.5;
   const ys = pts.map((p) => p.R).concat(avg == null ? [] : [R - moe, R + moe]);
   const span = Math.max(...ys) - Math.min(...ys);
   const step = span > 0.45 ? 0.1 : 0.05;
@@ -1493,7 +1516,7 @@ function tradeoffChart(pts, avg, R, moe) {
   }
   el("line", { x1: x(0), x2: x(0), y1: T - 6, y2: H - B, stroke: "var(--faint)", "stroke-width": 1 });
   el("text", { x: x(0), y: T - 10, "text-anchor": "middle", fill: "var(--muted)", "font-size": 11 }, "MLB");
-  for (let t = -Math.floor(range); t <= Math.floor(range); t++) {
+  for (let t = -Math.floor(range / tick) * tick; t <= range + 1e-9; t += tick) {
     el("text", { x: x(t), y: H - B + 16, "text-anchor": "middle", fill: "var(--muted)", "font-size": 11 }, fmtStep(t));
   }
   el("text", { x: L, y: H - 6, fill: "var(--muted)", "font-size": 11 }, "← Contact");
@@ -1945,11 +1968,13 @@ const LINEUP_BAND = [-0.41, 0.51];
 const tradeoffFileName = () => `lineup_sim_contact_vs_power${tradeoffShare?.vs ? `_vs_${slug(pShort(tradeoffShare.vs.name))}` : ""}.png`;
 
 async function tradeoffTileBlob() {
-  const { pts, vs } = tradeoffShare;
+  const { vs } = tradeoffShare;
   await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"',
     '600 19px "JetBrains Mono"', '600 17px "JetBrains Mono"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
-  const { W } = OPT_TILE, range = data.tradeoff.range;
+  // the curve within ±CURVE_X, teal to amber across it (the sliders' colors, there at the chart's ends)
+  const { W } = OPT_TILE, range = CURVE_X, pts = tradeoffShare.pts.filter((p) => Math.abs(p.theta) <= range + 1e-9);
+  const tint = (t) => tiltColor((t / range) * data.tradeoff.range);
   const cv = document.createElement("canvas");
   cv.width = cv.height = W;
   const g = cv.getContext("2d");
@@ -1997,13 +2022,13 @@ async function tradeoffTileBlob() {
   g.beginPath(); g.moveTo(x(0), T - 10); g.lineTo(x(0), B); g.stroke();
   g.fillStyle = OPT_TILE.axis;
   g.fillText("MLB", x(0), T - 18);
-  for (let t = -Math.floor(range); t <= Math.floor(range); t++) g.fillText(fmtStep(t), x(t), B + 30);
+  for (let t = -range; t <= range + 1e-9; t += 0.5) g.fillText(fmtStep(t), x(t), B + 30);
   g.font = '400 16px "DM Sans"';
   g.textAlign = "left";
-  g.fillStyle = tiltColor(-range);
+  g.fillStyle = tint(-range);
   g.fillText("← Contact", L, B + 58);
   g.textAlign = "right";
-  g.fillStyle = tiltColor(range);
+  g.fillStyle = tint(range);
   g.fillText("Power →", Rt, B + 58);
   // the band's label, just outside its left edge: at the top, or at the bottom when the curve runs through the top
   // one (the curve's height between its points, across the label's width)
@@ -2023,7 +2048,7 @@ async function tradeoffTileBlob() {
   g.textBaseline = "alphabetic";
   // the curve, colored by setting along the axis
   const grad = g.createLinearGradient(x(-range), 0, x(range), 0);
-  grad.addColorStop(0, tiltColor(-range)); grad.addColorStop(0.5, "#fff"); grad.addColorStop(1, tiltColor(range));
+  grad.addColorStop(0, tint(-range)); grad.addColorStop(0.5, "#fff"); grad.addColorStop(1, tint(range));
   g.strokeStyle = grad;
   g.lineWidth = 6;
   g.lineJoin = g.lineCap = "round";
@@ -2036,7 +2061,7 @@ async function tradeoffTileBlob() {
   // the middle one centered above its point
   for (const [p, align, dx] of [[lo, "left", 10], [mid, "center", 0], [hi, "right", -10]]) {
     if (!p) continue;
-    const color = tiltColor(p.theta), above = p.R >= (lo.R + hi.R) / 2 || p === mid;
+    const color = tint(p.theta), above = p.R >= (lo.R + hi.R) / 2 || p === mid;
     g.beginPath(); g.arc(x(p.theta), y(p.R), 7, 0, 2 * Math.PI);
     g.fillStyle = color; g.fill();
     g.lineWidth = 3; g.strokeStyle = OPT_TILE.bg; g.stroke();
