@@ -10,7 +10,7 @@
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
 import { PARK_N, parkAdjust as adjustForPark } from "./park.js?v=1";
-import { boxscoreUrl, checkSchedule, parseGame, pkOf, scheduleUrl } from "./game-load.js?v=1";
+import { boxscoreUrl, checkSchedule, parseGame, pkOf, scheduleUrl } from "./game-load.js?v=2";
 
 const SEASON = 2026;
 const SEED = 2026;
