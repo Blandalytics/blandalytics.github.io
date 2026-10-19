@@ -237,7 +237,9 @@ function fillPark() {
 // Any completed 2026 regular-season game, from MLB's Stats API (open to the browser): both teams,
 // their starting nines in order, the starting pitchers, each team's catcher, the ballpark and the
 // week. The rest (He pitches, Sim settings) stays as it was. A hitter or pitcher the 2026 data
-// doesn't have (no counted plate appearances) is replaced, and the note says by what.
+// doesn't have (no counted plate appearances) is replaced, and the note says by what. A link to
+// blandalytics.com/lineup-sims/<gamePk> lands here as game.html#gp=<gamePk> (the site's 404.html
+// sends it), and so does game.html#<gamePk>: the game loads as the page opens.
 const STATS_API = "https://statsapi.mlb.com/api/v1";
 const getJSON = async (url) => {
   const r = await fetch(url);
@@ -302,6 +304,11 @@ function applyGame(G) {
   $("gpk_note").textContent = `${a.name} at ${h.name}, ${day}, ${G.g.venue.name}: both starting nines and starters (${a.sp.name}, ${h.sp.name})`
     + (G.park < 0 && parkData ? `; ${G.g.venue.name} has no 2026 park factors, so ${parkName() ?? "no park"}` : "")
     + (G.missing.length ? `. Not in the ${SEASON} data, so replaced: ${G.missing.join(", ")}.` : ".");
+  // the game's short link (the site's 404.html turns it into game.html#gp=)
+  const link = document.createElement("a");
+  link.href = `/lineup-sims/${G.pk}`;
+  link.textContent = `${location.host}/lineup-sims/${G.pk}`;
+  $("gpk_note").append(" Link: ", link);
 }
 // a gamePk, or a link with one in it (Baseball Savant's gamefeed, MLB Gameday)
 const pkOf = (text) => {
@@ -874,8 +881,11 @@ function writeHash() {
   if (parkData && park.week >= 0) p.set("wk", String(park.week + 1));
   history.replaceState(null, "", `#${p}`);
 }
+let linkedGame = null; // a gamePk the link asked for (gp=, or the hash alone), loaded once the page is set up
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
+  const gp = p.get("gp") ?? location.hash.slice(1);
+  linkedGame = /^\d{6,7}$/.test(gp) ? Number(gp) : null;
   for (const [key, sel] of [["g", "games"], ["r", "regress"], ["pl", "platoon"], ["st", "steals"]]) {
     const v = p.get(key);
     if (v && [...$(sel).options].some((o) => o.value === v)) $(sel).value = v;
@@ -999,6 +1009,10 @@ async function boot() {
     SIDES.forEach(renderSide);
     run();
   });
+  if (linkedGame) {
+    $("gpk").value = linkedGame;
+    onLoadGame(); // its run replaces this one before the worker starts
+  }
   run();
 }
 
