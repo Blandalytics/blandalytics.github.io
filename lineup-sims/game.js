@@ -233,6 +233,101 @@ function fillPark() {
       + `${park.week >= 0 ? " that week (with the league's calendar)" : ""}; each player's home park taken out first`;
 }
 
+// ---------- a real game, by gamePk ----------
+// Any completed 2026 regular-season game, from MLB's Stats API (open to the browser): both teams,
+// their starting nines in order, the starting pitchers, each team's catcher, the ballpark and the
+// week. The rest (He pitches, Sim settings) stays as it was. A hitter or pitcher the 2026 data
+// doesn't have (no counted plate appearances) is replaced, and the note says by what.
+const STATS_API = "https://statsapi.mlb.com/api/v1";
+const getJSON = async (url) => {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`the Stats API answered ${r.status}`);
+  return r.json();
+};
+async function loadGame(pk) {
+  const sched = await getJSON(`${STATS_API}/schedule?gamePk=${pk}&fields=dates,games,gamePk,season,gameType,officialDate,status,codedGameState,detailedState,venue,id,name,teams,away,home,team`);
+  const g = sched.dates?.[0]?.games?.find((x) => x.gamePk === pk);
+  if (!g) throw new Error(`there's no MLB game ${pk}`);
+  const types = { S: "a spring training game", E: "an exhibition", A: "the All-Star Game", F: "a Wild Card game", D: "a Division Series game", L: "a League Championship Series game", W: "a World Series game" };
+  if (g.season !== String(SEASON) || g.gameType !== "R") {
+    throw new Error(`game ${pk} is ${g.gameType === "R" ? `from the ${g.season} season` : types[g.gameType] ?? `not a regular-season game`}; only completed ${SEASON} regular-season games load`);
+  }
+  if (g.status.codedGameState !== "F") throw new Error(`game ${pk} wasn't completed (${g.status.detailedState.toLowerCase()})`);
+  const box = await getJSON(`${STATS_API}/game/${pk}/boxscore?fields=teams,away,home,team,id,pitchers,players,person,fullName,position,abbreviation,battingOrder`);
+  const missing = [], sides = {};
+  for (const where of ["away", "home"]) {
+    const b = box.teams[where], t = data.teams.find((x) => x.id === b.team.id);
+    if (!t) throw new Error(`team ${b.team.id} isn't in the ${SEASON} data`);
+    // the starting nine: batting order 100, 200, ... 900 (a substitute is 101, 102, ...)
+    const starters = Object.values(b.players).filter((x) => x.battingOrder && Number(x.battingOrder) % 100 === 0)
+      .sort((x, y) => Number(x.battingOrder) - Number(y.battingOrder));
+    if (starters.length !== 9) throw new Error(`the ${t.short}' starting lineup isn't complete in the box score`);
+    const lineup = starters.map((x, i) => {
+      if (entries.has(`p${x.person.id}`)) return `p${x.person.id}`;
+      missing.push(`${x.person.fullName} (${t.short}' ${ordinal(i + 1)} spot)`);
+      return `s${t.abbr}-${i + 1}`;
+    });
+    const spId = b.pitchers?.[0], spName = b.players[`ID${spId}`]?.person.fullName ?? "the starter";
+    let sp = pitchers.get(`P${spId}`);
+    if (!sp) {
+      missing.push(`${spName} (MLB-average RHP)`);
+      sp = pitchers.get("PRHP");
+    }
+    const c = starters.findIndex((x) => x.position?.abbreviation === "C");
+    sides[where] = { team: t.abbr, lineup, sp, c, name: t.short };
+  }
+  // the ballpark by name, else the home team's; the week by the game's date
+  const pi = parkData ? parkData.parks.findIndex((x) => fold(x.name) === fold(g.venue.name)) : -1;
+  const md = g.officialDate.slice(5), wi = parkData ? parkData.weeks.findIndex((w) => w[0] <= md && md <= w[1]) : -1;
+  return { pk, g, sides, park: pi, week: wi, missing };
+}
+function applyGame(G) {
+  [["away", SIDES[0]], ["home", SIDES[1]]].forEach(([where, s]) => {
+    const x = G.sides[where];
+    Object.assign(s, { team: x.team, lineup: x.lineup, edited: true, sp: x.sp });
+    s.c = x.c >= 0 ? x.c : -1;
+    if (stealData) checkCatcher(s);
+  });
+  if (parkData) {
+    Object.assign(park, G.park >= 0 ? { at: G.park, auto: false } : { at: "none", auto: true });
+    if (park.auto) park.at = homePark();
+    park.week = G.week;
+  }
+  SIDES.forEach(renderSide);
+  fillPark();
+  run();
+  const day = new Date(`${G.g.officialDate}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  const a = G.sides.away, h = G.sides.home;
+  $("gpk_note").classList.toggle("warn", G.missing.length > 0);
+  $("gpk_note").textContent = `${a.name} at ${h.name}, ${day}, ${G.g.venue.name}: both starting nines and starters (${a.sp.name}, ${h.sp.name})`
+    + (G.park < 0 && parkData ? `; ${G.g.venue.name} has no 2026 park factors, so ${parkName() ?? "no park"}` : "")
+    + (G.missing.length ? `. Not in the ${SEASON} data, so replaced: ${G.missing.join(", ")}.` : ".");
+}
+// a gamePk, or a link with one in it (Baseball Savant's gamefeed, MLB Gameday)
+const pkOf = (text) => {
+  const m = String(text).match(/(?:gamePk=|\/)(\d{6,7})(?!\d)|^\s*(\d{6,7})\s*$/);
+  return m ? Number(m[1] ?? m[2]) : null;
+};
+async function onLoadGame() {
+  const pk = pkOf($("gpk").value), note = $("gpk_note");
+  note.classList.remove("warn", "err");
+  if (!pk) {
+    note.textContent = "Enter a gamePk: the 6-digit game number in a Baseball Savant or MLB Gameday link.";
+    note.classList.add("err");
+    return;
+  }
+  $("gpk_go").disabled = true;
+  note.textContent = `loading game ${pk}…`;
+  try {
+    applyGame(await loadGame(pk));
+  } catch (e) {
+    note.textContent = `Couldn't load it: ${e.message}.`;
+    note.classList.add("err");
+  } finally {
+    $("gpk_go").disabled = false;
+  }
+}
+
 // ---------- a team: lineup, starter, plan ----------
 // the team's most-used starter (most 2026 starts); an MLB-average RHP for MLB
 function defaultStarter(abbr) {
@@ -874,6 +969,8 @@ async function boot() {
       } });
     renderSide(s);
   }
+  $("gpk_go").addEventListener("click", onLoadGame);
+  $("gpk").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); onLoadGame(); } });
   $("swap").addEventListener("click", () => {
     const keep = ["team", "kind", "lineup", "edited", "sp", "plan", "c"];
     const a = Object.fromEntries(keep.map((x) => [x, SIDES[0][x]]));
