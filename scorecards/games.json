@@ -1,5 +1,5 @@
 {
- "built": "2026-10-18T13:49:08Z",
+ "built": "2026-10-19T16:51:14Z",
  "games": {
   "822678": {
    "away": "New York Mets",
@@ -34089,6 +34089,20 @@
    "home_nick": "Guardians",
    "home_r": 3,
    "title": "Rays 7, Guardians 3",
+   "venue": "Progressive Field"
+  },
+  "849817": {
+   "away": "Tampa Bay Rays",
+   "away_abbr": "TB",
+   "away_nick": "Rays",
+   "away_r": 3,
+   "date": "2026-10-18",
+   "file": "games/849817.html",
+   "home": "Cleveland Guardians",
+   "home_abbr": "CLE",
+   "home_nick": "Guardians",
+   "home_r": 1,
+   "title": "Rays 3, Guardians 1",
    "venue": "Progressive Field"
   },
   "849818": {
