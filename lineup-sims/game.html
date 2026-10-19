@@ -52,6 +52,10 @@ button:disabled{opacity:.45; cursor:default}
 .dot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:0}
 
 /* the two teams, side by side where there's room */
+/* the ballpark: park and week side by side, the note under them */
+.venue{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:6px 12px; margin-top:18px; padding-top:16px; border-top:1px solid var(--rule)}
+.venue .note{grid-column:1 / -1}
+@media (max-width:480px){.venue{grid-template-columns:minmax(0,1fr)}}
 .sides{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px 28px}
 @media (max-width:880px){.sides{grid-template-columns:minmax(0,1fr)}}
 .side h3{display:flex; align-items:baseline; gap:8px}
@@ -165,6 +169,11 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
       <button id="swap" type="button" title="The away team bats first; the home team bats last">⇄ Swap home and away</button>
     </div>
     <div class="sides" id="sides"></div>
+    <div class="venue" id="park_row" hidden>
+      <label><b>Ballpark</b><select id="park"></select></label>
+      <label><b>When</b><select id="park_week"></select></label>
+      <p id="park_note" class="note"></p>
+    </div>
     <details class="minor" id="settings">
       <summary>Sim settings</summary>
       <div class="options">
@@ -236,11 +245,12 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
         <p><b>MLB rules.</b> The away team bats first. From the 9th on, the bottom half isn't played when the home team leads after the top. In the bottom of the 9th or later, the game ends the moment the home team goes ahead: a walk-off, on which only the runs needed to win count, unless it's a home run. From the 10th on, each half-inning starts with a runner on second: the hitter who bats just before that inning's leadoff hitter. A game still tied after 40 innings is called a tie.</p>
         <p><b>The box score.</b> A run goes to the runner who scored it. A hitter's RBI are the runs that scored on his plate appearance, except on a ground-ball double play; runs on steals, wild pitches, passed balls and balks drive in nobody. A run is charged to the pitcher who let that runner on, so the bullpen's inherited runners count against the starter. Every run is earned except the extra-innings runner's: errors happen inside the advancement tables at 2026 rates, but aren't told apart from other plays. Pitches are drawn from 2026's pitches per plate appearance for each outcome. The win goes to the pitcher of record when his team took the lead for good (a starter needs five innings; short of that, it goes to the bullpen), the loss to the pitcher charged with the run that put the other team ahead for good, and the save to the winning team's last pitcher when he pitched its whole last inning with a lead of one to three runs. A quality start is the starter going six innings or more with three earned runs or fewer charged to him, counting runners he left on base who scored after he came out. A team's bullpen is one line, so it can take a win and a save in the same game, as two of its relievers would.</p>
         <p><b>Stolen bases.</b> Before each plate appearance, every runner with the next base open (home is always open) may try for it, lead runner first, and the first who goes is the play. The odds come from a model of every 2026 steal opportunity (the stolen_bases project's pull of MLB's play-by-play, with the runner, the pitcher and the catcher on each): two logistic models, one for whether he tries (stolen base, caught stealing, or caught breaking on a pickoff) and one for whether he makes it, each with the runner, the pitcher and the catcher as effects shrunk toward average, and the bases, outs, score and the pitcher's hand as context. How much to shrink each was picked by fitting games before July 1 and predicting the rest. Who's involved predicts attempts well (runners differ most, then pitchers, then catchers), but success much less: in one season a runner's or pitcher's success rate is mostly luck, so those are shrunk nearly to average, while catchers keep some spread. The catcher is one of the team's nine: a 2026 catcher in the batting order as himself, or a lineup spot as the team's catchers who batted in it, pooled (the box lists the spots that did at least 5% of the team's catching); a lineup with no 2026 catcher in it has the one picked catch like an MLB-average catcher. A lineup spot is its 2026 runners pooled, a bullpen its relievers, and the MLB-average starters every one of that hand, each set to give as many attempts and steals as its players did. Where the runners end up on an attempt (a double steal, a throwing error) comes from 2026's plays with that attempt; without one, the running game (wild pitches, passed balls, balks, pickoffs) is 2026's without one. Steals on the pitch that ends a plate appearance (a strikeout and a runner thrown out) are part of that plate appearance's result, as in the Lineup Sim, and aren't counted as SB or CS. With MLB-average everything it gives about 0.62 stolen bases and 0.18 caught stealing a team game, against 2026's 0.58 and 0.17 counted the same way. <b>League-average running game</b> under Sim settings puts back the Lineup Sim's running game.</p>
-        <p><b>Not modeled:</b> home-field advantage beyond batting last, park, pinch hitters and defensive substitutions, individual relievers (the bullpen is pooled), the times-through-the-order penalty, intentional walks and bunts. Results use a fixed random seed, so the same matchup always gets the same numbers.</p>
+        <p><b>Ballparks.</b> The game is played in the home team's park, or the one picked, with the park factors from <a href="/park-factors/">Park Factors</a>: for each park, how often a plate appearance there ends in a strikeout, walk, hit by pitch, single, double, triple or home run, against the season's average park (100), from a fit of every plate appearance that adjusts for who batted and pitched there. <b>When</b> picks a week of the season instead, the park that week with the league's calendar (cold April, summer heat). Players' 2026 rates already carry their home park, half their games, so each matchup first takes out the hitter's and the pitcher's environment (their home park's factors averaged with every other team's, half and half), then puts in the park's; the outs in play take up the difference. A team's spots and bullpen use that team's environment, a player his team's, and MLB's spots and average arms none. Runs follow from the outcomes, so a park's effect on runs comes out near its R factor but not exactly: the running game and how runners advance are league-wide, not by park. <b>MLB's average park</b> takes every home park out; <b>No park</b> leaves the 2026 rates as they are.</p>
+        <p><b>Not modeled:</b> home-field advantage beyond batting last, park-specific baserunning (extra bases at Coors, say), pinch hitters and defensive substitutions, individual relievers (the bullpen is pooled), the times-through-the-order penalty, intentional walks and bunts. Results use a fixed random seed, so the same matchup always gets the same numbers.</p>
       </div>
     </details>
   </section>
 </main>
-<script type="module" src="game.js?v=2"></script>
+<script type="module" src="game.js?v=3"></script>
 </body>
 </html>
