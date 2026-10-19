@@ -110,14 +110,16 @@ function bookkeeping(res, teams, label) {
   check(w[0] + w[1] > s[0] + s[1], `more attempts against ${weak[2]} (${w[0] + w[1]}) than ${strong[2]} (${s[0] + s[1]})`);
 }
 
-// 4. ballparks (park.js): a neutral park gives today's numbers exactly, and a park moves runs about as its R factor says
+// 4. ballparks (park.js). The page's "No park" never calls parkAdjust, so it is today's numbers by construction.
+// "MLB's average park" is all-1 park factors with each team's home-park environment divided out: for MLB's spots and
+// average arms, whose environment is all 1s, that must be today's numbers exactly; for a real team it must not be.
 {
   const ones = new Array(PARK_N).fill(1);
   const mlb = hitters("MLB");
   // the same chances, the same array, for every MLB spot against every stretch of pitching
   const same = mlb.every((h) => [arm, pen("MLB"), null].every((pp) => { const q = facing(h, pp); return parkAdjust(q, ones, ones, ones) === q; }));
-  check(same, "an average park with no home park to take out leaves every matchup's chances as they were");
-  // ... and so the games: MLB's spots and arms at MLB's average park are today's games, to the last draw
+  check(same, "all-1 park factors and all-1 environments (MLB's spots, average arms) leave every matchup's chances as they were");
+  // ... and so the games: MLB's spots and arms (environment all 1s) at MLB's average park are today's games, to the last draw
   const inPark = (f) => (abbr, opp) => {
     const t = team(abbr, opp);
     const at = (pp) => hitters(opp).map((h) => cumulative(parkAdjust(facing(h, pp), f, ones, ones)));
@@ -125,11 +127,15 @@ function bookkeeping(res, teams, label) {
   };
   const today = simulateGames(model, [team("MLB", "MLB"), team("MLB", "MLB")], G, 2026);
   const neutral = simulateGames(model, [inPark(ones)("MLB", "MLB"), inPark(ones)("MLB", "MLB")], G, 2026);
-  check(JSON.stringify(neutral) === JSON.stringify(today), "MLB's average park reproduces today's games exactly");
+  check(JSON.stringify(neutral) === JSON.stringify(today), "MLB's average park, for MLB's spots and arms (environment all 1s), reproduces today's games exactly");
   // a park whose factors are just the players' home-park environments takes nothing out and puts nothing in
   const env = PD.env.COL.map((x) => x / 100), envF = env.map((x, j) => x * ones[j]);
   const q0 = facing(mlb[0], arm);
   check(parkAdjust(q0, envF, env, ones) === q0, "a park equal to the hitter's own environment changes nothing");
+  // for a real team the average park is not today: its hitters' home park comes out (a Rockies spot loses Coors)
+  const qCol = facing(hitters("COL")[0], arm), avgCol = parkAdjust(qCol, ones, env, ones);
+  check(avgCol !== qCol && Math.abs(avgCol[6] / qCol[6] - 1 / env[6]) < 1e-12 && Math.abs(avgCol[5] / qCol[5] - 1 / env[5]) < 1e-12,
+    `a Rockies spot at MLB's average park has its home park taken out (HR ×${(1 / env[6]).toFixed(3)}, 3B ×${(1 / env[5]).toFixed(3)})`);
   // a real park: chances still add up to 1, and runs move about as the park's R factor says
   const factors = (name) => PD.parks.find((x) => x.name === name).f.map((x) => x / 100);
   const coors = factors("Coors Field"), tmo = factors("T-Mobile Park");
