@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Game Sim · Blandalytics</title>
+<meta name="description" content="Play any two 2026 MLB lineups and their pitchers against each other as full MLB games, walk-offs and extra-inning runners included, and get the box score averaged over thousands of games.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
+  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
+  --accent:#6cb4ff; --good:#7bd88f; --bad:#ff8a80; --warn:#ffd166;
+  /* the two teams: the Lineup Sim's validated pair on --surface */
+  --s-away:#3987e5; --s-home:#d95926;
+}
+*{box-sizing:border-box}
+body{margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased; padding:24px 16px}
+main{max-width:1040px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1{margin:0; font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
+h2{margin:0 0 12px; font-size:17px; font-weight:600}
+h3{margin:0 0 10px; font-size:15px; font-weight:600}
+.card-head{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 16px; margin-bottom:14px}
+.card-head h2{margin:0}
+p{margin:0}
+.tag{margin:6px 0 0; color:var(--muted); font-size:14px}
+a{color:var(--accent)}
+a.home{color:var(--muted); text-decoration:none; font-size:14px}
+@media (pointer:coarse){a.home{display:inline-block; padding:10px 0; margin:-10px 0}}
+a.home:hover{color:var(--ink)}
+.card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
+@media (max-width:400px){.card{padding:14px 12px}}
+label{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
+label b{color:var(--ink); font-weight:500}
+input,select,button{font:inherit; color:var(--ink)}
+input[type=text],select{background:var(--ground); border:1px solid var(--rule); border-radius:6px; padding:7px 9px; width:100%}
+input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
+button{background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:7px 12px; cursor:pointer}
+button:hover:not(:disabled){border-color:var(--faint); background:#222b36}
+button:disabled{opacity:.45; cursor:default}
+.status{color:var(--muted); font-size:13px}
+.status.err{color:var(--bad)}
+.note{color:var(--faint); font-size:12.5px}
+.num{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+.dot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:0}
+
+/* the two teams, side by side where there's room */
+.sides{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px 28px}
+@media (max-width:880px){.sides{grid-template-columns:minmax(0,1fr)}}
+.side h3{display:flex; align-items:baseline; gap:8px}
+.where{color:var(--muted); font-size:12px; font-weight:500; text-transform:uppercase; letter-spacing:.06em}
+#a_side .where{color:var(--s-away)} #h_side .where{color:var(--s-home)}
+.loader{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px 12px; align-items:end; margin-bottom:8px}
+@media (max-width:480px){.loader{grid-template-columns:minmax(0,1fr)}}
+.field{display:flex; flex-direction:column; gap:4px}
+.pick input[type=text]{height:35px}
+.pick input::placeholder{color:var(--muted); opacity:1}
+.side .note{white-space:pre-line; margin-bottom:8px}
+.lineup{width:100%; border-collapse:collapse}
+.lineup th{font-size:12px; font-weight:500; color:var(--muted); text-align:right; padding:0 6px 6px; white-space:nowrap}
+.lineup th:nth-child(2){text-align:left}
+.lineup td{padding:3px 6px; border-top:1px solid var(--rule); vertical-align:middle}
+.lineup td.spot{width:24px; color:var(--muted); font-weight:600; text-align:center; padding-left:0}
+.lineup td.who{width:100%}
+.lineup td.stat{text-align:right; font-size:13px; color:#fff; white-space:nowrap}
+.lineup td.stat.small{color:var(--warn)}
+.lineup td.move{white-space:nowrap; padding-right:0}
+.lineup td.move button{padding:3px 8px; font-size:12px; line-height:1.2}
+.who-sub{display:block; color:var(--faint); font-size:12px; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:340px}
+.lineup .who-sub{max-width:none; width:0; min-width:100%}
+.lineup input[type=text]{min-width:0; padding:5px 8px}
+@media (max-width:480px){.lineup .opt{display:none} .lineup td.move button{display:block} .lineup td.move button + button{margin-top:4px}}
+.suggest{position:relative}
+.suggest-list{--rows:10; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:5; margin:0; padding:4px; list-style:none;
+  background:var(--raise); border:1px solid var(--rule); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.4);
+  max-height:calc(var(--rows) * 32px + 10px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--faint) transparent;
+  right:auto; width:max-content; min-width:100%; max-width:min(440px, calc(100vw - 40px))}
+@media (pointer:coarse){.suggest-list{--rows:6} .lineup input[type=text],.pick input[type=text]{scroll-margin-top:12px}}
+.suggest-list li{display:flex; justify-content:space-between; gap:12px; padding:6px 9px; border-radius:4px; cursor:pointer; font-size:14px; line-height:20px}
+.suggest-list li small{color:var(--muted); font-size:12px; white-space:nowrap; font-variant-numeric:tabular-nums}
+.suggest-list li.active{background:#222b36}
+.suggest-list li.head{cursor:default; color:var(--faint); font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; padding:6px 9px 2px}
+.options{display:grid; grid-template-columns:150px minmax(190px,250px) minmax(190px,250px); gap:12px 14px; align-items:end}
+@media (max-width:760px){.options{grid-template-columns:150px minmax(0,1fr)} .options .platoon,.options .steals{grid-column:1 / -1}}
+.options .steals{grid-column:1 / span 2}
+/* the catcher's effect, beside his select */
+.cnote{align-self:center; margin:0}
+@media (max-width:480px){.cnote{margin-top:-4px}}
+.catch-line{margin-top:8px}
+@media (max-width:400px){.options{grid-template-columns:minmax(0,1fr)}}
+details summary{cursor:pointer; font-size:15px; font-weight:600; list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸ "; color:var(--muted)}
+details[open] summary::before{content:"▾ "}
+details[open] summary{margin-bottom:10px}
+details.minor summary{font-size:13px; font-weight:500; color:var(--muted)}
+details.minor summary:hover{color:var(--ink)}
+details.minor{margin-top:16px}
+
+/* results */
+.kpis{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px 20px; margin-bottom:12px}
+@media (max-width:640px){.kpis{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .kpis .kpi:last-child{grid-column:1 / -1}}
+.kpi span{display:block; color:var(--muted); font-size:12.5px}
+.kpi b{display:block; font-size:30px; font-weight:600; letter-spacing:-.01em; line-height:1.15}
+.kpi small{display:block; color:var(--muted); font-size:12.5px}
+.winbar{display:flex; height:8px; border-radius:4px; overflow:hidden; gap:2px; background:var(--rule)}
+.winbar i{display:block; height:100%}
+.section{margin-top:22px}
+.scroll{overflow-x:auto}
+table.linescore,table.box{border-collapse:collapse; font-size:13px; width:100%}
+.linescore th,.linescore td,.box th,.box td{padding:5px 7px; border-top:1px solid var(--rule); text-align:right; white-space:nowrap}
+.linescore thead th,.box thead th{border-top:0; font-size:12px; font-weight:500; color:var(--muted)}
+.linescore th:first-child,.box th:first-child,.box td.who{text-align:left; padding-left:0}
+.linescore tbody th{font-weight:600}
+.linescore .sum{border-left:1px solid var(--rule); font-weight:600}
+.linescore thead .sum{font-weight:500}
+.scores{display:flex; flex-wrap:wrap; gap:6px 22px; margin:0; padding:0; list-style:none; font-size:14px}
+.scores b{font-weight:500}
+.scores span{color:var(--muted); font-size:13px}
+.box-team h3{display:flex; align-items:baseline}
+.box-team h3 .where{margin-left:8px}
+.box-team .scroll + .scroll{margin-top:14px}
+.box td.who{min-width:150px; white-space:normal}
+.box .nm{display:block; color:var(--ink)}
+.box .sp{display:inline-block; min-width:18px; color:var(--muted); font-weight:600}
+.box td.who .who-sub{white-space:normal; max-width:340px}
+.box tr:not(.total) td.who .who-sub{padding-left:18px}
+.box.pitching tr td.who .who-sub{padding-left:0}
+.box .rate{border-left:1px solid var(--rule)}
+.box tr.total td{border-top:2px solid var(--rule); font-weight:600; color:var(--ink)}
+.box td.num{color:var(--ink)}
+/* phones: the names stay in view while the stats scroll */
+@media (max-width:720px){
+  .box th:first-child,.box td.who{position:sticky; left:0; z-index:1; background:var(--surface); box-shadow:inset -1px 0 0 var(--rule); min-width:130px; max-width:150px}
+  .box td.who .who-sub{display:none}
+  .linescore th:first-child{position:sticky; left:0; z-index:1; background:var(--surface); box-shadow:inset -1px 0 0 var(--rule)}}
+.method{color:var(--muted); font-size:14px}
+.method p{margin:0 0 10px}
+.method p:last-child{margin-bottom:0}
+.method b{color:var(--ink); font-weight:500}
+h1,h2,h3{text-wrap:balance}
+p,li,.tag,.note,.method,.status{text-wrap:pretty}
+@media (pointer:coarse){button,select,input[type=text]{min-height:44px} .lineup td.move button{min-height:36px; min-width:36px}
+  details summary{padding-block:8px}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <a class="home" href="./">← Lineup Sim</a>
+    <h1>Game Sim</h1>
+    <p class="tag">Two 2026 lineups and their pitchers, played as MLB games, walk-offs and extra-inning runners included, with the box score averaged over thousands of games.</p>
+  </header>
+
+  <section class="card" aria-labelledby="matchup_h">
+    <div class="card-head">
+      <h2 id="matchup_h">Matchup</h2>
+      <button id="swap" type="button" title="The away team bats first; the home team bats last">⇄ Swap home and away</button>
+    </div>
+    <div class="sides" id="sides"></div>
+    <details class="minor" id="settings">
+      <summary>Sim settings</summary>
+      <div class="options">
+        <label><b>Games</b>
+          <select id="games">
+            <option value="2000">2,000</option>
+            <option value="10000" selected>10,000</option>
+            <option value="50000">50,000</option>
+          </select>
+        </label>
+        <label title="Applies to individual hitters and the starters, not to lineup spots or bullpens"><b>Small samples (players)</b>
+          <select id="regress">
+            <option value="0">2026 rates as they are</option>
+            <option value="100">Add 100 PA of MLB average</option>
+            <option value="200" selected>Add 200 PA of MLB average</option>
+          </select>
+        </label>
+        <label class="platoon" title="How hitters' and pitchers' rates depend on each other's hand"><b>Platoon splits</b>
+          <select id="platoon">
+            <option value="own" selected>Each player's 2026 splits</option>
+            <option value="league">League-average platoon gaps</option>
+            <option value="off">Off: overall rates</option>
+          </select>
+        </label>
+        <label class="steals" title="Who tries to steal, and who makes it"><b>Stolen bases</b>
+          <select id="steals">
+            <option value="model" selected>By runner, pitcher and catcher</option>
+            <option value="league">League-average running game</option>
+          </select>
+        </label>
+      </div>
+    </details>
+    <p id="hook_missing" class="note" hidden style="margin-top:10px">The hook model didn't load, so starters go for their average start, and there are no pitch counts.</p>
+    <p id="status" class="status" style="margin-top:10px" role="status">loading 2026 data…</p>
+  </section>
+
+  <section id="out" class="card" hidden aria-labelledby="out_h">
+    <h2 id="out_h">Who wins</h2>
+    <div id="kpis" class="kpis"></div>
+    <div class="winbar" id="winbar" role="img"><i style="background:var(--s-away)"></i><i style="background:var(--s-home)"></i></div>
+    <div class="section">
+      <h3>Line score, per game</h3>
+      <div class="scroll">
+        <table class="linescore">
+          <thead><tr id="line_head"></tr></thead>
+          <tbody id="line_body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="section">
+      <h3>Most common final scores</h3>
+      <ul id="scores" class="scores"></ul>
+    </div>
+    <p id="games_note" class="note" style="margin-top:16px"></p>
+  </section>
+
+  <section id="box" class="card" hidden aria-labelledby="box_h">
+    <h2 id="box_h">Box score</h2>
+    <p class="note">Each stat is per game, averaged over every simulated game. AVG, OBP, SLG, ERA and WHIP are over all the games together; W, L, SV and QS are the share of games with that decision, or with a quality start.</p>
+    <div id="box_teams"></div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>How it works</summary>
+      <div class="method">
+        <p><b>Each plate appearance</b> is drawn as the <a href="./">Lineup Sim</a> draws it: the hitter's 2026 rates in eleven outcomes against the pitcher's by log5, with platoon splits, then the running game and where the runners end up from what happened in that base-out state across 2026. Each team's lineup is its nine lineup spots (everyone who batted there in 2026, pooled) or its most-used batting order, and any slot can be any 2026 hitter or any team's spot. Small samples adds MLB-average plate appearances to individual hitters and to the starters; the default here, 200, was the Lineup Sim's most predictive option.</p>
+        <p><b>Pitching.</b> Each team's starter faces the other lineup, then its bullpen (everyone who pitched for that team in 2026 without starting the game, pooled, right- and left-handers in the shares they pitched; an MLB team gets every 2026 reliever). <b>Modeled hook</b> leaves the starter in until the Lineup Sim's model of 2026 managers takes him out, now with the game's real score; <b>Average start</b> is as many outs as his 2026 starts averaged; <b>Bullpen day</b> has him open for <span id="opener_n"></span>; <b>Nine innings</b> keeps him in through the 9th, with the bullpen in extra innings. Pitching changes come between plate appearances.</p>
+        <p><b>MLB rules.</b> The away team bats first. From the 9th on, the bottom half isn't played when the home team leads after the top. In the bottom of the 9th or later, the game ends the moment the home team goes ahead: a walk-off, on which only the runs needed to win count, unless it's a home run. From the 10th on, each half-inning starts with a runner on second: the hitter who bats just before that inning's leadoff hitter. A game still tied after 40 innings is called a tie.</p>
+        <p><b>The box score.</b> A run goes to the runner who scored it. A hitter's RBI are the runs that scored on his plate appearance, except on a ground-ball double play; runs on steals, wild pitches, passed balls and balks drive in nobody. A run is charged to the pitcher who let that runner on, so the bullpen's inherited runners count against the starter. Every run is earned except the extra-innings runner's: errors happen inside the advancement tables at 2026 rates, but aren't told apart from other plays. Pitches are drawn from 2026's pitches per plate appearance for each outcome. The win goes to the pitcher of record when his team took the lead for good (a starter needs five innings; short of that, it goes to the bullpen), the loss to the pitcher charged with the run that put the other team ahead for good, and the save to the winning team's last pitcher when he pitched its whole last inning with a lead of one to three runs. A quality start is the starter going six innings or more with three earned runs or fewer charged to him, counting runners he left on base who scored after he came out. A team's bullpen is one line, so it can take a win and a save in the same game, as two of its relievers would.</p>
+        <p><b>Stolen bases.</b> Before each plate appearance, every runner with the next base open (home is always open) may try for it, lead runner first, and the first who goes is the play. The odds come from a model of every 2026 steal opportunity (the stolen_bases project's pull of MLB's play-by-play, with the runner, the pitcher and the catcher on each): two logistic models, one for whether he tries (stolen base, caught stealing, or caught breaking on a pickoff) and one for whether he makes it, each with the runner, the pitcher and the catcher as effects shrunk toward average, and the bases, outs, score and the pitcher's hand as context. How much to shrink each was picked by fitting games before July 1 and predicting the rest. Who's involved predicts attempts well (runners differ most, then pitchers, then catchers), but success much less: in one season a runner's or pitcher's success rate is mostly luck, so those are shrunk nearly to average, while catchers keep some spread. The catcher is one of the team's nine: a 2026 catcher in the batting order as himself, or a lineup spot as the team's catchers who batted in it, pooled (the box lists the spots that did at least 5% of the team's catching); a lineup with no 2026 catcher in it has the one picked catch like an MLB-average catcher. A lineup spot is its 2026 runners pooled, a bullpen its relievers, and the MLB-average starters every one of that hand, each set to give as many attempts and steals as its players did. Where the runners end up on an attempt (a double steal, a throwing error) comes from 2026's plays with that attempt; without one, the running game (wild pitches, passed balls, balks, pickoffs) is 2026's without one. Steals on the pitch that ends a plate appearance (a strikeout and a runner thrown out) are part of that plate appearance's result, as in the Lineup Sim, and aren't counted as SB or CS. With MLB-average everything it gives about 0.62 stolen bases and 0.18 caught stealing a team game, against 2026's 0.58 and 0.17 counted the same way. <b>League-average running game</b> under Sim settings puts back the Lineup Sim's running game.</p>
+        <p><b>Not modeled:</b> home-field advantage beyond batting last, park, pinch hitters and defensive substitutions, individual relievers (the bullpen is pooled), the times-through-the-order penalty, intentional walks and bunts. Results use a fixed random seed, so the same matchup always gets the same numbers.</p>
+      </div>
+    </details>
+  </section>
+</main>
+<script type="module" src="game.js?v=1"></script>
+</body>
+</html>
