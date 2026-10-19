@@ -994,7 +994,7 @@ async function boot() {
   }
   $("gpk_go").addEventListener("click", onLoadGame);
   $("gpk_rand").addEventListener("click", onRandomGame);
-  $("gpk").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); onLoadGame(); } });
+  $("gpk").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); if (!$("gpk_go").disabled) onLoadGame(); } });
   $("swap").addEventListener("click", () => {
     const keep = ["team", "kind", "lineup", "edited", "sp", "plan", "c"];
     const a = Object.fromEntries(keep.map((x) => [x, SIDES[0][x]]));

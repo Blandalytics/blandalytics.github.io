@@ -54,8 +54,8 @@ button:disabled{opacity:.45; cursor:default}
 /* the two teams, side by side where there's room */
 /* load a real game: the gamePk box with its button, the note under them */
 .loadgame{margin:-2px 0 18px; padding-bottom:16px; border-bottom:1px solid var(--rule); display:flex; flex-direction:column; gap:4px}
-.gpk-row{display:flex; gap:8px; max-width:440px}
-.gpk-row input{flex:1; min-width:0}
+.gpk-row{display:flex; flex-wrap:wrap; gap:8px; max-width:480px}
+.gpk-row input{flex:1 1 260px; min-width:0}
 .gpk-row button{flex:none}
 .note.warn{color:var(--warn)} .note.err{color:var(--bad)}
 /* the ballpark: park and week side by side, the note under them */
