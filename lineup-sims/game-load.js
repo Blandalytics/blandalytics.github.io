@@ -40,8 +40,11 @@ const malformed = () => new Error("the Stats API's reply wasn't a game this page
 // MLB clubs ([{ id }]).
 export function checkSchedule(pk, sched, season, teams) {
   if (!sched || typeof sched !== "object") throw malformed();
-  const g = (sched.dates ?? []).flatMap((d) => d?.games ?? []).find((x) => x?.gamePk === pk);
-  if (!g) throw new Error(`there's no game ${pk}`);
+  // a postponed game made up later keeps its gamePk, and the schedule lists it on each date (Postponed,
+  // then Final): the completed one is the game, else the latest
+  const all = (sched.dates ?? []).flatMap((d) => d?.games ?? []).filter((x) => x?.gamePk === pk);
+  if (!all.length) throw new Error(`there's no game ${pk}`);
+  const g = all.find((x) => x.status?.codedGameState === "F") ?? all[all.length - 1];
   const club = (side) => teams.some((t) => t.id === g.teams?.[side]?.team?.id);
   const names = `${g.teams?.away?.team?.name ?? "?"} at ${g.teams?.home?.team?.name ?? "?"}`;
   if (g.gameType === "A") throw new Error(`game ${pk} is the All-Star Game, not two clubs`);

@@ -192,6 +192,17 @@ function bookkeeping(res, teams, label) {
   check(ws.kind === "postseason" && ws.week === PD.weeks.length - 1 && PD.parks[ws.park]?.name === "Rogers Centre", "World Series: its park, last regular-season week");
   check(["F", "D", "L"].every((t) => as((g) => { g.gameType = t; }).week === PD.weeks.length - 1), "Wild Card, Division and League series: last regular-season week");
   check(refused((g) => { g.status = { codedGameState: "D", detailedState: "Postponed" }; }, /wasn't completed \(postponed\)/), "a postponed game is refused");
+  // a game postponed and made up later is on the schedule twice under one gamePk (as 849817 is): the completed one loads, on its makeup date
+  const madeUp = (order) => {
+    const f = copy(), fin = f.schedule.dates[0].games[0], post = JSON.parse(JSON.stringify(fin));
+    post.status = { codedGameState: "D", detailedState: "Postponed" };
+    fin.officialDate = "2026-08-12";
+    const days = [{ date: "2026-08-11", games: [post] }, { date: "2026-08-12", games: [fin] }];
+    f.schedule.dates = order === "postponed first" ? days : days.reverse();
+    return parseGame(pk, f.schedule, f.boxscore, ctx());
+  };
+  check(["postponed first", "final first"].every((o) => { const m = madeUp(o); return m.date === "2026-08-12" && PD.weeks[m.week]?.[2] === "Aug 12 – Aug 18"; }),
+    "a postponed game made up later loads, on its makeup date (either order)");
   check(refused((g) => { g.gamePk = 1; }, /no game/), "a gamePk the schedule doesn't have is refused");
   const throwsWith = (fn, want) => { try { fn(); return false; } catch (e) { return want.test(e.message); } };
   check(throwsWith(() => parseGame(pk, fx.schedule, { nope: 1 }, ctx()), /can read/), "a box score without teams is refused as unreadable");
