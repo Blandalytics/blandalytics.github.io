@@ -1,11 +1,14 @@
-// Team colors for the Game Sim's Who wins card (game.js). No imports, so tools/lineup_sims/test_game.mjs
+// Team colors for the Game Sim (game.js): wherever the page tells its two teams apart by color, the
+// Matchup card's labels, the Who wins card and the Box score. No imports, so tools/lineup_sims/test_game.mjs
 // checks every pairing.
 //
 // Each club's primary and secondary color. On the page's dark card a color is lightened (hue and
 // saturation kept) until it reads as text there, at 4.5:1. The away team takes its primary; the home
 // team its primary unless that looks like the away team's (CIEDE2000 ΔE under MIN_DE: two navy clubs
-// both lighten to a bright blue), then its secondary. MLB (the league-average lineup) takes the page's
-// own color for its side, through the same lightening.
+// both lighten to a bright blue), then its secondary. When neither home color stands apart, the away
+// team tries its secondary (one pairing of clubs: Marlins teal at the Rays' two blues). MLB (the
+// league-average lineup) has no colors of its own: it takes the page's color for its side, else the
+// other side's, and gives way to a club, which keeps its primary.
 
 export const TEAM_HEX = {
   ATH: ["#003831", "#efb21e"], ATL: ["#ce1141", "#13274f"], AZ: ["#a71930", "#e3d4ad"], BAL: ["#df4601", "#000000"],
@@ -79,10 +82,12 @@ export function readable(hex, on) {
 // own [away, home] pair, for MLB and for a matchup no team colors tell apart.
 export function teamColors(teams, on, fallback) {
   const page = fallback.map((h) => readable(h, on));
-  const choices = teams.map((t, i) => (TEAM_HEX[t] ?? [fallback[i]]).map((h) => readable(h, on)));
-  for (const a of choices[0]) {
-    const h = choices[1].find((x) => deltaE(a, x) >= MIN_DE);
-    if (h) return [a, h];
+  const choices = teams.map((t, i) => (TEAM_HEX[t] ?? [fallback[i], fallback[1 - i]]).map((h) => readable(h, on)));
+  // the side that picks first: the away team, unless only the home team is a club
+  const first = TEAM_HEX[teams[0]] || !TEAM_HEX[teams[1]] ? 0 : 1;
+  for (const a of choices[first]) {
+    const b = choices[1 - first].find((x) => deltaE(a, x) >= MIN_DE);
+    if (b) return first ? [b, a] : [a, b];
   }
   return page;
 }

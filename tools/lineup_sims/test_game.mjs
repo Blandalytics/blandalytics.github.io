@@ -248,6 +248,11 @@ function bookkeeping(res, teams, label) {
   const [ny, de] = teamColors(["NYY", "DET"], surface, pair), [nyy] = teamColors(["NYY", "BOS"], surface, pair);
   check(ny === nyy && deltaE(de, teamColors(["BOS", "DET"], surface, pair)[1]) >= MIN_DE, "two navy clubs: the home team takes its secondary");
   check(teamColors(["MLB", "MLB"], surface, pair).every((c, i) => c === readable(pair[i], surface)), "MLB against MLB takes the page's pair, readable");
+  check(clubs.every((t) => teamColors(["MLB", t], surface, pair)[1] === readable(TEAM_HEX[t][0], surface)
+    && teamColors([t, "MLB"], surface, pair)[0] === readable(TEAM_HEX[t][0], surface)), "against MLB every club keeps its primary");
+  const [mlb] = teamColors(["MLB", "NYY"], surface, pair);
+  check(mlb === readable(pair[1], surface), "MLB at the Yankees: MLB takes the page's orange, the Yankees their blue");
+  check(teamColors(["MIA", "TB"], surface, pair)[0] === readable(TEAM_HEX.MIA[1], surface), "Marlins at Rays: the one pairing where the away team takes its secondary");
   check(deltaE(readable("#ec424f", surface), readable("#ff1f23", surface)) < MIN_DE && deltaE(...teamColors(["PHI", "WSH"], surface, pair)) >= MIN_DE, "Phillies red and Nationals red count as alike");
 }
 
