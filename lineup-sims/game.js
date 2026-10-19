@@ -10,7 +10,7 @@
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
 import { PARK_N, parkAdjust as adjustForPark } from "./park.js?v=1";
-import { boxscoreUrl, checkSchedule, parseGame, pkOf, scheduleUrl } from "./game-load.js?v=2";
+import { boxscoreUrl, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=3";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -238,8 +238,8 @@ function fillPark() {
 // Any completed 2026 regular-season game, from MLB's Stats API: game-load.js reads the schedule and
 // box score into a matchup (both teams, their starting nines in order, the starting pitchers, each
 // team's catcher, the ballpark and the week); here it's fetched and put on the page. He pitches and
-// the Sim settings stay as they were. A game is fetched only on Load (or Enter), or once as the page
-// opens when the link asks for one: blandalytics.com/lineup-sims/<gamePk> lands here as
+// the Sim settings stay as they were. A game is fetched only on Load (or Enter), Random Game, or once
+// as the page opens when the link asks for one: blandalytics.com/lineup-sims/<gamePk> lands here as
 // game.html#gp=<gamePk> (the site's 404.html sends it), and so does game.html#<gamePk>.
 const FETCH_MS = 8000;
 // a Stats API reply, or a plain reason it isn't one: no answer within FETCH_MS, a network failure,
@@ -298,6 +298,11 @@ function applyGame(G) {
   link.textContent = `${location.host}/lineup-sims/${G.pk}`;
   $("gpk_note").append(" Link: ", link);
 }
+// Load and Random Game wait for each other
+function loading(on) {
+  $("gpk_go").disabled = on;
+  $("gpk_rand").disabled = on;
+}
 async function onLoadGame() {
   const pk = pkOf($("gpk").value), note = $("gpk_note");
   note.classList.remove("warn", "err");
@@ -306,7 +311,7 @@ async function onLoadGame() {
     note.classList.add("err");
     return;
   }
-  $("gpk_go").disabled = true;
+  loading(true);
   note.textContent = `loading game ${pk}…`;
   try {
     applyGame(await loadGame(pk));
@@ -315,8 +320,32 @@ async function onLoadGame() {
     note.textContent = `Couldn't load it: ${e.message}.`;
     note.classList.add("err");
   } finally {
-    $("gpk_go").disabled = false;
+    loading(false);
   }
+}
+// Random Game: any game that loads, all equally likely. The season's list of them is asked for on the
+// first click and kept for the page's life; the pick goes in the box and loads like a typed one.
+let seasonGames = null;
+async function onRandomGame() {
+  const note = $("gpk_note");
+  note.classList.remove("warn", "err");
+  if (!seasonGames) {
+    loading(true);
+    note.textContent = `finding the ${SEASON} games…`;
+    try {
+      const pks = completedGames(await getJSON(seasonUrl(SEASON)));
+      if (!pks.length) throw new Error(`the MLB Stats API lists no completed ${SEASON} games`);
+      seasonGames = pks;
+    } catch (e) {
+      note.textContent = `Couldn't pick a game: ${e.message}.`;
+      note.classList.add("err");
+      return;
+    } finally {
+      loading(false);
+    }
+  }
+  $("gpk").value = seasonGames[Math.floor(Math.random() * seasonGames.length)];
+  await onLoadGame();
 }
 
 // ---------- a team: lineup, starter, plan ----------
@@ -964,6 +993,7 @@ async function boot() {
     renderSide(s);
   }
   $("gpk_go").addEventListener("click", onLoadGame);
+  $("gpk_rand").addEventListener("click", onRandomGame);
   $("gpk").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); onLoadGame(); } });
   $("swap").addEventListener("click", () => {
     const keep = ["team", "kind", "lineup", "edited", "sp", "plan", "c"];

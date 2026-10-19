@@ -20,7 +20,7 @@ const PD = JSON.parse(readFileSync(join(dataDir, `${season}-parks.json`), "utf8"
 // game-sim.js imports sim.js with the page's ?v=; this file imports it plain, so the engine is loaded by URL
 const { BAT, PIT, prepareSteal, simulateGames } = await import(pathToFileURL(engineFile).href);
 const { PARK_N, parkAdjust } = await import(pathToFileURL(parkFile).href);
-const { checkSchedule, parseGame, pkOf, scheduleUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
+const { checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
 
 let failed = 0, passed = 0;
 const check = (ok, what) => {
@@ -216,6 +216,17 @@ function bookkeeping(res, teams, label) {
     && pkOf("https://www.mlb.com/gameday/red-sox-vs-blue-jays/2026/08/11/822778/final/box") === 822778
     && pkOf("82277") === null && pkOf("2026") === null && pkOf("822778; drop") === null && pkOf("abc") === null, "gamePk from the number or a Savant/Gameday link only");
   check(scheduleUrl(pk).includes(`gamePk=${pk}&`) && boxscoreUrl(pk).includes(`/game/${pk}/boxscore?`), "requests built from the number");
+  // Random Game's list: completed regular-season and postseason games, each once
+  const sg = (gamePk, gameType, code) => ({ gamePk, gameType, status: { codedGameState: code } });
+  const listed = completedGames({ dates: [
+    { games: [sg(700003, "R", "F"), sg(700002, "R", "D"), sg(700001, "S", "F"), sg(700004, "E", "F")] },
+    { games: [sg(700002, "R", "F"), sg(700005, "R", "C"), sg(700006, "A", "F"), sg(700007, "W", "F"), sg(700008, "L", "S")] },
+    { games: [sg(700009, "F", "F"), sg(700010, "D", "F"), sg(700011, "L", "F"), sg(700012, "R", "I")] }] });
+  check(JSON.stringify(listed) === JSON.stringify([700002, 700003, 700007, 700009, 700010, 700011]),
+    "Random Game picks from completed regular-season and postseason games, a made-up game once");
+  check(completedGames({}).length === 0 && throwsWith(() => completedGames("<html>"), /can read/), "an empty or unreadable season list");
+  check(completedGames(fx.schedule).every((x) => checkSchedule(x, fx.schedule, Number(season), data.teams)), "every listed game passes checkSchedule");
+  check(seasonUrl(season).includes(`sportId=1&season=${season}&gameType=R,F,D,L,W&`), "the season list asks for MLB's regular season and postseason");
 }
 
 // 3. the engine draws only from its seeded generator
