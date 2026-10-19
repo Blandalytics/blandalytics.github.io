@@ -9,6 +9,7 @@
 // two pages load two copies of it
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
+import { PARK_N, parkAdjust as adjustForPark } from "./park.js?v=1";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -174,12 +175,12 @@ function fillCatchers(s) {
 
 // ---------- the ballpark ----------
 // data/<season>-parks.json (pipeline/park_factors.py, from blandalytics.com/park-factors/): each
-// park's factors for K, BB, HBP, 1B, 2B, 3B and HR (100: the season's average park), for the season
-// and each week, and each team's environment (half its games at home, half on the road). Players'
-// 2026 rates carry their team's environment, so a matchup's chances are divided by the hitter's and
-// the pitcher's (log5 multiplies the two) and times the park's, outcome by outcome; the outs in play
-// take up the difference. park.at: a park's index, "avg" (MLB's average park, players neutralized)
-// or "none" (2026 rates as they are). park.auto: it follows the home team.
+// park's factors for K, BB, HBP, 1B, 2B, 3B and HR (100: the season's average park; all batters, not
+// by hand), for the season and each week, and each team's environment (half its games at home, half
+// on the road). Every plate appearance of the game, both teams', is in the park: park.js divides a
+// matchup by the hitter's and the pitcher's environments and multiplies by the park's factors.
+// park.at: a park's index, "avg" (MLB's average park, players' home parks taken out) or "none"
+// (2026 rates as they are). park.auto: it follows the home team.
 let parkData = null;
 const park = { at: "none", auto: true, week: -1 };
 async function loadParkData() {
@@ -187,35 +188,20 @@ async function loadParkData() {
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   parkData = await r.json();
 }
-const PARK_CATS = ["K", "BB", "HBP", "1B", "2B", "3B", "HR"].map((c) => C[c]);
-const OUT_CATS = ["GB", "LD", "FB", "PU"].map((c) => C[c]);
 // the home team's park (most games), or MLB's average park
 function homePark() {
   const i = parkData.parks.findIndex((p) => p.team === SIDES[1].team);
   return i < 0 ? "avg" : i;
 }
-const ONES = PARK_CATS.map(() => 1);
+const ONES = new Array(PARK_N).fill(1);
 // the park's factors as ratios: for the season, or the week picked (the league's calendar in it)
 function parkFactors() {
   if (typeof park.at !== "number") return ONES; // MLB's average park (or none)
   const p = parkData.parks[park.at];
-  return park.week >= 0 ? p.weeks[park.week].slice(0, PARK_CATS.length).map((x) => x / 1000) : p.f.map((x) => x / 100);
+  return park.week >= 0 ? p.weeks[park.week].slice(0, PARK_N).map((x) => x / 1000) : p.f.map((x) => x / 100);
 }
 const envOf = (team) => (parkData.env[team] ? parkData.env[team].map((x) => x / 100) : ONES);
-function parkAdjust(q, hTeam, pTeam) {
-  if (!parkData || park.at === "none") return q;
-  const f = parkFactors(), eh = envOf(hTeam), ep = envOf(pTeam), out = q.slice();
-  let kept = 0, outs = 0;
-  PARK_CATS.forEach((i, j) => { out[i] = (q[i] * f[j]) / (eh[j] * ep[j]); kept += out[i]; });
-  for (const i of OUT_CATS) outs += q[i];
-  if (kept >= 1 || outs <= 0) {
-    // nothing left for the outs in play (a lineup that never makes one): scale everything instead
-    const t = out.reduce((a, x) => a + x, 0);
-    return out.map((x) => x / t);
-  }
-  for (const i of OUT_CATS) out[i] = (q[i] * (1 - kept)) / outs;
-  return out;
-}
+const parkAdjust = (q, hTeam, pTeam) => (!parkData || park.at === "none" ? q : adjustForPark(q, parkFactors(), envOf(hTeam), envOf(pTeam)));
 const parkName = () => (park.at === "none" ? null : park.at === "avg" ? "MLB's average park" : parkData.parks[park.at].name);
 const slugOf = (n) => fold(n).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
@@ -239,7 +225,7 @@ function fillPark() {
   if (wk.disabled) park.week = -1;
   wk.value = String(park.week);
   const f = parkFactors(), p = typeof park.at === "number" ? parkData.parks[park.at] : null;
-  const r = p ? (park.week >= 0 ? p.weeks[park.week][PARK_CATS.length] : p.R * 10) / 1000 : 1;
+  const r = p ? (park.week >= 0 ? p.weeks[park.week][PARK_N] : p.R * 10) / 1000 : 1;
   const chg = (x) => `${x >= 1 ? "+" : "−"}${Math.abs(100 * (x - 1)).toFixed(0)}%`;
   $("park_note").textContent = park.at === "none" ? "Each player's 2026 rates as they are, home park and all"
     : park.at === "avg" ? "Every player's home park taken out, in an average park"

@@ -43,9 +43,13 @@ python -I tools/lineup_sims/quality_axis.py 2026
 #     again first), the cached play-by-play and lineup-sims/data/<season>.json, and writes only
 #     lineup-sims/data/<season>-steal.json. Nothing under projections/.
 python -I tools/lineup_sims/steal_model.py 2026 <running-game parquet>
-# 3f. the Game Sim's ballparks, from the park-factors project's files in this repo (it reads, never writes,
-#     tools/park_factors/park_factors_history.csv and park-factors/seasonal/MLB_<season>.json; run it again
-#     when those are rebuilt) and writes only lineup-sims/data/<season>-parks.json
+# 3f. the Game Sim's ballparks, from the park-factors project's files in this repo. It reads, never writes,
+#       tools/park_factors/park_factors_history.csv   (each season's factors by venue, all batters)
+#       park-factors/seasonal/MLB_<season>.json        (each venue week by week, and the league's calendar)
+#     and writes only lineup-sims/data/<season>-parks.json. Park Factors rebuilds those files on its own
+#     schedule (the seasonal JSON changes during a season): after a park-factors merge touches either one,
+#     run this again, and if the data file changed, bump data/<season>-parks.json?v= in lineup-sims/game.js
+#     and game.js?v= in lineup-sims/game.html.
 python -I tools/lineup_sims/park_factors.py 2026
 # 4. every team's lineups and the contact-power curve, simulated into the data file (~1 min)
 node tools/lineup_sims/precompute.mjs 2026 100000
@@ -59,7 +63,8 @@ Then bump `data/2026.json?v=` (and `data/2026-pitch.json?v=`, `data/2026-hook.js
 hold them for hours. The Game Sim (`lineup-sims/game.js`) loads `data/2026.json`, `data/2026-hook.json`,
 `data/2026-steal.json` and `data/2026-parks.json` with their own `?v=`, so bump those there too (and `game.js?v=` in
 `game.html`). `game.js`, `game-sim.js` and `game-worker.js` import `sim.js` at the page's `?v=`:
-when `sim.js?v=` changes in `app.js`, change it in all three.
+when `sim.js?v=` changes in `app.js`, change it in all three. `park.js` (the park adjustment, used by `game.js` and
+`test_game.mjs`) imports nothing; bump `park.js?v=` in `game.js` when it changes.
 
 `cache/` (git-ignored) holds the FanGraphs extract, the reduced per-game play-by-play and
 the Stats API player and team lists.
