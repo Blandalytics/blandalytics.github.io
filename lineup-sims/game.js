@@ -3,7 +3,8 @@
 // are built as the Lineup Sim (app.js) builds them: each player's 2026 rates, log5 against the
 // pitcher, platoon splits, Small samples, and a starter who goes until the modeled hook (or his
 // average start, or opens a bullpen day), then his team's bullpen. Stolen bases go by who's on
-// base, who's pitching and who's catching (data/<season>-steal.json, pipeline/steal_model.py).
+// base, who's pitching and who's catching (data/<season>-steal.json, pipeline/steal_model.py). The
+// game is played in a ballpark, with the park-factors project's factors (data/<season>-parks.json).
 // sim.js is the Lineup Sim's engine: when its ?v= changes there (app.js), change it here too, or the
 // two pages load two copies of it
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
@@ -171,6 +172,81 @@ function fillCatchers(s) {
   sel.value = String(s.c);
 }
 
+// ---------- the ballpark ----------
+// data/<season>-parks.json (pipeline/park_factors.py, from blandalytics.com/park-factors/): each
+// park's factors for K, BB, HBP, 1B, 2B, 3B and HR (100: the season's average park), for the season
+// and each week, and each team's environment (half its games at home, half on the road). Players'
+// 2026 rates carry their team's environment, so a matchup's chances are divided by the hitter's and
+// the pitcher's (log5 multiplies the two) and times the park's, outcome by outcome; the outs in play
+// take up the difference. park.at: a park's index, "avg" (MLB's average park, players neutralized)
+// or "none" (2026 rates as they are). park.auto: it follows the home team.
+let parkData = null;
+const park = { at: "none", auto: true, week: -1 };
+async function loadParkData() {
+  const r = await fetch(`data/${SEASON}-parks.json?v=1`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  parkData = await r.json();
+}
+const PARK_CATS = ["K", "BB", "HBP", "1B", "2B", "3B", "HR"].map((c) => C[c]);
+const OUT_CATS = ["GB", "LD", "FB", "PU"].map((c) => C[c]);
+// the home team's park (most games), or MLB's average park
+function homePark() {
+  const i = parkData.parks.findIndex((p) => p.team === SIDES[1].team);
+  return i < 0 ? "avg" : i;
+}
+const ONES = PARK_CATS.map(() => 1);
+// the park's factors as ratios: for the season, or the week picked (the league's calendar in it)
+function parkFactors() {
+  if (typeof park.at !== "number") return ONES; // MLB's average park (or none)
+  const p = parkData.parks[park.at];
+  return park.week >= 0 ? p.weeks[park.week].slice(0, PARK_CATS.length).map((x) => x / 1000) : p.f.map((x) => x / 100);
+}
+const envOf = (team) => (parkData.env[team] ? parkData.env[team].map((x) => x / 100) : ONES);
+function parkAdjust(q, hTeam, pTeam) {
+  if (!parkData || park.at === "none") return q;
+  const f = parkFactors(), eh = envOf(hTeam), ep = envOf(pTeam), out = q.slice();
+  let kept = 0, outs = 0;
+  PARK_CATS.forEach((i, j) => { out[i] = (q[i] * f[j]) / (eh[j] * ep[j]); kept += out[i]; });
+  for (const i of OUT_CATS) outs += q[i];
+  if (kept >= 1 || outs <= 0) {
+    // nothing left for the outs in play (a lineup that never makes one): scale everything instead
+    const t = out.reduce((a, x) => a + x, 0);
+    return out.map((x) => x / t);
+  }
+  for (const i of OUT_CATS) out[i] = (q[i] * (1 - kept)) / outs;
+  return out;
+}
+const parkName = () => (park.at === "none" ? null : park.at === "avg" ? "MLB's average park" : parkData.parks[park.at].name);
+const slugOf = (n) => fold(n).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+function fillPark() {
+  const sel = $("park"), wk = $("park_week");
+  if (!parkData) return;
+  if (park.auto) park.at = homePark();
+  if (!sel.options.length) {
+    const home = document.createElement("optgroup");
+    home.label = `Home parks, ${SEASON}`;
+    parkData.parks.map((p, i) => [p, i]).filter(([p]) => p.team).sort((a, b) => a[0].name.localeCompare(b[0].name))
+      .forEach(([p, i]) => home.append(new Option(`${p.name} (${p.team})`, i)));
+    const neutral = document.createElement("optgroup");
+    neutral.label = "Neutral sites";
+    parkData.parks.forEach((p, i) => { if (!p.team) neutral.append(new Option(p.name, i)); });
+    sel.append(new Option("MLB's average park", "avg"), home, neutral, new Option(`No park: ${SEASON} rates as they are`, "none"));
+    wk.append(new Option(`${SEASON} season`, -1), ...parkData.weeks.map((w, i) => new Option(w[2], i)));
+  }
+  sel.value = String(park.at);
+  wk.disabled = typeof park.at !== "number";
+  if (wk.disabled) park.week = -1;
+  wk.value = String(park.week);
+  const f = parkFactors(), p = typeof park.at === "number" ? parkData.parks[park.at] : null;
+  const r = p ? (park.week >= 0 ? p.weeks[park.week][PARK_CATS.length] : p.R * 10) / 1000 : 1;
+  const chg = (x) => `${x >= 1 ? "+" : "−"}${Math.abs(100 * (x - 1)).toFixed(0)}%`;
+  $("park_note").textContent = park.at === "none" ? "Each player's 2026 rates as they are, home park and all"
+    : park.at === "avg" ? "Every player's home park taken out, in an average park"
+    : `Runs ${chg(r)}, HR ${chg(f[6])}, 2B ${chg(f[4])}, 3B ${chg(f[5])}, K ${chg(f[0])}`
+      + `${park.week >= 0 ? " that week (with the league's calendar)" : ""}; each player's home park taken out first`;
+}
+
 // ---------- a team: lineup, starter, plan ----------
 // the team's most-used starter (most 2026 starts); an MLB-average RHP for MLB
 function defaultStarter(abbr) {
@@ -202,13 +278,15 @@ const specOf = (e) => hitterOf(e.counts, e.cells, { mode: $("platoon").value, le
 // a team's pitching as game-sim.js takes it: each stage with the other team's nine against it
 function pitchingOf(s, other) {
   const mode = $("platoon").value, regress = Number($("regress").value);
-  const hs = other.lineup.map((id) => specOf(entries.get(id)));
-  const vs = (pitching) => hs.map((h) => cumulative(facing(h, pitching)));
+  const es = other.lineup.map((id) => entries.get(id)), hs = es.map(specOf);
+  // each hitter against this stretch of pitching, in this park (pTeam: the pitching's team, for its environment)
+  const vs = (pitching, pTeam) => hs.map((h, i) => cumulative(parkAdjust(facing(h, pitching), es[i].team, pTeam)));
   const sp = pitcherOf(s.sp.counts, s.sp.cells, s.sp.throws, { mode, league, regress: s.sp.generic ? 0 : regress });
   const cells = penCells(s);
   const pen = bullpenOf(cellsTotal(cells), cells, { mode, league });
   const from = fromOf(s);
-  const t = { stages: [{ from: 0, vs: vs(sp) }, { from, vs: vs(pen), pen: true }], hook: from === "hook" ? hookOf(s.sp) : null };
+  const t = { stages: [{ from: 0, vs: vs(sp, s.sp.generic ? "MLB" : s.sp.team) }, { from, vs: vs(pen, s.team), pen: true }],
+    hook: from === "hook" ? hookOf(s.sp) : null };
   if (stealOn()) {
     t.stages[0].steal = armSteal(s.sp);
     t.stages[1].steal = penSteal(s);
@@ -489,7 +567,7 @@ function go() {
   const teams = [pitchingOf(SIDES[0], SIDES[1]), pitchingOf(SIDES[1], SIDES[0])];
   const games = Number($("games").value);
   const busy = job != null;
-  job = { id: ++jobs, teams, games, steal: stealOn(), sides: SIDES.map((s) => ({ ...s, lineup: [...s.lineup], from: fromOf(s) })) };
+  job = { id: ++jobs, teams, games, steal: stealOn(), park: parkName(), week: park.week >= 0 ? parkData.weeks[park.week][2] : null, sides: SIDES.map((s) => ({ ...s, lineup: [...s.lineup], from: fromOf(s) })) };
   $("status").textContent = "simulating…";
   $("status").classList.remove("err");
   $("out").style.opacity = $("box").style.opacity = last ? ".55" : "";
@@ -519,7 +597,7 @@ function runHere(j) {
 }
 function finish(j, res, ms) {
   job = null;
-  last = { res, sides: j.sides, games: j.games, ms, steal: j.steal };
+  last = { res, sides: j.sides, games: j.games, ms, steal: j.steal, park: j.park, week: j.week };
   $("out").hidden = $("box").hidden = false;
   $("out").style.opacity = $("box").style.opacity = "";
   $("status").textContent = res.capped ? `${res.capped.toLocaleString()} innings were called off at 60 plate appearances; adding MLB-average PA under Sim settings fixes that.` : "";
@@ -587,7 +665,8 @@ function renderResults() {
     li.querySelector("span").textContent = pct(n / games);
     return li;
   }));
-  $("games_note").textContent = `${games.toLocaleString()} games${last.ms ? ` in ${(last.ms / 1000).toFixed(1)} s` : ""}. The away team bats first; no home-field edge beyond batting last.`;
+  $("games_note").textContent = `${games.toLocaleString()} games${last.ms ? ` in ${(last.ms / 1000).toFixed(1)} s` : ""}`
+    + `${last.park ? ` at ${last.park}${last.week ? `, ${last.week}` : ""}` : ", no park adjustment"}. The away team bats first; no home-field edge beyond batting last.`;
 }
 
 // the box score: every hitter's and pitcher's line, per game
@@ -710,6 +789,8 @@ function writeHash() {
   p.set("r", $("regress").value);
   if ($("platoon").value !== "own") p.set("pl", $("platoon").value);
   if ($("steals").value !== "model") p.set("st", $("steals").value);
+  if (parkData && !park.auto) p.set("pk", typeof park.at === "number" ? slugOf(parkData.parks[park.at].name) : park.at);
+  if (parkData && park.week >= 0) p.set("wk", String(park.week + 1));
   history.replaceState(null, "", `#${p}`);
 }
 function readHash() {
@@ -733,12 +814,19 @@ function readHash() {
     s.c = /^[0-8]$/.test(c ?? "") ? Number(c) : -1;
     if (stealData) checkCatcher(s);
   }
+  if (parkData) {
+    const pk = p.get("pk"), i = parkData.parks.findIndex((x) => slugOf(x.name) === pk);
+    if (pk === "avg" || pk === "none" || i >= 0) Object.assign(park, { at: i >= 0 ? i : pk, auto: false });
+    const wk = Number(p.get("wk"));
+    if (Number.isInteger(wk) && wk >= 1 && wk <= parkData.weeks.length) park.week = wk - 1;
+  }
 }
 
 // ---------- boot ----------
 async function boot() {
   const hookFile = loadHookData().catch(() => null);
   const stealFile = loadStealData().catch(() => null);
+  const parkFile = loadParkData().catch(() => null);
   try {
     const r = await fetch(`data/${SEASON}.json?v=5`);
     if (!r.ok) throw new Error(`data ${r.status}`);
@@ -750,6 +838,8 @@ async function boot() {
   }
   await hookFile;
   await stealFile;
+  await parkFile;
+  $("park_row").hidden = !parkData;
   if (!stealData) {
     $("steals").value = "league";
     $("steals").disabled = true;
@@ -766,6 +856,7 @@ async function boot() {
     fillTeams($(`${k}_team`));
     $(`${k}_team`).addEventListener("change", () => {
       s.team = $(`${k}_team`).value;
+      if (s.k === "h") fillPark(); // an automatic park follows the home team
       s.sp = defaultStarter(s.team);
       loadPreset(s);
       if (stealData) s.c = defaultCatcher(s);
@@ -805,9 +896,22 @@ async function boot() {
       SIDES[1][x] = a[x];
     }
     SIDES.forEach(renderSide);
+    fillPark();
     run();
   });
   for (const id of ["games", "regress", "platoon"]) $(id).addEventListener("change", run);
+  fillPark();
+  $("park").addEventListener("change", () => {
+    const v = $("park").value;
+    Object.assign(park, { at: v === "avg" || v === "none" ? v : Number(v), auto: false });
+    fillPark();
+    run();
+  });
+  $("park_week").addEventListener("change", () => {
+    park.week = Number($("park_week").value);
+    fillPark();
+    run();
+  });
   $("steals").addEventListener("change", () => {
     SIDES.forEach(renderSide);
     run();

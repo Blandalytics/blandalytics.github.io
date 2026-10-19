@@ -43,6 +43,10 @@ python -I tools/lineup_sims/quality_axis.py 2026
 #     again first), the cached play-by-play and lineup-sims/data/<season>.json, and writes only
 #     lineup-sims/data/<season>-steal.json. Nothing under projections/.
 python -I tools/lineup_sims/steal_model.py 2026 <running-game parquet>
+# 3f. the Game Sim's ballparks, from the park-factors project's files in this repo (it reads, never writes,
+#     tools/park_factors/park_factors_history.csv and park-factors/seasonal/MLB_<season>.json; run it again
+#     when those are rebuilt) and writes only lineup-sims/data/<season>-parks.json
+python -I tools/lineup_sims/park_factors.py 2026
 # 4. every team's lineups and the contact-power curve, simulated into the data file (~1 min)
 node tools/lineup_sims/precompute.mjs 2026 100000
 # 5. engine checks against the new file, and the Game Sim's
@@ -52,8 +56,8 @@ node tools/lineup_sims/test_game.mjs 2026
 
 Then bump `data/2026.json?v=` (and `data/2026-pitch.json?v=`, `data/2026-hook.json?v=` or `data/2026-quality.json?v=`, if step 3b, 3c or 3d ran) in
 `lineup-sims/app.js` and `app.js?v=` in `lineup-sims/index.html`; browsers and the edge
-hold them for hours. The Game Sim (`lineup-sims/game.js`) loads `data/2026.json`, `data/2026-hook.json`
-and `data/2026-steal.json` with their own `?v=`, so bump those there too (and `game.js?v=` in
+hold them for hours. The Game Sim (`lineup-sims/game.js`) loads `data/2026.json`, `data/2026-hook.json`,
+`data/2026-steal.json` and `data/2026-parks.json` with their own `?v=`, so bump those there too (and `game.js?v=` in
 `game.html`). `game.js`, `game-sim.js` and `game-worker.js` import `sim.js` at the page's `?v=`:
 when `sim.js?v=` changes in `app.js`, change it in all three.
 
