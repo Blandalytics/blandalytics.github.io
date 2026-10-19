@@ -11,10 +11,13 @@ const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const season = process.argv[2] ?? "2026";
 const dataDir = join(repo, "lineup-sims", "data");
 const engineFile = join(repo, "lineup-sims", "game-sim.js");
+const parkFile = join(repo, "lineup-sims", "park.js");
 const data = JSON.parse(readFileSync(join(dataDir, `${season}.json`), "utf8"));
 const SD = JSON.parse(readFileSync(join(dataDir, `${season}-steal.json`), "utf8"));
+const PD = JSON.parse(readFileSync(join(dataDir, `${season}-parks.json`), "utf8"));
 // game-sim.js imports sim.js with the page's ?v=; this file imports it plain, so the engine is loaded by URL
 const { BAT, PIT, prepareSteal, simulateGames } = await import(pathToFileURL(engineFile).href);
+const { PARK_N, parkAdjust } = await import(pathToFileURL(parkFile).href);
 
 let failed = 0, passed = 0;
 const check = (ok, what) => {
@@ -105,6 +108,39 @@ function bookkeeping(res, teams, label) {
   const against = (c) => { const t = mk(true); t[1] = { ...t[1], catcher: [c[0], c[1]] }; return simulateGames(model, t, G, 2026, null, steal).caught[1]; };
   const [w, s] = [against(weak), against(strong)];
   check(w[0] + w[1] > s[0] + s[1], `more attempts against ${weak[2]} (${w[0] + w[1]}) than ${strong[2]} (${s[0] + s[1]})`);
+}
+
+// 4. ballparks (park.js): a neutral park gives today's numbers exactly, and a park moves runs about as its R factor says
+{
+  const ones = new Array(PARK_N).fill(1);
+  const mlb = hitters("MLB");
+  // the same chances, the same array, for every MLB spot against every stretch of pitching
+  const same = mlb.every((h) => [arm, pen("MLB"), null].every((pp) => { const q = facing(h, pp); return parkAdjust(q, ones, ones, ones) === q; }));
+  check(same, "an average park with no home park to take out leaves every matchup's chances as they were");
+  // ... and so the games: MLB's spots and arms at MLB's average park are today's games, to the last draw
+  const inPark = (f) => (abbr, opp) => {
+    const t = team(abbr, opp);
+    const at = (pp) => hitters(opp).map((h) => cumulative(parkAdjust(facing(h, pp), f, ones, ones)));
+    return { ...t, stages: [{ ...t.stages[0], vs: at(arm) }, { ...t.stages[1], vs: at(pen(abbr)) }] };
+  };
+  const today = simulateGames(model, [team("MLB", "MLB"), team("MLB", "MLB")], G, 2026);
+  const neutral = simulateGames(model, [inPark(ones)("MLB", "MLB"), inPark(ones)("MLB", "MLB")], G, 2026);
+  check(JSON.stringify(neutral) === JSON.stringify(today), "MLB's average park reproduces today's games exactly");
+  // a park whose factors are just the players' home-park environments takes nothing out and puts nothing in
+  const env = PD.env.COL.map((x) => x / 100), envF = env.map((x, j) => x * ones[j]);
+  const q0 = facing(mlb[0], arm);
+  check(parkAdjust(q0, envF, env, ones) === q0, "a park equal to the hitter's own environment changes nothing");
+  // a real park: chances still add up to 1, and runs move about as the park's R factor says
+  const factors = (name) => PD.parks.find((x) => x.name === name).f.map((x) => x / 100);
+  const coors = factors("Coors Field"), tmo = factors("T-Mobile Park");
+  const qc = parkAdjust(q0, coors, ones, ones);
+  check(Math.abs(qc.reduce((a, x) => a + x, 0) - 1) < 1e-12 && Math.abs(qc[6] / q0[6] - coors[6]) < 1e-12, "Coors: chances add to 1, HR scaled by its factor");
+  const runs = (res) => (res.line[0].reduce((a, x) => a + x, 0) + res.line[1].reduce((a, x) => a + x, 0)) / (2 * G);
+  const atCoors = runs(simulateGames(model, [inPark(coors)("MLB", "MLB"), inPark(coors)("MLB", "MLB")], G, 2026)) / runs(today);
+  const atTmo = runs(simulateGames(model, [inPark(tmo)("MLB", "MLB"), inPark(tmo)("MLB", "MLB")], G, 2026)) / runs(today);
+  const R = (name) => PD.parks.find((x) => x.name === name).R / 100;
+  check(Math.abs(atCoors - R("Coors Field")) < 0.08, `Coors runs ×${atCoors.toFixed(3)} against its R factor ${R("Coors Field")}`);
+  check(Math.abs(atTmo - R("T-Mobile Park")) < 0.05, `T-Mobile runs ×${atTmo.toFixed(3)} against its R factor ${R("T-Mobile Park")}`);
 }
 
 // 3. the engine draws only from its seeded generator
