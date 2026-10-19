@@ -9,7 +9,7 @@
 // two pages load two copies of it
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
-import { PARK_N, parkAdjust as adjustForPark } from "./park.js?v=1";
+import { PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=2";
 import { boxscoreUrl, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=3";
 import { teamColors } from "./team-colors.js?v=1";
 
@@ -204,6 +204,10 @@ function parkFactors() {
 }
 const envOf = (team) => (parkData.env[team] ? parkData.env[team].map((x) => x / 100) : ONES);
 const parkAdjust = (q, hTeam, pTeam) => (!parkData || park.at === "none" ? q : adjustForPark(q, parkFactors(), envOf(hTeam), envOf(pTeam)));
+// Home field (park.js homeField()): the home team's batters strike out less, walk more and hit more on
+// contact, the road team's the reverse. Not at a neutral site: a park that's another club's or no
+// club's home. MLB's average park and No park are the home team's.
+const homeEdge = () => !parkData || typeof park.at !== "number" || parkData.parks[park.at].team === SIDES[1].team;
 const parkName = () => (park.at === "none" ? null : park.at === "avg" ? "MLB's average park" : parkData.parks[park.at].name);
 const slugOf = (n) => fold(n).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
@@ -233,6 +237,8 @@ function fillPark() {
     : park.at === "avg" ? "Every player's home park taken out, in an average park"
     : `Runs ${chg(r)}, HR ${chg(f[6])}, 2B ${chg(f[4])}, 3B ${chg(f[5])}, K ${chg(f[0])}`
       + `${park.week >= 0 ? " that week (with the league's calendar)" : ""}; each player's home park taken out first`;
+  const home = SIDES[1].team;
+  if (!homeEdge()) $("park_note").textContent += p.team && home !== "MLB" ? `. Not the ${teamName(home)}' park, so no home-field edge` : ". A neutral site: no home-field edge";
 }
 
 // ---------- a real game, by gamePk ----------
@@ -382,7 +388,9 @@ function pitchingOf(s, other) {
   const mode = $("platoon").value, regress = Number($("regress").value);
   const es = other.lineup.map((id) => entries.get(id)), hs = es.map(specOf);
   // each hitter against this stretch of pitching, in this park (pTeam: the pitching's team, for its environment)
-  const vs = (pitching, pTeam) => hs.map((h, i) => cumulative(parkAdjust(facing(h, pitching), es[i].team, pTeam)));
+  // the batting nine at home (+1), on the road (-1), or at a neutral site (0)
+  const sign = homeEdge() ? (other === SIDES[1] ? 1 : -1) : 0;
+  const vs = (pitching, pTeam) => hs.map((h, i) => cumulative(homeField(parkAdjust(facing(h, pitching), es[i].team, pTeam), sign)));
   const sp = pitcherOf(s.sp.counts, s.sp.cells, s.sp.throws, { mode, league, regress: s.sp.generic ? 0 : regress });
   const cells = penCells(s);
   const pen = bullpenOf(cellsTotal(cells), cells, { mode, league });
@@ -677,7 +685,7 @@ function go() {
   const teams = [pitchingOf(SIDES[0], SIDES[1]), pitchingOf(SIDES[1], SIDES[0])];
   const games = Number($("games").value);
   const busy = job != null;
-  job = { id: ++jobs, teams, games, steal: stealOn(), park: parkName(), week: park.week >= 0 ? parkData.weeks[park.week][2] : null, sides: SIDES.map((s) => ({ ...s, lineup: [...s.lineup], from: fromOf(s) })) };
+  job = { id: ++jobs, teams, games, steal: stealOn(), park: parkName(), home: homeEdge(), week: park.week >= 0 ? parkData.weeks[park.week][2] : null, sides: SIDES.map((s) => ({ ...s, lineup: [...s.lineup], from: fromOf(s) })) };
   $("status").textContent = "simulating…";
   $("status").classList.remove("err");
   $("out").style.opacity = $("box").style.opacity = last ? ".55" : "";
@@ -707,7 +715,7 @@ function runHere(j) {
 }
 function finish(j, res, ms) {
   job = null;
-  last = { res, sides: j.sides, games: j.games, ms, steal: j.steal, park: j.park, week: j.week };
+  last = { res, sides: j.sides, games: j.games, ms, steal: j.steal, park: j.park, week: j.week, home: j.home };
   $("out").hidden = $("box").hidden = false;
   $("out").style.opacity = $("box").style.opacity = "";
   $("status").textContent = res.capped ? `${res.capped.toLocaleString()} innings were called off at 60 plate appearances; adding MLB-average PA under Sim settings fixes that.` : "";
@@ -777,7 +785,7 @@ function renderResults() {
     return li;
   }));
   $("games_note").textContent = `${games.toLocaleString()} games${last.ms ? ` in ${(last.ms / 1000).toFixed(1)} s` : ""}`
-    + `${last.park ? ` at ${last.park}${last.week ? `, ${last.week}` : ""}` : ", no park adjustment"}. The away team bats first; no home-field edge beyond batting last.`;
+    + `${last.park ? ` at ${last.park}${last.week ? `, ${last.week}` : ""}` : ", no park adjustment"}. The away team bats first; ${last.home ? "the home team bats last, with the home-field edge" : "a neutral site, so no home-field edge beyond batting last"}.`;
 }
 
 // the box score: every hitter's and pitcher's line, per game
