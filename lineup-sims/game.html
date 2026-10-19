@@ -14,8 +14,10 @@
   --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
   --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
   --accent:#6cb4ff; --good:#7bd88f; --bad:#ff8a80; --warn:#ffd166;
-  /* the two teams: the Lineup Sim's validated pair on --surface */
+  /* the two teams: the Lineup Sim's validated pair on --surface, for MLB and as the fallback; in use,
+     --t-away and --t-home, the teams' own colors, which game.js sets from team-colors.js */
   --s-away:#3987e5; --s-home:#d95926;
+  --t-away:var(--s-away); --t-home:var(--s-home);
 }
 *{box-sizing:border-box}
 body{margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
@@ -66,7 +68,7 @@ button:disabled{opacity:.45; cursor:default}
 @media (max-width:880px){.sides{grid-template-columns:minmax(0,1fr)}}
 .side h3{display:flex; align-items:baseline; gap:8px}
 .where{color:var(--muted); font-size:12px; font-weight:500; text-transform:uppercase; letter-spacing:.06em}
-#a_side .where{color:var(--s-away)} #h_side .where{color:var(--s-home)}
+#a_side .where{color:var(--t-away)} #h_side .where{color:var(--t-home)}
 .loader{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px 12px; align-items:end; margin-bottom:8px}
 @media (max-width:480px){.loader{grid-template-columns:minmax(0,1fr)}}
 .field{display:flex; flex-direction:column; gap:4px}
@@ -228,7 +230,7 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
   <section id="out" class="card" hidden aria-labelledby="out_h">
     <h2 id="out_h">Who wins</h2>
     <div id="kpis" class="kpis"></div>
-    <div class="winbar" id="winbar" role="img"><i style="background:var(--s-away)"></i><i style="background:var(--s-home)"></i></div>
+    <div class="winbar" id="winbar" role="img"><i style="background:var(--t-away)"></i><i style="background:var(--t-home)"></i></div>
     <div class="section">
       <h3>Line score, per game</h3>
       <div class="scroll">
@@ -267,6 +269,6 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
     </details>
   </section>
 </main>
-<script type="module" src="game.js?v=7"></script>
+<script type="module" src="game.js?v=8"></script>
 </body>
 </html>
