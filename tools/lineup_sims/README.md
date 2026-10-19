@@ -67,8 +67,8 @@ Then bump `data/2026.json?v=` (and `data/2026-pitch.json?v=`, `data/2026-hook.js
 hold them for hours. The Game Sim (`lineup-sims/game.js`) loads `data/2026.json`, `data/2026-hook.json`,
 `data/2026-steal.json` and `data/2026-parks.json` with their own `?v=`, so bump those there too (and `game.js?v=` in
 `game.html`). `game.js`, `game-sim.js` and `game-worker.js` import `sim.js` at the page's `?v=`:
-when `sim.js?v=` changes in `app.js`, change it in all three. `park.js` (the park adjustment, used by `game.js` and
-`test_game.mjs`) imports nothing; bump `park.js?v=` in `game.js` when it changes.
+when `sim.js?v=` changes in `app.js`, change it in all three. `park.js` (the park adjustment and home field, used by `game.js`
+and `test_game.mjs`) imports nothing; bump `park.js?v=` in `game.js` when it changes.
 
 `cache/` (git-ignored) holds the FanGraphs extract, the reduced per-game play-by-play and
 the Stats API player and team lists.

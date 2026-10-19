@@ -20,7 +20,7 @@ const SD = JSON.parse(readFileSync(join(dataDir, `${season}-steal.json`), "utf8"
 const PD = JSON.parse(readFileSync(join(dataDir, `${season}-parks.json`), "utf8"));
 // game-sim.js imports sim.js with the page's ?v=; this file imports it plain, so the engine is loaded by URL
 const { BAT, PIT, prepareSteal, simulateGames } = await import(pathToFileURL(engineFile).href);
-const { PARK_N, parkAdjust } = await import(pathToFileURL(parkFile).href);
+const { HOME_FIELD, PARK_N, homeField, parkAdjust } = await import(pathToFileURL(parkFile).href);
 const { checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
 
 let failed = 0, passed = 0;
@@ -151,6 +151,55 @@ function bookkeeping(res, teams, label) {
   const R = (name) => PD.parks.find((x) => x.name === name).R / 100;
   check(Math.abs(atCoors - R("Coors Field")) < 0.08, `Coors runs ×${atCoors.toFixed(3)} against its R factor ${R("Coors Field")}`);
   check(Math.abs(atTmo - R("T-Mobile Park")) < 0.05, `T-Mobile runs ×${atTmo.toFixed(3)} against its R factor ${R("T-Mobile Park")}`);
+}
+
+// 4b. home field (park.js homeField()): after the park, home batters x m and road batters / m, K and BB per PA,
+// hits per ball in play; the outs in play take the rest
+{
+  const ones = new Array(PARK_N).fill(1);
+  const sum = (q) => q.reduce((a, x) => a + x, 0), H = (q) => q[3] + q[4] + q[5] + q[6], BIP = (q) => 1 - q[0] - q[1] - q[2];
+  const q0 = facing(hitters("MLB")[3], arm), qh = homeField(q0, 1), qa = homeField(q0, -1);
+  check(homeField(q0, 0) === q0, "no home field (a neutral site) leaves a matchup's chances as they were");
+  const near = (x, y) => Math.abs(x - y) < 1e-12;
+  check(near(sum(qh), 1) && near(sum(qa), 1) && qh.every((x) => x >= 0) && qa.every((x) => x >= 0), "home and road chances are valid distributions");
+  check(near(qh[0] / qa[0], HOME_FIELD.K ** 2) && near(qh[1] / qa[1], HOME_FIELD.BB ** 2) && near(qh[2] / qa[2], 1),
+    `home over road: K ×${(HOME_FIELD.K ** 2).toFixed(4)}, BB ×${(HOME_FIELD.BB ** 2).toFixed(4)}, HBP the same (each side half the gap)`);
+  check(near((H(qh) / BIP(qh)) / (H(qa) / BIP(qa)), HOME_FIELD.HperBIP ** 2), `hits per ball in play ×${(HOME_FIELD.HperBIP ** 2).toFixed(4)} home over road`);
+  check([3, 4, 5, 6].every((i) => near(qh[i] / H(qh), q0[i] / H(q0))) && [7, 8, 9, 10].every((i) => near(qh[i] / (BIP(qh) - H(qh)), q0[i] / (BIP(q0) - H(q0)))),
+    "the mix of hits (1B to HR) and of outs in play (GB, LD, FB, PU) is kept");
+  check(homeField(q0, 1, { K: 1, BB: 1, HBP: 1, HperBIP: 1 }).every((x, i) => near(x, q0[i])), "all-1 multipliers change nothing");
+  // the worst cases, after the park: many matchups (seeded), the extreme parks, and extreme made-up chances
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const parks = PD.parks.map((x) => x.f.map((v) => v / 100));
+  let ok = true, worst = 1;
+  const valid = (q) => near(sum(q), 1) && q.every((x) => x >= 0 && x <= 1);
+  for (let n = 0; n < 4000; n++) {
+    const raw = Array.from({ length: 11 }, (_, i) => (i === 0 ? 3 * rnd() : rnd() ** 2)), t = sum(raw), q = raw.map((x) => x / t);
+    const f = parks[n % parks.length].map((x) => x * (0.8 + 0.4 * rnd()));
+    for (const sign of [1, -1]) {
+      const r = homeField(parkAdjust(q, f, ones, ones), sign);
+      ok &&= valid(r);
+      worst = Math.min(worst, ...r);
+    }
+  }
+  const extremes = [[0.9, 0.05, 0.01, 0.01, 0, 0, 0.03, 0, 0, 0, 0], [0.2, 0.2, 0.05, 0.25, 0.1, 0.05, 0.15, 0, 0, 0, 0],
+    [0.3, 0.6, 0.1, 0, 0, 0, 0, 0, 0, 0, 0], [0.5, 0.1, 0, 0, 0, 0, 0, 0.2, 0.05, 0.1, 0.05], [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]];
+  const coors = PD.parks.find((x) => x.name === "Coors Field").f.map((v) => v / 100);
+  for (const q of extremes) for (const sign of [1, -1]) ok &&= valid(homeField(parkAdjust(q, coors, ones, ones), sign)) && valid(homeField(q, sign));
+  check(ok, `after any park (Coors included) and either side, chances stay a valid distribution, extremes too (lowest ${worst.toExponential(2)})`);
+  // whole games: MLB's spots and arms at MLB's average park, home field on against off
+  const hf = (sign) => (abbr, opp) => {
+    const t = team(abbr, opp);
+    const at = (pp) => hitters(opp).map((h) => cumulative(homeField(facing(h, pp), sign)));
+    return { ...t, stages: [{ ...t.stages[0], vs: at(arm) }, { ...t.stages[1], vs: at(pen(abbr)) }] };
+  };
+  const off = simulateGames(model, [team("MLB", "MLB"), team("MLB", "MLB")], G, 2026);
+  const on = simulateGames(model, [hf(1)("MLB", "MLB"), hf(-1)("MLB", "MLB")], G, 2026);
+  const share = (r) => r.wins[1] / G, gain = share(on) - share(off);
+  check(gain > 0.01 && gain < 0.05, `home field adds ${(100 * gain).toFixed(1)} points to the home team's wins (${(100 * share(off)).toFixed(1)}% → ${(100 * share(on)).toFixed(1)}%)`);
+  const k = (r, t) => { let x = 0; for (let i = 0; i < 9; i++) x += r.bat[t][i * BAT.length + BAT.indexOf("K")]; return x; };
+  check(k(on, 1) < k(off, 1) && k(on, 0) > k(off, 0), "home batters strike out less with it, road batters more");
 }
 
 // 5. a real game by gamePk (game-load.js), from a saved Stats API reply (fixtures/game_822778.json: BOS at TOR, 2026-08-11)
