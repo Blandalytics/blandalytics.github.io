@@ -11,6 +11,7 @@ import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } fro
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
 import { PARK_N, parkAdjust as adjustForPark } from "./park.js?v=1";
 import { boxscoreUrl, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=3";
+import { teamColors } from "./team-colors.js?v=1";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -443,8 +444,16 @@ function fillTeams(sel) {
   }
 }
 
+// The two teams' colors (team-colors.js), as --t-away and --t-home on el: on the page for the Matchup
+// card, as the teams are picked; on the Who wins and Box score cards, for the teams their numbers are of.
+function paintTeams(el, sides) {
+  const css = getComputedStyle(document.documentElement), v = (x) => css.getPropertyValue(x).trim();
+  teamColors(sides.map((s) => s.team), v("--surface"), [v("--s-away"), v("--s-home")])
+    .forEach((c, t) => el.style.setProperty(t ? "--t-home" : "--t-away", c));
+}
 function renderSide(s) {
   const k = s.k;
+  paintTeams(document.documentElement, SIDES);
   $(`${k}_team`).value = s.team;
   $(`${k}_kind`).querySelector("[value=most_used]").disabled = s.team === "MLB";
   $(`${k}_kind`).value = s.kind;
@@ -716,7 +725,8 @@ function renderResults() {
   const name = (t) => teamName(sides[t].team), abbr = (t) => teamAbbr(sides[t]);
   const runs = res.line.map((l) => l.reduce((a, x) => a + x, 0));
   const hits = res.bat.map((b) => { let s = 0; for (let i = 0; i < 9; i++) s += b[i * nB + Bi.H]; return s; });
-  // who wins
+  // who wins, in the colors of the teams these results are for
+  paintTeams($("out"), sides);
   const kpis = $("kpis");
   kpis.replaceChildren();
   const kpi = (label, big, small, color) => {
@@ -730,8 +740,8 @@ function renderResults() {
     kpis.append(d);
   };
   const same = sides[0].team === sides[1].team;
-  kpi(`${same ? "Away" : name(0)} win`, pct(res.wins[0] / games), `${f2(per(runs[0]))} runs a game`, "var(--s-away)");
-  kpi(`${same ? "Home" : name(1)} win`, pct(res.wins[1] / games), `${f2(per(runs[1]))} runs a game`, "var(--s-home)");
+  kpi(`${same ? "Away" : name(0)} win`, pct(res.wins[0] / games), `${f2(per(runs[0]))} runs a game`, "var(--t-away)");
+  kpi(`${same ? "Home" : name(1)} win`, pct(res.wins[1] / games), `${f2(per(runs[1]))} runs a game`, "var(--t-home)");
   kpi("Extra innings", pct(res.extras / games), `Walk-offs ${pct(res.walkoffs / games)} · ${f2(per(res.innings))} innings a game`
     + (res.ties ? ` · ${res.ties} called at 40 innings` : ""));
   const bar = $("winbar");
@@ -750,7 +760,7 @@ function renderResults() {
       const title = t === 1 && i === 8 ? ` title="Played in ${pct(res.bottom9 / games)} of games; 0 when not played"` : "";
       return `<td class="num"${title}>${f2(per(x))}</td>`;
     }).join("");
-    tr.innerHTML = `<th scope="row"><i class="dot" style="background:var(--s-${t ? "home" : "away"})"></i>${abbr(t)}</th>${cells}`
+    tr.innerHTML = `<th scope="row"><i class="dot" style="background:var(--t-${t ? "home" : "away"})"></i>${abbr(t)}</th>${cells}`
       + `<td class="num sum">${f2(per(runs[t]))}</td><td class="num sum">${f2(per(hits[t]))}</td><td class="num sum">${f2(per(res.lob[t]))}</td>`;
     body.append(tr);
   }
@@ -775,11 +785,12 @@ function renderBox() {
   const { res, sides } = last;
   const box = $("box_teams");
   box.replaceChildren();
+  paintTeams($("box"), sides);
   sides.forEach((s, t) => {
     const sec = document.createElement("div");
     sec.className = "section box-team";
     const h = document.createElement("h3");
-    h.innerHTML = `<i class="dot" style="background:var(--s-${t ? "home" : "away"})"></i>`;
+    h.innerHTML = `<i class="dot" style="background:var(--t-${t ? "home" : "away"})"></i>`;
     h.append(`${teamName(s.team)} `, Object.assign(document.createElement("span"), { className: "where", textContent: s.where }));
     sec.append(h, battingTable(res.bat[t], s), pitchingTable(res.pit[t], s, res.wins[t], res.wins[1 - t]));
     if (last.steal) {

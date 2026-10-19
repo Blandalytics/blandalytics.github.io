@@ -14,6 +14,7 @@ const engineFile = join(repo, "lineup-sims", "game-sim.js");
 const parkFile = join(repo, "lineup-sims", "park.js");
 const loadFile = join(repo, "lineup-sims", "game-load.js");
 const fixtureFile = join(repo, "tools", "lineup_sims", "fixtures", "game_822778.json");
+const colorsFile = join(repo, "lineup-sims", "team-colors.js"), pageFile = join(repo, "lineup-sims", "game.html");
 const data = JSON.parse(readFileSync(join(dataDir, `${season}.json`), "utf8"));
 const SD = JSON.parse(readFileSync(join(dataDir, `${season}-steal.json`), "utf8"));
 const PD = JSON.parse(readFileSync(join(dataDir, `${season}-parks.json`), "utf8"));
@@ -229,7 +230,33 @@ function bookkeeping(res, teams, label) {
   check(seasonUrl(season).includes(`sportId=1&season=${season}&gameType=R,F,D,L,W&`), "the season list asks for MLB's regular season and postseason");
 }
 
-// 3. the engine draws only from its seeded generator
+// 3. Who wins in team colors: every pairing reads on the card and tells the two sides apart
+{
+  const { TEAM_HEX, MIN_CONTRAST, MIN_DE, contrast, deltaE, readable, teamColors } = await import(pathToFileURL(colorsFile).href);
+  const page = readFileSync(pageFile, "utf8");
+  const surface = page.match(/--surface:(#[0-9a-f]{6})/)[1], pair = page.match(/--s-away:(#[0-9a-f]{6}); --s-home:(#[0-9a-f]{6})/).slice(1);
+  const clubs = data.teams.map((t) => t.abbr);
+  check(clubs.every((t) => TEAM_HEX[t]), "every club in the data has colors");
+  let bad = [], fell = [];
+  for (const a of [...clubs, "MLB"]) for (const h of [...clubs, "MLB"]) {
+    const c = teamColors([a, h], surface, pair);
+    if (!(contrast(c[0], surface) >= MIN_CONTRAST && contrast(c[1], surface) >= MIN_CONTRAST && deltaE(c[0], c[1]) >= MIN_DE)) bad.push(`${a}-${h}`);
+    if (a !== "MLB" && h !== "MLB" && !TEAM_HEX[a].some((x) => readable(x, surface) === c[0])) fell.push(`${a}-${h}`);
+  }
+  check(!bad.length, `every pairing (and MLB) readable on --surface and distinct${bad.length ? `: ${bad.slice(0, 8).join(" ")}` : ""}`);
+  check(!fell.length, `no pairing of clubs falls back to the page's pair${fell.length ? `: ${fell.join(" ")}` : ""}`);
+  const [ny, de] = teamColors(["NYY", "DET"], surface, pair), [nyy] = teamColors(["NYY", "BOS"], surface, pair);
+  check(ny === nyy && deltaE(de, teamColors(["BOS", "DET"], surface, pair)[1]) >= MIN_DE, "two navy clubs: the home team takes its secondary");
+  check(teamColors(["MLB", "MLB"], surface, pair).every((c, i) => c === readable(pair[i], surface)), "MLB against MLB takes the page's pair, readable");
+  check(clubs.every((t) => teamColors(["MLB", t], surface, pair)[1] === readable(TEAM_HEX[t][0], surface)
+    && teamColors([t, "MLB"], surface, pair)[0] === readable(TEAM_HEX[t][0], surface)), "against MLB every club keeps its primary");
+  const [mlb] = teamColors(["MLB", "NYY"], surface, pair);
+  check(mlb === readable(pair[1], surface), "MLB at the Yankees: MLB takes the page's orange, the Yankees their blue");
+  check(teamColors(["MIA", "TB"], surface, pair)[0] === readable(TEAM_HEX.MIA[1], surface), "Marlins at Rays: the one pairing where the away team takes its secondary");
+  check(deltaE(readable("#ec424f", surface), readable("#ff1f23", surface)) < MIN_DE && deltaE(...teamColors(["PHI", "WSH"], surface, pair)) >= MIN_DE, "Phillies red and Nationals red count as alike");
+}
+
+// 4. the engine draws only from its seeded generator
 const src = readFileSync(engineFile, "utf8");
 check(!/Math\.random/.test(src), "no Math.random in game-sim.js");
 
