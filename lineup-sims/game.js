@@ -10,6 +10,7 @@
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
 import { PARK_N, parkAdjust as adjustForPark } from "./park.js?v=1";
+import { boxscoreUrl, checkSchedule, parseGame, pkOf, scheduleUrl } from "./game-load.js?v=1";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -234,60 +235,44 @@ function fillPark() {
 }
 
 // ---------- a real game, by gamePk ----------
-// Any completed 2026 regular-season game, from MLB's Stats API (open to the browser): both teams,
-// their starting nines in order, the starting pitchers, each team's catcher, the ballpark and the
-// week. The rest (He pitches, Sim settings) stays as it was. A hitter or pitcher the 2026 data
-// doesn't have (no counted plate appearances) is replaced, and the note says by what. A link to
-// blandalytics.com/lineup-sims/<gamePk> lands here as game.html#gp=<gamePk> (the site's 404.html
-// sends it), and so does game.html#<gamePk>: the game loads as the page opens.
-const STATS_API = "https://statsapi.mlb.com/api/v1";
-const getJSON = async (url) => {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`the Stats API answered ${r.status}`);
-  return r.json();
-};
+// Any completed 2026 regular-season game, from MLB's Stats API: game-load.js reads the schedule and
+// box score into a matchup (both teams, their starting nines in order, the starting pitchers, each
+// team's catcher, the ballpark and the week); here it's fetched and put on the page. He pitches and
+// the Sim settings stay as they were. A game is fetched only on Load (or Enter), or once as the page
+// opens when the link asks for one: blandalytics.com/lineup-sims/<gamePk> lands here as
+// game.html#gp=<gamePk> (the site's 404.html sends it), and so does game.html#<gamePk>.
+const FETCH_MS = 8000;
+// a Stats API reply, or a plain reason it isn't one: no answer within FETCH_MS, a network failure,
+// a status other than 200, or a body that isn't JSON
+async function getJSON(url) {
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), FETCH_MS);
+  let r;
+  try {
+    r = await fetch(url, { signal: ctl.signal });
+  } catch (e) {
+    throw new Error(e.name === "AbortError" ? `the MLB Stats API didn't answer within ${FETCH_MS / 1000} seconds` : "the MLB Stats API couldn't be reached");
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!r.ok) throw new Error(`the MLB Stats API answered ${r.status}`);
+  try {
+    return await r.json();
+  } catch {
+    throw new Error("the MLB Stats API's reply wasn't readable");
+  }
+}
 async function loadGame(pk) {
-  const sched = await getJSON(`${STATS_API}/schedule?gamePk=${pk}&fields=dates,games,gamePk,season,gameType,officialDate,status,codedGameState,detailedState,venue,id,name,teams,away,home,team`);
-  const g = sched.dates?.[0]?.games?.find((x) => x.gamePk === pk);
-  if (!g) throw new Error(`there's no MLB game ${pk}`);
-  const types = { S: "a spring training game", E: "an exhibition", A: "the All-Star Game", F: "a Wild Card game", D: "a Division Series game", L: "a League Championship Series game", W: "a World Series game" };
-  if (g.season !== String(SEASON) || g.gameType !== "R") {
-    throw new Error(`game ${pk} is ${g.gameType === "R" ? `from the ${g.season} season` : types[g.gameType] ?? `not a regular-season game`}; only completed ${SEASON} regular-season games load`);
-  }
-  if (g.status.codedGameState !== "F") throw new Error(`game ${pk} wasn't completed (${g.status.detailedState.toLowerCase()})`);
-  const box = await getJSON(`${STATS_API}/game/${pk}/boxscore?fields=teams,away,home,team,id,pitchers,players,person,fullName,position,abbreviation,battingOrder`);
-  const missing = [], sides = {};
-  for (const where of ["away", "home"]) {
-    const b = box.teams[where], t = data.teams.find((x) => x.id === b.team.id);
-    if (!t) throw new Error(`team ${b.team.id} isn't in the ${SEASON} data`);
-    // the starting nine: batting order 100, 200, ... 900 (a substitute is 101, 102, ...)
-    const starters = Object.values(b.players).filter((x) => x.battingOrder && Number(x.battingOrder) % 100 === 0)
-      .sort((x, y) => Number(x.battingOrder) - Number(y.battingOrder));
-    if (starters.length !== 9) throw new Error(`the ${t.short}' starting lineup isn't complete in the box score`);
-    const lineup = starters.map((x, i) => {
-      if (entries.has(`p${x.person.id}`)) return `p${x.person.id}`;
-      missing.push(`${x.person.fullName} (${t.short}' ${ordinal(i + 1)} spot)`);
-      return `s${t.abbr}-${i + 1}`;
-    });
-    const spId = b.pitchers?.[0], spName = b.players[`ID${spId}`]?.person.fullName ?? "the starter";
-    let sp = pitchers.get(`P${spId}`);
-    if (!sp) {
-      missing.push(`${spName} (MLB-average RHP)`);
-      sp = pitchers.get("PRHP");
-    }
-    const c = starters.findIndex((x) => x.position?.abbreviation === "C");
-    sides[where] = { team: t.abbr, lineup, sp, c, name: t.short };
-  }
-  // the ballpark by name, else the home team's; the week by the game's date
-  const pi = parkData ? parkData.parks.findIndex((x) => fold(x.name) === fold(g.venue.name)) : -1;
-  const md = g.officialDate.slice(5), wi = parkData ? parkData.weeks.findIndex((w) => w[0] <= md && md <= w[1]) : -1;
-  return { pk, g, sides, park: pi, week: wi, missing };
+  const ctx = { season: SEASON, teams: data.teams, hasHitter: (id) => entries.has(`p${id}`), hasPitcher: (id) => pitchers.has(`P${id}`),
+    parks: parkData ? parkData.parks.map((x) => x.name) : [], weeks: parkData ? parkData.weeks : [] };
+  const sched = await getJSON(scheduleUrl(pk));
+  checkSchedule(pk, sched, SEASON, data.teams); // whether it's a game that loads, before the larger box score is asked for
+  return parseGame(pk, sched, await getJSON(boxscoreUrl(pk)), ctx);
 }
 function applyGame(G) {
   [["away", SIDES[0]], ["home", SIDES[1]]].forEach(([where, s]) => {
     const x = G.sides[where];
-    Object.assign(s, { team: x.team, lineup: x.lineup, edited: true, sp: x.sp });
-    s.c = x.c >= 0 ? x.c : -1;
+    Object.assign(s, { team: x.team, lineup: x.lineup, edited: true, sp: pitchers.get(x.sp) });
+    s.c = x.c;
     if (stealData) checkCatcher(s);
   });
   if (parkData) {
@@ -298,11 +283,14 @@ function applyGame(G) {
   SIDES.forEach(renderSide);
   fillPark();
   run();
-  const day = new Date(`${G.g.officialDate}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  const day = new Date(`${G.date}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
   const a = G.sides.away, h = G.sides.home;
   $("gpk_note").classList.toggle("warn", G.missing.length > 0);
-  $("gpk_note").textContent = `${a.name} at ${h.name}, ${day}, ${G.g.venue.name}: both starting nines and starters (${a.sp.name}, ${h.sp.name})`
-    + (G.park < 0 && parkData ? `; ${G.g.venue.name} has no 2026 park factors, so ${parkName() ?? "no park"}` : "")
+  const wk = parkData && G.week >= 0 ? parkData.weeks[G.week][2] : null;
+  $("gpk_note").textContent = `${a.short} at ${h.short}, ${day}, ${G.venue}${G.kind === "regular" ? "" : ` (${G.type})`}: `
+    + `both starting nines and starters (${a.spName}, ${h.spName})`
+    + (G.park < 0 && parkData ? `; ${G.venue} has no ${SEASON} park factors, so ${parkName() ?? "no park"}` : "")
+    + (G.kind === "postseason" && wk ? `, with the regular season's last week (${wk})` : "")
     + (G.missing.length ? `. Not in the ${SEASON} data, so replaced: ${G.missing.join(", ")}.` : ".");
   // the game's short link (the site's 404.html turns it into game.html#gp=)
   const link = document.createElement("a");
@@ -310,16 +298,11 @@ function applyGame(G) {
   link.textContent = `${location.host}/lineup-sims/${G.pk}`;
   $("gpk_note").append(" Link: ", link);
 }
-// a gamePk, or a link with one in it (Baseball Savant's gamefeed, MLB Gameday)
-const pkOf = (text) => {
-  const m = String(text).match(/(?:gamePk=|\/)(\d{6,7})(?!\d)|^\s*(\d{6,7})\s*$/);
-  return m ? Number(m[1] ?? m[2]) : null;
-};
 async function onLoadGame() {
   const pk = pkOf($("gpk").value), note = $("gpk_note");
   note.classList.remove("warn", "err");
   if (!pk) {
-    note.textContent = "Enter a gamePk: the 6-digit game number in a Baseball Savant or MLB Gameday link.";
+    note.textContent = "Enter a gamePk: the 6- or 7-digit game number in a Baseball Savant or MLB Gameday link (or the link itself).";
     note.classList.add("err");
     return;
   }
@@ -328,6 +311,7 @@ async function onLoadGame() {
   try {
     applyGame(await loadGame(pk));
   } catch (e) {
+    // the matchup on screen stays as it was
     note.textContent = `Couldn't load it: ${e.message}.`;
     note.classList.add("err");
   } finally {

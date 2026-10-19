@@ -58,6 +58,10 @@ node tools/lineup_sims/test_sim.mjs 2026
 node tools/lineup_sims/test_game.mjs 2026
 ```
 
+`test_game.mjs` also reads `fixtures/game_822778.json`, one game's MLB Stats API schedule and box
+score (trimmed to the fields `lineup-sims/game-load.js` reads), saved so the gamePk loader is
+checked without going online.
+
 Then bump `data/2026.json?v=` (and `data/2026-pitch.json?v=`, `data/2026-hook.json?v=` or `data/2026-quality.json?v=`, if step 3b, 3c or 3d ran) in
 `lineup-sims/app.js` and `app.js?v=` in `lineup-sims/index.html`; browsers and the edge
 hold them for hours. The Game Sim (`lineup-sims/game.js`) loads `data/2026.json`, `data/2026-hook.json`,

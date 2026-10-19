@@ -1,0 +1,532 @@
+{
+ "about": "MLB Stats API, gamePk 822778 (BOS at TOR, 2026-08-11), trimmed to what lineup-sims/game-load.js reads: schedule?gamePk= and game/{pk}/boxscore with fields=, box score players cut to the batters and each starting pitcher. Saved once for tools/lineup_sims/test_game.mjs; never fetched by the test.",
+ "pk": 822778,
+ "schedule": {
+  "dates": [
+   {
+    "games": [
+     {
+      "gamePk": 822778,
+      "gameType": "R",
+      "season": "2026",
+      "officialDate": "2026-08-11",
+      "status": {
+       "codedGameState": "F",
+       "detailedState": "Final"
+      },
+      "teams": {
+       "away": {
+        "team": {
+         "id": 111,
+         "name": "Boston Red Sox"
+        }
+       },
+       "home": {
+        "team": {
+         "id": 141,
+         "name": "Toronto Blue Jays"
+        }
+       }
+      },
+      "venue": {
+       "id": 14,
+       "name": "Rogers Centre"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "boxscore": {
+  "teams": {
+   "away": {
+    "team": {
+     "id": 111,
+     "abbreviation": "BOS"
+    },
+    "pitchers": [
+     663776,
+     594027,
+     661527
+    ],
+    "players": {
+     "ID575929": {
+      "person": {
+       "id": 575929,
+       "fullName": "Willson Contreras"
+      },
+      "jerseyNumber": "40",
+      "position": {
+       "abbreviation": "1B"
+      },
+      "status": {},
+      "parentTeamId": 111,
+      "battingOrder": "400",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "1B"
+       }
+      ]
+     },
+     "ID663776": {
+      "person": {
+       "id": 663776,
+       "fullName": "Patrick Sandoval"
+      },
+      "jerseyNumber": "43",
+      "position": {
+       "abbreviation": "P"
+      },
+      "status": {},
+      "parentTeamId": 111,
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "P"
+       }
+      ]
+     },
+     "ID668939": {
+      "person": {
+       "id": 668939,
+       "fullName": "Adley Rutschman"
+      },
+      "jerseyNumber": "31",
+      "position": {
+       "abbreviation": "C"
+      },
+      "status": {},
+      "parentTeamId": 111,
+      "battingOrder": "300",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "C"
+       }
+      ]
+     },
+     "ID677800": {
+      "person": {
+       "id": 677800,
+       "fullName": "Wilyer Abreu"
+      },
+      "jerseyNumber": "52",
+      "position": {
+       "abbreviation": "RF"
+      },
+      "status": {},
+      "parentTeamId": 111,
+      "battingOrder": "500",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "RF"
+       }
+      ]
+     },
+     "ID655316": {
+      "person": {
+       "id": 655316,
+       "fullName": "Andruw Monasterio"
+      },
+      "jerseyNumber": "32",
+      "position": {
+       "abbreviation": "SS"
+      },
+      "status": {},
+      "parentTeamId": 111,
+      "battingOrder": "800",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "SS"
+       }
+      ]
+     },
+     "ID702332": {
+      "person": {
+       "id": 702332,
+       "fullName": "Caleb Durbin"
+      },
+      "jerseyNumber": "5",
+      "position": {
+       "abbreviation": "3B"
+      },
+      "status": {},
+      "parentTeamId": 111,
+      "battingOrder": "600",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "3B"
+       }
+      ]
+     },
+     "ID680776": {
+      "person": {
+       "id": 680776,
+       "fullName": "Jarren Duran"
+      },
+      "jerseyNumber": "16",
+      "position": {
+       "abbreviation": "LF"
+      },
+      "status": {},
+      "parentTeamId": 111,
+      "battingOrder": "700",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "LF"
+       }
+      ]
+     },
+     "ID686765": {
+      "person": {
+       "id": 686765,
+       "fullName": "Nick Sogard"
+      },
+      "jerseyNumber": "20",
+      "position": {
+       "abbreviation": "2B"
+      },
+      "status": {},
+      "parentTeamId": 111,
+      "battingOrder": "900",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "2B"
+       }
+      ]
+     },
+     "ID678882": {
+      "person": {
+       "id": 678882,
+       "fullName": "Ceddanne Rafaela"
+      },
+      "jerseyNumber": "3",
+      "position": {
+       "abbreviation": "CF"
+      },
+      "status": {},
+      "parentTeamId": 111,
+      "battingOrder": "200",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "CF"
+       }
+      ]
+     },
+     "ID807799": {
+      "person": {
+       "id": 807799,
+       "fullName": "Masataka Yoshida"
+      },
+      "jerseyNumber": "7",
+      "position": {
+       "abbreviation": "DH"
+      },
+      "status": {},
+      "parentTeamId": 111,
+      "battingOrder": "100",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "DH"
+       }
+      ]
+     }
+    }
+   },
+   "home": {
+    "team": {
+     "id": 141,
+     "abbreviation": "TOR"
+    },
+    "pitchers": [
+     656302,
+     695445,
+     663893,
+     680755,
+     693686
+    ],
+    "players": {
+     "ID676391": {
+      "person": {
+       "id": 676391,
+       "fullName": "Ernie Clement"
+      },
+      "jerseyNumber": "22",
+      "position": {
+       "abbreviation": "2B"
+      },
+      "status": {},
+      "parentTeamId": 141,
+      "battingOrder": "600",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "2B"
+       }
+      ]
+     },
+     "ID807727": {
+      "person": {
+       "id": 807727,
+       "fullName": "Charles McAdoo"
+      },
+      "jerseyNumber": "26",
+      "position": {
+       "abbreviation": "3B"
+      },
+      "status": {},
+      "parentTeamId": 141,
+      "battingOrder": "100",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "3B"
+       }
+      ]
+     },
+     "ID665926": {
+      "person": {
+       "id": 665926,
+       "fullName": "Andrés Giménez"
+      },
+      "jerseyNumber": "0",
+      "position": {
+       "abbreviation": "SS"
+      },
+      "status": {},
+      "parentTeamId": 141,
+      "battingOrder": "700",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "SS"
+       }
+      ]
+     },
+     "ID678218": {
+      "person": {
+       "id": 678218,
+       "fullName": "Brandon Valenzuela"
+      },
+      "jerseyNumber": "59",
+      "position": {
+       "abbreviation": "C"
+      },
+      "status": {},
+      "parentTeamId": 141,
+      "battingOrder": "502",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "C"
+       }
+      ]
+     },
+     "ID656302": {
+      "person": {
+       "id": 656302,
+       "fullName": "Dylan Cease"
+      },
+      "jerseyNumber": "84",
+      "position": {
+       "abbreviation": "P"
+      },
+      "status": {},
+      "parentTeamId": 141,
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "P"
+       }
+      ]
+     },
+     "ID703520": {
+      "person": {
+       "id": 703520,
+       "fullName": "Brett Bateman"
+      },
+      "jerseyNumber": "21",
+      "position": {
+       "abbreviation": "CF"
+      },
+      "status": {},
+      "parentTeamId": 141,
+      "battingOrder": "200",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "CF"
+       }
+      ]
+     },
+     "ID664770": {
+      "person": {
+       "id": 664770,
+       "fullName": "Nathan Lukes"
+      },
+      "jerseyNumber": "38",
+      "position": {
+       "abbreviation": "RF"
+      },
+      "status": {},
+      "parentTeamId": 141,
+      "battingOrder": "900",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "RF"
+       }
+      ]
+     },
+     "ID543807": {
+      "person": {
+       "id": 543807,
+       "fullName": "George Springer"
+      },
+      "jerseyNumber": "4",
+      "position": {
+       "abbreviation": "DH"
+      },
+      "status": {},
+      "parentTeamId": 141,
+      "battingOrder": "400",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "DH"
+       }
+      ]
+     },
+     "ID669701": {
+      "person": {
+       "id": 669701,
+       "fullName": "Josh Smith"
+      },
+      "jerseyNumber": "9",
+      "position": {
+       "abbreviation": "PR"
+      },
+      "status": {},
+      "parentTeamId": 141,
+      "battingOrder": "501",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "PR"
+       }
+      ]
+     },
+     "ID665489": {
+      "person": {
+       "id": 665489,
+       "fullName": "Vladimir Guerrero Jr."
+      },
+      "jerseyNumber": "27",
+      "position": {
+       "abbreviation": "1B"
+      },
+      "status": {},
+      "parentTeamId": 141,
+      "battingOrder": "300",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "1B"
+       }
+      ]
+     },
+     "ID664702": {
+      "person": {
+       "id": 664702,
+       "fullName": "Myles Straw"
+      },
+      "jerseyNumber": "3",
+      "position": {
+       "abbreviation": "LF"
+      },
+      "status": {},
+      "parentTeamId": 141,
+      "battingOrder": "800",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "LF"
+       }
+      ]
+     },
+     "ID672386": {
+      "person": {
+       "id": 672386,
+       "fullName": "Alejandro Kirk"
+      },
+      "jerseyNumber": "30",
+      "position": {
+       "abbreviation": "C"
+      },
+      "status": {},
+      "parentTeamId": 141,
+      "battingOrder": "500",
+      "stats": {},
+      "seasonStats": {},
+      "gameStatus": {},
+      "allPositions": [
+       {
+        "abbreviation": "C"
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+}

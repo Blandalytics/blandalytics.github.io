@@ -12,12 +12,15 @@ const season = process.argv[2] ?? "2026";
 const dataDir = join(repo, "lineup-sims", "data");
 const engineFile = join(repo, "lineup-sims", "game-sim.js");
 const parkFile = join(repo, "lineup-sims", "park.js");
+const loadFile = join(repo, "lineup-sims", "game-load.js");
+const fixtureFile = join(repo, "tools", "lineup_sims", "fixtures", "game_822778.json");
 const data = JSON.parse(readFileSync(join(dataDir, `${season}.json`), "utf8"));
 const SD = JSON.parse(readFileSync(join(dataDir, `${season}-steal.json`), "utf8"));
 const PD = JSON.parse(readFileSync(join(dataDir, `${season}-parks.json`), "utf8"));
 // game-sim.js imports sim.js with the page's ?v=; this file imports it plain, so the engine is loaded by URL
 const { BAT, PIT, prepareSteal, simulateGames } = await import(pathToFileURL(engineFile).href);
 const { PARK_N, parkAdjust } = await import(pathToFileURL(parkFile).href);
+const { checkSchedule, parseGame, pkOf, scheduleUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
 
 let failed = 0, passed = 0;
 const check = (ok, what) => {
@@ -147,6 +150,61 @@ function bookkeeping(res, teams, label) {
   const R = (name) => PD.parks.find((x) => x.name === name).R / 100;
   check(Math.abs(atCoors - R("Coors Field")) < 0.08, `Coors runs ×${atCoors.toFixed(3)} against its R factor ${R("Coors Field")}`);
   check(Math.abs(atTmo - R("T-Mobile Park")) < 0.05, `T-Mobile runs ×${atTmo.toFixed(3)} against its R factor ${R("T-Mobile Park")}`);
+}
+
+// 5. a real game by gamePk (game-load.js), from a saved Stats API reply (fixtures/game_822778.json: BOS at TOR, 2026-08-11)
+{
+  const fx = JSON.parse(readFileSync(fixtureFile, "utf8")), pk = fx.pk;
+  const hitterIds = new Set(data.players.map((r) => r[0])), pitcherIds = new Set(data.pitchers.map((r) => r[0]));
+  const ctx = (over = {}) => ({ season: Number(season), teams: data.teams, hasHitter: (id) => hitterIds.has(id), hasPitcher: (id) => pitcherIds.has(id),
+    parks: PD.parks.map((x) => x.name), weeks: PD.weeks, ...over });
+  const copy = () => JSON.parse(JSON.stringify(fx));
+  const G = parseGame(pk, fx.schedule, fx.boxscore, ctx());
+  // the play-by-play cache's starting orders for this game (order codes 100-900), and its first pitchers
+  check(G.sides.away.team === "BOS" && G.sides.home.team === "TOR", "teams by Stats API id");
+  check(G.sides.away.lineup.join() === "p807799,p678882,p668939,p575929,p677800,p702332,p680776,p655316,p686765", "Red Sox starting nine, in batting order");
+  check(G.sides.home.lineup.join() === "p807727,p703520,p665489,p543807,p672386,p676391,p665926,p664702,p664770", "Blue Jays starting nine, substitutes (401, ...) left out");
+  check(G.sides.away.sp === "P663776" && G.sides.home.sp === "P656302", "starters: each side's first pitcher (Sandoval, Cease)");
+  check(G.sides.away.c === 2 && G.sides.home.c === 4, "catchers: Rutschman batting 3rd, Kirk 5th");
+  check(PD.parks[G.park]?.name === "Rogers Centre" && PD.weeks[G.week]?.[2] === "Aug 05 – Aug 11", "ballpark by venue name, week by date");
+  check(G.missing.length === 0, "every starter is in the data");
+  // a starter the data doesn't have: his team's spot for a hitter, an MLB-average RHP for a pitcher, each named
+  const M = parseGame(pk, fx.schedule, fx.boxscore, ctx({ hasHitter: (id) => id !== 668939 && hitterIds.has(id), hasPitcher: (id) => id !== 656302 && pitcherIds.has(id) }));
+  check(M.sides.away.lineup[2] === "sBOS-3" && M.sides.home.sp === "PRHP" && M.missing.length === 2
+    && M.missing[0].startsWith("Adley Rutschman") && M.missing[1].startsWith("Dylan Cease"), `missing starters replaced and named: ${M.missing.join("; ")}`);
+  // only completed MLB games of the season load; anything else is refused with its reason
+  const refused = (edit, want) => {
+    const f = copy();
+    edit(f.schedule.dates[0].games[0]);
+    try { parseGame(pk, f.schedule, f.boxscore, ctx()); return false; } catch (e) { return want.test(e.message); }
+  };
+  check(refused((g) => { g.season = "2025"; }, /from 2025/), "another season is refused");
+  check(refused((g) => { g.gameType = "A"; }, /All-Star/), "the All-Star Game is refused");
+  check(refused((g) => { g.teams.away.team.id = 999; g.teams.home.team.id = 998; }, /isn't an MLB game/), "a minor-league game is refused");
+  check(refused((g) => { g.teams.away.team.id = 999; }, /two MLB clubs/), "a club against a non-MLB team is refused");
+  // preseason games don't load: many of their players have no regular-season rates
+  check(refused((g) => { g.gameType = "S"; }, /spring training game; preseason games don't load/), "spring training is refused");
+  check(refused((g) => { g.gameType = "E"; }, /exhibition; preseason games don't load/), "an exhibition is refused");
+  // postseason games load, with the park's factors for the regular season's last week
+  const as = (edit) => { const f = copy(); edit(f.schedule.dates[0].games[0]); return parseGame(pk, f.schedule, f.boxscore, ctx()); };
+  check(as((g) => { g.venue.name = "Somewhere Else"; }).park === -1, "a venue with no factors gives no park (the page uses the home team's)");
+  const ws = as((g) => { g.gameType = "W"; g.officialDate = "2026-10-24"; });
+  check(ws.kind === "postseason" && ws.week === PD.weeks.length - 1 && PD.parks[ws.park]?.name === "Rogers Centre", "World Series: its park, last regular-season week");
+  check(["F", "D", "L"].every((t) => as((g) => { g.gameType = t; }).week === PD.weeks.length - 1), "Wild Card, Division and League series: last regular-season week");
+  check(refused((g) => { g.status = { codedGameState: "D", detailedState: "Postponed" }; }, /wasn't completed \(postponed\)/), "a postponed game is refused");
+  check(refused((g) => { g.gamePk = 1; }, /no game/), "a gamePk the schedule doesn't have is refused");
+  const throwsWith = (fn, want) => { try { fn(); return false; } catch (e) { return want.test(e.message); } };
+  check(throwsWith(() => parseGame(pk, fx.schedule, { nope: 1 }, ctx()), /can read/), "a box score without teams is refused as unreadable");
+  check(throwsWith(() => parseGame(pk, "<html>", fx.boxscore, ctx()), /can read|no game/), "a schedule that isn't JSON's shape is refused");
+  const short = copy();
+  delete short.boxscore.teams.away.players[Object.keys(short.boxscore.teams.away.players).find((k) => short.boxscore.teams.away.players[k].battingOrder === "900")];
+  check(throwsWith(() => parseGame(pk, short.schedule, short.boxscore, ctx()), /starting lineup isn't complete/), "a starting nine short a hitter is refused");
+  check(checkSchedule(pk, fx.schedule, Number(season), data.teams).g.venue.name === "Rogers Centre", "checkSchedule passes a completed game through");
+  // the gamePk is all that's sent
+  check(pkOf("822778") === 822778 && pkOf(" 822778 ") === 822778 && pkOf("https://baseballsavant.mlb.com/gamefeed?date=8/11/2026&gamePk=822778") === 822778
+    && pkOf("https://www.mlb.com/gameday/red-sox-vs-blue-jays/2026/08/11/822778/final/box") === 822778
+    && pkOf("82277") === null && pkOf("2026") === null && pkOf("822778; drop") === null && pkOf("abc") === null, "gamePk from the number or a Savant/Gameday link only");
+  check(scheduleUrl(pk).includes(`gamePk=${pk}&`) && boxscoreUrl(pk).includes(`/game/${pk}/boxscore?`), "requests built from the number");
 }
 
 // 3. the engine draws only from its seeded generator
