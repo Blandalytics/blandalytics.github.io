@@ -10,6 +10,7 @@
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
 import { PARK_N, parkAdjust as adjustForPark } from "./park.js?v=1";
+import { boxscoreUrl, checkSchedule, parseGame, pkOf, scheduleUrl } from "./game-load.js?v=1";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -231,6 +232,91 @@ function fillPark() {
     : park.at === "avg" ? "Every player's home park taken out, in an average park"
     : `Runs ${chg(r)}, HR ${chg(f[6])}, 2B ${chg(f[4])}, 3B ${chg(f[5])}, K ${chg(f[0])}`
       + `${park.week >= 0 ? " that week (with the league's calendar)" : ""}; each player's home park taken out first`;
+}
+
+// ---------- a real game, by gamePk ----------
+// Any completed 2026 regular-season game, from MLB's Stats API: game-load.js reads the schedule and
+// box score into a matchup (both teams, their starting nines in order, the starting pitchers, each
+// team's catcher, the ballpark and the week); here it's fetched and put on the page. He pitches and
+// the Sim settings stay as they were. A game is fetched only on Load (or Enter), or once as the page
+// opens when the link asks for one: blandalytics.com/lineup-sims/<gamePk> lands here as
+// game.html#gp=<gamePk> (the site's 404.html sends it), and so does game.html#<gamePk>.
+const FETCH_MS = 8000;
+// a Stats API reply, or a plain reason it isn't one: no answer within FETCH_MS, a network failure,
+// a status other than 200, or a body that isn't JSON
+async function getJSON(url) {
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), FETCH_MS);
+  let r;
+  try {
+    r = await fetch(url, { signal: ctl.signal });
+  } catch (e) {
+    throw new Error(e.name === "AbortError" ? `the MLB Stats API didn't answer within ${FETCH_MS / 1000} seconds` : "the MLB Stats API couldn't be reached");
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!r.ok) throw new Error(`the MLB Stats API answered ${r.status}`);
+  try {
+    return await r.json();
+  } catch {
+    throw new Error("the MLB Stats API's reply wasn't readable");
+  }
+}
+async function loadGame(pk) {
+  const ctx = { season: SEASON, teams: data.teams, hasHitter: (id) => entries.has(`p${id}`), hasPitcher: (id) => pitchers.has(`P${id}`),
+    parks: parkData ? parkData.parks.map((x) => x.name) : [], weeks: parkData ? parkData.weeks : [] };
+  const sched = await getJSON(scheduleUrl(pk));
+  checkSchedule(pk, sched, SEASON, data.teams); // whether it's a game that loads, before the larger box score is asked for
+  return parseGame(pk, sched, await getJSON(boxscoreUrl(pk)), ctx);
+}
+function applyGame(G) {
+  [["away", SIDES[0]], ["home", SIDES[1]]].forEach(([where, s]) => {
+    const x = G.sides[where];
+    Object.assign(s, { team: x.team, lineup: x.lineup, edited: true, sp: pitchers.get(x.sp) });
+    s.c = x.c;
+    if (stealData) checkCatcher(s);
+  });
+  if (parkData) {
+    Object.assign(park, G.park >= 0 ? { at: G.park, auto: false } : { at: "none", auto: true });
+    if (park.auto) park.at = homePark();
+    park.week = G.week;
+  }
+  SIDES.forEach(renderSide);
+  fillPark();
+  run();
+  const day = new Date(`${G.date}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  const a = G.sides.away, h = G.sides.home;
+  $("gpk_note").classList.toggle("warn", G.missing.length > 0);
+  const wk = parkData && G.week >= 0 ? parkData.weeks[G.week][2] : null;
+  $("gpk_note").textContent = `${a.short} at ${h.short}, ${day}, ${G.venue}${G.kind === "regular" ? "" : ` (${G.type})`}: `
+    + `both starting nines and starters (${a.spName}, ${h.spName})`
+    + (G.park < 0 && parkData ? `; ${G.venue} has no ${SEASON} park factors, so ${parkName() ?? "no park"}` : "")
+    + (G.kind === "postseason" && wk ? `, with the regular season's last week (${wk})` : "")
+    + (G.missing.length ? `. Not in the ${SEASON} data, so replaced: ${G.missing.join(", ")}.` : ".");
+  // the game's short link (the site's 404.html turns it into game.html#gp=)
+  const link = document.createElement("a");
+  link.href = `/lineup-sims/${G.pk}`;
+  link.textContent = `${location.host}/lineup-sims/${G.pk}`;
+  $("gpk_note").append(" Link: ", link);
+}
+async function onLoadGame() {
+  const pk = pkOf($("gpk").value), note = $("gpk_note");
+  note.classList.remove("warn", "err");
+  if (!pk) {
+    note.textContent = "Enter a gamePk: the 6- or 7-digit game number in a Baseball Savant or MLB Gameday link (or the link itself).";
+    note.classList.add("err");
+    return;
+  }
+  $("gpk_go").disabled = true;
+  note.textContent = `loading game ${pk}…`;
+  try {
+    applyGame(await loadGame(pk));
+  } catch (e) {
+    // the matchup on screen stays as it was
+    note.textContent = `Couldn't load it: ${e.message}.`;
+    note.classList.add("err");
+  } finally {
+    $("gpk_go").disabled = false;
+  }
 }
 
 // ---------- a team: lineup, starter, plan ----------
@@ -779,8 +865,11 @@ function writeHash() {
   if (parkData && park.week >= 0) p.set("wk", String(park.week + 1));
   history.replaceState(null, "", `#${p}`);
 }
+let linkedGame = null; // a gamePk the link asked for (gp=, or the hash alone), loaded once the page is set up
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
+  const gp = p.get("gp") ?? location.hash.slice(1);
+  linkedGame = /^\d{6,7}$/.test(gp) ? Number(gp) : null;
   for (const [key, sel] of [["g", "games"], ["r", "regress"], ["pl", "platoon"], ["st", "steals"]]) {
     const v = p.get(key);
     if (v && [...$(sel).options].some((o) => o.value === v)) $(sel).value = v;
@@ -874,6 +963,8 @@ async function boot() {
       } });
     renderSide(s);
   }
+  $("gpk_go").addEventListener("click", onLoadGame);
+  $("gpk").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); onLoadGame(); } });
   $("swap").addEventListener("click", () => {
     const keep = ["team", "kind", "lineup", "edited", "sp", "plan", "c"];
     const a = Object.fromEntries(keep.map((x) => [x, SIDES[0][x]]));
@@ -902,6 +993,10 @@ async function boot() {
     SIDES.forEach(renderSide);
     run();
   });
+  if (linkedGame) {
+    $("gpk").value = linkedGame;
+    onLoadGame(); // its run replaces this one before the worker starts
+  }
   run();
 }
 
