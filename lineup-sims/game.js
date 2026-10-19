@@ -4,6 +4,8 @@
 // pitcher, platoon splits, Small samples, and a starter who goes until the modeled hook (or his
 // average start, or opens a bullpen day), then his team's bullpen. Stolen bases go by who's on
 // base, who's pitching and who's catching (data/<season>-steal.json, pipeline/steal_model.py).
+// sim.js is the Lineup Sim's engine: when its ?v= changes there (app.js), change it here too, or the
+// two pages load two copies of it
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=1";
 
@@ -150,7 +152,7 @@ function checkCatcher(s) {
 const catcherSteal = (s) => catchOf(s, s.c)?.slice(0, 2) ?? stealData.catcher_avg;
 const catcherName = (s) => {
   const e = entries.get(s.lineup[s.c]);
-  return e.kind === "spot" && e.team === s.team ? `${teamName(s.team)}' ${e.spot}` : e.name;
+  return e.kind === "spot" && e.team === s.team ? `${s.team === "MLB" ? "MLB's" : `${teamName(s.team)}'`} ${e.spot}` : e.name;
 };
 const runnerSteal = (e) => (e.kind === "spot" ? stealData.spots[e.id.slice(1)] : stealData.runners[e.id.slice(1)]) ?? [0, 0];
 const armSteal = (e) => (e.generic ? stealData.starter_avg[e.throws] : stealData.pitchers[e.mlbam] ?? stealData.hand[e.throws] ?? [0, 0]);
@@ -163,7 +165,7 @@ function fillCatchers(s) {
   const sel = $(`${s.k}_c`), slots = catchingSlots(s);
   sel.replaceChildren(...(slots.length ? slots : s.lineup.map((_, i) => i)).map((i) => {
     const e = entries.get(s.lineup[i]), c = catchOf(s, i);
-    const label = e.kind === "spot" ? `${e.name}${c ? ` (${Math.round(100 * c[2])}% of the catching)` : ""}` : e.name;
+    const label = e.kind === "spot" ? `${e.name}${c ? ` (${Math.round(100 * c[2])}%)` : ""}` : e.name;
     return new Option(`${i + 1}. ${label}`, i);
   }));
   sel.value = String(s.c);
@@ -288,7 +290,8 @@ function renderSide(s) {
     const c = catcherSteal(s), avg = stealData.catcher_avg, e = entries.get(s.lineup[s.c]);
     const vs = `against an average catcher, runners go ${times(c[0] - avg[0])} as often, steal odds ${times(c[1] - avg[1])}`;
     $(`${k}_cnote`).textContent = !catchOf(s, s.c) ? "No 2026 catcher in this lineup: this one catches like an MLB-average catcher"
-      : e.kind === "spot" ? `The catchers who batted in this spot, pooled: ${vs}` : vs[0].toUpperCase() + vs.slice(1);
+      : e.kind === "spot" ? `${e.team === "MLB" ? "MLB" : teamName(e.team)} catchers who batted ${ordinal(Number(e.id.split("-")[1]))} (${Math.round(100 * catchOf(s, s.c)[2])}% of the catching), pooled: ${vs}`
+      : vs[0].toUpperCase() + vs.slice(1);
   }
   document.querySelectorAll(`#${k}_side .catcher`).forEach((x) => { x.hidden = !stealOn(); });
   renderLineup(s);

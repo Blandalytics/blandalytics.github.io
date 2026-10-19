@@ -1,6 +1,6 @@
 """Stolen bases for the Game Sim: who runs, and who gets thrown out, by runner, pitcher and catcher.
 
-    python -I pipeline/steal_model.py 2026 <running-game parquet>
+    python -I tools/lineup_sims/steal_model.py 2026 <running-game parquet>     # writes lineup-sims/data/2026-steal.json
 
 The parquet is the stolen_bases project's pull (mlb_running_game.scrape_running_game, regular
 season): one row per steal opportunity, a runner on a base with the next one open, with the
@@ -25,7 +25,7 @@ play-by-play the main data file is built from, into
 A pooled lineup spot (or bullpen, or MLB-average starter, or MLB-average catcher) gets the one
 shift that gives its 2026 opportunities as many attempts, and those attempts as many steals, as
 its players' own effects do (so a few fast runners don't count for more than they ran). Writes
-site/data/<season>-steal.json.
+lineup-sims/data/<season>-steal.json.
 """
 import collections
 import json
@@ -41,7 +41,9 @@ from sklearn.linear_model import LogisticRegression
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import pbp  # noqa: E402
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+TOOL = pathlib.Path(__file__).resolve().parent
+CACHE = TOOL / "cache"
+REPO = TOOL.parent.parent
 SPLIT = "-07-01"           # validation: fit before, score after
 TARGET = {1: "2B", 2: "3B", 3: "H"}
 ATTEMPT_EVENTS = ("stolen_base_", "caught_stealing_", "pickoff_caught_stealing_")
@@ -58,7 +60,7 @@ def plays_and_states(season):
     phase's code, whether a runner who had an opportunity when it began tried to steal (and
     which base, and whether he made it), each game's two starters, and its batting orders."""
     rows, starters, orders = [], set(), {}
-    for g in pbp.load_games(season, ROOT):
+    for g in pbp.load_games(season, CACHE):
         orders[g["pk"]] = g["order"]
         raw = {p[0]: p for p in g["plays"]}
         first = {}
@@ -150,7 +152,7 @@ def tune(df, ycol, ctx_cols, label):
 
 def main(season, parquet):
     season = int(season)
-    data = json.loads((ROOT / "site" / "data" / f"{season}.json").read_text(encoding="utf-8"))
+    data = json.loads((REPO / "lineup-sims" / "data" / f"{season}.json").read_text(encoding="utf-8"))
     abbr_of = {t["name"]: t["abbr"] for t in data["teams"]}
     # the Stats API's full names; the data file's are short in places (Athletics)
     for t in data["teams"]:
@@ -300,7 +302,7 @@ def main(season, parquet):
         "actual": {"SB": int((raw.y_sb).sum()), "CS": int((raw.y_att & ~raw.y_sb).sum()),
                    "team_games": int(2 * raw.game_pk.nunique())},
     }
-    dest = ROOT / "site" / "data" / f"{season}-steal.json"
+    dest = REPO / "lineup-sims" / "data" / f"{season}-steal.json"
     dest.write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
     print(f"wrote {dest} ({dest.stat().st_size / 1024:.0f} KB): {len(runners)} runners, {len(pitchers)} pitchers, {len(catchers)} catchers")
 

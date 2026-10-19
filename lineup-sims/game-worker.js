@@ -3,6 +3,8 @@
 // message: both teams' pitching, each stage with the other lineup's chances against it (and, with
 // useSteal, each side's runners, pitchers and catcher). A job can't be stopped partway; when the
 // page wants a newer one it replaces the whole worker.
+// sim.js is the Lineup Sim's engine: when its ?v= changes there (app.js), change it here too, or the
+// two pages load two copies of it
 import { prepare } from "./sim.js?v=8";
 import { prepareSteal, simulateGames } from "./game-sim.js?v=1";
 

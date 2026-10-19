@@ -37,15 +37,25 @@ python -I tools/lineup_sims/hook_model.py 2026 --projections <projections>/data
 # 3d. the hypothetical pitcher's quality axes (Scrub - Average - Ace), from the data files of steps 3
 #     and 3b; run it again whenever either changes
 python -I tools/lineup_sims/quality_axis.py 2026
+# 3e. the Game Sim's stolen bases (lineup-sims/game.html), by runner, pitcher and catcher. It reads the
+#     stolen_bases project's running-game pull for the season (mlb_running_game.scrape_running_game(<season>,
+#     game_types=("R",)) written to parquet; its stored 2026 data stops at 2026-08-20, so pull the season
+#     again first), the cached play-by-play and lineup-sims/data/<season>.json, and writes only
+#     lineup-sims/data/<season>-steal.json. Nothing under projections/.
+python -I tools/lineup_sims/steal_model.py 2026 <running-game parquet>
 # 4. every team's lineups and the contact-power curve, simulated into the data file (~1 min)
 node tools/lineup_sims/precompute.mjs 2026 100000
-# 5. engine checks against the new file
+# 5. engine checks against the new file, and the Game Sim's
 node tools/lineup_sims/test_sim.mjs 2026
+node tools/lineup_sims/test_game.mjs 2026
 ```
 
 Then bump `data/2026.json?v=` (and `data/2026-pitch.json?v=`, `data/2026-hook.json?v=` or `data/2026-quality.json?v=`, if step 3b, 3c or 3d ran) in
 `lineup-sims/app.js` and `app.js?v=` in `lineup-sims/index.html`; browsers and the edge
-hold them for hours.
+hold them for hours. The Game Sim (`lineup-sims/game.js`) loads `data/2026.json`, `data/2026-hook.json`
+and `data/2026-steal.json` with their own `?v=`, so bump those there too (and `game.js?v=` in
+`game.html`). `game.js`, `game-sim.js` and `game-worker.js` import `sim.js` at the page's `?v=`:
+when `sim.js?v=` changes in `app.js`, change it in all three.
 
 `cache/` (git-ignored) holds the FanGraphs extract, the reduced per-game play-by-play and
 the Stats API player and team lists.
