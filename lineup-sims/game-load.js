@@ -19,6 +19,9 @@ export const STATS_API = "https://statsapi.mlb.com/api/v1";
 export const scheduleUrl = (pk) => `${STATS_API}/schedule?gamePk=${pk}&fields=dates,games,gamePk,season,gameType,officialDate,status,codedGameState,detailedState,venue,id,name,teams,away,home,team`;
 export const boxscoreUrl = (pk) => `${STATS_API}/game/${pk}/boxscore?fields=teams,away,home,team,id,pitchers,players,person,fullName,position,abbreviation,battingOrder`;
 
+// the season's MLB regular-season and postseason games (for Random Game: about 8 KB gzipped)
+export const seasonUrl = (season) => `${STATS_API}/schedule?sportId=1&season=${season}&gameType=R,F,D,L,W&fields=dates,games,gamePk,gameType,status,codedGameState`;
+
 // a gamePk: 6 or 7 digits on their own, or in a Baseball Savant (gamePk=) or MLB Gameday (/<pk>/) link
 export function pkOf(text) {
   const m = String(text).match(/(?:gamePk=|\/)(\d{6,7})(?!\d)|^\s*(\d{6,7})\s*$/);
@@ -58,6 +61,15 @@ export function checkSchedule(pk, sched, season, teams) {
   if (!kind) throw new Error(`game ${pk} isn't a regular-season, preseason or postseason game`);
   if (g.status?.codedGameState !== "F") throw new Error(`game ${pk} wasn't completed (${String(g.status?.detailedState ?? "no result").toLowerCase()})`);
   return { g, kind };
+}
+
+// The gamePks in a seasonUrl reply that load: completed regular-season and postseason games, each once
+// (a postponed game made up later is listed on both dates), in order.
+export function completedGames(sched) {
+  if (!sched || typeof sched !== "object") throw malformed();
+  const pks = (sched.dates ?? []).flatMap((d) => d?.games ?? [])
+    .filter((x) => KIND[x?.gameType] && x.status?.codedGameState === "F" && Number.isInteger(x.gamePk)).map((x) => x.gamePk);
+  return [...new Set(pks)].sort((a, b) => a - b);
 }
 
 export function parseGame(pk, sched, box, ctx) {
