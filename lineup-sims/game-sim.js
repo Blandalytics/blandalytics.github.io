@@ -26,6 +26,8 @@
 // With `steal`, each team also carries `runners` (its own nine slots' [attempt, success] logit
 // effects, flat), `catcher` ([attempt, success]), and each stage `steal` ([attempt, success],
 // the pitcher's hand included).
+// sim.js is the Lineup Sim's engine: when its ?v= changes there (app.js), change it here too, or the
+// two pages load two copies of it
 import { CATS, hookChance, rng } from "./sim.js?v=8";
 
 const C = Object.fromEntries(CATS.map((c, i) => [c, i]));
