@@ -7,7 +7,7 @@
 // sim.js is the Lineup Sim's engine: when its ?v= changes there (app.js), change it here too, or the
 // two pages load two copies of it
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
-import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=1";
+import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -465,7 +465,7 @@ let job = null, jobs = 0, worker = null, last = null;
 let useWorker = typeof Worker !== "undefined";
 
 function startWorker() {
-  const w = new Worker(new URL("./game-worker.js?v=1", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./game-worker.js?v=2", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance }, steal: stealData });
   w.onmessage = ({ data: msg }) => {
     if (job && msg.id === job.id) finish(job, msg.res, msg.ms);
