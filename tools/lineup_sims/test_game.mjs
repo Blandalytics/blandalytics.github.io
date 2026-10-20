@@ -21,7 +21,7 @@ const PD = JSON.parse(readFileSync(join(dataDir, `${season}-parks.json`), "utf8"
 // game-sim.js imports sim.js with the page's ?v=; this file imports it plain, so the engine is loaded by URL
 const { BAT, PIT, prepareSteal, simulateGames } = await import(pathToFileURL(engineFile).href);
 const { HOME_FIELD, PARK_N, homeField, parkAdjust } = await import(pathToFileURL(parkFile).href);
-const { checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
+const { bullpenDay, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
 
 let failed = 0, passed = 0;
 const check = (ok, what) => {
@@ -276,6 +276,16 @@ function bookkeeping(res, teams, label) {
   };
   check(["postponed first", "final first"].every((o) => JSON.stringify(madeUpScore(o)) === "[3,5]"), "a made-up game's final score is the completed entry's (either order)");
   check(/[,&=]score(,|&|$)/.test(scheduleUrl(pk)), "the schedule request asks for the score");
+  // He pitches, from the game: the starters' outs (the API's: 18 and 15), and who opened a bullpen day
+  const G0 = parseGame(pk, fx.schedule, fx.boxscore, ctx());
+  check(G0.sides.away.spOuts === 18 && G0.sides.home.spOuts === 15 && /[,&=]outs(,|&|$)/.test(boxscoreUrl(pk)), "each starter's outs in the game, from the box score");
+  check(bullpenDay(3, 0, 0) && bullpenDay(6, 12, 60) && !bullpenDay(6, 32, 560) && !bullpenDay(7, 0, 0) && !bullpenDay(null, 0, 0),
+    "a bullpen day: 6 outs or fewer and no 2026 starts or short ones (an opener), not a regular starter knocked out early");
+  // 849816 then 849817, as the user found it: Shawn Armstrong opened (3 outs, no 2026 starts), Parker Messick started and
+  // went 6 outs; loading each sets both sides' plan from this, so the second load turns the bullpen day back into the hook
+  const arm = (id) => data.pitchers.find((r) => r[0] === id);
+  const [armstrong, messick] = [arm(542888), arm(800048)];
+  check(bullpenDay(3, armstrong[6], armstrong[7]) && !bullpenDay(6, messick[6], messick[7]), "849816's Armstrong opens a bullpen day; 849817's Messick (6 outs, a regular starter) gets the hook");
   // the gamePk is all that's sent
   check(pkOf("822778") === 822778 && pkOf(" 822778 ") === 822778 && pkOf("https://baseballsavant.mlb.com/gamefeed?date=8/11/2026&gamePk=822778") === 822778
     && pkOf("https://www.mlb.com/gameday/red-sox-vs-blue-jays/2026/08/11/822778/final/box") === 822778

@@ -10,7 +10,7 @@
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
 import { PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=2";
-import { boxscoreUrl, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=4";
+import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=5";
 import { teamColors } from "./team-colors.js?v=1";
 
 const SEASON = 2026;
@@ -248,8 +248,9 @@ function fillPark() {
 // ---------- a real game, by gamePk ----------
 // Any completed 2026 regular-season game, from MLB's Stats API: game-load.js reads the schedule and
 // box score into a matchup (both teams, their starting nines in order, the starting pitchers, each
-// team's catcher, the ballpark and the week); here it's fetched and put on the page. He pitches and
-// the Sim settings stay as they were. A game is fetched only on Load (or Enter), Random Game, or once
+// team's catcher, the ballpark and the week); here it's fetched and put on the page, with He pitches
+// set from what each starter did (bullpenDay); the Sim settings stay as they were. A game is fetched
+// only on Load (or Enter), Random Game, or once
 // as the page opens when the link asks for one: blandalytics.com/lineup-sims/<gamePk> lands here as
 // game.html#gp=<gamePk> (the site's 404.html sends it), and so does game.html#<gamePk>.
 const FETCH_MS = 8000;
@@ -288,6 +289,9 @@ function applyGame(G) {
   [["away", SIDES[0]], ["home", SIDES[1]]].forEach(([where, s]) => {
     const x = G.sides[where];
     Object.assign(s, { team: x.team, lineup: x.lineup, edited: true, sp: pitchers.get(x.sp) });
+    // He pitches, from the game: a bullpen day if the starter opened one, else the modeled hook
+    // (renderSide steps down to what he can do: a pitcher with no 2026 starts has no hook)
+    s.plan = bullpenDay(x.spOuts, s.sp.gs, s.sp.startOuts) ? "bullpen" : "hook";
     s.c = x.c;
     if (stealData) checkCatcher(s);
   });
@@ -304,8 +308,9 @@ function applyGame(G) {
   const a = G.sides.away, h = G.sides.home;
   $("gpk_note").classList.toggle("warn", G.missing.length > 0);
   const wk = parkData && G.week >= 0 ? parkData.weeks[G.week][2] : null;
+  const spOf = (t, x) => `${x.spName}${SIDES[t].plan === "bullpen" ? " (opener)" : ""}`;
   $("gpk_note").textContent = `${a.short} at ${h.short}, ${day}, ${G.venue}${G.kind === "regular" ? "" : ` (${G.type})`}: `
-    + `both starting nines and starters (${a.spName}, ${h.spName})`
+    + `both starting nines and starters (${spOf(0, a)}, ${spOf(1, h)})`
     + (G.park < 0 && parkData ? `; ${G.venue} has no ${SEASON} park factors, so ${parkName() ?? "no park"}` : "")
     + (G.kind === "postseason" && wk ? `, with the regular season's last week (${wk})` : "")
     + (G.missing.length ? `. Not in the ${SEASON} data, so replaced: ${G.missing.join(", ")}.` : ".");
@@ -1026,10 +1031,11 @@ function sgHover(ev) {
   const n = k.D[a * k.n1 + h];
   t.innerHTML = "<b></b><small></small>";
   t.querySelector("b").textContent = `${k.ab(0)} ${k.runs(a)}, ${k.ab(1)} ${k.runs(h)}`;
-  const final = k.fin && k.fin[0] === a && k.fin[1] === h;
-  t.querySelector("small").textContent = (a === h && !n ? "a tie: no game ends tied"
+  // a tie square says no game ends there, unless the real game did (called, tied)
+  const final = k.fin && k.fin[0] === a && k.fin[1] === h, tie = a === h;
+  t.querySelector("small").textContent = (tie && !n && !final ? "a tie: no game ends tied"
     : !n ? "no games ended here" : n / k.games < 0.0005 ? `${n} of ${k.games.toLocaleString()} games` : `${pct(n / k.games)} of games`)
-    + (final ? " · the final score" : "");
+    + (final ? (tie ? " · the final score (called tied)" : " · the final score") : "");
   t.style.left = `${k.m.l + (h + 0.5) * k.c}px`;
   t.style.top = `${k.m.t + (k.M - a) * k.c}px`;
   t.hidden = false;
