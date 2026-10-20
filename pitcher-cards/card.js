@@ -102,15 +102,16 @@
   // ---- palette ----------------------------------------------------------------------
   const BACKGROUND = "#292C42";
   const WHITE = "#FFFFFF";
-  const TEXT = "#00D4FF";
+  const TEXT = "#55e8ff"; // the frames: PLPD brand-brand-cyan
   const LINE = "#8D96B3";
-  const HIGHLIGHT = "#F1C647";
+  const HIGHLIGHT = "#ffc277"; // A+: PLPD brand-brand-amber
   const LINE_TEXT = "#bae2ff"; // the box-score line under the title
-  const NAME_GRADIENT = ["#00D4FF", "#0099CC"];
+  const NAME_GRADIENT = ["#55e8ff", "#37a2b7"]; // PLPD cyan-400 to cyan-600
 
+  // the PLPD design system's pitch-* colors (KN: pitch-knuckle-eephus); Unknown has no token
   const MARKER_COLORS = {
-    FF: "#FF6683", SI: "#F2B24B", FS: "#83D6FF", FC: "#C59C9C", SL: "#CE66FF",
-    ST: "#FFAAF7", CU: "#339cff", CH: "#6DE95D", KN: "#c7c7c7", UN: "#c7c7c7",
+    FF: "#ff839b", SI: "#ffc277", FS: "#83d6ff", FC: "#c59c9c", SL: "#ce66ff",
+    ST: "#ffaaf7", CU: "#2a98ff", CH: "#6de95d", KN: "#a0a0a0", UN: "#c7c7c7",
   };
 
   const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -133,15 +134,18 @@
     return out;
   }
 
-  const DIVERGE_STOPS = ["#4BBFDF", "#FFFFFF", "#ff5757"];
-  const DIVERGE = blend(DIVERGE_STOPS, 5); // stat colours, worst -> best
-  const VELO_DIFF = blend(DIVERGE_STOPS, 13); // velo change vs the comparison season
-  const GRADE_PALETTE = blend(DIVERGE_STOPS, 9);
+  // the five steps, worst -> best, from the PLPD primitives: cyan-400 and cyan-200 below
+  // average, white at it, red-200 and red-400 above (red-400 is the strongest red that
+  // reads at 4.5:1 on the card), with A+ in amber above them all. Every step reads at
+  // 4.8:1 or more on BACKGROUND.
+  const SCALE = ["#55e8ff", "#adf6ff", "#FFFFFF", "#f7b8b9", "#f4707c"];
+  const DIVERGE = SCALE; // stat colours (PLV+, plvStuff+, Velo, SwStr%, CSW%, xSLGcon), worst -> best
+  const VELO_DIFF = blend(SCALE, 13); // velo change vs the comparison season
 
   const LETTERS = ["F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"];
   // a letter's colour is its family's (D-, D and D+ share one), A+ gets the highlight
   const GRADE_COLORS = { "-": WHITE, "A+": HIGHLIGHT };
-  ["F", "D", "C", "B", "A"].forEach((g, i) => (GRADE_COLORS[g] = GRADE_PALETTE[2 * i]));
+  ["F", "D", "C", "B", "A"].forEach((g, i) => (GRADE_COLORS[g] = SCALE[i]));
   LETTERS.forEach((g) => (GRADE_COLORS[g] = GRADE_COLORS[g] || GRADE_COLORS[g[0]]));
 
   // Cut points for the Stuff, Location and PLV letters, on the 100 +/- 15 scale: an
@@ -552,7 +556,7 @@
       if (!shares[i]) return;
       const width = (shares[i] + fw) * ax.sx;
       const x = sign > 0 ? ax.x(0) : ax.x(0) - width;
-      out.push(rect(x, ax.y(i - 0.4), width, 0.8 * -ax.sy, { fill: get(MARKER_COLORS, t.code, "#c7c7c7"), rx, ry }));
+      out.push(rect(x, ax.y(i - 0.4), width, 0.8 * -ax.sy, { fill: get(MARKER_COLORS, t.code, MARKER_COLORS.UN), rx, ry }));
     });
     return out;
   }
@@ -577,7 +581,7 @@
       text(fx(0.7725), fy(0.798), `vs RHB (${card.n_vr})`, 20, { color: LINE, ha: "left" }),
     ];
     types.forEach((t, i) => {
-      const color = get(MARKER_COLORS, t.code, "#c7c7c7");
+      const color = get(MARKER_COLORS, t.code, MARKER_COLORS.UN);
       const size = n > 1 ? (Math.min(t.usage || 0, 33) / 33) * 12 + 16 : 25;
       out.push(text(ax.x(0), ax.y(i + 0.05), `${t.code} ${fixed(t.usage, 0)}%`, size, { color }));
       const xr = ax.x(vsR[i] + barLim / 2.75);
@@ -671,7 +675,7 @@
   function shapes(ax, card) {
     return card.comparisons.map((c) => {
       const paths = Object.entries(c.shapes)
-        .flatMap(([code, ds]) => ds.map((d) => `<path d="${d}" fill="${get(MARKER_COLORS, code, "#c7c7c7")}" fill-opacity="0.25"/>`))
+        .flatMap(([code, ds]) => ds.map((d) => `<path d="${d}" fill="${get(MARKER_COLORS, code, MARKER_COLORS.UN)}" fill-opacity="0.25"/>`))
         .join("");
       return `<g data-cmp="${c.year}" transform="${ax.transform()}">${paths}</g>`;
     });
@@ -811,7 +815,7 @@
     }
     const bw = Math.max(0.5, Math.min(0.8, 2 / n));
     types.forEach((t, i) => {
-      const color = get(MARKER_COLORS, t.code, "#c7c7c7");
+      const color = get(MARKER_COLORS, t.code, MARKER_COLORS.UN);
       const y = hdr.y(i);
       out.push(rect(hdr.x(0.1), hdr.y(i - bw / 2), 0.075 * hdr.sx, bw * -hdr.sy, { fill: color, rx: 4 }));
       out.push(text(hdr.x(0.225), y, get(PITCH_NAMES, t.code, t.code), 20, { color, ha: "left" }));

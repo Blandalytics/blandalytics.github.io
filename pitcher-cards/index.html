@@ -8,83 +8,55 @@
 <link rel="icon" href="https://res.cloudinary.com/dduabusaf/image/upload/v1772839606/teal_letter_logo_owufaj.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/shared/plpd.css?v=2">
 <style>
-:root{
-  --ground:#101222; --surface:#292C42; --raise:#32344a;
-  --ink:#ffffff; --accent:#00d4ff; --muted:#8D96B3; --faint:#6b7684;
-  --rule:#32344a; --card:#292C42;
-}
+/* the picker on the PLPD design system (/shared/plpd.css): a surface-2 bar of PLPD fields over the
+   card, which keeps its own card-bg (#292C42, the system's card-card-bg) */
 *{box-sizing:border-box}
 html,body{height:100%}
-body{
-  margin:0; background:var(--ground); color:var(--ink);
-  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
-  display:flex; flex-direction:column;
-}
+body.plpd{display:flex; flex-direction:column}
 
 /* ---------- picker bar ---------- */
 .bar{
-  display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 18px;
-  padding:14px 20px 14px; border-bottom:1px solid var(--rule); background:var(--surface);
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-300) var(--space-400);
+  padding:16px var(--layout-page-content-gutter); border-bottom:1px solid var(--surface-border-card); background:var(--surfaces-surface-2);
 }
-.brand{margin-right:auto; display:flex; align-items:center; gap:12px}
+.brand{margin-right:auto; display:flex; align-items:center; gap:var(--space-300); align-self:center}
 .brand img{height:34px; width:auto}
-.brand div{display:flex; flex-direction:column; gap:1px}
-.brand h1{margin:0; font-size:19px; font-weight:700; letter-spacing:-.01em; color:var(--accent)}
-.brand .sub{
-  font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
-  font-variant-numeric:tabular-nums;
-}
-.field{display:flex; flex-direction:column; gap:5px; min-width:150px}
-.field label{
-  font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
-  font-weight:600;
-}
-select{
-  appearance:none; -webkit-appearance:none;
-  font:inherit; font-size:14px; font-weight:500; color:var(--ink);
-  background:var(--raise) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238D96B3' stroke-width='1.5'/></svg>") no-repeat right 11px center;
-  border:1px solid var(--rule); border-radius:6px; padding:8px 30px 8px 11px;
-  cursor:pointer; font-variant-numeric:tabular-nums;
-}
-select:hover{border-color:var(--faint)}
-select:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
-select:disabled{opacity:.45; cursor:default}
-#pitcher{min-width:260px}
-.check{display:flex; align-items:center; gap:8px; padding:8px 0; font-size:14px; font-weight:500}
-.check input{accent-color:var(--accent); width:16px; height:16px; margin:0}
-.check.off{opacity:.45}
-#year{min-width:90px}
-.btn,.open{
-  font:inherit; font-size:12.5px; font-weight:600; color:var(--ink); text-decoration:none;
-  background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:8px 12px;
-  white-space:nowrap; cursor:pointer; align-self:flex-end;
-}
-.btn:hover,.open:hover{border-color:var(--accent); color:var(--accent)}
-.btn[hidden],.open[hidden]{display:none}
-.btn:disabled{opacity:.45; cursor:default}
+.brand div{display:flex; flex-direction:column; gap:2px}
+/* the title as PageTitleHeading's (DM Sans 900 24 in cyan), the status as its stamp */
+.brand h1{margin:0; font-family:var(--font-display); font-size:24px; font-weight:900; line-height:1.2; color:var(--brand-brand-cyan)}
+.brand .sub{font-family:var(--font-display); font-size:12px; line-height:1.25; letter-spacing:.36px; color:var(--text-text-zero); font-variant-numeric:tabular-nums}
+.field select.plpd-filter-dropdown{width:auto; min-width:150px; font-variant-numeric:tabular-nums}
+#pitcher{min-width:280px}
+#year{min-width:110px}
+.check.off{opacity:.4; cursor:default}
+.open[hidden],.btn[hidden]{display:none}
+a.plpd-btn{text-decoration:none; color:var(--base-white)}
 
 /* ---------- the card ---------- */
-.stage{flex:1; min-height:0; position:relative; display:flex; justify-content:center; overflow:auto; padding:12px}
-.card,iframe{border:0; background:var(--card); height:100%; aspect-ratio:3/4; max-width:100%; border-radius:6px; display:block; overflow:hidden}
+.stage{flex:1; min-height:0; position:relative; display:flex; justify-content:center; overflow:auto; padding:var(--space-300)}
+.card,iframe{border:0; background:var(--card-card-bg); height:100%; aspect-ratio:3/4; max-width:100%; border-radius:var(--radius-xl); display:block; overflow:hidden;
+  box-shadow:var(--shadow-pl-data-table-wrap-shadow)}
 .card svg{display:block; width:100%; height:100%}
 .card[hidden],iframe[hidden]{display:none}
 .empty{
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  color:var(--muted); font-size:15px; text-align:center; padding:0 20px;
+  color:var(--text-text-meta); font-size:15px; text-align:center; padding:0 20px;
 }
 .empty[hidden]{display:none}
-.note{padding:6px 20px 10px; color:var(--muted); font-size:12px; border-top:1px solid var(--rule); background:var(--surface)}
-.prov{padding:6px 20px; color:var(--muted); font-size:12.5px; border-top:1px solid var(--rule); background:var(--surface)}
-.prov b{color:var(--ink); font-weight:600}
+.note,.prov{padding:8px var(--layout-page-content-gutter); color:var(--text-text-meta); font-size:13px; line-height:1.45;
+  border-top:1px solid var(--surface-border-card); background:var(--surfaces-surface-2)}
+.note{padding-bottom:12px}
+.note b,.prov b{font-family:var(--font-display); color:var(--text-text-cell); font-weight:600}
 .prov[hidden]{display:none}
-.note a{color:var(--accent)}
+.note a{color:var(--brand-brand-cyan)}
 
 @media (max-width:760px){
-  .bar{padding:12px 12px 10px; gap:10px 12px}
+  .bar{padding:12px 12px 12px; gap:10px 12px}
   .brand{flex-basis:100%; margin:0}
+  .brand h1{font-size:20px}
   /* two fields to a row, the pitcher's alone; each select fills its field */
   .field{flex:1 1 40%; min-width:0}
   .field.wide{flex-basis:100%}
@@ -93,7 +65,7 @@ select:disabled{opacity:.45; cursor:default}
   .field:has(#date){flex:0 1 auto}
   .field:has(#level){flex:1 1 0; min-width:110px}
   .field:has(#game){flex-basis:100%}   /* its own row, also while the dates load */
-  .field select{width:100%}
+  .field select.plpd-filter-dropdown{width:100%; min-width:0}
   #pitcher{min-width:0}
   .brand img{height:26px}
   /* the year (four digits) shares the compare checkbox's row, so the buttons share the next one */
@@ -103,24 +75,18 @@ select:disabled{opacity:.45; cursor:default}
   html,body{height:auto}
   .stage{flex:none; overflow:visible; display:block; padding:8px; min-height:160px}
   .card,iframe{width:100%; height:auto}
+  .note,.prov{padding-inline:12px}
 }
 @media (max-width:359px){
   .field:has(#date){flex:1 1 100%}     /* too narrow for both: the date takes the row, the level the next */
 }
-/* polish: balanced headings, prose without orphan words, a slight scale on press, and controls
-   at least 44px tall on touch screens */
 h1,h2,h3{text-wrap:balance}
-p,li,.tag,.note,.method,.status{text-wrap:pretty}
-.btn,.open{transition:transform .12s cubic-bezier(.2,0,0,1)}
-.btn:active:not(:disabled),.open:active:not(:disabled){transform:scale(.96)}
-@media (pointer:coarse){button,select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}
+p,li,.note,.prov{text-wrap:pretty}
 /* the note's links (Bluesky, Twitter) as 40px taps on a touch screen, the text unmoved */
 @media (pointer:coarse){.note a{display:inline-block; padding:12px 0; margin:-12px 0}}
-  .open{display:inline-flex; align-items:center; min-height:44px}}
-@media (prefers-reduced-motion:reduce){.btn:active:not(:disabled),.open:active:not(:disabled){transform:none}}
 </style>
 </head>
-<body>
+<body class="plpd">
 
 <header class="bar">
   <div class="brand">
@@ -130,29 +96,29 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
       <span class="sub" id="status">Loading cards…</span>
     </div>
   </div>
-  <div class="field">
-    <label for="date">Game date</label>
-    <select id="date" disabled></select>
+  <div class="field plpd-filter-field">
+    <label class="plpd-filter-field__label" for="date">Game date</label>
+    <select id="date" class="plpd-filter-dropdown" disabled></select>
   </div>
-  <div class="field">
-    <label for="level">Level</label>
-    <select id="level" disabled></select>
+  <div class="field plpd-filter-field">
+    <label class="plpd-filter-field__label" for="level">Level</label>
+    <select id="level" class="plpd-filter-dropdown" disabled></select>
   </div>
-  <div class="field">
-    <label for="game">Game</label>
-    <select id="game" disabled></select>
+  <div class="field plpd-filter-field">
+    <label class="plpd-filter-field__label" for="game">Game</label>
+    <select id="game" class="plpd-filter-dropdown" disabled></select>
   </div>
-  <div class="field wide">
-    <label for="pitcher">Pitcher</label>
-    <select id="pitcher" disabled></select>
+  <div class="field wide plpd-filter-field">
+    <label class="plpd-filter-field__label" for="pitcher">Pitcher</label>
+    <select id="pitcher" class="plpd-filter-dropdown" disabled></select>
   </div>
-  <label class="check off" id="compareWrap"><input type="checkbox" id="compare" checked disabled>Compare to previous stats?</label>
-  <div class="field">
-    <label for="year">Year for comparison</label>
-    <select id="year" disabled></select>
+  <label class="check off plpd-check" id="compareWrap"><input type="checkbox" id="compare" checked disabled>Compare to previous stats?</label>
+  <div class="field plpd-filter-field">
+    <label class="plpd-filter-field__label" for="year">Year for comparison</label>
+    <select id="year" class="plpd-filter-dropdown" disabled></select>
   </div>
-  <button class="btn" id="png" type="button" hidden>Share image ▾</button>
-  <a class="open" id="open" href="#" target="_blank" rel="noopener" hidden>Open full page ↗</a>
+  <button class="btn plpd-btn" id="png" type="button" hidden>Share image ▾</button>
+  <a class="open plpd-btn" id="open" href="#" target="_blank" rel="noopener" hidden>Open full page ↗</a>
 </header>
 
 <main class="stage">
@@ -173,7 +139,7 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
 </footer>
 
 <script src="/shared/share-image.js?v=2"></script>
-<script src="card.js?v=2"></script>
+<script src="card.js?v=3"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
