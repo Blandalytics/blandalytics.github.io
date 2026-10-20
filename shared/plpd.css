@@ -1,0 +1,138 @@
+/* PLPD on blandalytics.com: the tokens and the base components of the Pitcher List Pro Dashboard design
+   system (the "PLPD design system" artifact, tokens.json and components/bundle.css), for any page to
+   load. Values are copied exactly; the few literals are the system's own "no token" Figma values.
+   Fonts: DM Sans (display: headings, buttons, labels) and Work Sans (text: data, cells, body), loaded
+   by the page from Google Fonts. Dark only. */
+:root{
+  color-scheme:dark;
+  /* surfaces */
+  --surfaces-surface-1:#13152a; --surfaces-surface-2:#181a2c; --surfaces-surface-3:#21243a;
+  --card-card-bg:#292c42; --card-card-bg-hover:#34374c;
+  /* brand */
+  --brand-brand-cyan:#55e8ff; --brand-brand-cyan-header:#73efff; --brand-brand-amber:#ffc277;
+  /* text */
+  --base-white:#ffffff; --text-text-cell:#f0f1f5; --text-text-player:#f6f8fff5; --text-text-nav:#cbd7fd;
+  --text-text-team:#b4bbd7ad; --text-text-meta:#c0c4d8b8; --text-text-zero:#a4aacab2; --lgd-text-dim:#8a8eb0;
+  /* borders and overlays */
+  --borders-border-tab:#ffffff21; --white-alpha-200:#ffffff0a; --overlay-overlay-white-08:#ffffff14;
+  --navy-600:#2e3150;
+  /* data tables */
+  --data-table-pl-data-table-wrap-border:#768abe38;
+  --data-table-pl-data-table-header-border:#8ca5d21b;
+  --data-table-pl-data-table-header-text:var(--brand-brand-cyan-header);
+  --data-table-pl-data-table-row-border:#8ca5d21c;
+  --data-table-pl-data-table-row-open-bg:#2a4558;
+  --data-table-pl-data-table-cell-text:#f0f1f5;
+  --data-table-pl-data-table-cell-zero:#9298b8c7;
+  --data-table-pl-data-table-scroll-base-bg:#202233;
+  --data-table-pl-data-table-sticky-row-bg-light:#272d48;
+  --data-table-pl-data-table-sticky-row-bg-dark:#242840;
+  --data-table-pl-data-table-scrollbar-track:#6073a82e;
+  --data-table-pl-data-table-scrollbar-thumb:#7ac1ff7a;
+  --table-thead-label:#73efff; --surface-border-card:#2e3a5e;
+  /* charts (the Process+ chart set) */
+  --chart-blue:#53aaf8; --chart-gold:#f0b846; --chart-axis:#cbd7fd; --chart-muted:#c4cdecd9;
+  --chart-grid:#ffffff0f; --chart-center-line:#ffffff3d;
+  /* gradients and shadows */
+  --gradient-gloss:linear-gradient(180deg,#ffffff26 0%,#ffffff0d 100%);
+  --gradient-pl-btn-primary-bg:linear-gradient(150deg,#245297 0%,#0a2e63 100%);
+  --gradient-pl-btn-primary-bg-hover:linear-gradient(150deg,#295eae 0%,#0c3572 100%);
+  --gradient-pl-data-table-header-bg:linear-gradient(180deg,#404660 0%,#3c4360 22%,#353e5b 45%,#333c59 68%,#313a59 100%);
+  --gradient-pl-data-table-header-tooltip-bg:linear-gradient(180deg,#162344f5 0%,#0f1730f7 100%);
+  --shadow-pl-btn-primary:0 0 0 1px rgba(0,80,100,.4),0 6px 20px 0 rgba(0,0,0,.36),inset 0 1px 0 0 rgba(255,255,255,.3);
+  --shadow-pl-btn-standard-pressed:inset 0 3px 7px 0 rgba(0,0,0,.55);
+  --shadow-pl-data-table-wrap-shadow:0 0 0 1px rgba(7,9,18,.3),0 18px 30px 0 rgba(0,0,0,.28);
+  --shadow-pl-data-table-header-inset:inset 0 1px 0 0 rgba(255,255,255,.08);
+  --shadow-pl-filter-search-input-inset:inset 0 1px 0 0 rgba(255,255,255,.06);
+  --shadow-tab-nav-filter-chip-secondary-active-shadow:0 0 12px 0 rgba(85,232,255,.22);
+  /* type */
+  --font-display:"DM Sans",system-ui,sans-serif; --font-text:"Work Sans",system-ui,sans-serif;
+  /* space, radius, layout */
+  --space-050:2px; --space-100:4px; --space-150:6px; --space-200:8px; --space-250:10px; --space-300:12px; --space-400:16px;
+  --space-500:20px; --space-600:24px; --space-800:32px;
+  --radius-xs:3px; --radius-sm:4px; --radius-md:6px; --radius-lg:8px; --radius-xl:10px; --radius-2xl:12px;
+  --layout-page-content-gutter:24px; --layout-pl-prose-max:896px; --layout-pl-site-max:1600px;
+}
+
+/* the page: surface 1 under the atmosphere mesh */
+body.plpd{margin:0; min-height:100vh; color:var(--text-text-cell); font-family:var(--font-text); font-size:15px; line-height:1.45;
+  background:url("/shared/plpd-atmosphere.webp") center top / cover fixed, var(--surfaces-surface-1);
+  -webkit-font-smoothing:antialiased}
+.plpd a{color:var(--brand-brand-cyan)}
+.plpd :focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:2px}
+
+/* PlPageHeader: the page title (DM Sans 700 36 in cyan) with a one-line details line */
+.plpd-page-header{display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-400)}
+.plpd-page-header__title{margin:0; font-family:var(--font-display); font-size:36px; font-weight:700; line-height:36px; color:var(--brand-brand-cyan)}
+.plpd-page-header__meta{margin:0; font-family:var(--font-display); font-size:16px; font-weight:400; line-height:1.2; letter-spacing:.32px; color:var(--text-text-meta)}
+
+/* a panel (PlPane, Titled): a bordered section with a heading in DM Sans Bold 17 */
+.plpd-pane{background:var(--surfaces-surface-2); border:1px solid var(--surface-border-card); border-radius:var(--radius-xl); padding:16px 16px 12px}
+.plpd-pane__title{margin:0; font-family:var(--font-display); font-size:17px; font-weight:700; line-height:1.2; color:var(--table-thead-label)}
+
+/* PlFilterField + PlFilterDropdown, on a native select: label over a 40px surface-3 control, cyan caret */
+.plpd-filter-field{display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-200); min-width:0}
+.plpd-filter-field__label{font-family:var(--font-display); font-size:14px; font-weight:500; line-height:normal; color:var(--text-text-meta)}
+select.plpd-filter-dropdown{-webkit-appearance:none; appearance:none; box-sizing:border-box; height:40px; width:200px; max-width:100%;
+  padding:0 40px 0 12px; border:1px solid var(--borders-border-tab); border-radius:var(--radius-lg);
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 48 48' fill='none' stroke='%2355e8ff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M36 18L24 30L12 18'/%3E%3C/svg%3E") right 12px center / 16px 16px no-repeat,
+    var(--surfaces-surface-3);
+  box-shadow:var(--shadow-pl-filter-search-input-inset); font-family:var(--font-text); font-size:14px; font-weight:500; line-height:1.2;
+  color:var(--text-text-cell); cursor:pointer}
+select.plpd-filter-dropdown:hover{background-color:#262940} /* surface 3 under white-alpha-200 */
+select.plpd-filter-dropdown:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:2px}
+select.plpd-filter-dropdown option{background:var(--surfaces-surface-3); color:var(--text-text-cell)}
+
+/* PlBtn, Standard: a 40px outline button, DM Sans Bold 14 */
+.plpd-btn{box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:var(--space-200); height:40px;
+  padding:0 var(--space-400); border:0; border-radius:var(--radius-lg); background:transparent; box-shadow:inset 0 0 0 1px var(--borders-border-tab);
+  font-family:var(--font-display); font-size:14px; font-weight:700; line-height:1.2; color:var(--base-white); cursor:pointer; white-space:nowrap}
+.plpd-btn:hover:not(:disabled){background:var(--white-alpha-200); box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}
+.plpd-btn:active:not(:disabled){box-shadow:var(--shadow-pl-btn-standard-pressed)}
+.plpd-btn--primary{letter-spacing:.3px; background:var(--gradient-gloss),var(--gradient-pl-btn-primary-bg); box-shadow:var(--shadow-pl-btn-primary)}
+.plpd-btn--primary:hover:not(:disabled){background:var(--gradient-gloss),var(--gradient-pl-btn-primary-bg-hover); box-shadow:var(--shadow-pl-btn-primary)}
+.plpd-btn--icon{width:40px; padding:0}
+.plpd-btn svg{flex:none}
+
+/* PlTextButton: a quiet text action (Reset beside a filter bar) */
+.plpd-text-btn{display:inline-flex; align-items:center; height:40px; padding:0; border:0; background:transparent; font-family:var(--font-display);
+  font-size:14px; font-weight:400; line-height:normal; color:var(--lgd-text-dim); cursor:pointer; white-space:nowrap}
+.plpd-text-btn:hover{color:var(--brand-brand-cyan)}
+
+/* TabNavFilterChip, Role Cyan: a radio-style choice */
+.plpd-chip{box-sizing:border-box; display:inline-flex; align-items:center; height:40px; padding:8px 10px; border:0; border-radius:6px;
+  background:transparent; box-shadow:inset 0 0 0 1px var(--borders-border-tab); font-family:var(--font-display); font-size:14px; font-weight:500;
+  letter-spacing:.03em; line-height:1.2; color:#797d9a; cursor:pointer; white-space:nowrap}
+.plpd-chip:hover:not(:disabled){color:var(--brand-brand-cyan)}
+.plpd-chip[aria-pressed=true]{font-weight:600; color:var(--brand-brand-cyan); box-shadow:inset 0 0 0 1px rgba(85,232,255,.7),var(--shadow-tab-nav-filter-chip-secondary-active-shadow)}
+.plpd-chip:disabled{color:rgba(203,215,253,.4); box-shadow:inset 0 0 0 1px rgba(255,255,255,.06); cursor:default}
+.plpd-chips{display:inline-flex; gap:10px}
+
+/* PlRange: a 4px track with the filled part and a 14px thumb in cyan (track #3b4264: no token).
+   The page sets --plpd-range-pct as the value moves. */
+input[type=range].plpd-range{-webkit-appearance:none; appearance:none; height:4px; margin:0; border-radius:2px; outline:none; cursor:pointer;
+  background:linear-gradient(var(--brand-brand-cyan),var(--brand-brand-cyan)) 0 0 / var(--plpd-range-pct,0%) 100% no-repeat,#3b4264}
+input[type=range].plpd-range::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:14px; height:14px; border:0; border-radius:50%; background:var(--brand-brand-cyan)}
+input[type=range].plpd-range::-moz-range-thumb{width:14px; height:14px; border:0; border-radius:50%; background:var(--brand-brand-cyan)}
+input[type=range].plpd-range:active::-webkit-slider-thumb{width:16px; height:16px; box-shadow:0 0 0 4px rgba(85,232,255,.25)}
+input[type=range].plpd-range:active::-moz-range-thumb{width:16px; height:16px; box-shadow:0 0 0 4px rgba(85,232,255,.25)}
+
+/* PlDataTableWrap (Raised) and its header cells: the gradient header, cyan header labels (Work Sans SemiBold 14) */
+.plpd-table-wrap{overflow:auto; border:1px solid var(--data-table-pl-data-table-wrap-border); border-radius:var(--radius-xl);
+  background:var(--data-table-pl-data-table-scroll-base-bg); box-shadow:var(--shadow-pl-data-table-wrap-shadow);
+  scrollbar-color:var(--data-table-pl-data-table-scrollbar-thumb) var(--data-table-pl-data-table-scrollbar-track)}
+.plpd-table{border-collapse:separate; border-spacing:0; font-family:var(--font-text); font-variant-numeric:tabular-nums}
+.plpd-table thead th{background:var(--gradient-pl-data-table-header-bg); box-shadow:var(--shadow-pl-data-table-header-inset);
+  border-bottom:1px solid var(--data-table-pl-data-table-header-border); color:var(--data-table-pl-data-table-header-text);
+  font-family:var(--font-text); font-size:14px; font-weight:600; line-height:1.2; white-space:nowrap}
+.plpd-table td{border-bottom:1px solid var(--data-table-pl-data-table-row-border); color:var(--data-table-pl-data-table-cell-text); white-space:nowrap}
+
+/* PlMetricDefinition-style prose: terms in cyan DM Sans SemiBold, text in Work Sans meta */
+.plpd-prose{max-width:var(--layout-pl-prose-max); font-family:var(--font-text); font-size:14px; line-height:20px; color:var(--text-text-meta)}
+.plpd-prose b{font-family:var(--font-display); font-weight:600; color:var(--brand-brand-cyan)}
+
+/* PlTooltip look, for title-less hover readouts */
+.plpd-tooltip{box-sizing:border-box; max-width:280px; padding:8px 12px; border-radius:var(--radius-lg); background:var(--gradient-pl-data-table-header-tooltip-bg);
+  box-shadow:inset 0 0 0 1px var(--overlay-overlay-white-08),0 12px 24px 0 rgba(0,0,0,.4); font-family:var(--font-text); font-size:14px; line-height:1.4; color:#f0f1f5f5}
+
+@media (prefers-reduced-motion:reduce){*{transition:none !important}}

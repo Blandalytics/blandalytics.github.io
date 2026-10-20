@@ -13,15 +13,29 @@ const DEFAULTS = {level: "MLB", year: ALL, stat: "R", wk: "", grid: "model"};
 const state = {...DEFAULTS};
 let D = null;
 
-// the diverging scale of Park Factors: blue (worse for hitters) – surface – red (better), clipped at 90/110
-const SURF = [21, 27, 35], RED = [214, 72, 66], BLUE = [58, 116, 214];
-function shade(v, col) {
+// the diverging scale: the PLPD heat cell's seven fills (cold-3 … neutral … hot-3), blue (worse for
+// hitters) through white at 100 to red (better), run continuously and clipped at 90/110
+const HEAT = ["#0066ff", "#5599ff", "#aaccff", "#ffffff", "#e2bcbe", "#c6797c", "#a9363b"]
+  .map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)));
+const INK_DARK = "#292c42", INK_LIGHT = "#ffffff"; // card-card-bg on the light fills, base-white on the rest
+function heatRgb(v, col) {
   let t = Math.max(-1, Math.min(1, (v - 100) / 10));
   if (LOWER_BETTER.has(col)) t = -t;
-  const to = t >= 0 ? RED : BLUE, a = Math.abs(t) * 0.9;
-  return `rgb(${SURF.map((s, i) => Math.round(s + (to[i] - s) * a)).join(",")})`;
+  const u = (t + 1) * 3, i = Math.min(5, Math.floor(u)), f = u - i;
+  return HEAT[i].map((x, j) => Math.round(x + (HEAT[i + 1][j] - x) * f));
 }
-$("legend_bar").style.background = `linear-gradient(90deg, ${[90, 95, 100, 105, 110].map(v => shade(v, "")).join(",")})`;
+const shade = (v, col) => `rgb(${heatRgb(v, col).join(",")})`;
+// the label color: whichever of the two reads better on the fill
+function inkOn(rgb) {
+  const L = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const lum = 0.2126 * L(rgb[0]) + 0.7152 * L(rgb[1]) + 0.0722 * L(rgb[2]);
+  return (lum + 0.05) / (0.0263 + 0.05) >= (1.05) / (lum + 0.05) ? INK_DARK : INK_LIGHT; // 0.0263: #292c42's luminance
+}
+$("legend_bar").style.background = `linear-gradient(90deg, ${[90, 93.3, 96.7, 100, 103.3, 106.7, 110].map(v => shade(v, "")).join(",")})`;
+// the play button's two icons (IconPark-style outline glyphs, 18px beside the label size)
+const ICON_PLAY = '<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M15 24V11.876L25.5 17.938L36 24L25.5 30.062L15 36.124V24Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>';
+const ICON_PAUSE = '<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M16 12V36M32 12V36" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>';
+$("play").innerHTML = ICON_PLAY;
 
 // a "MM-DD" as a day of a common year, so that seasons line up by date
 const DAY0 = Date.UTC(2023, 0, 1);
@@ -99,6 +113,7 @@ function render() {
   $("week").max = s.weeks.length - 1;
   $("week").value = wi;
   $("week").setAttribute("aria-valuetext", w[2]);
+  $("week").style.setProperty("--plpd-range-pct", `${s.weeks.length > 1 ? (100 * wi) / (s.weeks.length - 1) : 0}%`);
   $("wk_label").textContent = `${w[2]}, ${yearShown()}`;
   const n = s.weeks.length;
   $("months").innerHTML = s.weeks.map((x, i) => (i && x[0].slice(0, 2) !== s.weeks[i - 1][0].slice(0, 2)
@@ -164,22 +179,22 @@ function drawChart() {
   const Y = v => m.t + ((hi - v) / (hi - lo)) * (H - m.t - m.b);
   const out = [];
   for (let v = lo; v <= hi + 1e-9; v += step) {
-    out.push(`<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 100 ? "#4a5565" : "#242c37"}" stroke-width="${v === 100 ? 1.5 : 1}"/>`);
-    out.push(`<text class="ylab" x="${m.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`);
+    out.push(`<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 100 ? "var(--chart-center-line)" : "var(--chart-grid)"}" stroke-width="${v === 100 ? 1.5 : 1}"/>`);
+    out.push(`<text x="${m.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`);
   }
   for (let mo = 2; mo <= 10; mo++) {
     const d = (Date.UTC(2023, mo, 1) - DAY0) / 864e5;
     if (d >= x0 && d <= x1) {
-      out.push(`<line x1="${X(d)}" x2="${X(d)}" y1="${m.t}" y2="${H - m.b}" stroke="#1d242e"/>`);
+      out.push(`<line x1="${X(d)}" x2="${X(d)}" y1="${m.t}" y2="${H - m.b}" stroke="var(--chart-grid)"/>`);
       out.push(`<text x="${X(d) + 4}" y="${H - 8}">${MON[mo]}</text>`);
     }
   }
   const xw = X(mid(s.weeks[wi]));
-  out.push(`<rect x="${xw - 3.5 * (W - m.l - m.r) / (x1 - x0)}" y="${m.t}" width="${7 * (W - m.l - m.r) / (x1 - x0)}" height="${H - m.t - m.b}" fill="rgba(108,180,255,.08)"/>`);
+  out.push(`<rect x="${xw - 3.5 * (W - m.l - m.r) / (x1 - x0)}" y="${m.t}" width="${7 * (W - m.l - m.r) / (x1 - x0)}" height="${H - m.t - m.b}" fill="rgba(85,232,255,.08)"/>`);
   let clipped = false;
   for (const [x, v, pa, lab, sel] of dots) {
     const r = Math.max(1.6, Math.min(5, 4.2 * Math.sqrt(pa / 7000))), vy = Math.max(lo, Math.min(hi, v));
-    const col = sel ? "var(--actual)" : "var(--other)", op = (sel ? 0.9 : 0.42) * (pa < 1500 ? 0.55 : 1);
+    const col = sel ? "var(--chart-gold)" : "var(--chart-muted)", op = (sel ? 0.9 : 0.42) * (pa < 1500 ? 0.55 : 1);
     const tip = `<title>${esc(lab)}: ${f1(v)} (${num(pa)} PA)</title>`;
     if (v !== vy) {
       clipped = true;
@@ -192,9 +207,9 @@ function drawChart() {
   // All years: the actual weeks' average by date (the table's Actual), dashed
   const avg = all ? pooledActual(c) : [];
   const ap = avg.map((a, i) => (a ? `${X(mid(s.weeks[i]))},${Y(Math.max(lo, Math.min(hi, a.v / 10)))}` : null)).filter(Boolean);
-  if (ap.length > 1) out.push(`<polyline points="${ap.join(" ")}" fill="none" stroke="var(--actual)" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round" opacity=".9"/>`);
-  out.push(`<polyline points="${line.map(([x, v]) => `${X(x)},${Y(v)}`).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`);
-  line.forEach(([x, v], i) => out.push(`<circle cx="${X(x)}" cy="${Y(v)}" r="${i === wi ? 5 : 0}" fill="var(--accent)" stroke="#0d1117" stroke-width="1.5"><title>model · ${esc(s.weeks[i][2])}: ${f1(v)}</title></circle>`));
+  if (ap.length > 1) out.push(`<polyline points="${ap.join(" ")}" fill="none" stroke="var(--chart-gold)" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round" opacity=".9"/>`);
+  out.push(`<polyline points="${line.map(([x, v]) => `${X(x)},${Y(v)}`).join(" ")}" fill="none" stroke="var(--chart-blue)" stroke-width="2.5" stroke-linejoin="round"/>`);
+  line.forEach(([x, v], i) => out.push(`<circle cx="${X(x)}" cy="${Y(v)}" r="${i === wi ? 5 : 0}" fill="var(--chart-blue)" stroke="var(--surfaces-surface-2)" stroke-width="2"><title>model · ${esc(s.weeks[i][2])}: ${f1(v)}</title></circle>`));
   line.forEach(([x, v], i) => { if (i !== wi) out.push(`<circle cx="${X(x)}" cy="${Y(v)}" r="7" fill="transparent"><title>model · ${esc(s.weeks[i][2])}: ${f1(v)}</title></circle>`); });
   const svg = $("chart");
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -204,7 +219,7 @@ function drawChart() {
   const key = [`<span><i class="ln"></i>Model: ${state.level} ${yearShown()}${yearShown() === 2027 ? " on the 2027 schedule" : ""}</span>`];
   if (all && dots.length) {
     key.push(`<span><i class="dt o"></i>Actual weeks, ${pooled()[pooled().length - 1]}–${pooled()[0]} (size: plate appearances)</span>`);
-    key.push(`<span><i class="ln" style="background:repeating-linear-gradient(90deg,var(--actual) 0 5px,transparent 5px 8px)"></i>Their average by date</span>`);
+    key.push(`<span><i class="ln" style="background:repeating-linear-gradient(90deg,var(--chart-gold) 0 5px,transparent 5px 8px)"></i>Their average by date</span>`);
   }
   else if (dots.length) key.push(`<span><i class="dt"></i>Actual weeks, ${yearShown()} (size: plate appearances)</span>`);
   if (clipped) key.push(`<span>▵ ▿ a week outside the range, on the edge</span>`);
@@ -223,7 +238,7 @@ function renderGrid(s, wi) {
     vals.map((row, i) => {
       const {v, note, thin} = row[ci], cls = `${i === wi ? "sel" : ""}${thin ? " thin" : ""}`;
       if (v === null || v === undefined) return `<td class="na ${cls}" data-i="${i}">–</td>`;
-      return `<td class="${cls}" data-i="${i}" style="background:${shade(v / 10, c)}" title="${NAMES[c] || c}, ${s.weeks[i][2]}: ${f1(v / 10)} (${note})">${Math.round(v / 10)}</td>`;
+      return `<td class="${cls}" data-i="${i}" style="background:${shade(v / 10, c)};color:${inkOn(heatRgb(v / 10, c))}" title="${NAMES[c] || c}, ${s.weeks[i][2]}: ${f1(v / 10)} (${note})">${Math.round(v / 10)}</td>`;
     }).join("") + "</tr>").join("");
   const gs = state.year === ALL ? pooled() : [];
   $("grid_note").textContent = state.grid === "actual" && hasActual()
@@ -400,12 +415,12 @@ $("copy").addEventListener("click", async () => {
 let timer = null;
 function stop() {
   clearInterval(timer); timer = null;
-  $("play").textContent = "▶"; $("play").setAttribute("aria-label", "Play through the season");
+  $("play").innerHTML = ICON_PLAY; $("play").setAttribute("aria-label", "Play through the season");
 }
 $("play").addEventListener("click", () => {
   if (timer) return stop();
   if (weekIndex(cur()) >= cur().weeks.length - 1) { state.wk = cur().weeks[0][0]; render(); }
-  $("play").textContent = "❚❚"; $("play").setAttribute("aria-label", "Pause");
+  $("play").innerHTML = ICON_PAUSE; $("play").setAttribute("aria-label", "Pause");
   timer = setInterval(() => {
     const s = cur(), i = weekIndex(s);
     if (i >= s.weeks.length - 1) return stop();
@@ -433,6 +448,7 @@ fetch("data.json")
   .then(d => {
     D = d;
     $("generated").textContent = `Data through the 2026 season; built ${d.generated}.`;
+    $("updated").textContent += ` · Updated ${+d.generated.slice(5, 7)}/${+d.generated.slice(8)}/${d.generated.slice(2, 4)}`;
     readHash(); refreshOptions(); render();
   })
   .catch(err => { $("readout").textContent = `Could not load the data (${err.message}).`; });
