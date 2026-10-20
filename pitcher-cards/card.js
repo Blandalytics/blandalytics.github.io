@@ -102,11 +102,11 @@
   // ---- palette ----------------------------------------------------------------------
   const BACKGROUND = "#292C42";
   const WHITE = "#FFFFFF";
-  const TEXT = "#00D4FF";
+  const TEXT = "#55e8ff"; // the frames: PLPD brand-brand-cyan
   const LINE = "#8D96B3";
-  const HIGHLIGHT = "#F1C647";
+  const HIGHLIGHT = "#ffc277"; // A+: PLPD brand-brand-amber
   const LINE_TEXT = "#bae2ff"; // the box-score line under the title
-  const NAME_GRADIENT = ["#00D4FF", "#0099CC"];
+  const NAME_GRADIENT = ["#55e8ff", "#37a2b7"]; // PLPD cyan-400 to cyan-600
 
   // the PLPD design system's pitch-* colors (KN: pitch-knuckle-eephus); Unknown has no token
   const MARKER_COLORS = {
@@ -134,15 +134,18 @@
     return out;
   }
 
-  const DIVERGE_STOPS = ["#4BBFDF", "#FFFFFF", "#ff5757"];
-  const DIVERGE = blend(DIVERGE_STOPS, 5); // stat colours, worst -> best
-  const VELO_DIFF = blend(DIVERGE_STOPS, 13); // velo change vs the comparison season
-  const GRADE_PALETTE = blend(DIVERGE_STOPS, 9);
+  // the five steps, worst -> best, from the PLPD primitives: cyan-400 and cyan-200 below
+  // average, white at it, red-200 and red-400 above (red-400 is the strongest red that
+  // reads at 4.5:1 on the card), with A+ in amber above them all. Every step reads at
+  // 4.8:1 or more on BACKGROUND.
+  const SCALE = ["#55e8ff", "#adf6ff", "#FFFFFF", "#f7b8b9", "#f4707c"];
+  const DIVERGE = SCALE; // stat colours (PLV+, plvStuff+, Velo, SwStr%, CSW%, xSLGcon), worst -> best
+  const VELO_DIFF = blend(SCALE, 13); // velo change vs the comparison season
 
   const LETTERS = ["F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"];
   // a letter's colour is its family's (D-, D and D+ share one), A+ gets the highlight
   const GRADE_COLORS = { "-": WHITE, "A+": HIGHLIGHT };
-  ["F", "D", "C", "B", "A"].forEach((g, i) => (GRADE_COLORS[g] = GRADE_PALETTE[2 * i]));
+  ["F", "D", "C", "B", "A"].forEach((g, i) => (GRADE_COLORS[g] = SCALE[i]));
   LETTERS.forEach((g) => (GRADE_COLORS[g] = GRADE_COLORS[g] || GRADE_COLORS[g[0]]));
 
   // Cut points for the Stuff, Location and PLV letters, on the 100 +/- 15 scale: an
