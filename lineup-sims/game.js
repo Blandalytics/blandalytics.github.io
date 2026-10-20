@@ -248,8 +248,9 @@ function fillPark() {
 // ---------- a real game, by gamePk ----------
 // Any completed 2026 regular-season game, from MLB's Stats API: game-load.js reads the schedule and
 // box score into a matchup (both teams, their starting nines in order, the starting pitchers, each
-// team's catcher, the ballpark and the week); here it's fetched and put on the page. He pitches and
-// the Sim settings stay as they were. A game is fetched only on Load (or Enter), Random Game, or once
+// team's catcher, the ballpark and the week); here it's fetched and put on the page, with He pitches
+// set from what each starter did (bullpenDay); the Sim settings stay as they were. A game is fetched
+// only on Load (or Enter), Random Game, or once
 // as the page opens when the link asks for one: blandalytics.com/lineup-sims/<gamePk> lands here as
 // game.html#gp=<gamePk> (the site's 404.html sends it), and so does game.html#<gamePk>.
 const FETCH_MS = 8000;
