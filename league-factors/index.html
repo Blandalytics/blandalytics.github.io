@@ -8,171 +8,146 @@
 <meta name="description" content="How the run environment of MLB and each minor-league level moves through the season, week by week: the park model's calendar curve against what each week produced, 2015–2027.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/shared/plpd.css?v=1">
 <style>
-:root{
-  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
-  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
-  --accent:#6cb4ff; --actual:#ffd166; --other:#8a96a6;
-}
-*{box-sizing:border-box}
-body{margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
-  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:15px; line-height:1.45;
-  -webkit-font-smoothing:antialiased; padding:24px 16px}
-main{max-width:1320px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
-header{max-width:860px}
-h1{margin:0; font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
-h2{margin:0; font-size:17px; font-weight:600}
+/* League Factors on the PLPD design system (/shared/plpd.css): the page's own layout and its chart,
+   heat table and readouts, all in the system's tokens */
+main{max-width:var(--layout-pl-site-max); margin:0 auto; padding:32px var(--layout-page-content-gutter) 48px; display:flex; flex-direction:column; gap:var(--space-600)}
+@media (max-width:700px){main{padding:24px 16px 40px; gap:var(--space-400)}}
+header{display:flex; flex-direction:column; gap:var(--space-400)}
+.intro{max-width:var(--layout-pl-prose-max); margin:0; font-size:15px; line-height:1.45; color:var(--text-text-meta)}
 p{margin:0}
-.tag{margin:6px 0 0; color:var(--muted); font-size:14px}
-a{color:var(--accent)}
-.card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
-.controls{display:grid; grid-template-columns:repeat(3,minmax(120px,220px)) 1fr; gap:12px 14px; align-items:end}
-.controls .actions{display:flex; justify-content:flex-end; align-items:flex-end}
-@media (max-width:700px){.controls{grid-template-columns:1fr 1fr} .controls .stat{grid-column:1 / -1} .controls .actions{grid-column:1 / -1; justify-content:flex-start}}
-label,.field{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
-label b,.field b{color:var(--ink); font-weight:500}
-input,select,button{font:inherit; color:var(--ink)}
-select{background:var(--ground); border:1px solid var(--rule); border-radius:6px; padding:7px 9px; width:100%}
-select:focus,button:focus-visible,input:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
-.seg{display:inline-flex; align-self:flex-start; border:1px solid var(--rule); border-radius:6px; overflow:hidden; background:var(--ground)}
-.seg button{background:transparent; border:0; padding:6px 13px; cursor:pointer; color:var(--muted); font-size:14px}
-.seg button + button{border-left:1px solid var(--rule)}
-.seg button[aria-pressed=true]{background:var(--accent); color:#0b1320; font-weight:600}
-.seg button:hover:not([aria-pressed=true]):not(:disabled){color:var(--ink); background:var(--raise)}
-.seg button:disabled{opacity:.4; cursor:default}
-.seasonbar{display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px 18px; align-items:center;
-  margin-top:14px; padding-top:14px; border-top:1px solid var(--rule)}
-button.play{width:38px; height:38px; border-radius:50%; border:1px solid var(--rule); background:var(--raise); cursor:pointer;
-  font-size:13px; line-height:1; padding:0}
-button.play:hover{border-color:var(--accent); color:var(--accent)}
-.slider{display:flex; flex-direction:column; gap:2px; min-width:0}
-.slider .now{font-size:13px; color:var(--muted)}
-.slider .now b{color:var(--ink); font-weight:600; font-size:14px}
-.slider input[type=range]{width:100%; margin:6px 0 2px; accent-color:var(--accent); cursor:pointer}
-.months{position:relative; height:15px; font-size:11px; color:var(--faint); margin:0 8px}
+
+/* the filter bar: Level, Year and Stat dropdowns, Reset at the right; the season slider under them */
+.filters{display:flex; flex-wrap:wrap; gap:var(--space-400); align-items:flex-end}
+.filters .grow{flex:1}
+@media (max-width:700px){.filters{display:grid; grid-template-columns:1fr 1fr} .filters .plpd-filter-field:last-of-type{grid-column:1 / -1}
+  .filters select.plpd-filter-dropdown{width:100%} .filters .plpd-filter-field{width:100%} .filters .grow{display:none}}
+.seasonbar{display:grid; grid-template-columns:auto minmax(0,1fr); gap:var(--space-300) var(--space-400); align-items:center;
+  margin-top:var(--space-400); padding-top:var(--space-400); border-top:1px solid var(--data-table-pl-data-table-row-border)}
+.slider{display:flex; flex-direction:column; gap:var(--space-200); min-width:0}
+.slider .now{font-family:var(--font-display); font-size:16px; font-weight:600; color:var(--text-text-cell)}
+.slider input[type=range]{width:100%}
+.months{position:relative; height:16px; margin:0 7px; font-family:var(--font-text); font-size:12px; color:var(--text-text-zero)}
 .months span{position:absolute; transform:translateX(-50%); white-space:nowrap}
 
-.chartbar{display:flex; gap:10px 18px; align-items:flex-start; justify-content:space-between}
+/* the chart panel: the readout and Share image over the chart, the key under it */
+.chartbar{display:flex; gap:var(--space-300) var(--space-400); align-items:flex-start; justify-content:space-between}
 .chartbar > button{flex:none}
-.readout{display:flex; flex-wrap:wrap; gap:4px 18px; align-items:baseline; font-size:14px; color:var(--muted)}
-.readout b{color:var(--ink); font-weight:600}
-.readout .m{color:var(--accent); font-family:"JetBrains Mono",monospace; font-weight:600}
-.readout .a{color:var(--actual); font-family:"JetBrains Mono",monospace; font-weight:600}
-#chartbox{margin-top:10px; width:100%; min-width:0}
+.readout{display:flex; flex-wrap:wrap; gap:var(--space-100) var(--space-400); align-items:baseline; font-size:14px; color:var(--text-text-meta)}
+.readout b{font-family:var(--font-display); font-size:16px; font-weight:600; color:var(--text-text-cell)}
+.readout .m,.readout .a{font-weight:600; font-size:16px; font-variant-numeric:tabular-nums}
+.readout .m{color:var(--chart-blue)} .readout .a{color:var(--chart-gold)}
+#chartbox{margin-top:var(--space-300); width:100%; min-width:0}
 #chart{display:block; width:100%; overflow:visible}
-#chart text{font-family:"DM Sans",system-ui,sans-serif; fill:var(--faint); font-size:11px}
-#chart .ylab{font-family:"JetBrains Mono",monospace}
-.key{display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:8px; font-size:12px; color:var(--muted)}
-.key span{display:inline-flex; align-items:center; gap:6px}
+#chart text{font-family:var(--font-text); fill:var(--chart-axis); font-size:12px}
+.key{display:flex; flex-wrap:wrap; gap:var(--space-150) var(--space-500); margin-top:var(--space-300); font-size:13px; color:var(--text-text-meta)}
+.key span{display:inline-flex; align-items:center; gap:var(--space-200)}
 .key i{display:inline-block}
-.key .ln{width:18px; height:3px; border-radius:2px; background:var(--accent)}
-.key .dt{width:9px; height:9px; border-radius:50%; background:var(--actual)}
-.key .dt.o{background:var(--other); opacity:.6}
+.key .ln{width:20px; height:3px; border-radius:2px; background:var(--chart-blue)}
+.key .dt{width:9px; height:9px; border-radius:50%; background:var(--chart-gold)}
+.key .dt.o{background:var(--chart-muted); opacity:.6}
 
-.row{display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; justify-content:space-between}
-.legend{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px}
-.legend .bar{width:160px; height:10px; border-radius:3px; border:1px solid var(--rule)}
-button.reset{background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:5px 10px; cursor:pointer; font-size:13px}
-button.reset:hover{border-color:var(--faint)}
-.status{color:var(--muted); font-size:13px}
+/* the table panel: heading, Model / Actual chips, the heat legend and Copy link, then the table */
+.row{display:flex; flex-wrap:wrap; gap:var(--space-300) var(--space-400); align-items:center; justify-content:space-between}
+.tools{display:flex; flex-wrap:wrap; gap:var(--space-300) var(--space-400); align-items:center}
+.legend{display:flex; align-items:center; gap:var(--space-200); font-family:var(--font-display); font-size:13px; color:var(--text-text-meta)}
+.legend .bar{width:160px; height:10px; border-radius:var(--radius-xs)}
+.status{font-size:14px; color:var(--text-text-meta)}
+#grid_note{margin:var(--space-300) 0}
+/* the heat table: 14px cells for 28 weeks across (the system's leaderboard cells are 16px; this grid is denser) */
+#grid th,#grid td{padding:6px 7px; text-align:center}
+#grid thead th{position:sticky; top:0; z-index:2; cursor:pointer; min-width:40px; font-size:13px}
+#grid thead th:hover{color:var(--data-table-pl-data-table-cell-text)}
+#grid thead th.sel{color:var(--brand-brand-amber)}
+#grid td{font-size:14px; cursor:pointer}
+#grid th.name,#grid td.name{position:sticky; left:0; z-index:1; text-align:left; padding:6px 12px; min-width:132px;
+  font-family:var(--font-text); font-size:14px; font-weight:500}
+#grid thead th.name{z-index:3; cursor:default; color:var(--data-table-pl-data-table-header-text)}
+#grid tbody tr:nth-child(odd) td.name{background:var(--data-table-pl-data-table-sticky-row-bg-light)}
+#grid tbody tr:nth-child(even) td.name{background:var(--data-table-pl-data-table-sticky-row-bg-dark)}
+#grid td.name{color:var(--text-text-player); box-shadow:inset -1px 0 0 var(--data-table-pl-data-table-row-border)}
+#grid tr.on td.name{background:var(--data-table-pl-data-table-row-open-bg); color:var(--brand-brand-amber); font-weight:600}
+#grid tr.on td:not(.name){font-weight:600}
+#grid td.na{color:var(--data-table-pl-data-table-cell-zero)}
+#grid td.thin{opacity:.55}
+#grid td.sel{box-shadow:inset 2px 0 0 var(--brand-brand-cyan), inset -2px 0 0 var(--brand-brand-cyan)}
+#grid tbody tr:last-child td.sel{box-shadow:inset 2px 0 0 var(--brand-brand-cyan), inset -2px 0 0 var(--brand-brand-cyan), inset 0 -2px 0 var(--brand-brand-cyan)}
+#grid tbody tr:last-child td{border-bottom:0}
 
-.tablewrap{overflow:auto; border:1px solid var(--rule); border-radius:8px; background:var(--surface)}
-table{border-collapse:separate; border-spacing:0; font-size:12.5px}
-th,td{padding:5px 4px; border-bottom:1px solid var(--rule); white-space:nowrap}
-thead th{position:sticky; top:0; z-index:2; background:var(--raise); color:var(--muted); font-weight:600; font-size:11px;
-  text-align:center; cursor:pointer; min-width:34px}
-thead th:hover{color:var(--ink)}
-td{text-align:center; font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; cursor:pointer; color:var(--ink)}
-th.name,td.name{position:sticky; left:0; z-index:1; background:var(--surface); border-right:1px solid var(--rule);
-  text-align:left; font-family:inherit; padding:5px 10px; min-width:118px}
-thead th.name{z-index:3; background:var(--raise); cursor:default}
-td.name{color:var(--muted)}
-tr.on td.name{color:var(--ink); font-weight:600; box-shadow:inset 3px 0 0 var(--accent)}
-td.na{color:var(--faint)}
-td.thin{opacity:.5}
-th.sel{color:var(--accent)}
-td.sel{box-shadow:inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent)}
-tr.on td:not(.name){font-weight:600}
-tbody tr:last-child td.sel{box-shadow:inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent), inset 0 -2px 0 var(--accent)}
+/* How it works */
+details summary{cursor:pointer; list-style-position:outside}
+details summary .plpd-pane__title{display:inline}
+.method{display:flex; flex-direction:column; gap:var(--space-300); margin-top:var(--space-300)}
 
-details summary{cursor:pointer; color:var(--ink); font-weight:600}
-.method{display:flex; flex-direction:column; gap:10px; margin-top:12px; color:var(--muted); font-size:14px; max-width:980px}
-.method b{color:var(--ink); font-weight:600}
-/* polish: balanced headings, prose without orphan words, a slight scale on press, and controls
-   at least 44px tall on touch screens */
 h1,h2,h3{text-wrap:balance}
-p,li,.tag,.note,.method,.status{text-wrap:pretty}
-button.reset,button.play{transition:transform .12s cubic-bezier(.2,0,0,1)}
-button.reset:active:not(:disabled),button.play:active:not(:disabled){transform:scale(.96)}
-@media (pointer:coarse){button:not(.play),select,input[type=text],input[type=number],input[type=search],input[type=date]{min-height:44px}button.play{width:44px;height:44px}}
-/* the week slider: the input is the touch target, so it's 36px tall on a touch screen (the track and thumb drawn as before) */
-@media (pointer:coarse){.slider input[type=range]{height:36px; margin:0}}
-/* the expander rows as ~38px taps on a touch screen */
-@media (pointer:coarse){details summary{padding-block:8px}}
-@media (prefers-reduced-motion:reduce){button.reset:active:not(:disabled),button.play:active:not(:disabled){transform:none}}
+p,.intro,.status,.plpd-prose{text-wrap:pretty}
+@media (pointer:coarse){.months{margin:0 9px} details summary{padding-block:8px}}
 </style>
 </head>
-<body>
+<body class="plpd">
 <main>
-  <header>
-    <h1>League Factors</h1>
-    <p class="tag">How each level's run environment moves through the season. 100 is that level's season average, and a week above 100 had more of that result per plate appearance. The line is the model's calendar curve, with the same batters and pitchers all season. The dots are what each week actually produced. For each park's own pattern, see the Seasonal view of <a href="/park-factors/#view=seasonal">Park Factors</a>.</p>
+  <header class="plpd-page-header">
+    <h1 class="plpd-page-header__title">League Factors</h1>
+    <p class="plpd-page-header__meta" id="updated">MLB 2015–2027 · AAA, AA, A+ and A 2021–2026 · week by week</p>
+    <p class="intro">How each level's run environment moves through the season. 100 is that level's season average, and a week above 100 had more of that result per plate appearance. The line is the model's calendar curve, with the same batters and pitchers all season. The dots are what each week actually produced. For each park's own pattern, see the Seasonal view of <a href="/park-factors/#view=seasonal">Park Factors</a>.</p>
   </header>
 
-  <section class="card">
-    <div class="controls">
-      <label><b>Level</b><select id="level"></select></label>
-      <label><b>Year</b><select id="year"></select></label>
-      <label class="stat"><b>Stat</b><select id="stat"></select></label>
-      <div class="actions"><button id="reset" class="reset" type="button" title="Back to MLB, All years, Runs, opening week">Reset filters</button></div>
+  <section class="plpd-pane" aria-label="Filters">
+    <div class="filters">
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">Level</span><select id="level" class="plpd-filter-dropdown"></select></label>
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">Year</span><select id="year" class="plpd-filter-dropdown"></select></label>
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">Stat</span><select id="stat" class="plpd-filter-dropdown"></select></label>
+      <span class="grow"></span>
+      <button id="reset" class="plpd-text-btn" type="button" title="Back to MLB, All years, Runs, opening week">Reset filters</button>
     </div>
     <div class="seasonbar">
-      <button type="button" id="play" class="play" aria-label="Play through the season" title="Play through the season">▶</button>
+      <button type="button" id="play" class="plpd-btn plpd-btn--primary plpd-btn--icon" aria-label="Play through the season" title="Play through the season"></button>
       <div class="slider">
-        <div class="now"><b id="wk_label"></b></div>
-        <input type="range" id="week" min="0" step="1" value="0" aria-label="Week of the season">
+        <div class="now" id="wk_label"></div>
+        <input type="range" id="week" class="plpd-range" min="0" step="1" value="0" aria-label="Week of the season">
         <div class="months" id="months" aria-hidden="true"></div>
       </div>
     </div>
   </section>
 
-  <section class="card">
+  <section class="plpd-pane">
     <div class="chartbar">
       <div class="readout" id="readout"></div>
-      <button id="share" class="reset" type="button">Share image ▾</button>
+      <button id="share" class="plpd-btn" type="button">Share image ▾</button>
     </div>
     <div id="chartbox"><svg id="chart" role="img" aria-labelledby="chart_title"><title id="chart_title"></title></svg></div>
     <div class="key" id="key"></div>
   </section>
 
-  <section class="card">
+  <section class="plpd-pane">
     <div class="row">
-      <h2>Every stat, week by week</h2>
-      <div class="row" style="gap:14px">
-        <div class="seg" id="grid_src" role="group" aria-label="Values in the table">
-          <button type="button" data-v="model" aria-pressed="true" title="The model's calendar curve">Model</button>
-          <button type="button" data-v="actual" aria-pressed="false" title="What each week produced">Actual</button>
+      <h2 class="plpd-pane__title">Every stat, week by week</h2>
+      <div class="tools">
+        <div class="plpd-chips" id="grid_src" role="group" aria-label="Values in the table">
+          <button type="button" class="plpd-chip" data-v="model" aria-pressed="true" title="The model's calendar curve">Model</button>
+          <button type="button" class="plpd-chip" data-v="actual" aria-pressed="false" title="What each week produced">Actual</button>
         </div>
         <div class="legend" aria-hidden="true">
-          <span>Pitcher-Friendly</span><span class="bar" id="legend_bar"></span><span>Hitter-Friendly</span>
+          <span>Pitcher-friendly</span><span class="bar" id="legend_bar"></span><span>Hitter-friendly</span>
         </div>
-        <button id="copy" class="reset" type="button">Copy link</button>
+        <button id="copy" class="plpd-btn" type="button">Copy link</button>
       </div>
     </div>
-    <p class="status" id="grid_note" style="margin:8px 0 10px"></p>
-    <div class="tablewrap">
-      <table id="grid">
+    <p class="status" id="grid_note"></p>
+    <div class="plpd-table-wrap">
+      <table id="grid" class="plpd-table">
         <thead><tr id="grid_head"></tr></thead>
         <tbody id="grid_body"></tbody>
       </table>
     </div>
   </section>
 
-  <section class="card">
+  <section class="plpd-pane">
     <details>
-      <summary>How it works</summary>
-      <div class="method">
+      <summary><h2 class="plpd-pane__title">How it works</h2></summary>
+      <div class="method plpd-prose">
         <p><b>Scale:</b> 100 is the level's average over that season, and each week is indexed to it. A week at 92 in home runs had 8% fewer home runs per plate appearance than the season as a whole. <b>wOBA</b> is per plate appearance and <b>R</b> is runs (<a href="https://en.wikipedia.org/wiki/Base_runs">BaseRuns</a>) per plate appearance. <b>AVG</b> is hits per plate appearance, and <b>1B</b> through <b>HBP</b> are each result per plate appearance. <b>BACON</b> is batting average on contact (home runs included) and <b>wOBACon</b> is wOBA on contact.</p>
         <p><b>The line (model):</b> the calendar curve of the <a href="/park-factors/">Park Factors</a> model's seasonal fit, which also gives the Seasonal view's "average" row there. The fit covers every plate appearance of MLB 2015–2026 and of AAA, AA, A+ and A 2021–2026. It has one curve per level, piecewise linear between points every two weeks from March 22 to October 4, with one shape for all seasons. Because the fit also has a term for each batter and each pitcher, the curve shows the environment with the same players all season: cold April air, summer heat and anything else that moves with the date for everybody. It also carries the mix of parks in use that week. Past years show the curve on that year's games and rates; 2027 shows it on the 2027 schedule.</p>
         <p><b>The dots (actual):</b> every plate appearance at the level that week, against the season, with no adjustment. They carry that year's weather and who played: September call-ups, injuries, promotions and demotions. A bigger dot has more plate appearances. A typical week has about 7,000, so chance alone moves home runs by about ±7 points and triples by about ±20. Opening weeks with a few games (the Tokyo and Seoul series) are small and noisy. Where the dots and the line part late in the season, the players changed, not the weather.</p>
@@ -184,6 +159,6 @@ button.reset:active:not(:disabled),button.play:active:not(:disabled){transform:s
   </section>
 </main>
 <script src="/shared/share-image.js?v=2"></script>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
