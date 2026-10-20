@@ -84,7 +84,11 @@
       },
       "status": {},
       "parentTeamId": 111,
-      "stats": {},
+      "stats": {
+       "pitching": {
+        "outs": 18
+       }
+      },
       "seasonStats": {},
       "gameStatus": {},
       "allPositions": [
@@ -371,7 +375,11 @@
       },
       "status": {},
       "parentTeamId": 141,
-      "stats": {},
+      "stats": {
+       "pitching": {
+        "outs": 15
+       }
+      },
       "seasonStats": {},
       "gameStatus": {},
       "allPositions": [

@@ -17,7 +17,7 @@
 export const STATS_API = "https://statsapi.mlb.com/api/v1";
 // the gamePk is the only thing of the visitor's in either request
 export const scheduleUrl = (pk) => `${STATS_API}/schedule?gamePk=${pk}&fields=dates,games,gamePk,season,gameType,officialDate,status,codedGameState,detailedState,venue,id,name,teams,away,home,team,score`;
-export const boxscoreUrl = (pk) => `${STATS_API}/game/${pk}/boxscore?fields=teams,away,home,team,id,pitchers,players,person,fullName,position,abbreviation,battingOrder`;
+export const boxscoreUrl = (pk) => `${STATS_API}/game/${pk}/boxscore?fields=teams,away,home,team,id,pitchers,players,person,fullName,position,abbreviation,battingOrder,stats,pitching,outs`;
 
 // the season's MLB regular-season and postseason games (for Random Game: about 8 KB gzipped)
 export const seasonUrl = (season) => `${STATS_API}/schedule?sportId=1&season=${season}&gameType=R,F,D,L,W&fields=dates,games,gamePk,gameType,status,codedGameState`;
@@ -38,7 +38,8 @@ const malformed = () => new Error("the Stats API's reply wasn't a game this page
 // ctx: { season, teams: [{ id, abbr, short }] (the data's MLB clubs), hasHitter(id), hasPitcher(id), parks: [venue names], weeks: [[first "MM-DD", last, label]] }
 // Returns { pk, date, venue, sides: { away, home }, park, week, missing, final }; final: the game's
 // [away, home] runs (null if the schedule doesn't give both); each side is
-// { team, short, lineup: [entry ids: "p<id>" or "s<team>-<spot>"], sp: "P<id>" or "PRHP", spName, c: catcher slot or -1 }.
+// { team, short, lineup: [entry ids: "p<id>" or "s<team>-<spot>"], sp: "P<id>" or "PRHP", spName, spOuts: the outs he
+// recorded in this game (null if the box score doesn't say), c: catcher slot or -1 }.
 // The schedule's game, and its kind ("regular" or "postseason"), if it's one that loads
 // (checked before the larger box score is asked for); otherwise throws the reason. teams: the data's
 // MLB clubs ([{ id }]).
@@ -62,6 +63,15 @@ export function checkSchedule(pk, sched, season, teams) {
   if (!kind) throw new Error(`game ${pk} isn't a regular-season, preseason or postseason game`);
   if (g.status?.codedGameState !== "F") throw new Error(`game ${pk} wasn't completed (${String(g.status?.detailedState ?? "no result").toLowerCase()})`);
   return { g, kind };
+}
+
+// Whether a game's starter opened a bullpen day: 6 outs or fewer in the game (the pipeline's opener
+// cutoff), and not a regular starter, so one knocked out early isn't one: no 2026 starts, or starts
+// that averaged 3 innings (9 outs) or less. outs: his outs in the game (null: unknown, so no);
+// gs, startOuts: his 2026 starts and the outs in them. The Game Sim sets He pitches from it: a
+// bullpen day (opener) if so, the modeled hook if not.
+export function bullpenDay(outs, gs, startOuts) {
+  return Number.isInteger(outs) && outs <= 6 && (!gs || startOuts / gs <= 9);
 }
 
 // The gamePks in a seasonUrl reply that load: completed regular-season and postseason games, each once
@@ -96,7 +106,9 @@ export function parseGame(pk, sched, box, ctx) {
       missing.push(`${spName} (an MLB-average RHP)`);
       sp = "PRHP";
     }
-    sides[where] = { team: t.abbr, short: t.short, lineup, sp, spName, c: starters.findIndex((x) => x.position?.abbreviation === "C") };
+    const outs = b.players[`ID${spId}`]?.stats?.pitching?.outs;
+    sides[where] = { team: t.abbr, short: t.short, lineup, sp, spName, spOuts: Number.isInteger(outs) ? outs : null,
+      c: starters.findIndex((x) => x.position?.abbreviation === "C") };
   }
   // the park by venue name (-1: none of the season's parks; the page uses the home team's); the week by
   // the game's date, or for the postseason the regular season's last
