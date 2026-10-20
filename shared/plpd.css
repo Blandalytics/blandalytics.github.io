@@ -29,7 +29,13 @@
   --data-table-pl-data-table-sticky-row-bg-dark:#242840;
   --data-table-pl-data-table-scrollbar-track:#6073a82e;
   --data-table-pl-data-table-scrollbar-thumb:#7ac1ff7a;
+  --data-table-pl-data-table-row-bg-stripe-light:#303a6175;
+  --data-table-pl-data-table-row-bg-stripe-dark:#2a335561;
+  --data-table-pl-data-table-row-bg-section:#202233;
+  --data-table-pl-data-table-row-hover-bg:#3a467280;
   --table-thead-label:#73efff; --surface-border-card:#2e3a5e;
+  /* inputs */
+  --input-field-bg:#4748a212; --overlay-overlay-white-13:#ffffff21; --overlay-overlay-white-25:#ffffff40;
   /* charts (the Process+ chart set) */
   --chart-blue:#53aaf8; --chart-gold:#f0b846; --chart-axis:#cbd7fd; --chart-muted:#c4cdecd9;
   --chart-grid:#ffffff0f; --chart-center-line:#ffffff3d;
@@ -106,7 +112,18 @@ select.plpd-filter-dropdown option{background:var(--surfaces-surface-3); color:v
 .plpd-chip:hover:not(:disabled){color:var(--brand-brand-cyan)}
 .plpd-chip[aria-pressed=true]{font-weight:600; color:var(--brand-brand-cyan); box-shadow:inset 0 0 0 1px rgba(85,232,255,.7),var(--shadow-tab-nav-filter-chip-secondary-active-shadow)}
 .plpd-chip:disabled{color:rgba(203,215,253,.4); box-shadow:inset 0 0 0 1px rgba(255,255,255,.06); cursor:default}
-.plpd-chips{display:inline-flex; gap:10px}
+.plpd-chips{display:inline-flex; flex-wrap:wrap; gap:10px}
+/* Role Amber: the primary selection (one amber group per page) */
+.plpd-chip--amber:hover:not(:disabled){color:var(--brand-brand-amber)}
+.plpd-chip--amber[aria-pressed=true]{color:var(--brand-brand-amber); box-shadow:inset 0 0 0 1px rgba(255,194,119,.7),0 0 12px 0 rgba(255,194,119,.28)}
+
+/* PlCheck, on a native checkbox: an 18px box, a cyan tick when on, the label in DM Sans 14 */
+.plpd-check{display:inline-flex; align-items:center; gap:var(--space-200); min-height:40px; font-family:var(--font-display); font-size:14px;
+  color:var(--text-text-cell); cursor:pointer; white-space:nowrap}
+.plpd-check input[type=checkbox]{-webkit-appearance:none; appearance:none; box-sizing:border-box; width:18px; height:18px; margin:0; flex:none;
+  border-radius:var(--radius-sm); background:var(--input-field-bg); box-shadow:inset 0 0 0 1px var(--overlay-overlay-white-13); cursor:pointer}
+.plpd-check:hover input[type=checkbox]{box-shadow:inset 0 0 0 1px var(--overlay-overlay-white-25)}
+.plpd-check input[type=checkbox]:checked{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48' fill='none' stroke='%2355e8ff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 24L21 33L37 15'/%3E%3C/svg%3E") center / 14px 14px no-repeat, var(--input-field-bg)}
 
 /* PlRange: a 4px track with the filled part and a 14px thumb in cyan (track #3b4264: no token).
    The page sets --plpd-range-pct as the value moves. */
@@ -126,6 +143,11 @@ input[type=range].plpd-range:active::-moz-range-thumb{width:16px; height:16px; b
   border-bottom:1px solid var(--data-table-pl-data-table-header-border); color:var(--data-table-pl-data-table-header-text);
   font-family:var(--font-text); font-size:14px; font-weight:600; line-height:1.2; white-space:nowrap}
 .plpd-table td{border-bottom:1px solid var(--data-table-pl-data-table-row-border); color:var(--data-table-pl-data-table-cell-text); white-space:nowrap}
+/* the sorted column: its label in amber (the system draws no sort arrows) */
+.plpd-table thead th[aria-sort=ascending],.plpd-table thead th[aria-sort=descending]{color:var(--brand-brand-amber)}
+select.plpd-filter-dropdown:disabled{cursor:default; opacity:.5}
+.plpd-btn:disabled,.plpd-chip:disabled{cursor:default}
+.plpd-btn--primary:disabled{background:var(--navy-600); color:var(--text-text-zero); box-shadow:none}
 
 /* PlMetricDefinition-style prose: terms in cyan DM Sans SemiBold, text in Work Sans meta */
 .plpd-prose{max-width:var(--layout-pl-prose-max); font-family:var(--font-text); font-size:14px; line-height:20px; color:var(--text-text-meta)}

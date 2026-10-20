@@ -148,7 +148,8 @@ def main():
     renamed = {new: f"{old} through 2026" for old, new in NAMES_2027.items()}
     data = json.dumps({"cols": cols, "rows": rows, "latest": LATEST, "minGames": mins, "renamed": renamed,
                        "seasonal": seasonal_years()}, separators=(",", ":"))
-    html = TEMPLATE.replace("__DATA__", data).replace("__GENERATED__", as_of)
+    short = f"{int(as_of[5:7])}/{int(as_of[8:10])}/{as_of[2:4]}"  # the header's Updated stamp
+    html = TEMPLATE.replace("__DATA__", data).replace("__GENERATED_SHORT__", short).replace("__GENERATED__", as_of)
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(html, encoding="utf-8")
     print(f"{len(rows)} rows -> {OUT}")
@@ -164,135 +165,125 @@ TEMPLATE = r"""<!doctype html>
 <meta name="description" content="Park factors for MLB and MiLB parks, by batter side: wOBA, runs, hits by type, walks, strikeouts and contact quality, adjusted for batter and pitcher.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/shared/plpd.css?v=2">
 <style>
-:root{
-  --ground:#0d1117; --surface:#151b23; --raise:#1b222c;
-  --ink:#e3e9f1; --muted:#8a96a6; --faint:#6b7684; --rule:#242c37;
-  --accent:#6cb4ff; --good:#7bd88f; --bad:#ff8a80; --warn:#ffd166;
-}
-*{box-sizing:border-box}
-body{margin:0; min-height:100vh; background:var(--ground); color:var(--ink);
-  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:15px; line-height:1.45;
-  -webkit-font-smoothing:antialiased; padding:24px 16px}
-main{max-width:1320px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
-header{max-width:860px}
-h1{margin:0; font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
+/* Park Factors on the PLPD design system (/shared/plpd.css): the page's own layout, its filter bar,
+   season slider and leaderboard, all in the system's tokens */
+main{max-width:var(--layout-pl-site-max); margin:0 auto; padding:32px var(--layout-page-content-gutter) 48px; display:flex; flex-direction:column; gap:var(--space-600)}
+@media (max-width:700px){main{padding:24px 16px 40px; gap:var(--space-400)}}
+header{display:flex; flex-direction:column; gap:var(--space-400)}
+.intro{max-width:var(--layout-pl-prose-max); margin:0; font-size:15px; line-height:1.45; color:var(--text-text-meta)}
 p{margin:0}
-.tag{margin:6px 0 0; color:var(--muted); font-size:14px}
-a{color:var(--accent)}
-a.home{color:var(--muted); text-decoration:none; font-size:14px}
-a.home:hover{color:var(--ink)}
-.card{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:16px 18px}
-.controls{display:grid; grid-template-columns:auto auto repeat(5,minmax(100px,1fr)) auto; gap:12px 14px; align-items:end}
-@media (max-width:1280px){.controls{grid-template-columns:auto auto repeat(3,minmax(100px,1fr))}}
+
+/* the filter bar: View (amber) and Batter side (cyan) chips, five dropdowns, Qualified parks */
+.controls{display:grid; grid-template-columns:auto auto repeat(5,minmax(140px,1fr)) auto; gap:var(--space-400); align-items:end}
+@media (max-width:1560px){.controls{grid-template-columns:auto auto repeat(3,minmax(140px,1fr))}}
 @media (max-width:900px){.controls{grid-template-columns:1fr 1fr} .controls .view,.controls .side,.controls .qual{grid-column:1 / -1}}
-label,.field{display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted)}
-label b,.field b{color:var(--ink); font-weight:500}
-input,select,button{font:inherit; color:var(--ink)}
-select{background:var(--ground); border:1px solid var(--rule); border-radius:6px; padding:7px 9px; width:100%}
-select:focus,button:focus-visible,input:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
-select:disabled{opacity:.45; cursor:default}
-.seg{display:inline-flex; align-self:flex-start; border:1px solid var(--rule); border-radius:6px; overflow:hidden; background:var(--ground)}
-.seg button{background:transparent; border:0; padding:7px 14px; cursor:pointer; color:var(--muted)}
-.seg button + button{border-left:1px solid var(--rule)}
-.seg button[aria-pressed=true]{background:var(--accent); color:#0b1320; font-weight:600}
-.seg button:hover:not([aria-pressed=true]):not(:disabled){color:var(--ink); background:var(--raise)}
-.seg button:disabled{opacity:.4; cursor:default}
-.check{flex-direction:row; align-items:center; gap:8px; padding-bottom:8px; white-space:nowrap}
-.check input{accent-color:var(--accent); width:16px; height:16px; margin:0}
-.row{display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; justify-content:space-between}
-.status{color:var(--muted); font-size:13px}
-.legend{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px}
-.legend .bar{width:160px; height:10px; border-radius:3px; border:1px solid var(--rule)}
-.legend .tick{font-family:"JetBrains Mono",monospace; font-size:11px}
-button.reset{background:var(--raise); border:1px solid var(--rule); border-radius:6px; padding:5px 10px; cursor:pointer; font-size:13px}
-button.reset:hover{border-color:var(--faint)}
-.seasonbar{display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px 18px; align-items:center;
-  margin-top:14px; padding-top:14px; border-top:1px solid var(--rule)}
+.controls select.plpd-filter-dropdown{width:100%}
+.controls .plpd-filter-field{width:100%}
+.seasonbar{display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:var(--space-300) var(--space-500); align-items:center;
+  margin-top:var(--space-400); padding-top:var(--space-400); border-top:1px solid var(--data-table-pl-data-table-row-border)}
 .seasonbar[hidden]{display:none}
 @media (max-width:900px){.seasonbar{grid-template-columns:auto minmax(0,1fr)} .seasonbar .base{grid-column:1 / -1}}
-button.play{width:38px; height:38px; border-radius:50%; border:1px solid var(--rule); background:var(--raise); cursor:pointer;
-  font-size:13px; line-height:1; padding:0}
-button.play:hover{border-color:var(--accent); color:var(--accent)}
-.slider{display:flex; flex-direction:column; gap:2px; min-width:0}
-.slider .now{display:flex; flex-wrap:wrap; justify-content:space-between; gap:2px 14px; font-size:13px; color:var(--muted)}
-.slider .now b{color:var(--ink); font-weight:600; font-size:14px}
-.slider input[type=range]{width:100%; margin:6px 0 2px; accent-color:var(--accent); cursor:pointer}
-.months{position:relative; height:15px; font-size:11px; color:var(--faint); margin:0 8px}
+.slider{display:flex; flex-direction:column; gap:var(--space-200); min-width:0}
+.slider .now{display:flex; flex-wrap:wrap; justify-content:space-between; gap:2px 14px; font-size:14px; color:var(--text-text-meta)}
+.slider .now b{font-family:var(--font-display); font-size:16px; font-weight:600; color:var(--text-text-cell)}
+.slider input[type=range]{width:100%}
+.months{position:relative; height:16px; margin:0 7px; font-size:12px; color:var(--text-text-zero)}
 .months span{position:absolute; transform:translateX(-50%); white-space:nowrap}
-tr.league td{background:var(--raise); color:var(--muted); font-style:italic}
-tr.league td.venue{background:var(--raise)}
 
-.tablewrap{overflow:auto; max-height:calc(100vh - 120px); border:1px solid var(--rule); border-radius:8px; background:var(--surface)}
-table{border-collapse:separate; border-spacing:0; width:100%; font-size:13px}
-th,td{padding:6px 8px; border-bottom:1px solid var(--rule); white-space:nowrap}
-thead th{position:sticky; top:0; z-index:2; background:var(--raise); color:var(--muted); font-weight:600; font-size:12px;
-  text-align:right; cursor:pointer; user-select:none}
-thead th.txt{text-align:left}
-thead th:hover{color:var(--ink)}
-thead th[aria-sort=descending]::after{content:" ▾"; color:var(--accent)}
-thead th[aria-sort=ascending]::after{content:" ▴"; color:var(--accent)}
-td{text-align:right; font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums}
-td.txt{text-align:left; font-family:inherit}
-td.rk{color:var(--faint)}
-td.venue{font-weight:500}
-th.venue,td.venue{position:sticky; left:0; z-index:1; background:var(--surface); border-right:1px solid var(--rule)}
-thead th.venue{z-index:3; background:var(--raise)}
-td.stat{color:var(--ink)}
-td.pf{font-weight:600}
-td.dim{color:var(--muted)}
-th.sep,td.sep{border-left:1px solid var(--rule)}
-tbody tr:hover td{box-shadow:inset 0 0 0 999px rgba(255,255,255,.04)}
-tbody tr:hover td.venue{background:#1a212a}
-.empty td{text-align:center; color:var(--muted); padding:28px; font-family:inherit}
+/* the toolbar over the board: the count, the heat legend, Copy link, Download CSV, Reset filters */
+.row{display:flex; flex-wrap:wrap; gap:var(--space-300) var(--space-400); align-items:center; justify-content:space-between}
+.tools{display:flex; flex-wrap:wrap; gap:var(--space-300) var(--space-400); align-items:center}
+.status{font-size:14px; color:var(--text-text-meta)}
+.legend{display:flex; align-items:center; gap:var(--space-200); font-family:var(--font-display); font-size:13px; color:var(--text-text-meta)}
+.legend .bar{width:160px; height:10px; border-radius:var(--radius-xs)}
+.legend span{white-space:nowrap}
+@media (max-width:480px){.legend .bar{width:72px}}
 
-details summary{cursor:pointer; color:var(--ink); font-weight:600}
-.method{display:flex; flex-direction:column; gap:10px; margin-top:12px; color:var(--muted); font-size:14px}
-.method b{color:var(--ink); font-weight:600}
-code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--ground); border:1px solid var(--rule); border-radius:4px; padding:0 4px; color:var(--ink)}
+/* the leaderboard: the system's data table, 14px cells for its 22 columns (the system's cells are 16px) */
+.plpd-table-wrap{max-height:calc(100vh - 120px)}
+#board{width:100%}
+#board th,#board td{padding:7px 10px}
+#board thead th{position:sticky; top:0; z-index:2; text-align:right; cursor:pointer; user-select:none; font-size:13px}
+#board thead th:hover{color:var(--data-table-pl-data-table-cell-text)}
+#board thead th.txt{text-align:left}
+#board thead th.heat{text-align:center}
+#board td{text-align:right; font-size:14px}
+#board td.txt{text-align:left}
+#board td.stat{text-align:center}
+#board td.rk{color:var(--text-text-zero)}
+#board td.dim{color:var(--text-text-team)}
+#board td.pf{font-weight:600}
+#board th.sep,#board td.sep{box-shadow:inset 1px 0 0 var(--data-table-pl-data-table-header-border)}
+#board td.venue{font-weight:500; color:var(--text-text-player)}
+#board th.venue,#board td.venue{position:sticky; left:0; z-index:1}
+#board thead th.venue{z-index:3}
+/* stripes and hover laid over the table base, so the pinned venue column stays opaque */
+#board tbody tr:nth-child(odd) td:not(.stat){background:linear-gradient(var(--data-table-pl-data-table-row-bg-stripe-light),var(--data-table-pl-data-table-row-bg-stripe-light)),var(--data-table-pl-data-table-scroll-base-bg)}
+#board tbody tr:nth-child(even) td:not(.stat){background:linear-gradient(var(--data-table-pl-data-table-row-bg-stripe-dark),var(--data-table-pl-data-table-row-bg-stripe-dark)),var(--data-table-pl-data-table-scroll-base-bg)}
+#board tbody tr:hover td:not(.stat){background:linear-gradient(var(--data-table-pl-data-table-row-hover-bg),var(--data-table-pl-data-table-row-hover-bg)),var(--data-table-pl-data-table-scroll-base-bg)}
+#board tbody tr:hover td.stat{box-shadow:inset 0 0 0 999px rgba(19,21,42,.12)}
+#board tbody tr.league td{background:var(--data-table-pl-data-table-row-bg-section); color:var(--text-text-meta); font-style:italic; text-align:right}
+#board tr.league td.venue,#board tr.league td.txt{text-align:left}
+#board tbody tr:last-child td{border-bottom:0}
+#board .empty td{text-align:center; color:var(--text-text-meta); padding:28px}
+/* pinned at full width the longest venue takes ~215px of a phone's 343px table: capped, the stats keep the room */
+@media (max-width:640px){#board th.venue,#board td.venue{max-width:132px; overflow:hidden; text-overflow:ellipsis}}
+
+/* How it works */
+details summary{cursor:pointer}
+details summary .plpd-pane__title{display:inline}
+.method{display:flex; flex-direction:column; gap:var(--space-300); margin-top:var(--space-300)}
+code{font-family:var(--font-text); font-size:13px; background:var(--surfaces-surface-3); border-radius:var(--radius-sm); padding:0 4px; color:var(--text-text-cell)}
+
+h1,h2,h3{text-wrap:balance}
+p,.intro,.status,.plpd-prose{text-wrap:pretty}
+@media (pointer:coarse){.months{margin:0 9px} details summary{padding-block:8px}}
 </style>
 </head>
-<body>
+<body class="plpd">
 <main>
-  <header>
-    <h1>Park Factors</h1>
-    <p class="tag">How each park affects outcomes going into 2027. 100 is the level's average park, and a factor above 100 shows the park increases that result. Stats are color-coded for how they benefit a hitter (Red = better for the hitter). Every factor uses observed results, adjusted for who batted and pitched there.</p>
+  <header class="plpd-page-header">
+    <h1 class="plpd-page-header__title">Park Factors</h1>
+    <p class="plpd-page-header__meta">MLB 2027 · AAA, AA, A+ and A 2026 · by batter side · Updated __GENERATED_SHORT__</p>
+    <p class="intro">How each park affects outcomes going into 2027. 100 is the level's average park, and a factor above 100 shows the park increases that result. Stats are color-coded for how they benefit a hitter (Red = better for the hitter). Every factor uses observed results, adjusted for who batted and pitched there.</p>
   </header>
 
-  <section class="card">
+  <section class="plpd-pane" aria-label="Filters">
     <div class="controls">
-      <div class="field view"><b>View</b>
-        <div class="seg" id="view" role="group" aria-label="View">
-          <button type="button" data-v="season" aria-pressed="true" title="Each park's factor for the whole season">Full season</button>
-          <button type="button" data-v="seasonal" aria-pressed="false" title="Each level and year's parks week by week">Seasonal</button>
+      <div class="plpd-filter-field view"><span class="plpd-filter-field__label">View</span>
+        <div class="plpd-chips" id="view" role="group" aria-label="View">
+          <button type="button" class="plpd-chip plpd-chip--amber" data-v="season" aria-pressed="true" title="Each park's factor for the whole season">Full season</button>
+          <button type="button" class="plpd-chip plpd-chip--amber" data-v="seasonal" aria-pressed="false" title="Each level and year's parks week by week">Seasonal</button>
         </div>
       </div>
-      <div class="field side"><b>Batter side</b>
-        <div class="seg" id="side" role="group" aria-label="Batter side">
-          <button type="button" data-v="All" aria-pressed="true">All</button>
-          <button type="button" data-v="L" aria-pressed="false">LHB</button>
-          <button type="button" data-v="R" aria-pressed="false">RHB</button>
+      <div class="plpd-filter-field side"><span class="plpd-filter-field__label">Batter side</span>
+        <div class="plpd-chips" id="side" role="group" aria-label="Batter side">
+          <button type="button" class="plpd-chip" data-v="All" aria-pressed="true">All</button>
+          <button type="button" class="plpd-chip" data-v="L" aria-pressed="false">LHB</button>
+          <button type="button" class="plpd-chip" data-v="R" aria-pressed="false">RHB</button>
         </div>
       </div>
-      <label><b>Level</b><select id="level"></select></label>
-      <label><b>Year</b><select id="year"></select></label>
-      <label><b>League</b><select id="league"></select></label>
-      <label><b>Team</b><select id="team"></select></label>
-      <label><b>Org</b><select id="org"></select></label>
-      <label class="check qual"><input id="qual" type="checkbox" checked><span id="qual_label">Qualified parks</span></label>
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">Level</span><select id="level" class="plpd-filter-dropdown"></select></label>
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">Year</span><select id="year" class="plpd-filter-dropdown"></select></label>
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">League</span><select id="league" class="plpd-filter-dropdown"></select></label>
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">Team</span><select id="team" class="plpd-filter-dropdown"></select></label>
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">Org</span><select id="org" class="plpd-filter-dropdown"></select></label>
+      <label class="plpd-check qual"><input id="qual" type="checkbox" checked><span id="qual_label">Qualified parks</span></label>
     </div>
     <div class="seasonbar" id="seasonbar" hidden>
-      <button type="button" id="play" class="play" aria-label="Play through the season" title="Play through the season">▶</button>
+      <button type="button" id="play" class="plpd-btn plpd-btn--primary plpd-btn--icon" aria-label="Play through the season" title="Play through the season"></button>
       <div class="slider">
         <div class="now"><span><b id="wk_label"></b></span><span id="lg_note"></span></div>
-        <input type="range" id="week" min="0" step="1" aria-label="Week of the season">
+        <input type="range" id="week" class="plpd-range" min="0" step="1" aria-label="Week of the season">
         <div class="months" id="months" aria-hidden="true"></div>
       </div>
-      <div class="field base"><b>Compared to</b>
-        <div class="seg" id="base" role="group" aria-label="Compared to">
-          <button type="button" data-v="season" aria-pressed="true" title="100 = the average park over the whole season: the league's own calendar (cold April, summer heat) is included">Season average</button>
-          <button type="button" data-v="week" aria-pressed="false" title="100 = the average park that week: only the park's own seasonal pattern remains">Same week</button>
+      <div class="plpd-filter-field base"><span class="plpd-filter-field__label">Compared to</span>
+        <div class="plpd-chips" id="base" role="group" aria-label="Compared to">
+          <button type="button" class="plpd-chip" data-v="season" aria-pressed="true" title="100 = the average park over the whole season: the league's own calendar (cold April, summer heat) is included">Season average</button>
+          <button type="button" class="plpd-chip" data-v="week" aria-pressed="false" title="100 = the average park that week: only the park's own seasonal pattern remains">Same week</button>
         </div>
       </div>
     </div>
@@ -300,27 +291,27 @@ code{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--
 
   <div class="row">
     <span id="status" class="status"></span>
-    <div class="row" style="gap:14px">
+    <div class="tools">
       <div class="legend" aria-hidden="true">
-        <span>Pitcher-Friendly</span><span class="bar" id="legend_bar"></span><span>Hitter-Friendly</span>
+        <span>Pitcher-friendly</span><span class="bar" id="legend_bar"></span><span>Hitter-friendly</span>
       </div>
-      <button id="copy" class="reset" type="button">Copy link</button>
-      <button id="csv" class="reset" type="button">Download CSV</button>
-      <button id="reset" class="reset" type="button">Reset filters</button>
+      <button id="copy" class="plpd-btn" type="button">Copy link</button>
+      <button id="csv" class="plpd-btn" type="button">Download CSV</button>
+      <button id="reset" class="plpd-text-btn" type="button">Reset filters</button>
     </div>
   </div>
 
-  <div class="tablewrap">
-    <table id="board">
+  <div class="plpd-table-wrap">
+    <table id="board" class="plpd-table">
       <thead><tr id="head"></tr></thead>
       <tbody id="body"></tbody>
     </table>
   </div>
 
-  <section class="card">
+  <section class="plpd-pane">
     <details>
-      <summary>How it works</summary>
-      <div class="method">
+      <summary><h2 class="plpd-pane__title">How it works</h2></summary>
+      <div class="method plpd-prose">
         <p><b>Scale:</b> 100 is the average park at that level. <b>Park Factor</b> is the wOBA index and <b>R</b> is runs (<a href="https://en.wikipedia.org/wiki/Base_runs">BaseRuns</a>). The other columns are indexes for each outcome: <b>BACON</b> is Batting Average on CONtact (home runs included), <b>wOBACon</b> is wOBA on Contact, and <b>HR p10 / p90</b> factors provide an 80% Confidence Interval for the park's HR true factor. The spread is wider for newer parks or those with recent renovations (Ex: <a href="https://www.mlb.com/news/royals-moving-outfield-walls-at-kauffman-stadium">Kauffman Stadium</a> in 2026).</p>
         <p><b>Colors:</b> centered on 100 and saturated at 90 and 110. Red helps hitters and blue hurts them, so for <b>K</b> the scale is flipped: more strikeouts shade blue.</p>
         <p><b>Model:</b> one joint Bayesian fit of every plate appearance (MLB 2015–26; AAA, AA, A+ and A 2021–26) with batter, pitcher, league-season, home-field and platoon terms, a per-venue factor that drifts across seasons (with breaks for known dimension changes) and a per-venue left/right split. If a park is used across multiple leagues (Ex: Sutter Health Park has hosted both AAA and MLB games), the data from all leagues informs that park factor.</p>
@@ -399,16 +390,29 @@ const DEFAULTS = {view: "season", wk: "", base: "season",
 const state = {...DEFAULTS};
 let shown = [];  // the rows on screen, in order, for the CSV download
 
-// diverging scale on the dark surface: blue (worse) – surface – red (better), clipped at 90/110
-const SURF = [21, 27, 35], RED = [214, 72, 66], BLUE = [58, 116, 214];
-function shade(v, col) {
+// the diverging scale: the PLPD heat cell's seven fills (cold-3 … neutral … hot-3), blue (worse for
+// hitters) through white at 100 to red (better), run continuously and clipped at 90/110
+const HEAT = ["#0066ff", "#5599ff", "#aaccff", "#ffffff", "#e2bcbe", "#c6797c", "#a9363b"]
+  .map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)));
+function heatRgb(v, col) {
   let t = Math.max(-1, Math.min(1, (v - 100) / 10));
   if (LOWER_BETTER.has(col)) t = -t;
-  const to = t >= 0 ? RED : BLUE, a = Math.abs(t) * 0.9;
-  return `rgb(${SURF.map((s, i) => Math.round(s + (to[i] - s) * a)).join(",")})`;
+  const u = (t + 1) * 3, i = Math.min(5, Math.floor(u)), f = u - i;
+  return HEAT[i].map((x, j) => Math.round(x + (HEAT[i + 1][j] - x) * f));
+}
+const shade = (v, col) => `rgb(${heatRgb(v, col).join(",")})`;
+// the label: card-card-bg (#292c42) or base-white, whichever reads better on the fill
+function inkOn(rgb) {
+  const L = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const lum = 0.2126 * L(rgb[0]) + 0.7152 * L(rgb[1]) + 0.0722 * L(rgb[2]);
+  return (lum + 0.05) / 0.0763 >= 1.05 / (lum + 0.05) ? "#292c42" : "#ffffff";
 }
 document.getElementById("legend_bar").style.background =
-  `linear-gradient(90deg, ${[90, 95, 100, 105, 110].map(v => shade(v, "")).join(",")})`;
+  `linear-gradient(90deg, ${[90, 93.3, 96.7, 100, 103.3, 106.7, 110].map(v => shade(v, "")).join(",")})`;
+// the play button's two icons (outline glyphs at stroke 4 on a 48 grid)
+const ICON_PLAY = '<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M15 24V11.876L25.5 17.938L36 24L25.5 30.062L15 36.124V24Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>';
+const ICON_PAUSE = '<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M16 12V36M32 12V36" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>';
+document.getElementById("play").innerHTML = ICON_PLAY;
 
 const $ = id => document.getElementById(id);
 const uniq = a => [...new Set(a)].sort((x, y) => x.localeCompare(y));
@@ -449,7 +453,7 @@ function refreshOptions() {
 
 function head() {
   $("head").innerHTML = showCols().map(c => {
-    const cls = [TXT.has(c) ? "txt" : "", c === "Venue" ? "venue" : "", c === "Park Factor" ? "sep" : "", c === "PA" ? "sep" : ""].join(" ").trim();
+    const cls = [TXT.has(c) ? "txt" : "", c === "Venue" ? "venue" : "", c === "Park Factor" ? "sep" : "", c === "PA" ? "sep" : "", COLORED.includes(c) ? "heat" : ""].join(" ").trim();
     const sort = c === state.sort ? (state.dir < 0 ? "descending" : "ascending") : "none";
     return `<th scope="col" data-c="${esc(c)}" class="${cls}" aria-sort="${sort}" title="${esc(TIPS[c] || "")}">${esc(c)}</th>`;
   }).join("");
@@ -517,7 +521,7 @@ function render() {
     const v = r[ci[c]];
     const was = c === "Venue" && DATA.renamed[v];  // a park renamed for 2027
     if (TXT.has(c)) return `<td class="txt${c === "Venue" ? " venue" : ""}"${was ? ` title="${esc(was)}"` : ""}>${esc(v)}</td>`;
-    if (COLORED.includes(c)) return `<td class="stat${c === "Park Factor" ? " pf sep" : ""}" style="background:${shade(v, c)}">${fmt(v, c)}</td>`;
+    if (COLORED.includes(c)) return `<td class="stat${c === "Park Factor" ? " pf sep" : ""}" style="background:${shade(v, c)};color:${inkOn(heatRgb(v, c))}">${fmt(v, c)}</td>`;
     return `<td class="dim${c === "PA" ? " sep" : ""}">${c === "Year" ? v : v.toLocaleString()}</td>`;
   }).join("") + "</tr>").join("")
     : `<tr class="empty"><td colspan="${SHOW.length}">${none || `No parks match these filters${state.qual ? " — try turning off Qualified parks" : ""}.`}</td></tr>`;
@@ -538,6 +542,7 @@ function render() {
   if (wk) {
     const nw = sd.weeks.length;
     $("week").max = nw - 1; $("week").value = wi;
+    $("week").style.setProperty("--plpd-range-pct", `${nw > 1 ? (100 * wi) / (nw - 1) : 0}%`);
     $("months").innerHTML = sd.weeks.map((w, i) => i && w[0].slice(0, 2) !== sd.weeks[i - 1][0].slice(0, 2)
       ? `<span style="left:${(100 * i / (nw - 1)).toFixed(2)}%">${MONTHS[+w[0].slice(0, 2)]}</span>` : "").join("");
   }
@@ -616,14 +621,14 @@ $("week").addEventListener("input", e => {
 let timer = null;
 function stop() {
   clearInterval(timer); timer = null;
-  $("play").textContent = "▶"; $("play").setAttribute("aria-label", "Play through the season");
+  $("play").innerHTML = ICON_PLAY; $("play").setAttribute("aria-label", "Play through the season");
 }
 $("play").addEventListener("click", () => {
   if (timer) return stop();
   const d = seasonalData();
   if (!ready(d)) return;
   if (weekIndex(d) >= d.weeks.length - 1) { state.wk = d.weeks[0][0]; render(); }
-  $("play").textContent = "❚❚"; $("play").setAttribute("aria-label", "Pause");
+  $("play").innerHTML = ICON_PAUSE; $("play").setAttribute("aria-label", "Pause");
   timer = setInterval(() => {
     const d = seasonalData(), i = ready(d) ? weekIndex(d) : -1;
     if (i < 0 || i >= d.weeks.length - 1) return stop();
