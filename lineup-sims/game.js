@@ -1234,6 +1234,7 @@ async function boot() {
   $("sg").addEventListener("pointermove", sgHover);
   $("sg").addEventListener("pointerdown", sgHover);
   $("sg").addEventListener("pointerleave", (ev) => { if (ev.pointerType === "mouse") sgOff(); });
+  $("sg").addEventListener("pointercancel", sgOff); // a swipe that scrolls the page instead
   document.addEventListener("pointerdown", (ev) => { if (ev.target !== $("sg")) sgOff(); });
   let sgTimer = 0;
   window.addEventListener("resize", () => { clearTimeout(sgTimer); sgTimer = setTimeout(() => last && renderScoreGrid(), 120); });

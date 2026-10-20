@@ -135,7 +135,7 @@ table.linescore,table.box{border-collapse:collapse; font-size:13px; width:100%}
 .linescore thead .sum{font-weight:500}
 /* every final score as a grid, a square a score: home runs across, away runs up */
 .sgrid{position:relative; max-width:460px}
-.sgrid canvas{display:block; width:100%; height:auto; touch-action:none}
+.sgrid canvas{display:block; width:100%; height:auto; touch-action:pan-y pinch-zoom}
 .sgrid-tip{position:absolute; pointer-events:none; background:var(--raise); border:1px solid var(--rule); border-radius:6px;
   padding:5px 8px; font-size:12.5px; line-height:1.35; white-space:nowrap; color:var(--ink); transform:translate(-50%, calc(-100% - 10px))}
 .sgrid-tip small{display:block; color:var(--muted); font-size:12px}
