@@ -261,6 +261,21 @@ function bookkeeping(res, teams, label) {
   delete short.boxscore.teams.away.players[Object.keys(short.boxscore.teams.away.players).find((k) => short.boxscore.teams.away.players[k].battingOrder === "900")];
   check(throwsWith(() => parseGame(pk, short.schedule, short.boxscore, ctx()), /starting lineup isn't complete/), "a starting nine short a hitter is refused");
   check(checkSchedule(pk, fx.schedule, Number(season), data.teams).g.venue.name === "Rogers Centre", "checkSchedule passes a completed game through");
+  // the final score, for the score grid's outline: from the schedule's Final entry (the fixture has the API's own, BOS 3 at TOR 5)
+  const unscored = copy();
+  delete unscored.schedule.dates[0].games[0].teams.home.score;
+  check(JSON.stringify(parseGame(pk, fx.schedule, fx.boxscore, ctx()).final) === "[3,5]" && parseGame(pk, unscored.schedule, unscored.boxscore, ctx()).final === null,
+    "the final score comes back as [away, home] (BOS 3, TOR 5), or null without both");
+  const madeUpScore = (order) => {
+    const f = copy(), fin = f.schedule.dates[0].games[0], post = JSON.parse(JSON.stringify(fin));
+    post.status = { codedGameState: "D", detailedState: "Postponed" };
+    post.teams.away.score = post.teams.home.score = 0;
+    const days = [{ date: "2026-08-11", games: [post] }, { date: "2026-08-12", games: [fin] }];
+    f.schedule.dates = order === "postponed first" ? days : days.reverse();
+    return parseGame(pk, f.schedule, f.boxscore, ctx()).final;
+  };
+  check(["postponed first", "final first"].every((o) => JSON.stringify(madeUpScore(o)) === "[3,5]"), "a made-up game's final score is the completed entry's (either order)");
+  check(/[,&=]score(,|&|$)/.test(scheduleUrl(pk)), "the schedule request asks for the score");
   // the gamePk is all that's sent
   check(pkOf("822778") === 822778 && pkOf(" 822778 ") === 822778 && pkOf("https://baseballsavant.mlb.com/gamefeed?date=8/11/2026&gamePk=822778") === 822778
     && pkOf("https://www.mlb.com/gameday/red-sox-vs-blue-jays/2026/08/11/822778/final/box") === 822778

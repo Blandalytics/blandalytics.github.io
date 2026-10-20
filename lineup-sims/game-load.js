@@ -16,7 +16,7 @@
 
 export const STATS_API = "https://statsapi.mlb.com/api/v1";
 // the gamePk is the only thing of the visitor's in either request
-export const scheduleUrl = (pk) => `${STATS_API}/schedule?gamePk=${pk}&fields=dates,games,gamePk,season,gameType,officialDate,status,codedGameState,detailedState,venue,id,name,teams,away,home,team`;
+export const scheduleUrl = (pk) => `${STATS_API}/schedule?gamePk=${pk}&fields=dates,games,gamePk,season,gameType,officialDate,status,codedGameState,detailedState,venue,id,name,teams,away,home,team,score`;
 export const boxscoreUrl = (pk) => `${STATS_API}/game/${pk}/boxscore?fields=teams,away,home,team,id,pitchers,players,person,fullName,position,abbreviation,battingOrder`;
 
 // the season's MLB regular-season and postseason games (for Random Game: about 8 KB gzipped)
@@ -36,7 +36,8 @@ const fold = (s) => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCa
 const malformed = () => new Error("the Stats API's reply wasn't a game this page can read");
 
 // ctx: { season, teams: [{ id, abbr, short }] (the data's MLB clubs), hasHitter(id), hasPitcher(id), parks: [venue names], weeks: [[first "MM-DD", last, label]] }
-// Returns { pk, date, venue, sides: { away, home }, park, week, missing }; each side is
+// Returns { pk, date, venue, sides: { away, home }, park, week, missing, final }; final: the game's
+// [away, home] runs (null if the schedule doesn't give both); each side is
 // { team, short, lineup: [entry ids: "p<id>" or "s<team>-<spot>"], sp: "P<id>" or "PRHP", spName, c: catcher slot or -1 }.
 // The schedule's game, and its kind ("regular" or "postseason"), if it's one that loads
 // (checked before the larger box score is asked for); otherwise throws the reason. teams: the data's
@@ -101,6 +102,7 @@ export function parseGame(pk, sched, box, ctx) {
   // the game's date, or for the postseason the regular season's last
   const md = g.officialDate.slice(5);
   const week = kind === "postseason" ? ctx.weeks.length - 1 : ctx.weeks.findIndex((w) => w[0] <= md && md <= w[1]);
+  const runs = [g.teams?.away?.score, g.teams?.home?.score];
   return { pk, date: g.officialDate, venue: g.venue.name, kind, type: GAME_TYPES[g.gameType], sides, missing,
-    park: ctx.parks.findIndex((n) => fold(n) === fold(g.venue.name)), week };
+    park: ctx.parks.findIndex((n) => fold(n) === fold(g.venue.name)), week, final: runs.every(Number.isInteger) ? runs : null };
 }
