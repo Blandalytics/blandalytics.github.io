@@ -8,34 +8,32 @@
 <link rel="icon" href="https://res.cloudinary.com/dduabusaf/image/upload/v1772839606/teal_letter_logo_owufaj.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Work+Sans:wght@400;500&display=swap">
+<link rel="stylesheet" href="/shared/plpd.css?v=2">
 <style>
-html,body{margin:0;background:#292C42;color:#8D96B3;font:15px "DM Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}
-#card{width:100%;max-width:1500px}
-#prov{margin:6px 0 10px;padding:0 20px;font-size:13px;text-align:center}
-#prov b{color:#fff;font-weight:600}
+/* one card, full size, on its own card-card-bg (the PLPD system's #292C42); the Share image button
+   floats over it as a PLPD standard button on a surface-3 fill */
+html,body{margin:0}
+body.plpd{background:var(--card-card-bg); color:var(--text-text-meta); display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh}
+#card{width:100%; max-width:1500px}
+#prov{margin:6px 0 10px; padding:0 20px; font-size:13px; text-align:center}
+#prov b{font-family:var(--font-display); color:var(--text-text-cell); font-weight:600}
 #prov[hidden]{display:none}
-#card svg{display:block;width:100%;height:auto}
-#msg{align-self:center;padding:0 20px;text-align:center}
+#card svg{display:block; width:100%; height:auto}
+#msg{align-self:center; padding:0 20px; text-align:center}
 #msg[hidden],#card[hidden]{display:none}
-#png{position:fixed;right:14px;bottom:14px;font:600 13px "DM Sans",system-ui,sans-serif;
-  color:#fff;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.35);border-radius:6px;
-  padding:7px 11px;cursor:pointer}
-#png:hover{background:rgba(0,0,0,.7)}
-#png{transition:transform .12s cubic-bezier(.2,0,0,1)}
-#png:active{transform:scale(.96)}
-@media (prefers-reduced-motion:reduce){#png:active{transform:none}}
+#png{position:fixed; right:14px; bottom:14px; background:var(--surfaces-surface-3); box-shadow:inset 0 0 0 1px var(--borders-border-tab),0 6px 20px 0 rgba(0,0,0,.36)}
+#png:hover{background:linear-gradient(var(--white-alpha-200),var(--white-alpha-200)),var(--surfaces-surface-3)}
 #png[hidden]{display:none}
 </style>
 </head>
-<body>
+<body class="plpd">
 <div id="card" hidden></div>
 <p id="prov" hidden><b>PLV and Location are provisional below MLB</b> (the models aren't yet calibrated to minor-league strike zones and parks).</p>
 <p id="msg">Loading the card…</p>
-<button id="png" type="button" hidden>Share image ▾</button>
+<button id="png" class="plpd-btn" type="button" hidden>Share image ▾</button>
 <script src="/shared/share-image.js?v=2"></script>
-<script src="card.js?v=2"></script>
+<script src="card.js?v=3"></script>
 <script>
 // One card, full size: card.html#<gamePk>-<pitcherId>, optionally &cmp=<year> (0 for no
 // comparison). The card comes from the day's data file, found through the index, or from
