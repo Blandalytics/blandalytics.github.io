@@ -1,5 +1,5 @@
 {
- "built": "2026-10-19T16:51:14Z",
+ "built": "2026-10-20T14:47:37Z",
  "games": {
   "822678": {
    "away": "New York Mets",
@@ -34075,6 +34075,20 @@
    "home_nick": "Rays",
    "home_r": 3,
    "title": "Rays 3, Guardians 1",
+   "venue": "Tropicana Field"
+  },
+  "849815": {
+   "away": "Cleveland Guardians",
+   "away_abbr": "CLE",
+   "away_nick": "Guardians",
+   "away_r": 3,
+   "date": "2026-10-19",
+   "file": "games/849815.html",
+   "home": "Tampa Bay Rays",
+   "home_abbr": "TB",
+   "home_nick": "Rays",
+   "home_r": 7,
+   "title": "Rays 7, Guardians 3",
    "venue": "Tropicana Field"
   },
   "849816": {
