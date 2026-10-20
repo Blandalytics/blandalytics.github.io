@@ -10,7 +10,7 @@
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
 import { PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=2";
-import { boxscoreUrl, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=3";
+import { boxscoreUrl, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=4";
 import { teamColors } from "./team-colors.js?v=1";
 
 const SEASON = 2026;
@@ -279,6 +279,11 @@ async function loadGame(pk) {
   checkSchedule(pk, sched, SEASON, data.teams); // whether it's a game that loads, before the larger box score is asked for
   return parseGame(pk, sched, await getJSON(boxscoreUrl(pk)), ctx);
 }
+// A loaded game's final score ([away, home]), kept while the matchup is still that game: the same
+// teams, nines in the same order and starters (the Sim settings, the park and He pitches can change).
+let realGame = null;
+const gameKey = () => JSON.stringify(SIDES.map((s) => [s.team, s.lineup, s.sp?.id]));
+const realFinal = () => (realGame && realGame.key === gameKey() ? realGame.final : null);
 function applyGame(G) {
   [["away", SIDES[0]], ["home", SIDES[1]]].forEach(([where, s]) => {
     const x = G.sides[where];
@@ -291,6 +296,7 @@ function applyGame(G) {
     if (park.auto) park.at = homePark();
     park.week = G.week;
   }
+  realGame = G.final ? { final: G.final, key: gameKey() } : null;
   SIDES.forEach(renderSide);
   fillPark();
   run();
@@ -689,7 +695,7 @@ function go() {
   const teams = [pitchingOf(SIDES[0], SIDES[1]), pitchingOf(SIDES[1], SIDES[0])];
   const games = Number($("games").value);
   const busy = job != null;
-  job = { id: ++jobs, teams, games, steal: stealOn(), park: parkName(), home: homeEdge(), week: park.week >= 0 ? parkData.weeks[park.week][2] : null, sides: SIDES.map((s) => ({ ...s, lineup: [...s.lineup], from: fromOf(s) })) };
+  job = { id: ++jobs, teams, games, steal: stealOn(), park: parkName(), home: homeEdge(), final: realFinal(), week: park.week >= 0 ? parkData.weeks[park.week][2] : null, sides: SIDES.map((s) => ({ ...s, lineup: [...s.lineup], from: fromOf(s) })) };
   $("status").textContent = "simulating…";
   $("status").classList.remove("err");
   $("out").style.opacity = $("box").style.opacity = last ? ".55" : "";
@@ -719,7 +725,7 @@ function runHere(j) {
 }
 function finish(j, res, ms) {
   job = null;
-  last = { res, sides: j.sides, games: j.games, ms, steal: j.steal, park: j.park, week: j.week, home: j.home };
+  last = { res, sides: j.sides, games: j.games, ms, steal: j.steal, park: j.park, week: j.week, home: j.home, final: j.final };
   $("out").hidden = $("box").hidden = false;
   $("out").style.opacity = $("box").style.opacity = "";
   $("status").textContent = res.capped ? `${res.capped.toLocaleString()} innings were called off at 60 plate appearances; adding MLB-average PA under Sim settings fixes that.` : "";
@@ -814,12 +820,15 @@ function renderScoreGrid() {
   // the axes: to the most runs by either team in a score of SG_FLOOR or more of games
   let M = 1;
   res.scoreDist.forEach((n, i) => { if (n >= SG_FLOOR * games) M = Math.max(M, Math.floor(i / N), i % N); });
+  // a real game's final score is always in view (the sim's scores stop at 30)
+  const fin = last.final ? last.final.map((r) => Math.min(r, N - 1)) : null;
+  if (fin) M = Math.max(M, ...fin);
   const n1 = M + 1;
   // D[a * n1 + h]: games at each score in view
   const D = new Float64Array(n1 * n1);
   for (let a = 0; a < n1; a++) for (let h = 0; h < n1; h++) D[a * n1 + h] = res.scoreDist[a * N + h];
   const outCss = getComputedStyle($("out"));
-  sgView = { D, n1, M, games, ab, nm, runs, max: Math.max(...D), away: outCss.getPropertyValue("--t-away").trim(), home: outCss.getPropertyValue("--t-home").trim() };
+  sgView = { D, n1, M, games, ab, nm, runs, fin, max: Math.max(...D), away: outCss.getPropertyValue("--t-away").trim(), home: outCss.getPropertyValue("--t-home").trim() };
   drawScoreGrid(null);
   // the likeliest scores, for screen readers
   const top = [];
@@ -828,7 +837,9 @@ function renderScoreGrid() {
   const say = ([n, a, h]) => `${ab(0)} ${runs(a)}, ${ab(1)} ${runs(h)} (${pct(n / games)})`;
   $("sg").setAttribute("aria-label", `Every simulated final score, ${nm(1)} runs across and ${nm(0)} runs up, each to ${M}; the likeliest: ${top.slice(0, 3).map(say).join("; ")}`);
   $("sg_note").textContent = `Each square is one final score, ${nm(1)} runs across and ${nm(0)} runs up; brighter is likelier, and the number is its share of games (%); scores under ${SG_FLOOR * 100}% have no square. `
-    + `Above the dotted line the ${nm(0)} won, below it the ${nm(1)}; no game ends tied. Hover or tap a square for its share.`;
+    + `Above the dotted line the ${nm(0)} won, below it the ${nm(1)}; no game ends tied. `
+    + (fin ? `The outlined square is how the game actually ended (${ab(0)} ${last.final[0]}, ${ab(1)} ${last.final[1]}). ` : "")
+    + "Hover or tap a square for its share.";
 }
 // The grid, on the page's canvas, with the square at `hot` ([away, home]) ringed
 function drawScoreGrid(hot) {
@@ -846,11 +857,17 @@ function drawScoreGrid(hot) {
     label: c >= 15 ? `600 ${c >= 30 ? 11 : c >= 22 ? 10 : 8.5}px "DM Sans", system-ui, sans-serif` : null, radius: 2, gap: 1,
     tickFont: `11.5px "DM Sans", system-ui, sans-serif`, tickGap: 6,
     titleFont: `12.5px "DM Sans", system-ui, sans-serif`, dot: 4, xTitleY: H - 12, yTitleX: 13,
-    tie: { width: 1.75, dash: [2, 4] }, ring: 1.5,
+    tie: { width: 1.75, dash: [2, 4] }, ring: 1.5, final: 2.5,
   }, hot);
   Object.assign(k, { m, c, P });
 }
 
+// a share of games as a percent: one decimal, or as many as its first digit that isn't 0 needs (0.03,
+// 0.004); none at all is 0
+const shareText = (n, games) => {
+  const x = (100 * n) / games;
+  return !n ? "0" : x >= 0.1 ? x.toFixed(1) : x.toFixed(Math.min(4, -Math.floor(Math.log10(x))));
+};
 // The grid in a box ({ l, t, P }: left, top, side) with a look (colors, fonts, spacing): the page's
 // canvas and the share image both draw it here. The ramp starts at the look's background at SG_FADE.
 function paintScoreGrid(ctx, box, L, hot) {
@@ -881,6 +898,17 @@ function paintScoreGrid(ctx, box, L, hot) {
       ctx.fillStyle = contrast(lum(hex(L.ground)), sq) > contrast(lum(hex(L.ink)), sq) ? L.ground : L.ink;
       ctx.fillText((100 * n / games).toFixed(1), cx(h), cy(a) + 0.5);
     }
+  }
+  // a real game's final score: its share even without a square (to the first digit that isn't 0), outlined
+  if (k.fin) {
+    const [fa, fh] = k.fin, n = D[fa * n1 + fh];
+    if (L.label && (!n || n < SG_FLOOR * games)) {
+      ctx.font = L.label;
+      ctx.fillStyle = L.ink;
+      ctx.fillText(shareText(n, games), cx(fh), cy(fa) + 0.5);
+    }
+    square(fh, fa, L.gap + L.final / 2);
+    ctx.lineWidth = L.final; ctx.strokeStyle = L.ink; ctx.stroke();
   }
   // the tie line, dotted, through the diagonal squares
   ctx.save();
@@ -956,7 +984,8 @@ async function scoreGridBlob() {
   g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
   // the starters by surname; the first line stops short of the wordmark beside it
   const who = (t) => `${k.nm(t)} (${surname(sides[t].sp.name)})`;
-  const lines = [`${who(0)} at ${who(1)}`, `${k.nm(0)} win ${pct(res.wins[0] / games)} · ${k.nm(1)} win ${pct(res.wins[1] / games)}`];
+  const lines = [`${who(0)} at ${who(1)}`, `${k.nm(0)} win ${pct(res.wins[0] / games)} · ${k.nm(1)} win ${pct(res.wins[1] / games)}`
+    + (last.final ? ` · Final: ${k.ab(0)} ${last.final[0]}, ${k.ab(1)} ${last.final[1]}` : "")];
   g.fillStyle = TILE.sub;
   lines.forEach((line, i) => {
     fitFont(g, line, 400, 21, '"DM Sans"', i ? W - 96 : W - 32 - 236 - 24 - 48);
@@ -969,13 +998,13 @@ async function scoreGridBlob() {
     label: `600 ${Math.max(13, Math.min(20, Math.round(c * 0.3)))}px "DM Sans"`, radius: 4, gap: 2,
     tickFont: '400 17px "JetBrains Mono"', tickGap: 12,
     titleFont: '400 18px "DM Sans"', dot: 6, xTitleY: t + P + 62, yTitleX: l - 62,
-    tie: { width: 2.5, dash: [3, 7] }, ring: 0,
+    tie: { width: 2.5, dash: [3, 7] }, ring: 0, final: 4,
   }, null);
   // the footer: what a square is, and how many games
   g.textAlign = "left";
   g.textBaseline = "alphabetic";
   g.fillStyle = TILE.sub;
-  const what = "Each square is a final score and its share of games (%).";
+  const what = `Each square is a final score and its share of games (%).${last.final ? " The outlined square is how the game ended." : ""}`;
   const where = `${games.toLocaleString()} simulated games`;
   fitFont(g, what, 400, 16, '"DM Sans"', W - 96);
   g.fillText(what, 48, 836);
@@ -997,8 +1026,10 @@ function sgHover(ev) {
   const n = k.D[a * k.n1 + h];
   t.innerHTML = "<b></b><small></small>";
   t.querySelector("b").textContent = `${k.ab(0)} ${k.runs(a)}, ${k.ab(1)} ${k.runs(h)}`;
-  t.querySelector("small").textContent = a === h && a < k.M && !n ? "a tie: no game ends tied"
-    : !n ? "no games ended here" : n / k.games < 0.0005 ? `${n} of ${k.games.toLocaleString()} games` : `${pct(n / k.games)} of games`;
+  const final = k.fin && k.fin[0] === a && k.fin[1] === h;
+  t.querySelector("small").textContent = (a === h && !n ? "a tie: no game ends tied"
+    : !n ? "no games ended here" : n / k.games < 0.0005 ? `${n} of ${k.games.toLocaleString()} games` : `${pct(n / k.games)} of games`)
+    + (final ? " · the final score" : "");
   t.style.left = `${k.m.l + (h + 0.5) * k.c}px`;
   t.style.top = `${k.m.t + (k.M - a) * k.c}px`;
   t.hidden = false;

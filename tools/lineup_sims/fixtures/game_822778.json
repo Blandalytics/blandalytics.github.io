@@ -19,13 +19,15 @@
         "team": {
          "id": 111,
          "name": "Boston Red Sox"
-        }
+        },
+        "score": 3
        },
        "home": {
         "team": {
          "id": 141,
          "name": "Toronto Blue Jays"
-        }
+        },
+        "score": 5
        }
       },
       "venue": {
