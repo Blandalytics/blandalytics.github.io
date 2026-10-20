@@ -133,6 +133,12 @@ table.linescore,table.box{border-collapse:collapse; font-size:13px; width:100%}
 .linescore tbody th{font-weight:600}
 .linescore .sum{border-left:1px solid var(--rule); font-weight:600}
 .linescore thead .sum{font-weight:500}
+/* every final score as a grid, a square a score: home runs across, away runs up */
+.sgrid{position:relative; max-width:460px}
+.sgrid canvas{display:block; width:100%; height:auto; touch-action:none}
+.sgrid-tip{position:absolute; pointer-events:none; background:var(--raise); border:1px solid var(--rule); border-radius:6px;
+  padding:5px 8px; font-size:12.5px; line-height:1.35; white-space:nowrap; color:var(--ink); transform:translate(-50%, calc(-100% - 10px))}
+.sgrid-tip small{display:block; color:var(--muted); font-size:12px}
 .scores{display:flex; flex-wrap:wrap; gap:6px 22px; margin:0; padding:0; list-style:none; font-size:14px}
 .scores b{font-weight:500}
 .scores span{color:var(--muted); font-size:13px}
@@ -244,6 +250,15 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
       <h3>Most common final scores</h3>
       <ul id="scores" class="scores"></ul>
     </div>
+    <div class="section">
+      <h3>Every final score</h3>
+      <div class="sgrid" id="sg_wrap">
+        <canvas id="sg" role="img"></canvas>
+        <div class="sgrid-tip" id="sg_tip" hidden></div>
+      </div>
+      <p id="sg_note" class="note" style="margin-top:6px"></p>
+      <div style="margin-top:10px"><button id="sg_share" type="button">Share image ▾</button></div>
+    </div>
     <p id="games_note" class="note" style="margin-top:16px"></p>
   </section>
 
@@ -270,6 +285,7 @@ p,li,.tag,.note,.method,.status{text-wrap:pretty}
     </details>
   </section>
 </main>
-<script type="module" src="game.js?v=9"></script>
+<script src="/shared/share-image.js?v=2"></script>
+<script type="module" src="game.js?v=10"></script>
 </body>
 </html>

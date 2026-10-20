@@ -40,6 +40,10 @@ const ordinal = (n) => {
 };
 const fold = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const lastName = (n) => n.split(" ").filter((w) => !/^(Jr\.?|Sr\.?|II|III|IV)$/.test(w)).pop();
+// a pitcher's surname whole ("Woods Richardson", "De Los Santos"): the name less the first name, any
+// middle initial and any suffix; an MLB-average arm keeps its label
+const surname = (n) => (/^MLB-average /.test(n) ? n
+  : n.split(" ").slice(1).filter((w) => !/^(Jr\.?|Sr\.?|II|III|IV|[A-Z]\.)$/.test(w)).join(" ") || n);
 const fmtIP = (outs) => `${Math.floor(outs / 3)}.${outs % 3}`;
 const countOf = (c) => (c ? c.reduce((a, x) => a + x, 0) : 0);
 const handOf = (e) => ({ L: "LHP", R: "RHP" })[e.throws] ?? "P";
@@ -784,8 +788,221 @@ function renderResults() {
     li.querySelector("span").textContent = pct(n / games);
     return li;
   }));
+  renderScoreGrid();
   $("games_note").textContent = `${games.toLocaleString()} games${last.ms ? ` in ${(last.ms / 1000).toFixed(1)} s` : ""}`
     + `${last.park ? ` at ${last.park}${last.week ? `, ${last.week}` : ""}` : ", no park adjustment"}. The away team bats first; ${last.home ? "the home team bats last, with the home-field edge" : "a neutral site, so no home-field edge beyond batting last"}.`;
+}
+
+// ---------- every final score, as a grid ----------
+// One square per final score (res.scoreDist: how many games ended at each away x home score), home
+// runs across and away runs up. Brighter is likelier: the ramp runs from the card's own color at
+// SG_FADE of games, through the blue ramp, to the likeliest score, so the faintest squares melt into the
+// card; a score under SG_FLOOR has no square (the card shows through). Every square carries its share. Both axes run to the most runs either team scored in a score that has a square (the grid
+// square, so the tie line is its diagonal); the squares past it would all be empty. The diagonal squares are ties,
+// which no game ends on (a tie called at 40 innings aside): the dotted line runs through them, the away
+// team's wins above it and the home team's below.
+const SG_FLOOR = 0.005, SG_FADE = 0.0045;
+// sparse to dense, after the card's color: the sequential blue ramp's steps 650 to 100
+const SG_RAMP = ["#104281", "#256abf", "#3987e5", "#6da7ec", "#9ec5f4", "#cde2fb"].map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)));
+let sgView = null; // what's drawn, for the hover readout
+function renderScoreGrid() {
+  const { res, sides, games } = last, N = 31;
+  $("sg_tip").hidden = true; // a redraw moves the squares under it
+  if ($("out").hidden) return; // drawn when there are results to show
+  const same = sides[0].team === sides[1].team, ab = (t) => teamAbbr(sides[t]), nm = (t) => (same ? sides[t].where : teamName(sides[t].team));
+  const runs = (r) => String(r);
+  // the axes: to the most runs by either team in a score of SG_FLOOR or more of games
+  let M = 1;
+  res.scoreDist.forEach((n, i) => { if (n >= SG_FLOOR * games) M = Math.max(M, Math.floor(i / N), i % N); });
+  const n1 = M + 1;
+  // D[a * n1 + h]: games at each score in view
+  const D = new Float64Array(n1 * n1);
+  for (let a = 0; a < n1; a++) for (let h = 0; h < n1; h++) D[a * n1 + h] = res.scoreDist[a * N + h];
+  const outCss = getComputedStyle($("out"));
+  sgView = { D, n1, M, games, ab, nm, runs, max: Math.max(...D), away: outCss.getPropertyValue("--t-away").trim(), home: outCss.getPropertyValue("--t-home").trim() };
+  drawScoreGrid(null);
+  // the likeliest scores, for screen readers
+  const top = [];
+  D.forEach((n, i) => { if (n) top.push([n, Math.floor(i / n1), i % n1]); });
+  top.sort((a, b) => b[0] - a[0]);
+  const say = ([n, a, h]) => `${ab(0)} ${runs(a)}, ${ab(1)} ${runs(h)} (${pct(n / games)})`;
+  $("sg").setAttribute("aria-label", `Every simulated final score, ${nm(1)} runs across and ${nm(0)} runs up, each to ${M}; the likeliest: ${top.slice(0, 3).map(say).join("; ")}`);
+  $("sg_note").textContent = `Each square is one final score, ${nm(1)} runs across and ${nm(0)} runs up; brighter is likelier, and the number is its share of games (%); scores under ${SG_FLOOR * 100}% have no square. `
+    + `Above the dotted line the ${nm(0)} won, below it the ${nm(1)}; no game ends tied. Hover or tap a square for its share.`;
+}
+// The grid, on the page's canvas, with the square at `hot` ([away, home]) ringed
+function drawScoreGrid(hot) {
+  const k = sgView, cv = $("sg"), css = getComputedStyle(document.documentElement), v = (x) => css.getPropertyValue(x).trim(), dpr = window.devicePixelRatio || 1;
+  const S = Math.min(460, $("sg_wrap").clientWidth || 460), m = { l: 44, r: 10, t: 10, b: 44 }, P = S - m.l - m.r, H = P + m.t + m.b;
+  cv.width = Math.round(S * dpr);
+  cv.height = Math.round(H * dpr);
+  cv.style.height = `${H}px`;
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, S, H);
+  const c = P / k.n1;
+  paintScoreGrid(ctx, { l: m.l, t: m.t, P }, {
+    bg: v("--surface"), ink: v("--ink"), ground: v("--ground"), tick: v("--muted"),
+    label: c >= 15 ? `600 ${c >= 30 ? 11 : c >= 22 ? 10 : 8.5}px "DM Sans", system-ui, sans-serif` : null, radius: 2, gap: 1,
+    tickFont: `11.5px "DM Sans", system-ui, sans-serif`, tickGap: 6,
+    titleFont: `12.5px "DM Sans", system-ui, sans-serif`, dot: 4, xTitleY: H - 12, yTitleX: 13,
+    tie: { width: 1.75, dash: [2, 4] }, ring: 1.5,
+  }, hot);
+  Object.assign(k, { m, c, P });
+}
+
+// The grid in a box ({ l, t, P }: left, top, side) with a look (colors, fonts, spacing): the page's
+// canvas and the share image both draw it here. The ramp starts at the look's background at SG_FADE.
+function paintScoreGrid(ctx, box, L, hot) {
+  const k = sgView, { D, n1, M, games } = k, { l, t, P } = box, c = P / n1;
+  const hex = (h) => [1, 3, 5].map((j) => parseInt(h.slice(j, j + 2), 16));
+  const lum = (rgb) => { const [r, g, b] = rgb.map((x) => ((x /= 255) <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const contrast = (x, y) => (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  const cx = (h) => l + (h + 0.5) * c, cy = (a) => t + (M - a + 0.5) * c; // a square's center
+  const square = (h, a, inset) => {
+    const x = l + h * c + inset, y = t + (M - a) * c + inset, w = c - 2 * inset;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, w, L.radius); else ctx.rect(x, y, w, w);
+  };
+  const ramp = [hex(L.bg), ...SG_RAMP], lo = SG_FADE * games;
+  if (L.label) ctx.font = L.label;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (let a = 0; a < n1; a++) for (let h = 0; h < n1; h++) {
+    const n = D[a * n1 + h];
+    if (!n || n < SG_FLOOR * games) continue; // under the floor: no square
+    square(h, a, L.gap); // the background between squares
+    const f = k.max > lo ? Math.min(1, (n - lo) / (k.max - lo)) : 1, u = f * (ramp.length - 1), i = Math.min(ramp.length - 2, Math.floor(u)), w = u - i;
+    const rgb = ramp[i].map((x, j) => Math.round(x + (ramp[i + 1][j] - x) * w));
+    ctx.fillStyle = `rgb(${rgb.join(",")})`;
+    ctx.fill();
+    if (L.label) {
+      // the share in whichever of ink and ground contrasts more with its square
+      const sq = lum(rgb);
+      ctx.fillStyle = contrast(lum(hex(L.ground)), sq) > contrast(lum(hex(L.ink)), sq) ? L.ground : L.ink;
+      ctx.fillText((100 * n / games).toFixed(1), cx(h), cy(a) + 0.5);
+    }
+  }
+  // the tie line, dotted, through the diagonal squares
+  ctx.save();
+  ctx.setLineDash(L.tie.dash); ctx.lineCap = "round"; ctx.lineWidth = L.tie.width; ctx.strokeStyle = L.ink; ctx.globalAlpha = 0.85;
+  ctx.beginPath(); ctx.moveTo(l, t + P); ctx.lineTo(l + P, t); ctx.stroke();
+  ctx.restore();
+  if (hot) {
+    square(hot[1], hot[0], L.gap / 2);
+    ctx.lineWidth = L.ring; ctx.strokeStyle = L.ink; ctx.stroke();
+  }
+  // ticks: every run (every other one past 10)
+  ctx.font = L.tickFont;
+  ctx.fillStyle = L.tick;
+  for (let r = 0; r <= M; r += M > 10 ? 2 : 1) {
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillText(k.runs(r), cx(r), t + P + L.tickGap);
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    ctx.fillText(k.runs(r), l - L.tickGap, cy(r));
+  }
+  // axis titles, each with its team's color mark
+  const title = (text, color, x, y, rot) => {
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(rot);
+    ctx.font = L.titleFont; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const w = ctx.measureText(text).width;
+    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(-w / 2 - L.dot * 2.25, 0, L.dot, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = L.ink; ctx.fillText(text, 0, 0);
+    ctx.restore();
+  };
+  title(`${k.nm(1)} Runs (Home)`, k.home, l + P / 2, L.xTitleY, 0);
+  title(`${k.nm(0)} Runs (Away)`, k.away, L.yTitleX, t + P / 2, -Math.PI / 2);
+}
+
+// ---------- the score grid as an image ----------
+// The grid above as a 900 x 900 image in the site's share-image style (the Lineup Sim's: the Pitcher
+// List Stats ground, a cyan title, the wordmark top right), to copy or download with the Share image
+// button (shared/share-image.js): the matchup and starters, each side's win share, the grid, what a
+// square is, and how many games.
+const TILE = { W: 900, bg: "#292c42", cyan: "rgb(4,209,249)", sub: "#9aa0b8", axis: "#c0c4d3" };
+let logoImg = null;
+const loadLogo = () => logoImg || (logoImg = new Promise((res, rej) => {
+  const im = new Image();
+  im.onload = () => res(im);
+  im.onerror = rej;
+  im.src = "logo.png";
+}));
+const scoreGridFile = () => {
+  const s = last?.sides;
+  return s ? `game_sim_simulated_scores_${teamAbbr(s[0]).toLowerCase()}_at_${teamAbbr(s[1]).toLowerCase()}.png` : "game_sim_simulated_scores.png";
+};
+// shrink a line's font until it fits
+function fitFont(g, text, weight, size, family, width) {
+  for (; size > 11; size--) {
+    g.font = `${weight} ${size}px ${family}`;
+    if (g.measureText(text).width <= width) break;
+  }
+}
+async function scoreGridBlob() {
+  const k = sgView, { res, sides, games } = last;
+  await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 17px "DM Sans"',
+    '400 17px "JetBrains Mono"'].map((f) => document.fonts.load(f)));
+  const logo = await loadLogo();
+  const { W } = TILE;
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = W;
+  const g = cv.getContext("2d");
+  g.fillStyle = TILE.bg;
+  g.fillRect(0, 0, W, W);
+  // title, wordmark, the matchup and the win shares
+  g.font = '700 36px "DM Sans"';
+  g.fillStyle = TILE.cyan;
+  g.fillText("Simulated Scores", 48, 64);
+  g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
+  // the starters by surname; the first line stops short of the wordmark beside it
+  const who = (t) => `${k.nm(t)} (${surname(sides[t].sp.name)})`;
+  const lines = [`${who(0)} at ${who(1)}`, `${k.nm(0)} win ${pct(res.wins[0] / games)} · ${k.nm(1)} win ${pct(res.wins[1] / games)}`];
+  g.fillStyle = TILE.sub;
+  lines.forEach((line, i) => {
+    fitFont(g, line, 400, 21, '"DM Sans"', i ? W - 96 : W - 32 - 236 - 24 - 48);
+    g.fillText(line, 48, 100 + 28 * i);
+  });
+  // the grid, square, centered under the subtitle
+  const P = 540, l = 200, t = 182, c = P / k.n1;
+  paintScoreGrid(g, { l, t, P }, {
+    bg: TILE.bg, ink: "#ffffff", ground: "#0d1117", tick: TILE.axis,
+    label: `600 ${Math.max(13, Math.min(20, Math.round(c * 0.3)))}px "DM Sans"`, radius: 4, gap: 2,
+    tickFont: '400 17px "JetBrains Mono"', tickGap: 12,
+    titleFont: '400 18px "DM Sans"', dot: 6, xTitleY: t + P + 62, yTitleX: l - 62,
+    tie: { width: 2.5, dash: [3, 7] }, ring: 0,
+  }, null);
+  // the footer: what a square is, and how many games
+  g.textAlign = "left";
+  g.textBaseline = "alphabetic";
+  g.fillStyle = TILE.sub;
+  const what = "Each square is a final score and its share of games (%).";
+  const where = `${games.toLocaleString()} simulated games`;
+  fitFont(g, what, 400, 16, '"DM Sans"', W - 96);
+  g.fillText(what, 48, 836);
+  fitFont(g, where, 400, 16, '"DM Sans"', W - 96);
+  g.fillText(where, 48, 862);
+  return new Promise((r) => cv.toBlob(r, "image/png"));
+}
+
+function sgHover(ev) {
+  const t = $("sg_tip"), k = sgView;
+  if (!k || !k.c) return;
+  const r = $("sg").getBoundingClientRect();
+  const h = Math.floor((ev.clientX - r.left - k.m.l) / k.c), a = k.M - Math.floor((ev.clientY - r.top - k.m.t) / k.c);
+  if (h < 0 || a < 0 || h > k.M || a > k.M) {
+    if (!t.hidden) drawScoreGrid(null);
+    t.hidden = true;
+    return;
+  }
+  const n = k.D[a * k.n1 + h];
+  t.innerHTML = "<b></b><small></small>";
+  t.querySelector("b").textContent = `${k.ab(0)} ${k.runs(a)}, ${k.ab(1)} ${k.runs(h)}`;
+  t.querySelector("small").textContent = a === h && a < k.M && !n ? "a tie: no game ends tied"
+    : !n ? "no games ended here" : n / k.games < 0.0005 ? `${n} of ${k.games.toLocaleString()} games` : `${pct(n / k.games)} of games`;
+  t.style.left = `${k.m.l + (h + 0.5) * k.c}px`;
+  t.style.top = `${k.m.t + (k.M - a) * k.c}px`;
+  t.hidden = false;
+  drawScoreGrid([a, h]);
 }
 
 // the box score: every hitter's and pitcher's line, per game
@@ -1012,6 +1229,17 @@ async function boot() {
     renderSide(s);
   }
   $("gpk_go").addEventListener("click", onLoadGame);
+  // the score grid's readout: hover, or a tap on touch (a tap elsewhere puts it away)
+  const sgOff = () => { if (!$("sg_tip").hidden) { $("sg_tip").hidden = true; if (sgView) drawScoreGrid(null); } };
+  $("sg").addEventListener("pointermove", sgHover);
+  $("sg").addEventListener("pointerdown", sgHover);
+  $("sg").addEventListener("pointerleave", (ev) => { if (ev.pointerType === "mouse") sgOff(); });
+  document.addEventListener("pointerdown", (ev) => { if (ev.target !== $("sg")) sgOff(); });
+  let sgTimer = 0;
+  window.addEventListener("resize", () => { clearTimeout(sgTimer); sgTimer = setTimeout(() => last && renderScoreGrid(), 120); });
+  // the score grid's Share image button (shared/share-image.js)
+  if (window.ShareImage) ShareImage.image($("sg_share"), scoreGridBlob, scoreGridFile);
+  else $("sg_share").hidden = true;
   $("gpk_rand").addEventListener("click", onRandomGame);
   $("gpk").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); if (!$("gpk_go").disabled) onLoadGame(); } });
   $("swap").addEventListener("click", () => {
