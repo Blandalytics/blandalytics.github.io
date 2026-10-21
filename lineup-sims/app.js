@@ -1572,7 +1572,7 @@ function tradeoffChart(all, at, slide) {
   // this lineup's dot on the curve, its setting above it (the slider's to a tenth)
   const dot = el("circle", { r: 5, fill: "var(--s-lineup)", stroke: "var(--surface)", "stroke-width": 2 });
   const tag = el("text", { fill: "var(--ink)", "font-size": 11, stroke: "var(--surface)", "stroke-width": 3, "paint-order": "stroke",
-    "font-family": '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace' });
+    "font-family": "var(--font-text)", style: "font-variant-numeric:tabular-nums" });
   tradeoffMove = (t) => {
     // past this chart's ends: drawing it again widens it, up to the sliders' range; a lineup past that sits at its end
     if (Math.abs(t) > range + 1e-9 && range < data.tradeoff.range) return;
@@ -1851,7 +1851,7 @@ function settingsChart(before, after, wasSlot) {
     if (prev?.theta != null) el("rect", { x: x(prev.theta) - 1, y: y - 9, width: 2, height: 18, rx: 1, fill: "var(--muted)" });
     // the value just past the bar's end (toward contact, to its left), in the bar's color
     el("text", { x: t < 0 ? x1 - 5 : x1 + 5, y: y + 4, "text-anchor": t < 0 ? "end" : "start", fill: color, "font-size": 12,
-      "font-family": "JetBrains Mono, monospace" }, fmtTheta(t));
+      "font-family": "var(--font-text)", style: "font-variant-numeric:tabular-nums" }, fmtTheta(t));
     const hit = el("rect", { x: 0, y: y - rowH / 2, width: W, height: rowH, fill: "transparent" });
     hover(hit, (ev) => {
       const l = lineOf(e.counts);
@@ -1895,7 +1895,9 @@ function resetSettings() {
 // The chart above as a 900 x 900 image in the site's share-image style (League Factors' and the
 // homepage tiles': the Pitcher List Stats ground, a cyan title, the wordmark top right), to copy
 // or download with the Share image button (shared/share-image.js).
-const OPT_TILE = { W: 900, bg: "rgb(41,44,66)", cyan: "rgb(4,209,249)", sub: "#9aa0b8", axis: "#c0c4d3", grid: "#3a3e5a", zero: "#6d7290" };
+// the PLPD tokens, as Model Drilldown's card has them: card-bg, brand-cyan, blue-200, text-nav, navy-500 and
+// chart-center-line
+const OPT_TILE = { W: 900, bg: "#292c42", cyan: "#55e8ff", sub: "#98b3de", axis: "#cbd7fd", grid: "#404460", zero: "rgba(255,255,255,0.24)" };
 let optShare = null;   // what the chart on screen shows: { before, after, wasSlot, byPitch }
 let logoImg = null;
 const loadLogo = () => logoImg || (logoImg = new Promise((res, rej) => {
@@ -1910,7 +1912,7 @@ async function optTileBlob() {
   const { before, after, wasSlot } = optShare;
   const { result } = optDone;
   await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"',
-    '600 19px "JetBrains Mono"'].map((f) => document.fonts.load(f)));
+    '600 19px "Work Sans"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
   const { W } = OPT_TILE, range = data.tradeoff.range;
   const cv = document.createElement("canvas");
@@ -1996,7 +1998,7 @@ async function optTileBlob() {
       g.fillRect(x(prev.theta) - 1.5, y - 19, 3, 38);
     }
     // the value just past the bar's end, in the bar's color
-    g.font = '600 19px "JetBrains Mono"';
+    g.font = '600 19px "Work Sans"';
     g.fillStyle = color;
     g.textAlign = t < 0 ? "right" : "left";
     g.fillText(fmtTheta(t), t < 0 ? x1 - 10 : x1 + 10, y + 1);
@@ -2045,7 +2047,7 @@ const tradeoffFileName = () => `lineup_sim_contact_vs_power${tradeoffShare?.vs ?
 async function tradeoffTileBlob() {
   const { vs } = tradeoffShare;
   await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"',
-    '600 19px "JetBrains Mono"', '600 17px "JetBrains Mono"'].map((f) => document.fonts.load(f)));
+    '600 19px "Work Sans"', '600 17px "Work Sans"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
   // the curve within ±CURVE_X, teal to amber across it (the sliders' colors, there at the chart's ends)
   const { W } = OPT_TILE, range = CURVE_X, pts = tradeoffShare.pts.filter((p) => Math.abs(p.theta) <= range + 1e-9);
@@ -2127,7 +2129,7 @@ async function tradeoffTileBlob() {
   pts.forEach((p, i) => (i ? g.lineTo(x(p.theta), y(p.R)) : g.moveTo(x(p.theta), y(p.R))));
   g.stroke();
   // its ends and its middle, labeled
-  g.font = '600 17px "JetBrains Mono"';
+  g.font = '600 17px "Work Sans"';
   const lo = pts[0], hi = pts[pts.length - 1], mid = pts.find((p) => p.theta === 0);
   // the middle one centered above its point
   for (const [p, align, dx] of [[lo, "left", 10], [mid, "center", 0], [hi, "right", -10]]) {
@@ -2157,7 +2159,7 @@ async function runsTileBlob() {
   const { mine, amber, white: whiteOf, R, subs, games, ids, team, ohtani: allOhtanis, vs, byPitch: pitchModel } = runsShare;
   const white = whiteOf ? await whiteOf() : null;
   await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 15px "DM Sans"',
-    '600 48px "JetBrains Mono"', '600 20px "JetBrains Mono"', '400 17px "JetBrains Mono"', '400 15px "DM Sans"'].map((f) => document.fonts.load(f)));
+    '600 48px "Work Sans"', '600 20px "Work Sans"', '400 17px "Work Sans"', '400 15px "DM Sans"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
   const { W } = OPT_TILE, n = mine.length;
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -2227,7 +2229,7 @@ async function runsTileBlob() {
   const boxH = (B - T) / 3, boxW = band * 5;
   // the smaller numbers a row each, label left and value right, their type shrunk until the longest fits
   const rowW = (size) => Math.max(0, ...subs.map(([label, v]) =>
-    widthOf(`400 ${size}px "DM Sans"`, label) + 10 + widthOf(`600 ${size + 4}px "JetBrains Mono"`, v.toFixed(2))));
+    widthOf(`400 ${size}px "DM Sans"`, label) + 10 + widthOf(`600 ${size + 4}px "Work Sans"`, v.toFixed(2))));
   let subSize = 15;
   while (subSize > 11 && rowW(subSize) > boxW - 2 * pad) subSize--;
   // A curve is a Gaussian kernel density over the shares (0.6 runs wide, mirrored at the 0 column's
@@ -2277,7 +2279,7 @@ async function runsTileBlob() {
   g.textAlign = "center";
   g.textBaseline = "alphabetic";
   g.fillStyle = OPT_TILE.axis;
-  g.font = '400 17px "JetBrains Mono"';
+  g.font = '400 17px "Work Sans"';
   mine.forEach((_, i) => g.fillText(i === n - 1 ? `${i}+` : String(i), cx(i), B + 30));
   g.font = '400 16px "DM Sans"';
   g.fillText("Runs", (P0 + P1) / 2, B + 58);
@@ -2291,9 +2293,9 @@ async function runsTileBlob() {
   g.arcTo(x0, y0 + boxH, x0, y0, rad);
   g.arcTo(x0, y0, x0 + boxW, y0, rad);
   g.closePath();
-  g.fillStyle = "rgb(49,53,79)";
+  g.fillStyle = "#2e3150";
   g.fill();
-  g.strokeStyle = "#4b5075";
+  g.strokeStyle = "#404460";
   g.lineWidth = 1.5;
   g.stroke();
   // with no smaller numbers, runs per 9 sits in the middle of the box
@@ -2302,10 +2304,10 @@ async function runsTileBlob() {
   g.font = '400 16px "DM Sans"';
   g.fillStyle = OPT_TILE.sub;
   g.fillText("Runs per 9", mid, y0 + 26 + lift);
-  g.font = '600 48px "JetBrains Mono"';
+  g.font = '600 48px "Work Sans"';
   g.fillStyle = TEAL;
   g.fillText(R.toFixed(2), mid, y0 + 72 + lift);
-  g.strokeStyle = "#4b5075";
+  g.strokeStyle = "#404460";
   g.lineWidth = 1;
   if (subs.length) { g.beginPath(); g.moveTo(x0 + pad, y0 + 88); g.lineTo(x0 + boxW - pad, y0 + 88); g.stroke(); }
   const subH = (boxH - 88) / subs.length;
@@ -2316,7 +2318,7 @@ async function runsTileBlob() {
     g.fillStyle = OPT_TILE.sub;
     g.fillText(label, x0 + pad, yb);
     g.textAlign = "right";
-    g.font = `600 ${subSize + 4}px "JetBrains Mono"`;
+    g.font = `600 ${subSize + 4}px "Work Sans"`;
     g.fillStyle = COLOR[color];
     g.fillText(v.toFixed(2), x0 + boxW - pad, yb);
   });
