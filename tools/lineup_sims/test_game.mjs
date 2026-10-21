@@ -14,7 +14,7 @@ const engineFile = join(repo, "lineup-sims", "game-sim.js");
 const parkFile = join(repo, "lineup-sims", "park.js");
 const loadFile = join(repo, "lineup-sims", "game-load.js");
 const fixtureFile = join(repo, "tools", "lineup_sims", "fixtures", "game_822778.json");
-const colorsFile = join(repo, "lineup-sims", "team-colors.js"), pageFile = join(repo, "lineup-sims", "game.html");
+const colorsFile = join(repo, "lineup-sims", "team-colors.js"), pageFile = join(repo, "game-sim", "index.html");
 const gameFile = join(repo, "lineup-sims", "game.js"), plpdFile = join(repo, "shared", "plpd.css");
 const data = JSON.parse(readFileSync(join(dataDir, `${season}.json`), "utf8"));
 const SD = JSON.parse(readFileSync(join(dataDir, `${season}-steal.json`), "utf8"));

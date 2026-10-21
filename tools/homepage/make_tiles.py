@@ -46,6 +46,7 @@ CROPS = {
     "playing-time-risk": (0.0, 0.0),     # top of the leaderboard
     "promotion-timelines": (0.0, 0.0),   # top of the leaderboard
     "lineup-sims": (0.0, 0.0),           # the KPIs and the comparison strips
+    "game-sim": None,                    # square already: the score grid's share image
 }
 
 
