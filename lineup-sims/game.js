@@ -807,14 +807,14 @@ function renderResults() {
 // ---------- every final score, as a grid ----------
 // One square per final score (res.scoreDist: how many games ended at each away x home score), home
 // runs across and away runs up. Brighter is likelier: the ramp runs from the card's own color at
-// SG_FADE of games, through the blue ramp, to the likeliest score, so the faintest squares melt into the
+// SG_FADE of games straight to white at the likeliest score, so the faintest squares melt into the
 // card; a score under SG_FLOOR has no square (the card shows through). Every square carries its share. Both axes run to the most runs either team scored in a score that has a square (the grid
 // square, so the tie line is its diagonal); the squares past it would all be empty. The diagonal squares are ties,
 // which no game ends on (a tie called at 40 innings aside): the dotted line runs through them, the away
 // team's wins above it and the home team's below.
 const SG_FLOOR = 0.005, SG_FADE = 0.0045;
-// sparse to dense, after the card's color: the PLPD cyan primitives, cyan-800 to cyan-100
-const SG_RAMP = ["#195d6e", "#288092", "#37a2b7", "#46c5db", "#73efff", "#e6fcff"].map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)));
+// sparse to dense, after the card's color: white (base-white) at the likeliest score
+const SG_RAMP = [[255, 255, 255]];
 let sgView = null; // what's drawn, for the hover readout
 function renderScoreGrid() {
   const { res, sides, games } = last, N = 31;
