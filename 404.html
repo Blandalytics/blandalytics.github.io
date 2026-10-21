@@ -8,11 +8,11 @@
 <title>Page not found · Blandalytics</title>
 <script>
   // GitHub Pages serves this page for any path the site doesn't have. One kind of path is a short
-  // link, not a missing page: /lineup-sims/<gamePk> is the Game Sim with that 2026 game loaded
-  // (lineup-sims/game.js reads #gp=). It goes there before anything is drawn.
+  // link, not a missing page: /game-sim/<gamePk> (and the older /lineup-sims/<gamePk>) is the Game
+  // Sim with that 2026 game loaded (lineup-sims/game.js reads #gp=). It goes there before anything is drawn.
   (function () {
-    var m = location.pathname.match(/^\/lineup-sims\/(\d{6,7})\/?$/);
-    if (m) location.replace("/lineup-sims/game.html#gp=" + m[1]);
+    var m = location.pathname.match(/^\/(?:game-sim|lineup-sims)\/(\d{6,7})\/?$/);
+    if (m) location.replace("/game-sim/#gp=" + m[1]);
   })();
 </script>
 <style>

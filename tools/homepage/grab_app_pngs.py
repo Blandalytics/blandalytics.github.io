@@ -62,6 +62,9 @@ APPS = [
     # Jacob Misiorowski's 2026 four-seamer, Stuff+, the Velocity row
     ("model-drilldown", "https://blandalytics.com/model-drilldown/#2026-694819-FF&row=velo",
      "document.querySelector('#flow svg .panel-hit') && document.title.includes('Misiorowski')", "share_flow_download"),
+    # the 2026 ALCS Game 6, Guardians at Rays (the pennant clincher): the simulated scores, the final outlined
+    ("game-sim", "https://blandalytics.com/game-sim/#gp=849815",
+     "/amber/.test(document.getElementById('sg_note').textContent) && !document.getElementById('sg_share').hidden", "sg_share_download"),
 ]
 
 

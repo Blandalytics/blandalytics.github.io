@@ -97,7 +97,7 @@ const teamName = (abbr) => (abbr === "MLB" ? "MLB" : teamOf(abbr).short);
 const teamAbbr = (s) => (SIDES[0].team === SIDES[1].team ? s.where : s.team);
 
 async function loadHookData() {
-  const r = await fetch(`data/${SEASON}-hook.json?v=1`);
+  const r = await fetch(new URL(`data/${SEASON}-hook.json?v=1`, import.meta.url));
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const d = await r.json();
   const t = d.trees;
@@ -129,7 +129,7 @@ function hookOf(e) {
 // the Lineup Sim has it.
 let stealData = null, stealHere = null;
 async function loadStealData() {
-  const r = await fetch(`data/${SEASON}-steal.json?v=1`);
+  const r = await fetch(new URL(`data/${SEASON}-steal.json?v=1`, import.meta.url));
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   stealData = await r.json();
 }
@@ -190,7 +190,7 @@ function fillCatchers(s) {
 let parkData = null;
 const park = { at: "none", auto: true, week: -1 };
 async function loadParkData() {
-  const r = await fetch(`data/${SEASON}-parks.json?v=1`);
+  const r = await fetch(new URL(`data/${SEASON}-parks.json?v=1`, import.meta.url));
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   parkData = await r.json();
 }
@@ -251,8 +251,9 @@ function fillPark() {
 // team's catcher, the ballpark and the week); here it's fetched and put on the page, with He pitches
 // set from what each starter did (bullpenDay); the Sim settings stay as they were. A game is fetched
 // only on Load (or Enter), Random Game, or once
-// as the page opens when the link asks for one: blandalytics.com/lineup-sims/<gamePk> lands here as
-// game.html#gp=<gamePk> (the site's 404.html sends it), and so does game.html#<gamePk>.
+// as the page opens when the link asks for one: blandalytics.com/game-sim/<gamePk> (or the older
+// /lineup-sims/<gamePk>) lands here as /game-sim/#gp=<gamePk> (the site's 404.html sends it), and so
+// does /game-sim/#<gamePk>.
 const FETCH_MS = 8000;
 // a Stats API reply, or a plain reason it isn't one: no answer within FETCH_MS, a network failure,
 // a status other than 200, or a body that isn't JSON
@@ -314,10 +315,10 @@ function applyGame(G) {
     + (G.park < 0 && parkData ? `; ${G.venue} has no ${SEASON} park factors, so ${parkName() ?? "no park"}` : "")
     + (G.kind === "postseason" && wk ? `, with the regular season's last week (${wk})` : "")
     + (G.missing.length ? `. Not in the ${SEASON} data, so replaced: ${G.missing.join(", ")}.` : ".");
-  // the game's short link (the site's 404.html turns it into game.html#gp=)
+  // the game's short link (the site's 404.html turns it into /game-sim/#gp=)
   const link = document.createElement("a");
-  link.href = `/lineup-sims/${G.pk}`;
-  link.textContent = `${location.host}/lineup-sims/${G.pk}`;
+  link.href = `/game-sim/${G.pk}`;
+  link.textContent = `${location.host}/game-sim/${G.pk}`;
   $("gpk_note").append(" Link: ", link);
 }
 // Load and Random Game wait for each other
@@ -974,7 +975,7 @@ const loadLogo = () => logoImg || (logoImg = new Promise((res, rej) => {
   const im = new Image();
   im.onload = () => res(im);
   im.onerror = rej;
-  im.src = "logo.png";
+  im.src = new URL("logo.png", import.meta.url).href;
 }));
 const scoreGridFile = () => {
   const s = last?.sides;
@@ -1039,7 +1040,9 @@ function sgHover(ev) {
   if (!k || !k.c) return;
   const r = $("sg").getBoundingClientRect();
   const h = Math.floor((ev.clientX - r.left - k.m.l) / k.c), a = k.M - Math.floor((ev.clientY - r.top - k.m.t) / k.c);
-  if (h < 0 || a < 0 || h > k.M || a > k.M) {
+  // the tie line's squares get no readout and no ring, unless the real game ended there (called, tied)
+  const final = k.fin && k.fin[0] === a && k.fin[1] === h, tie = a === h;
+  if (h < 0 || a < 0 || h > k.M || a > k.M || (tie && !final)) {
     if (!t.hidden) drawScoreGrid(null);
     t.hidden = true;
     return;
@@ -1047,10 +1050,7 @@ function sgHover(ev) {
   const n = k.D[a * k.n1 + h];
   t.innerHTML = "<b></b><small></small>";
   t.querySelector("b").textContent = `${k.ab(0)} ${k.runs(a)}, ${k.ab(1)} ${k.runs(h)}`;
-  // a tie square says no game ends there, unless the real game did (called, tied)
-  const final = k.fin && k.fin[0] === a && k.fin[1] === h, tie = a === h;
-  t.querySelector("small").textContent = (tie && !n && !final ? "a tie: no game ends tied"
-    : !n ? "no games ended here" : n / k.games < 0.0005 ? `${n} of ${k.games.toLocaleString()} games` : `${pct(n / k.games)} of games`)
+  t.querySelector("small").textContent = (!n ? "no games ended here" : n / k.games < 0.0005 ? `${n} of ${k.games.toLocaleString()} games` : `${pct(n / k.games)} of games`)
     + (final ? (tie ? " · the final score (called tied)" : " · the final score") : "");
   t.style.left = `${k.m.l + (h + 0.5) * k.c}px`;
   t.style.top = `${k.m.t + (k.M - a) * k.c}px`;
@@ -1221,7 +1221,7 @@ async function boot() {
   const stealFile = loadStealData().catch(() => null);
   const parkFile = loadParkData().catch(() => null);
   try {
-    const r = await fetch(`data/${SEASON}.json?v=5`);
+    const r = await fetch(new URL(`data/${SEASON}.json?v=5`, import.meta.url));
     if (!r.ok) throw new Error(`data ${r.status}`);
     data = await r.json();
   } catch (e) {
