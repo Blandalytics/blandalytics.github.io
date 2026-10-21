@@ -654,6 +654,8 @@ const POINTS_COL = { key: "points", label: "Points", get: (p) => p.points, cell:
 const VALUE_COL = { key: "value", label: "Auction $", frozen: true, get: (p) => p.value, cell: (p) => money(p.value), cls: (p) => "val" + (p.value < result.settings.minBid ? " neg" : "") };
 // The risk-aware $ and its move from the Auction $ (with the Risk setting on)
 const riskValue = (p) => (p.risk ? p.risk.value : NaN);
+// the risk-aware $ is priced without the Pitcher List credit, so it moves from the value without it
+const riskBase = (p) => (p.pl ? p.pl.base : p.value);
 const sgp = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2);
 function riskTip(p) {
   const r = p.risk;
@@ -662,7 +664,7 @@ function riskTip(p) {
   const parts = [`value ${r.mu.toFixed(2)}`, `option ${sgp(r.option)} (a bust dropped after ${Math.round(100 * r.lambda)}% of the season)`];
   if (Math.abs(r.payout) >= 0.005) parts.push(`payout ${sgp(r.payout)} (season SD ${r.sd.toFixed(2)})`);
   if (r.il >= 0.005) parts.push(`IL ${sgp(-r.il)}`);
-  return `Risk-aware ${money(r.value)} against ${money(p.value)}. In SGP above replacement: ${parts.join(", ")}`
+  return `Risk-aware ${money(r.value)} against ${money(riskBase(p))}${p.pl ? " (before the Pitcher List credit)" : ""}. In SGP above replacement: ${parts.join(", ")}`
     + `${r.drafted ? "" : ". Not on a drafted roster at these values"}`;
 }
 const RISK_COL = {
@@ -689,8 +691,8 @@ const PL_CREDIT_COL = {
   title: "What the Pitcher List credit moved: Auction $ less the value without the ranks",
 };
 const RISK_MOVE_COL = {
-  key: "riskmove", label: "Risk ±", get: (p) => riskValue(p) - p.value, cell: (p) => signed(riskValue(p) - p.value), cls: (p) => signCls(riskValue(p) - p.value),
-  title: "Risk $ less Auction $",
+  key: "riskmove", label: "Risk ±", get: (p) => riskValue(p) - riskBase(p), cell: (p) => signed(riskValue(p) - riskBase(p)), cls: (p) => signCls(riskValue(p) - riskBase(p)),
+  title: "Risk $ less Auction $ (the Auction $ before the Pitcher List credit, which the risk $ leaves out)",
 };
 
 // ---- the value breakdown -------------------------------------------------------------------
