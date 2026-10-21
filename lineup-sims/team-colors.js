@@ -8,7 +8,9 @@
 // both lighten to a bright blue), then its secondary. When neither home color stands apart, the away
 // team tries its secondary (one pairing of clubs: Marlins teal at the Rays' two blues). MLB (the
 // league-average lineup) has no colors of its own: it takes the page's color for its side, else the
-// other side's, and gives way to a club, which keeps its primary.
+// other side's, and gives way to a club, which keeps its primary. A club whose two colors lighten alike
+// on the card can't be told from itself (the Rays' navy and light blue, on the PLPD card-bg): against
+// itself the away side keeps its primary and the home side takes the page's color for its side.
 
 export const TEAM_HEX = {
   ATH: ["#003831", "#efb21e"], ATL: ["#ce1141", "#13274f"], AZ: ["#a71930", "#e3d4ad"], BAL: ["#df4601", "#000000"],
@@ -79,7 +81,7 @@ export function readable(hex, on) {
 }
 
 // The two sides' colors on `on`: [away, home]. teams: the two team abbreviations; fallback: the page's
-// own [away, home] pair, for MLB and for a matchup no team colors tell apart.
+// own [away, home] pair, for MLB and for a side no team colors tell apart.
 export function teamColors(teams, on, fallback) {
   const page = fallback.map((h) => readable(h, on));
   const choices = teams.map((t, i) => (TEAM_HEX[t] ?? [fallback[i], fallback[1 - i]]).map((h) => readable(h, on)));
@@ -89,5 +91,8 @@ export function teamColors(teams, on, fallback) {
     const b = choices[1 - first].find((x) => deltaE(a, x) >= MIN_DE);
     if (b) return first ? [b, a] : [a, b];
   }
+  // no two club colors stand apart: the side that picked keeps its own, the other takes the page's
+  const own = choices[first][0], other = page[1 - first];
+  if (deltaE(own, other) >= MIN_DE) return first ? [other, own] : [own, other];
   return page;
 }

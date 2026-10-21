@@ -11,7 +11,7 @@ import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } fro
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
 import { PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=2";
 import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=5";
-import { teamColors } from "./team-colors.js?v=1";
+import { teamColors } from "./team-colors.js?v=2";
 
 const SEASON = 2026;
 const SEED = 2026;
@@ -813,8 +813,8 @@ function renderResults() {
 // which no game ends on (a tie called at 40 innings aside): the dotted line runs through them, the away
 // team's wins above it and the home team's below.
 const SG_FLOOR = 0.005, SG_FADE = 0.0045;
-// sparse to dense, after the card's color: the sequential blue ramp's steps 650 to 100
-const SG_RAMP = ["#104281", "#256abf", "#3987e5", "#6da7ec", "#9ec5f4", "#cde2fb"].map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)));
+// sparse to dense, after the card's color: the PLPD cyan primitives, cyan-800 to cyan-100
+const SG_RAMP = ["#195d6e", "#288092", "#37a2b7", "#46c5db", "#73efff", "#e6fcff"].map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)));
 let sgView = null; // what's drawn, for the hover readout
 function renderScoreGrid() {
   const { res, sides, games } = last, N = 31;
