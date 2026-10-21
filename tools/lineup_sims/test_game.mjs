@@ -21,7 +21,7 @@ const SD = JSON.parse(readFileSync(join(dataDir, `${season}-steal.json`), "utf8"
 const PD = JSON.parse(readFileSync(join(dataDir, `${season}-parks.json`), "utf8"));
 // game-sim.js imports sim.js with the page's ?v=; this file imports it plain, so the engine is loaded by URL
 const { BAT, PIT, prepareSteal, simulateGames } = await import(pathToFileURL(engineFile).href);
-const { HOME_FIELD, PARK_N, homeField, parkAdjust } = await import(pathToFileURL(parkFile).href);
+const { BULLPEN_LEAD, HOME_FIELD, PARK_N, homeField, leadBucket, parkAdjust } = await import(pathToFileURL(parkFile).href);
 const { bullpenDay, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
 
 let failed = 0, passed = 0;
@@ -201,6 +201,32 @@ function bookkeeping(res, teams, label) {
   check(gain > 0.01 && gain < 0.05, `home field adds ${(100 * gain).toFixed(1)} points to the home team's wins (${(100 * share(off)).toFixed(1)}% → ${(100 * share(on)).toFixed(1)}%)`);
   const k = (r, t) => { let x = 0; for (let i = 0; i < 9; i++) x += r.bat[t][i * BAT.length + BAT.indexOf("K")]; return x; };
   check(k(on, 1) < k(off, 1) && k(on, 0) > k(off, 0), "home batters strike out less with it, road batters more");
+}
+
+// 4c. the bullpen by the score (park.js BULLPEN_LEAD, a stage's vsLead in game-sim.js): the pitching side's lead
+// picks the bullpen's chances as each plate appearance begins
+{
+  check([[-9, 0], [-5, 0], [-4, 1], [-3, 1], [-2, 2], [-1, 2], [0, 3], [1, 4], [2, 4], [3, 5], [4, 5], [5, 6], [12, 6]].every(([d, b]) => leadBucket(d) === b),
+    "lead buckets: down 5+, 3-4, 1-2, tied, up 1-2, 3-4, 5+");
+  check(BULLPEN_LEAD.length === 7 && BULLPEN_LEAD.every((m) => ["K", "BB", "HperBIP"].every((x) => m[x] > 0.8 && m[x] < 1.2) && m.HBP === 1),
+    "seven rows of K, BB and hits-per-ball-in-play multipliers, each within 20% of 1");
+  const K = BULLPEN_LEAD.map((m) => m.K);
+  check(K[4] > 1 && K[5] > 1 && K[0] < 1 && K[1] < 1, "relievers holding a lead of 1-4 strike out more batters; down 3 or more, fewer");
+  const lead = (abbr, opp, rows) => {
+    const t = team(abbr, opp);
+    return { ...t, stages: [t.stages[0], { ...t.stages[1], vsLead: rows.map((m) => hitters(opp).map((h) => cumulative(homeField(facing(h, pen(abbr)), 1, m)))) }] };
+  };
+  const one = { K: 1, BB: 1, HBP: 1, HperBIP: 1 }, ones = BULLPEN_LEAD.map(() => one);
+  const flat = simulateGames(model, [team("NYY", "BOS"), team("BOS", "NYY")], G, 2026);
+  const same = simulateGames(model, [lead("NYY", "BOS", ones), lead("BOS", "NYY", ones)], G, 2026);
+  check(same.scoreDist.every((n, i) => n === flat.scoreDist[i]) && same.wins.every((w, i) => w === flat.wins[i]),
+    "a vsLead of the bullpen's own chances plays exactly the games it plays without one (no extra draws)");
+  const real = simulateGames(model, [lead("NYY", "BOS", BULLPEN_LEAD), lead("BOS", "NYY", BULLPEN_LEAD)], G, 2026);
+  bookkeeping(real, [lead("NYY", "BOS", BULLPEN_LEAD), lead("BOS", "NYY", BULLPEN_LEAD)], "bullpen by the score");
+  const N = 31, spread = (r) => { let s = 0, s2 = 0, n = 0; r.scoreDist.forEach((c, i) => { const m = (i % N) - Math.floor(i / N); s += c * m; s2 += c * m * m; n += c; }); return Math.sqrt(s2 / n - (s / n) ** 2); };
+  const oneRun = (r) => { let x = 0; r.scoreDist.forEach((c, i) => { if (Math.abs((i % N) - Math.floor(i / N)) === 1) x += c; }); return x / G; };
+  check(spread(real) > spread(flat) && oneRun(real) < oneRun(flat),
+    `margins spread (sd ${spread(flat).toFixed(2)} → ${spread(real).toFixed(2)}) and one-run games fall (${(100 * oneRun(flat)).toFixed(1)}% → ${(100 * oneRun(real)).toFixed(1)}%)`);
 }
 
 // 5. a real game by gamePk (game-load.js), from a saved Stats API reply (fixtures/game_822778.json: BOS at TOR, 2026-08-11)

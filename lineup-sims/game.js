@@ -8,8 +8,8 @@
 // sim.js is the Lineup Sim's engine: when its ?v= changes there (app.js), change it here too, or the
 // two pages load two copies of it
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
-import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
-import { PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=2";
+import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=3";
+import { BULLPEN_LEAD, PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=3";
 import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=5";
 import { teamColors } from "./team-colors.js?v=2";
 
@@ -406,12 +406,16 @@ function pitchingOf(s, other) {
   // each hitter against this stretch of pitching, in this park (pTeam: the pitching's team, for its environment)
   // the batting nine at home (+1), on the road (-1), or at a neutral site (0)
   const sign = homeEdge() ? (other === SIDES[1] ? 1 : -1) : 0;
-  const vs = (pitching, pTeam) => hs.map((h, i) => cumulative(homeField(parkAdjust(facing(h, pitching), es[i].team, pTeam), sign)));
+  // lead: a BULLPEN_LEAD row, the bullpen's shift for one score (park.js), on top of home field
+  const vs = (pitching, pTeam, lead) => hs.map((h, i) => {
+    const q = homeField(parkAdjust(facing(h, pitching), es[i].team, pTeam), sign);
+    return cumulative(lead ? homeField(q, 1, lead) : q);
+  });
   const sp = pitcherOf(s.sp.counts, s.sp.cells, s.sp.throws, { mode, league, regress: s.sp.generic ? 0 : regress });
   const cells = penCells(s);
   const pen = bullpenOf(cellsTotal(cells), cells, { mode, league });
   const from = fromOf(s);
-  const t = { stages: [{ from: 0, vs: vs(sp, s.sp.generic ? "MLB" : s.sp.team) }, { from, vs: vs(pen, s.team), pen: true }],
+  const t = { stages: [{ from: 0, vs: vs(sp, s.sp.generic ? "MLB" : s.sp.team) }, { from, vs: vs(pen, s.team), vsLead: BULLPEN_LEAD.map((m) => vs(pen, s.team, m)), pen: true }],
     hook: from === "hook" ? hookOf(s.sp) : null };
   if (stealOn()) {
     t.stages[0].steal = armSteal(s.sp);
@@ -677,7 +681,7 @@ let job = null, jobs = 0, worker = null, last = null;
 let useWorker = typeof Worker !== "undefined";
 
 function startWorker() {
-  const w = new Worker(new URL("./game-worker.js?v=2", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./game-worker.js?v=3", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance }, steal: stealData });
   w.onmessage = ({ data: msg }) => {
     if (job && msg.id === job.id) finish(job, msg.res, msg.ms);
