@@ -19,8 +19,9 @@ export const STATS_API = "https://statsapi.mlb.com/api/v1";
 export const scheduleUrl = (pk) => `${STATS_API}/schedule?gamePk=${pk}&fields=dates,games,gamePk,season,gameType,officialDate,status,codedGameState,detailedState,venue,id,name,teams,away,home,team,score`;
 export const boxscoreUrl = (pk) => `${STATS_API}/game/${pk}/boxscore?fields=teams,away,home,team,id,pitchers,players,person,fullName,position,abbreviation,battingOrder,stats,pitching,outs`;
 
-// the season's MLB regular-season and postseason games (for Random Game: about 8 KB gzipped)
-export const seasonUrl = (season) => `${STATS_API}/schedule?sportId=1&season=${season}&gameType=R,F,D,L,W&fields=dates,games,gamePk,gameType,status,codedGameState`;
+// the season's MLB regular-season and postseason games, with each one's start time (for Random Game
+// and the latest game: about 12 KB gzipped)
+export const seasonUrl = (season) => `${STATS_API}/schedule?sportId=1&season=${season}&gameType=R,F,D,L,W&fields=dates,games,gamePk,gameType,gameDate,status,codedGameState`;
 
 // a gamePk: 6 or 7 digits on their own, or in a Baseball Savant (gamePk=) or MLB Gameday (/<pk>/) link
 export function pkOf(text) {
@@ -76,11 +77,24 @@ export function bullpenDay(outs, gs, startOuts) {
 
 // The gamePks in a seasonUrl reply that load: completed regular-season and postseason games, each once
 // (a postponed game made up later is listed on both dates), in order.
-export function completedGames(sched) {
+const finals = (sched) => {
   if (!sched || typeof sched !== "object") throw malformed();
-  const pks = (sched.dates ?? []).flatMap((d) => d?.games ?? [])
-    .filter((x) => KIND[x?.gameType] && x.status?.codedGameState === "F" && Number.isInteger(x.gamePk)).map((x) => x.gamePk);
-  return [...new Set(pks)].sort((a, b) => a - b);
+  return (sched.dates ?? []).flatMap((d) => d?.games ?? []).filter((x) => KIND[x?.gameType] && x.status?.codedGameState === "F" && Number.isInteger(x.gamePk));
+};
+export function completedGames(sched) {
+  return [...new Set(finals(sched).map((x) => x.gamePk))].sort((a, b) => a - b);
+}
+
+// The most recent game in a seasonUrl reply that loads: the latest start (gameDate, an ISO time in UTC),
+// not the highest gamePk (the postseason's are numbered ahead of the season's last days; a made-up game
+// keeps its old one). null when there's none.
+export function latestGame(sched) {
+  let best = null;
+  for (const x of finals(sched)) {
+    const t = Date.parse(x.gameDate);
+    if (Number.isFinite(t) && (!best || t > best.t || (t === best.t && x.gamePk > best.pk))) best = { t, pk: x.gamePk };
+  }
+  return best ? best.pk : null;
 }
 
 export function parseGame(pk, sched, box, ctx) {
