@@ -21,7 +21,9 @@
 // starts with `from` outs made by this team's pitchers (or, with from "hook", once the hook model
 // takes the starter out). `vs` is the OTHER team's nine hitters against that stage, as cumulative
 // outcome chances (CATS order). `pen` marks a pooled bullpen (it can take a win and a save in the
-// same game: different relievers). `hook` is sim.js's hook (trees, features, x) for the starter,
+// same game: different relievers). A stage may also carry `vsLead`: `vs` for each of park.js's lead
+// buckets (BULLPEN_LEAD, by leadBucket() of the pitching side's lead), drawn from by the score as each
+// plate appearance begins (game.js gives one to the bullpen). `hook` is sim.js's hook (trees, features, x) for the starter,
 // or null. `pitches` is each outcome's pitch count, cumulative by CATS (index 0 is one pitch).
 // With `steal`, each team also carries `runners` (its own nine slots' [attempt, success] logit
 // effects, flat), `catcher` ([attempt, success]), and each stage `steal` ([attempt, success],
@@ -29,6 +31,7 @@
 // sim.js is the Lineup Sim's engine: when its ?v= changes there (app.js), change it here too, or the
 // two pages load two copies of it
 import { CATS, hookChance, rng } from "./sim.js?v=8";
+import { leadBucket } from "./park.js?v=3";
 
 const C = Object.fromEntries(CATS.map((c, i) => [c, i]));
 
@@ -261,7 +264,8 @@ export function simulateGames(model, teams, games, seed = 1, pitches = null, ste
         }
         mask = maskOf();
       }
-      const i = up[b], cat = pick(teams[p].stages[s].vs[i], rand());
+      const stage = teams[p].stages[s];
+      const i = up[b], cat = pick((stage.vsLead ? stage.vsLead[leadBucket(score[p] - score[b])] : stage.vs)[i], rand());
       const ca = advance[(cat * 8 + mask) * 3 + outs];
       const o = ca.codes[pick(ca.cum, rand())];
       const runs = move(o, i, s, walkoff && cat !== C.HR ? score[p] - score[b] + 1 : 99);

@@ -8,9 +8,9 @@
 // sim.js is the Lineup Sim's engine: when its ?v= changes there (app.js), change it here too, or the
 // two pages load two copies of it
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
-import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=2";
-import { PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=2";
-import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=5";
+import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=3";
+import { BULLPEN_LEAD, PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=3";
+import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, latestGame, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=6";
 import { teamColors } from "./team-colors.js?v=2";
 
 const SEASON = 2026;
@@ -97,7 +97,7 @@ const teamName = (abbr) => (abbr === "MLB" ? "MLB" : teamOf(abbr).short);
 const teamAbbr = (s) => (SIDES[0].team === SIDES[1].team ? s.where : s.team);
 
 async function loadHookData() {
-  const r = await fetch(`data/${SEASON}-hook.json?v=1`);
+  const r = await fetch(new URL(`data/${SEASON}-hook.json?v=1`, import.meta.url));
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const d = await r.json();
   const t = d.trees;
@@ -129,7 +129,7 @@ function hookOf(e) {
 // the Lineup Sim has it.
 let stealData = null, stealHere = null;
 async function loadStealData() {
-  const r = await fetch(`data/${SEASON}-steal.json?v=1`);
+  const r = await fetch(new URL(`data/${SEASON}-steal.json?v=1`, import.meta.url));
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   stealData = await r.json();
 }
@@ -190,7 +190,7 @@ function fillCatchers(s) {
 let parkData = null;
 const park = { at: "none", auto: true, week: -1 };
 async function loadParkData() {
-  const r = await fetch(`data/${SEASON}-parks.json?v=1`);
+  const r = await fetch(new URL(`data/${SEASON}-parks.json?v=1`, import.meta.url));
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   parkData = await r.json();
 }
@@ -251,8 +251,9 @@ function fillPark() {
 // team's catcher, the ballpark and the week); here it's fetched and put on the page, with He pitches
 // set from what each starter did (bullpenDay); the Sim settings stay as they were. A game is fetched
 // only on Load (or Enter), Random Game, or once
-// as the page opens when the link asks for one: blandalytics.com/lineup-sims/<gamePk> lands here as
-// game.html#gp=<gamePk> (the site's 404.html sends it), and so does game.html#<gamePk>.
+// as the page opens when the link asks for one: blandalytics.com/game-sim/<gamePk> (or the older
+// /lineup-sims/<gamePk>) lands here as /game-sim/#gp=<gamePk> (the site's 404.html sends it), and so
+// does /game-sim/#<gamePk>.
 const FETCH_MS = 8000;
 // a Stats API reply, or a plain reason it isn't one: no answer within FETCH_MS, a network failure,
 // a status other than 200, or a body that isn't JSON
@@ -314,10 +315,10 @@ function applyGame(G) {
     + (G.park < 0 && parkData ? `; ${G.venue} has no ${SEASON} park factors, so ${parkName() ?? "no park"}` : "")
     + (G.kind === "postseason" && wk ? `, with the regular season's last week (${wk})` : "")
     + (G.missing.length ? `. Not in the ${SEASON} data, so replaced: ${G.missing.join(", ")}.` : ".");
-  // the game's short link (the site's 404.html turns it into game.html#gp=)
+  // the game's short link (the site's 404.html turns it into /game-sim/#gp=)
   const link = document.createElement("a");
-  link.href = `/lineup-sims/${G.pk}`;
-  link.textContent = `${location.host}/lineup-sims/${G.pk}`;
+  link.href = `/game-sim/${G.pk}`;
+  link.textContent = `${location.host}/game-sim/${G.pk}`;
   $("gpk_note").append(" Link: ", link);
 }
 // Load and Random Game wait for each other
@@ -345,8 +346,11 @@ async function onLoadGame() {
     loading(false);
   }
 }
-// Random Game: any game that loads, all equally likely. The season's list of them is asked for on the
-// first click and kept for the page's life; the pick goes in the box and loads like a typed one.
+// The season's schedule (seasonUrl), asked for once and kept for the page's life: the latest game on a
+// plain visit, then Random Game's list. A failed ask is forgotten, so the next one tries again.
+let seasonReply = null;
+const seasonSchedule = () => (seasonReply ??= getJSON(seasonUrl(SEASON)).catch((e) => { seasonReply = null; throw e; }));
+// Random Game: any game that loads, all equally likely; the pick goes in the box and loads like a typed one.
 let seasonGames = null;
 async function onRandomGame() {
   const note = $("gpk_note");
@@ -355,7 +359,7 @@ async function onRandomGame() {
     loading(true);
     note.textContent = `finding the ${SEASON} games…`;
     try {
-      const pks = completedGames(await getJSON(seasonUrl(SEASON)));
+      const pks = completedGames(await seasonSchedule());
       if (!pks.length) throw new Error(`the MLB Stats API lists no completed ${SEASON} games`);
       seasonGames = pks;
     } catch (e) {
@@ -367,6 +371,28 @@ async function onRandomGame() {
     }
   }
   $("gpk").value = seasonGames[Math.floor(Math.random() * seasonGames.length)];
+  await onLoadGame();
+}
+// A plain visit (no hash: no matchup or game named) opens on the season's most recent game, loaded as
+// Load loads it. The default matchup runs meanwhile; if the schedule or the game can't be had, it stays,
+// with a note saying so.
+async function loadLatest() {
+  const note = $("gpk_note");
+  loading(true);
+  note.textContent = "finding the latest game…";
+  let pk = null;
+  try {
+    pk = latestGame(await seasonSchedule());
+  } catch {
+    // the note below
+  } finally {
+    loading(false);
+  }
+  if (!pk) {
+    note.textContent = `Couldn't find the latest ${SEASON} game, so this is the default matchup. Load a game or pick a Random Game.`;
+    return;
+  }
+  $("gpk").value = pk;
   await onLoadGame();
 }
 
@@ -405,12 +431,16 @@ function pitchingOf(s, other) {
   // each hitter against this stretch of pitching, in this park (pTeam: the pitching's team, for its environment)
   // the batting nine at home (+1), on the road (-1), or at a neutral site (0)
   const sign = homeEdge() ? (other === SIDES[1] ? 1 : -1) : 0;
-  const vs = (pitching, pTeam) => hs.map((h, i) => cumulative(homeField(parkAdjust(facing(h, pitching), es[i].team, pTeam), sign)));
+  // lead: a BULLPEN_LEAD row, the bullpen's shift for one score (park.js), on top of home field
+  const vs = (pitching, pTeam, lead) => hs.map((h, i) => {
+    const q = homeField(parkAdjust(facing(h, pitching), es[i].team, pTeam), sign);
+    return cumulative(lead ? homeField(q, 1, lead) : q);
+  });
   const sp = pitcherOf(s.sp.counts, s.sp.cells, s.sp.throws, { mode, league, regress: s.sp.generic ? 0 : regress });
   const cells = penCells(s);
   const pen = bullpenOf(cellsTotal(cells), cells, { mode, league });
   const from = fromOf(s);
-  const t = { stages: [{ from: 0, vs: vs(sp, s.sp.generic ? "MLB" : s.sp.team) }, { from, vs: vs(pen, s.team), pen: true }],
+  const t = { stages: [{ from: 0, vs: vs(sp, s.sp.generic ? "MLB" : s.sp.team) }, { from, vs: vs(pen, s.team), vsLead: BULLPEN_LEAD.map((m) => vs(pen, s.team, m)), pen: true }],
     hook: from === "hook" ? hookOf(s.sp) : null };
   if (stealOn()) {
     t.stages[0].steal = armSteal(s.sp);
@@ -676,7 +706,7 @@ let job = null, jobs = 0, worker = null, last = null;
 let useWorker = typeof Worker !== "undefined";
 
 function startWorker() {
-  const w = new Worker(new URL("./game-worker.js?v=2", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./game-worker.js?v=3", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance }, steal: stealData });
   w.onmessage = ({ data: msg }) => {
     if (job && msg.id === job.id) finish(job, msg.res, msg.ms);
@@ -974,7 +1004,7 @@ const loadLogo = () => logoImg || (logoImg = new Promise((res, rej) => {
   const im = new Image();
   im.onload = () => res(im);
   im.onerror = rej;
-  im.src = "logo.png";
+  im.src = new URL("logo.png", import.meta.url).href;
 }));
 const scoreGridFile = () => {
   const s = last?.sides;
@@ -1039,7 +1069,9 @@ function sgHover(ev) {
   if (!k || !k.c) return;
   const r = $("sg").getBoundingClientRect();
   const h = Math.floor((ev.clientX - r.left - k.m.l) / k.c), a = k.M - Math.floor((ev.clientY - r.top - k.m.t) / k.c);
-  if (h < 0 || a < 0 || h > k.M || a > k.M) {
+  // the tie line's squares get no readout and no ring, unless the real game ended there (called, tied)
+  const final = k.fin && k.fin[0] === a && k.fin[1] === h, tie = a === h;
+  if (h < 0 || a < 0 || h > k.M || a > k.M || (tie && !final)) {
     if (!t.hidden) drawScoreGrid(null);
     t.hidden = true;
     return;
@@ -1047,10 +1079,7 @@ function sgHover(ev) {
   const n = k.D[a * k.n1 + h];
   t.innerHTML = "<b></b><small></small>";
   t.querySelector("b").textContent = `${k.ab(0)} ${k.runs(a)}, ${k.ab(1)} ${k.runs(h)}`;
-  // a tie square says no game ends there, unless the real game did (called, tied)
-  const final = k.fin && k.fin[0] === a && k.fin[1] === h, tie = a === h;
-  t.querySelector("small").textContent = (tie && !n && !final ? "a tie: no game ends tied"
-    : !n ? "no games ended here" : n / k.games < 0.0005 ? `${n} of ${k.games.toLocaleString()} games` : `${pct(n / k.games)} of games`)
+  t.querySelector("small").textContent = (!n ? "no games ended here" : n / k.games < 0.0005 ? `${n} of ${k.games.toLocaleString()} games` : `${pct(n / k.games)} of games`)
     + (final ? (tie ? " · the final score (called tied)" : " · the final score") : "");
   t.style.left = `${k.m.l + (h + 0.5) * k.c}px`;
   t.style.top = `${k.m.t + (k.M - a) * k.c}px`;
@@ -1184,7 +1213,9 @@ function writeHash() {
   history.replaceState(null, "", `#${p}`);
 }
 let linkedGame = null; // a gamePk the link asked for (gp=, or the hash alone), loaded once the page is set up
+let plainVisit = false; // no hash at all: the page opens on the latest game
 function readHash() {
+  plainVisit = location.hash.length <= 1;
   const p = new URLSearchParams(location.hash.slice(1));
   const gp = p.get("gp") ?? location.hash.slice(1);
   linkedGame = /^\d{6,7}$/.test(gp) ? Number(gp) : null;
@@ -1221,7 +1252,7 @@ async function boot() {
   const stealFile = loadStealData().catch(() => null);
   const parkFile = loadParkData().catch(() => null);
   try {
-    const r = await fetch(`data/${SEASON}.json?v=5`);
+    const r = await fetch(new URL(`data/${SEASON}.json?v=5`, import.meta.url));
     if (!r.ok) throw new Error(`data ${r.status}`);
     data = await r.json();
   } catch (e) {
@@ -1327,7 +1358,7 @@ async function boot() {
   if (linkedGame) {
     $("gpk").value = linkedGame;
     onLoadGame(); // its run replaces this one before the worker starts
-  }
+  } else if (plainVisit) loadLatest(); // the default matchup runs until the game is in
   run();
 }
 

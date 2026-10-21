@@ -14,15 +14,15 @@ const engineFile = join(repo, "lineup-sims", "game-sim.js");
 const parkFile = join(repo, "lineup-sims", "park.js");
 const loadFile = join(repo, "lineup-sims", "game-load.js");
 const fixtureFile = join(repo, "tools", "lineup_sims", "fixtures", "game_822778.json");
-const colorsFile = join(repo, "lineup-sims", "team-colors.js"), pageFile = join(repo, "lineup-sims", "game.html");
+const colorsFile = join(repo, "lineup-sims", "team-colors.js"), pageFile = join(repo, "game-sim", "index.html");
 const gameFile = join(repo, "lineup-sims", "game.js"), plpdFile = join(repo, "shared", "plpd.css");
 const data = JSON.parse(readFileSync(join(dataDir, `${season}.json`), "utf8"));
 const SD = JSON.parse(readFileSync(join(dataDir, `${season}-steal.json`), "utf8"));
 const PD = JSON.parse(readFileSync(join(dataDir, `${season}-parks.json`), "utf8"));
 // game-sim.js imports sim.js with the page's ?v=; this file imports it plain, so the engine is loaded by URL
 const { BAT, PIT, prepareSteal, simulateGames } = await import(pathToFileURL(engineFile).href);
-const { HOME_FIELD, PARK_N, homeField, parkAdjust } = await import(pathToFileURL(parkFile).href);
-const { bullpenDay, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
+const { BULLPEN_LEAD, HOME_FIELD, PARK_N, homeField, leadBucket, parkAdjust } = await import(pathToFileURL(parkFile).href);
+const { bullpenDay, checkSchedule, completedGames, latestGame, parseGame, pkOf, scheduleUrl, seasonUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
 
 let failed = 0, passed = 0;
 const check = (ok, what) => {
@@ -203,6 +203,32 @@ function bookkeeping(res, teams, label) {
   check(k(on, 1) < k(off, 1) && k(on, 0) > k(off, 0), "home batters strike out less with it, road batters more");
 }
 
+// 4c. the bullpen by the score (park.js BULLPEN_LEAD, a stage's vsLead in game-sim.js): the pitching side's lead
+// picks the bullpen's chances as each plate appearance begins
+{
+  check([[-9, 0], [-5, 0], [-4, 1], [-3, 1], [-2, 2], [-1, 2], [0, 3], [1, 4], [2, 4], [3, 5], [4, 5], [5, 6], [12, 6]].every(([d, b]) => leadBucket(d) === b),
+    "lead buckets: down 5+, 3-4, 1-2, tied, up 1-2, 3-4, 5+");
+  check(BULLPEN_LEAD.length === 7 && BULLPEN_LEAD.every((m) => ["K", "BB", "HperBIP"].every((x) => m[x] > 0.8 && m[x] < 1.2) && m.HBP === 1),
+    "seven rows of K, BB and hits-per-ball-in-play multipliers, each within 20% of 1");
+  const K = BULLPEN_LEAD.map((m) => m.K);
+  check(K[4] > 1 && K[5] > 1 && K[0] < 1 && K[1] < 1, "relievers holding a lead of 1-4 strike out more batters; down 3 or more, fewer");
+  const lead = (abbr, opp, rows) => {
+    const t = team(abbr, opp);
+    return { ...t, stages: [t.stages[0], { ...t.stages[1], vsLead: rows.map((m) => hitters(opp).map((h) => cumulative(homeField(facing(h, pen(abbr)), 1, m)))) }] };
+  };
+  const one = { K: 1, BB: 1, HBP: 1, HperBIP: 1 }, ones = BULLPEN_LEAD.map(() => one);
+  const flat = simulateGames(model, [team("NYY", "BOS"), team("BOS", "NYY")], G, 2026);
+  const same = simulateGames(model, [lead("NYY", "BOS", ones), lead("BOS", "NYY", ones)], G, 2026);
+  check(same.scoreDist.every((n, i) => n === flat.scoreDist[i]) && same.wins.every((w, i) => w === flat.wins[i]),
+    "a vsLead of the bullpen's own chances plays exactly the games it plays without one (no extra draws)");
+  const real = simulateGames(model, [lead("NYY", "BOS", BULLPEN_LEAD), lead("BOS", "NYY", BULLPEN_LEAD)], G, 2026);
+  bookkeeping(real, [lead("NYY", "BOS", BULLPEN_LEAD), lead("BOS", "NYY", BULLPEN_LEAD)], "bullpen by the score");
+  const N = 31, spread = (r) => { let s = 0, s2 = 0, n = 0; r.scoreDist.forEach((c, i) => { const m = (i % N) - Math.floor(i / N); s += c * m; s2 += c * m * m; n += c; }); return Math.sqrt(s2 / n - (s / n) ** 2); };
+  const oneRun = (r) => { let x = 0; r.scoreDist.forEach((c, i) => { if (Math.abs((i % N) - Math.floor(i / N)) === 1) x += c; }); return x / G; };
+  check(spread(real) > spread(flat) && oneRun(real) < oneRun(flat),
+    `margins spread (sd ${spread(flat).toFixed(2)} → ${spread(real).toFixed(2)}) and one-run games fall (${(100 * oneRun(flat)).toFixed(1)}% → ${(100 * oneRun(real)).toFixed(1)}%)`);
+}
+
 // 5. a real game by gamePk (game-load.js), from a saved Stats API reply (fixtures/game_822778.json: BOS at TOR, 2026-08-11)
 {
   const fx = JSON.parse(readFileSync(fixtureFile, "utf8")), pk = fx.pk;
@@ -303,6 +329,18 @@ function bookkeeping(res, teams, label) {
   check(completedGames({}).length === 0 && throwsWith(() => completedGames("<html>"), /can read/), "an empty or unreadable season list");
   check(completedGames(fx.schedule).every((x) => checkSchedule(x, fx.schedule, Number(season), data.teams)), "every listed game passes checkSchedule");
   check(seasonUrl(season).includes(`sportId=1&season=${season}&gameType=R,F,D,L,W&`), "the season list asks for MLB's regular season and postseason");
+  // the latest game, for a plain visit: the latest start among the games that load, not the highest gamePk
+  check(seasonUrl(season).includes("gameDate"), "the season list has each game's start time");
+  const at = (gamePk, gameType, code, gameDate) => ({ ...sg(gamePk, gameType, code), gameDate });
+  const late = { dates: [
+    { games: [at(849817, "L", "F", "2026-10-17T20:08:00Z"), at(849816, "L", "F", "2026-10-18T00:03:00Z")] },
+    { games: [at(849815, "L", "F", "2026-10-19T23:08:00Z"), at(849820, "W", "S", "2026-10-21T00:08:00Z"), at(849830, "S", "F", "2026-10-20T00:00:00Z")] },
+    { games: [at(776500, "R", "F", "2026-09-27T19:10:00Z"), at(849818, "L", "D", "2026-10-20T23:08:00Z")] }] };
+  check(latestGame(late) === 849815, "the latest game is the latest start among final games (849815, ALCS Game 6), not the highest gamePk");
+  check(latestGame({ dates: [{ games: [at(700001, "R", "F", "2026-05-01T17:05:00Z"), at(700002, "R", "F", "2026-05-01T17:05:00Z")] }] }) === 700002,
+    "two games starting together: the higher gamePk");
+  check(latestGame({}) === null && latestGame({ dates: [{ games: [at(700001, "R", "F", "not a time"), at(700002, "R", "S", "2026-05-01T17:05:00Z")] }] }) === null
+    && throwsWith(() => latestGame("<html>"), /can read/), "no final game with a start time: none, and an unreadable reply throws");
 }
 
 // 3. Who wins in team colors: every pairing reads on the card and tells the two sides apart
