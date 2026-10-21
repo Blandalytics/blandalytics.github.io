@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Created Runs Leaders</title>
+<meta name="description" content="2026 hitters ranked by runs created above an RE24 baseline, at the plate and on the bases: state change on balls in play, hit luck, walks, hit-by-pitches and strikeouts; home-to-first, baserunning, steals, caught stealing and pickoffs.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/shared/plpd.css?v=3">
+<style>
+/* Created Runs Leaders on the PLPD design system (/shared/plpd.css): the page header over one raised,
+   sortable data table, three column groups split by 2px dividers, a metric glossary card beneath */
+:root{
+  /* Process+ colours name the three column groups */
+  --group-created:#53aaf8;   /* chart-process-plus-decisions */
+  --group-batting:#f0b846;   /* chart-process-plus-contact */
+  --group-running:#eb6f7b;   /* chart-process-plus-power */
+  /* filled headline headers: the lightest PLPD step of each hue where white text reaches 3:1 */
+  --hl-created:#4d79c2;      /* blue-300, CR: 4.35:1 */
+  --hl-batting:#cd8532;      /* amber-600, bCR: 3.00:1 */
+  --hl-running:#e15157;      /* red-500, rCR: 3.81:1 */
+  --dt-wrap-border:#768abe38; --dt-header-border:#8ca5d21b; --dt-row-border:#8ca5d21c;
+  --dt-stripe-light:#303a6175; --dt-stripe-dark:#2a335561; --dt-scroll-bg:#202233; --dt-divider:#323c59;
+  --dt-sticky-light:#272d48; --dt-sticky-dark:#242840; --dt-row-hover:#293461;
+  --dt-header-bg:linear-gradient(180deg,#404660 0%,#3c4360 22%,#353e5b 45%,#333c59 68%,#313a59 100%);
+  --dt-header-inset:inset 0 1px 0 0 rgba(255,255,255,.08);
+  --dt-wrap-shadow:0 0 0 1px rgba(7,9,18,.3),0 18px 30px 0 rgba(0,0,0,.28);
+}
+.page{box-sizing:border-box; max-width:1600px; margin:0 auto; padding-block:32px 48px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px));
+  display:flex; flex-direction:column; gap:28px}
+@media (min-width:720px){.page{padding-left:max(24px, env(safe-area-inset-left, 0px)); padding-right:max(24px, env(safe-area-inset-right, 0px))}}
+.plpd-page-header__title{text-wrap:balance}
+
+/* PlDataTableWrap (raised): scrolls both ways; its height is set in script to the header plus 20 rows */
+.table-wrap{box-sizing:border-box; max-width:100%; overflow:auto; overscroll-behavior:contain;
+  border:1px solid var(--dt-wrap-border); border-radius:10px; background:var(--dt-scroll-bg); box-shadow:var(--dt-wrap-shadow)}
+.table-wrap:focus-visible{outline:2px solid #55e8ff; outline-offset:2px}
+.table-wrap table{border-collapse:separate; border-spacing:0; width:100%; font-variant-numeric:tabular-nums}
+.table-wrap caption{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+
+/* PlDataTableHeaderCell */
+.table-wrap th{box-sizing:border-box; height:34px; padding:0; white-space:nowrap; background:var(--dt-header-bg); box-shadow:var(--dt-header-inset);
+  border-bottom:1px solid var(--dt-header-border); font-family:var(--font-text); font-size:14px; font-weight:600; line-height:1.2;
+  color:#73efff; text-align:center}
+.table-wrap th.left{text-align:left}
+.table-wrap th.right{text-align:right}
+.table-wrap th > .label{display:block; padding:8px 12px}
+/* sortable headers: the whole cell is the button */
+.table-wrap th > button{all:unset; box-sizing:border-box; display:block; width:100%; padding:8px 12px; cursor:pointer; text-align:inherit; color:inherit; font:inherit}
+.table-wrap th > button:focus-visible{outline:2px solid #55e8ff; outline-offset:-2px}
+/* the sorted column: a white line along the header's foot, the same on cyan labels and filled headers; no arrows */
+.table-wrap th[aria-sort] > button{box-shadow:inset 0 -3px 0 #ffffff}
+
+/* the group header row: the group's Process+ colour on its label and a 2px rule beneath */
+.table-wrap th.group{padding:8px 12px; font-family:var(--font-display); font-size:16px; font-weight:700; text-align:center;
+  border-bottom:2px solid var(--group); color:var(--group)}
+.g-created{--group:var(--group-created)}
+.g-batting{--group:var(--group-batting)}
+.g-running{--group:var(--group-running)}
+/* headline columns (CR, bCR, rCR): the header cell filled with its group's colour */
+.table-wrap th.hl{color:#ffffff; font-weight:700}
+.table-wrap th.hl.g-created{background:var(--hl-created)}
+.table-wrap th.hl.g-batting{background:var(--hl-batting)}
+.table-wrap th.hl.g-running{background:var(--hl-running)}
+
+/* PlDataTableDivider: 2px between column groups, header included */
+.table-wrap .div{border-left:2px solid var(--dt-divider)}
+
+/* PlDataTableCell */
+.table-wrap td{box-sizing:border-box; height:36px; padding:8px 12px; white-space:nowrap; border-bottom:1px solid var(--dt-row-border);
+  font-family:var(--font-text); font-size:16px; font-weight:400; line-height:1.2; color:#f0f1f5; text-align:right}
+.table-wrap tbody tr:nth-child(odd) td{background:var(--dt-stripe-light)}
+.table-wrap tbody tr:nth-child(even) td{background:var(--dt-stripe-dark)}
+.table-wrap tbody tr:hover td.plain{background:var(--dt-row-hover)}
+.table-wrap tbody tr:last-child td{border-bottom:0}
+.table-wrap td.name{text-align:left; font-weight:500; line-height:1; color:#f6f8fff5; min-width:176px}
+/* both header rows stay in view while the rows scroll; the name column while the stats scroll sideways */
+.table-wrap thead th{position:sticky; top:0; z-index:2}
+.table-wrap thead tr + tr th{top:var(--group-row-h, 37px)}
+.table-wrap td.sticky{position:sticky; left:0; z-index:1}
+.table-wrap thead th.sticky{left:0; z-index:3}
+.table-wrap tbody tr:nth-child(odd) td.sticky{background:var(--dt-sticky-light)}
+.table-wrap tbody tr:nth-child(even) td.sticky{background:var(--dt-sticky-dark)}
+.table-wrap tbody tr:hover td.sticky{background:var(--dt-row-hover)}
+/* PlDataTableHeatCell, read continuously: base-white at 0, out to the hottest stop at the highest value and the coldest at the lowest */
+.table-wrap tbody td.heat{text-align:center; min-width:76px}
+.table-wrap tbody td.heat.hl{font-weight:700; min-width:84px}
+
+/* the metric glossary card */
+.glossary{box-sizing:border-box; background:#292c42; border-radius:10px; padding:24px; display:flex; flex-direction:column; gap:20px}
+.glossary h2{margin:0; font-family:var(--font-display); font-weight:900; font-size:24px; line-height:1.2; color:#73efff}
+.glossary > p{margin:0; max-width:72ch; font-size:16px; line-height:1.5; color:#f0f1f5}
+.gl-groups{display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:24px 32px}
+.glossary dl{margin:0; display:flex; flex-direction:column; gap:14px}
+.glossary dl > div{display:flex; flex-direction:column; gap:2px; min-width:0}
+.glossary dt{font-family:var(--font-display); font-weight:600; font-size:14px; color:#55e8ff}
+.glossary dd{margin:0; font-size:14px; line-height:20px; color:#cbd7fd}
+.glossary .gl-group{display:flex; flex-direction:column; gap:12px}
+.glossary h3{margin:0; font-family:var(--font-display); font-weight:700; font-size:16px; line-height:1.2; color:var(--group)}
+.status{margin:0; color:#cbd7fd}
+</style>
+</head>
+<body class="plpd">
+<div class="page">
+  <header class="plpd-page-header">
+    <h1 class="plpd-page-header__title">Created Runs Leaders</h1>
+    <p class="plpd-page-header__meta" id="details">2026 regular season · hitters with 400+ PA · Runs above an RE24 baseline</p>
+  </header>
+
+  <div class="table-wrap" id="wrap" role="region" aria-label="Hitters, sortable by any stat" tabindex="0">
+    <table>
+      <caption id="caption">Hitters ranked by CR, 2026</caption>
+      <thead>
+        <tr>
+          <th class="group g-created" colspan="4" scope="colgroup">Created Runs</th>
+          <th class="group g-batting div" colspan="6" scope="colgroup">Batting</th>
+          <th class="group g-running div" colspan="5" scope="colgroup">Running</th>
+        </tr>
+        <tr id="col-head"></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <p class="status" id="status" hidden></p>
+
+  <section class="glossary" aria-labelledby="gl-title">
+    <h2 id="gl-title">Reading the table</h2>
+    <p>Every number is runs created above an RE24 baseline built from the <span class="season">2026</span> season. The table covers the <span id="gl-count">205</span> hitters with at least <span class="min-pa">400</span> PA. Pick any column heading to rank them by it, highest first; pick it again for lowest first. It shows 20 hitters at a time, so scroll it for the rest. Values shade from white at zero toward red at the highest value among these hitters and blue at the lowest.</p>
+    <div class="gl-groups">
+      <div class="gl-group g-created">
+        <h3>Created Runs</h3>
+        <dl>
+          <div><dt>CR</dt><dd>Total runs created, batting plus running.</dd></div>
+          <div><dt>CR/600</dt><dd>CR scaled to 600 plate appearances.</dd></div>
+        </dl>
+      </div>
+      <div class="gl-group g-batting">
+        <h3>Batting</h3>
+        <dl>
+          <div><dt>bCR</dt><dd>Runs created at the plate: every column in this group added together.</dd></div>
+          <div><dt>State Change</dt><dd>Expected runs from each ball in play, given the base-out state, exit velocity, launch angle and spray angle.</dd></div>
+          <div><dt>Hit Luck</dt><dd>How much more or less a line drive, fly ball or popup was worth than its contact deserved: a blooper falling in, or a hard liner caught.</dd></div>
+          <div><dt>BB, HBP, K</dt><dd>Runs from walks (intentional included), hit-by-pitches and strikeouts.</dd></div>
+        </dl>
+      </div>
+      <div class="gl-group g-running">
+        <h3>Running</h3>
+        <dl>
+          <div><dt>rCR</dt><dd>Runs created on the bases: every column in this group added together.</dd></div>
+          <div><dt>Home-to-First</dt><dd>How much more or less a ground ball was worth than its contact deserved: beating out the throw, or being thrown out on a grounder that should have been a hit.</dd></div>
+          <div><dt>BsR</dt><dd>Extra bases taken or given away on balls in play, against the average runner from the same spot.</dd></div>
+          <div><dt>SB</dt><dd>Runs from stolen bases.</dd></div>
+          <div><dt>CS+PO</dt><dd>Runs lost to times caught stealing and pickoffs, together.</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+</div>
+<script type="module" src="app.js?v=1"></script>
+</body>
+</html>
