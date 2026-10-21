@@ -10,7 +10,7 @@
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=3";
 import { BULLPEN_LEAD, PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=3";
-import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=5";
+import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, latestGame, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=6";
 import { teamColors } from "./team-colors.js?v=2";
 
 const SEASON = 2026;
@@ -346,8 +346,11 @@ async function onLoadGame() {
     loading(false);
   }
 }
-// Random Game: any game that loads, all equally likely. The season's list of them is asked for on the
-// first click and kept for the page's life; the pick goes in the box and loads like a typed one.
+// The season's schedule (seasonUrl), asked for once and kept for the page's life: the latest game on a
+// plain visit, then Random Game's list. A failed ask is forgotten, so the next one tries again.
+let seasonReply = null;
+const seasonSchedule = () => (seasonReply ??= getJSON(seasonUrl(SEASON)).catch((e) => { seasonReply = null; throw e; }));
+// Random Game: any game that loads, all equally likely; the pick goes in the box and loads like a typed one.
 let seasonGames = null;
 async function onRandomGame() {
   const note = $("gpk_note");
@@ -356,7 +359,7 @@ async function onRandomGame() {
     loading(true);
     note.textContent = `finding the ${SEASON} games…`;
     try {
-      const pks = completedGames(await getJSON(seasonUrl(SEASON)));
+      const pks = completedGames(await seasonSchedule());
       if (!pks.length) throw new Error(`the MLB Stats API lists no completed ${SEASON} games`);
       seasonGames = pks;
     } catch (e) {
@@ -368,6 +371,28 @@ async function onRandomGame() {
     }
   }
   $("gpk").value = seasonGames[Math.floor(Math.random() * seasonGames.length)];
+  await onLoadGame();
+}
+// A plain visit (no hash: no matchup or game named) opens on the season's most recent game, loaded as
+// Load loads it. The default matchup runs meanwhile; if the schedule or the game can't be had, it stays,
+// with a note saying so.
+async function loadLatest() {
+  const note = $("gpk_note");
+  loading(true);
+  note.textContent = "finding the latest game…";
+  let pk = null;
+  try {
+    pk = latestGame(await seasonSchedule());
+  } catch {
+    // the note below
+  } finally {
+    loading(false);
+  }
+  if (!pk) {
+    note.textContent = `Couldn't find the latest ${SEASON} game, so this is the default matchup. Load a game or pick a Random Game.`;
+    return;
+  }
+  $("gpk").value = pk;
   await onLoadGame();
 }
 
@@ -1188,7 +1213,9 @@ function writeHash() {
   history.replaceState(null, "", `#${p}`);
 }
 let linkedGame = null; // a gamePk the link asked for (gp=, or the hash alone), loaded once the page is set up
+let plainVisit = false; // no hash at all: the page opens on the latest game
 function readHash() {
+  plainVisit = location.hash.length <= 1;
   const p = new URLSearchParams(location.hash.slice(1));
   const gp = p.get("gp") ?? location.hash.slice(1);
   linkedGame = /^\d{6,7}$/.test(gp) ? Number(gp) : null;
@@ -1331,7 +1358,7 @@ async function boot() {
   if (linkedGame) {
     $("gpk").value = linkedGame;
     onLoadGame(); // its run replaces this one before the worker starts
-  }
+  } else if (plainVisit) loadLatest(); // the default matchup runs until the game is in
   run();
 }
 

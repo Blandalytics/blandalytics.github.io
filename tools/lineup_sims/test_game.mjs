@@ -22,7 +22,7 @@ const PD = JSON.parse(readFileSync(join(dataDir, `${season}-parks.json`), "utf8"
 // game-sim.js imports sim.js with the page's ?v=; this file imports it plain, so the engine is loaded by URL
 const { BAT, PIT, prepareSteal, simulateGames } = await import(pathToFileURL(engineFile).href);
 const { BULLPEN_LEAD, HOME_FIELD, PARK_N, homeField, leadBucket, parkAdjust } = await import(pathToFileURL(parkFile).href);
-const { bullpenDay, checkSchedule, completedGames, parseGame, pkOf, scheduleUrl, seasonUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
+const { bullpenDay, checkSchedule, completedGames, latestGame, parseGame, pkOf, scheduleUrl, seasonUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
 
 let failed = 0, passed = 0;
 const check = (ok, what) => {
@@ -329,6 +329,18 @@ function bookkeeping(res, teams, label) {
   check(completedGames({}).length === 0 && throwsWith(() => completedGames("<html>"), /can read/), "an empty or unreadable season list");
   check(completedGames(fx.schedule).every((x) => checkSchedule(x, fx.schedule, Number(season), data.teams)), "every listed game passes checkSchedule");
   check(seasonUrl(season).includes(`sportId=1&season=${season}&gameType=R,F,D,L,W&`), "the season list asks for MLB's regular season and postseason");
+  // the latest game, for a plain visit: the latest start among the games that load, not the highest gamePk
+  check(seasonUrl(season).includes("gameDate"), "the season list has each game's start time");
+  const at = (gamePk, gameType, code, gameDate) => ({ ...sg(gamePk, gameType, code), gameDate });
+  const late = { dates: [
+    { games: [at(849817, "L", "F", "2026-10-17T20:08:00Z"), at(849816, "L", "F", "2026-10-18T00:03:00Z")] },
+    { games: [at(849815, "L", "F", "2026-10-19T23:08:00Z"), at(849820, "W", "S", "2026-10-21T00:08:00Z"), at(849830, "S", "F", "2026-10-20T00:00:00Z")] },
+    { games: [at(776500, "R", "F", "2026-09-27T19:10:00Z"), at(849818, "L", "D", "2026-10-20T23:08:00Z")] }] };
+  check(latestGame(late) === 849815, "the latest game is the latest start among final games (849815, ALCS Game 6), not the highest gamePk");
+  check(latestGame({ dates: [{ games: [at(700001, "R", "F", "2026-05-01T17:05:00Z"), at(700002, "R", "F", "2026-05-01T17:05:00Z")] }] }) === 700002,
+    "two games starting together: the higher gamePk");
+  check(latestGame({}) === null && latestGame({ dates: [{ games: [at(700001, "R", "F", "not a time"), at(700002, "R", "S", "2026-05-01T17:05:00Z")] }] }) === null
+    && throwsWith(() => latestGame("<html>"), /can read/), "no final game with a start time: none, and an unreadable reply throws");
 }
 
 // 3. Who wins in team colors: every pairing reads on the card and tells the two sides apart
