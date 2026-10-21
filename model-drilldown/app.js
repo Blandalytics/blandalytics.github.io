@@ -24,7 +24,7 @@ import {
   TARGET_NAMES,
   PITCH_NAMES,
   LABELS,
-} from './data.js?v=13';
+} from './data.js?v=14';
 import {
   phoneFlowSvg,
   swarmSvg,
@@ -38,8 +38,8 @@ import {
   niceTicks,
   titleRight,
   C,
-} from './charts.js?v=78';
-import { cardSvg, cardSvgForExport, nearestCardPoint } from './card.js?v=54';
+} from './charts.js?v=79';
+import { cardSvg, cardSvgForExport, nearestCardPoint } from './card.js?v=55';
 import { morph } from './morph.js?v=2';
 
 const DEFAULT = { season: 2026, pitcher: 694819, pt: 'FF' }; // Jacob Misiorowski's four-seamer
@@ -64,7 +64,7 @@ const $ = (id) => document.getElementById(id);
 // the tooltip's colours (index.html's --raise, --ink, --muted). fade() dims a colour toward the
 // tooltip's background by as much as its grey (--muted) is dimmed from its white (--ink), channel
 // by channel.
-const TIP = { bg: '#1b222c', ink: '#e3e9f1', muted: '#8a96a6' };
+const TIP = { bg: '#0f1730', ink: '#f0f1f5', muted: '#a4aaca' }; // PlTooltip's ground, text-cell, text-zero
 const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 function fade(hex) {
   const [b, w, m, c] = [TIP.bg, TIP.ink, TIP.muted, hex].map(rgb);
@@ -579,9 +579,12 @@ function renderStats() {
       `Proxy fit, R² on held-out pitchers: ${fit.map((r) => `${r.r2_heldout_pitchers.toFixed(3)} ${r.group_model.replace(`${info.group} vs `, 'vs ').replace(' Hand', '-handed')}`).join(', ')}. This unit's residual (in Other): ${f.d(unit.residual)} ${f.unit}.`,
     );
   }
+  // the notes run on in the section's description (no footnotes); a small sample leads with its warning word
+  el.notes.innerHTML = notes.map(esc).join(' ');
   if (info.n < 20)
-    notes.push(`Only ${info.n} pitch${info.n === 1 ? '' : 'es'}: a small sample, so read the SHAP values loosely.`);
-  el.notes.innerHTML = notes.map((n) => `<p class="note">${esc(n)}</p>`).join('');
+    el.notes.innerHTML =
+      `<b class="warn">Small sample:</b> only ${info.n} pitch${info.n === 1 ? '' : 'es'}, so read the SHAP values loosely. ` +
+      el.notes.innerHTML;
 }
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);

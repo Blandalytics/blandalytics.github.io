@@ -1,6 +1,7 @@
 /* PLPD on blandalytics.com: the tokens and the base components of the Pitcher List Pro Dashboard design
-   system (the "PLPD design system" artifact, tokens.json and components/bundle.css), for any page to
-   load. Values are copied exactly; the few literals are the system's own "no token" Figma values.
+   system (the "PLPD design system" artifact: tokens.json, components/bundle.css and page-composition.md,
+   as of its 2026-10-20 version), for any page to load. Values are copied exactly; the few literals are
+   the system's own "no token" Figma values.
    Fonts: DM Sans (display: headings, buttons, labels) and Work Sans (text: data, cells, body), loaded
    by the page from Google Fonts. Dark only. */
 :root{
@@ -13,15 +14,16 @@
   /* text */
   --base-white:#ffffff; --text-text-cell:#f0f1f5; --text-text-player:#f6f8fff5; --text-text-nav:#cbd7fd;
   --text-text-team:#b4bbd7ad; --text-text-meta:#c0c4d8b8; --text-text-zero:#a4aacab2; --lgd-text-dim:#8a8eb0;
+  --text-name:#f6f8fff5; /* meta lines under names and headers; body copy under a mini heading is text-nav */
   /* borders and overlays */
   --borders-border-tab:#ffffff21; --white-alpha-200:#ffffff0a; --overlay-overlay-white-08:#ffffff14;
-  --navy-600:#2e3150;
+  --navy-300:#a4aaca; --navy-500:#404460; --navy-600:#2e3150;
   /* data tables */
   --data-table-pl-data-table-wrap-border:#768abe38;
   --data-table-pl-data-table-header-border:#8ca5d21b;
   --data-table-pl-data-table-header-text:var(--brand-brand-cyan-header);
   --data-table-pl-data-table-row-border:#8ca5d21c;
-  --data-table-pl-data-table-row-open-bg:#2a4558;
+  --data-table-pl-data-table-row-open-bg:#293461; /* table-row-hover: hover and open rows are one colour */
   --data-table-pl-data-table-cell-text:#f0f1f5;
   --data-table-pl-data-table-cell-zero:#9298b8c7;
   --data-table-pl-data-table-scroll-base-bg:#202233;
@@ -32,10 +34,15 @@
   --data-table-pl-data-table-row-bg-stripe-light:#303a6175;
   --data-table-pl-data-table-row-bg-stripe-dark:#2a335561;
   --data-table-pl-data-table-row-bg-section:#202233;
-  --data-table-pl-data-table-row-hover-bg:#3a467280;
+  --data-table-pl-data-table-row-hover-bg:#293461;
   --table-thead-label:#73efff; --surface-border-card:#2e3a5e;
   /* inputs */
-  --input-field-bg:#4748a212; --overlay-overlay-white-13:#ffffff21; --overlay-overlay-white-25:#ffffff40;
+  --input-field-bg:#4748a212; --input-field-border:#81ace440; --input-field-border-hover:#81ace46b;
+  --overlay-overlay-white-13:#ffffff21; --overlay-overlay-white-25:#ffffff40;
+  --dropdown-dd-menu-bg:#1b1f38; --dropdown-dd-menu-border:#ffffff17; --dropdown-dd-item-hover-bg:#ffffff0d;
+  /* status */
+  --status-message-error:#ff8a8a; --green-400:#34d399;
+  --data-table-header-tooltip-border:#73efff38;
   /* charts (the Process+ chart set) */
   --chart-blue:#53aaf8; --chart-gold:#f0b846; --chart-axis:#cbd7fd; --chart-muted:#c4cdecd9;
   --chart-grid:#ffffff0f; --chart-center-line:#ffffff3d;
@@ -70,11 +77,18 @@ body.plpd{margin:0; min-height:100vh; color:var(--text-text-cell); font-family:v
 /* PlPageHeader: the page title (DM Sans 700 36 in cyan) with a one-line details line */
 .plpd-page-header{display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-400)}
 .plpd-page-header__title{margin:0; font-family:var(--font-display); font-size:36px; font-weight:700; line-height:36px; color:var(--brand-brand-cyan)}
-.plpd-page-header__meta{margin:0; font-family:var(--font-display); font-size:16px; font-weight:400; line-height:1.2; letter-spacing:.32px; color:var(--text-text-meta)}
+.plpd-page-header__meta{margin:0; font-family:var(--font-display); font-size:16px; font-weight:400; line-height:1.2; letter-spacing:.32px; color:var(--text-name)}
 
-/* a panel (PlPane, Titled): a bordered section with a heading in DM Sans Bold 17 */
-.plpd-pane{background:var(--surfaces-surface-2); border:1px solid var(--surface-border-card); border-radius:var(--radius-xl); padding:16px 16px 12px}
-.plpd-pane__title{margin:0; font-family:var(--font-display); font-size:17px; font-weight:700; line-height:1.2; color:var(--table-thead-label)}
+/* a content section (page-composition.md): a card on card-bg, headed in cyan (brand-cyan-header) at
+   type-section-title (DM Sans Black 24); the section's description sits right under it in text-cell */
+.plpd-pane{background:var(--card-card-bg); border:1px solid var(--surface-border-card); border-radius:var(--radius-xl); padding:20px 20px 16px}
+.plpd-pane__title{margin:0; font-family:var(--font-display); font-size:24px; font-weight:900; line-height:1.2; color:var(--brand-brand-cyan-header)}
+.plpd-pane__desc{margin:6px 0 0; max-width:var(--layout-pl-prose-max); font-family:var(--font-text); font-size:15px; line-height:1.45; color:var(--text-text-cell)}
+/* an item inside a section: a mini heading in off-white (text-cell, type-panel-label) with its
+   description directly under it in text-nav. No eyebrow labels, no footnotes, no bullet lists */
+.plpd-mini{display:flex; flex-direction:column; gap:4px}
+.plpd-mini__title{margin:0; font-family:var(--font-display); font-size:16px; font-weight:700; line-height:1.2; color:var(--text-text-cell)}
+.plpd-mini__desc{margin:0; max-width:var(--layout-pl-prose-max); font-family:var(--font-text); font-size:14px; line-height:20px; color:var(--text-text-nav)}
 
 /* PlFilterField + PlFilterDropdown, on a native select: label over a 40px surface-3 control, cyan caret */
 .plpd-filter-field{display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-200); min-width:0}
@@ -149,12 +163,33 @@ select.plpd-filter-dropdown:disabled{cursor:default; opacity:.5}
 .plpd-btn:disabled,.plpd-chip:disabled{cursor:default}
 .plpd-btn--primary:disabled{background:var(--navy-600); color:var(--text-text-zero); box-shadow:none}
 
-/* PlMetricDefinition-style prose: terms in cyan DM Sans SemiBold, text in Work Sans meta */
-.plpd-prose{max-width:var(--layout-pl-prose-max); font-family:var(--font-text); font-size:14px; line-height:20px; color:var(--text-text-meta)}
+/* PlMetricDefinition-style prose: terms in cyan DM Sans SemiBold, the text in text-nav (body copy) */
+.plpd-prose{max-width:var(--layout-pl-prose-max); font-family:var(--font-text); font-size:14px; line-height:20px; color:var(--text-text-nav)}
 .plpd-prose b{font-family:var(--font-display); font-weight:600; color:var(--brand-brand-cyan)}
 
-/* PlTooltip look, for title-less hover readouts */
-.plpd-tooltip{box-sizing:border-box; max-width:280px; padding:8px 12px; border-radius:var(--radius-lg); background:var(--gradient-pl-data-table-header-tooltip-bg);
-  box-shadow:inset 0 0 0 1px var(--overlay-overlay-white-08),0 12px 24px 0 rgba(0,0,0,.4); font-family:var(--font-text); font-size:14px; line-height:1.4; color:#f0f1f5f5}
+/* PlTooltip, as PL Pro has it today: radius 12, a cyan 22% edge, 12px padding, wrapping at 320px */
+.plpd-tooltip{box-sizing:border-box; max-width:320px; padding:var(--space-300); border:1px solid var(--data-table-header-tooltip-border); border-radius:var(--radius-2xl);
+  background:var(--gradient-pl-data-table-header-tooltip-bg); box-shadow:0 16px 34px 0 rgba(0,0,0,.38); font-family:var(--font-text); font-size:14px; line-height:1.4; color:#f0f1f5f5}
+
+/* PlAutocomplete: a 40px search field (input-field-bg, cyan 40% border while focused) over a menu of 32px suggestions */
+.plpd-autocomplete{position:relative}
+.plpd-autocomplete__input{box-sizing:border-box; width:100%; height:40px; padding:0 12px 0 38px; border:1px solid var(--input-field-border); border-radius:var(--radius-lg);
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 48 48' fill='none' stroke='%23a9b0cc' stroke-width='4' stroke-linejoin='round'%3E%3Cpath d='M21 38C30.3888 38 38 30.3888 38 21C38 11.6112 30.3888 4 21 4C11.6112 4 4 11.6112 4 21C4 30.3888 11.6112 38 21 38Z'/%3E%3Cpath d='M33.2218 33.2218L41.7071 41.7071' stroke-linecap='round'/%3E%3C/svg%3E") 12px center / 18px 18px no-repeat, var(--input-field-bg);
+  font-family:var(--font-text); font-size:16px; color:var(--text-text-cell); outline:none}
+.plpd-autocomplete__input::placeholder{color:#a9b0cc; opacity:1} /* draft-text-zero */
+.plpd-autocomplete__input:hover{border-color:var(--input-field-border-hover)}
+.plpd-autocomplete__input:focus{border-color:rgba(85,232,255,.4)}
+.plpd-autocomplete__input:disabled{opacity:.5}
+.plpd-autocomplete__menu{position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:5; margin:0; padding:6px; list-style:none;
+  border:1px solid var(--dropdown-dd-menu-border); border-radius:var(--radius-xl); background:var(--dropdown-dd-menu-bg); box-shadow:0 18px 40px 0 rgba(3,4,12,.5)}
+.plpd-autocomplete__menu li{box-sizing:border-box; display:flex; align-items:baseline; justify-content:space-between; gap:8px; min-height:32px; padding:8px 10px;
+  border-radius:var(--radius-md); font-family:var(--font-text); font-size:14px; line-height:16px; color:var(--text-text-cell); cursor:pointer}
+.plpd-autocomplete__menu li small{color:var(--text-text-team); font-size:14px; white-space:nowrap}
+.plpd-autocomplete__menu li.active,.plpd-autocomplete__menu li:hover{background:var(--dropdown-dd-item-hover-bg); color:var(--base-white)}
+
+/* a status line: text-nav, an error in status-message-error, a warning's word in bold brand-amber */
+.plpd-status{font-family:var(--font-text); font-size:14px; line-height:1.45; color:var(--text-text-nav)}
+.plpd-status.err{color:var(--status-message-error)}
+.plpd-status b.warn{font-weight:700; color:var(--brand-brand-amber)}
 
 @media (prefers-reduced-motion:reduce){*{transition:none !important}}

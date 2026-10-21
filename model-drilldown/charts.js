@@ -32,29 +32,31 @@ import {
   rowInput,
   allRows,
   sgn,
-} from './data.js?v=13';
+} from './data.js?v=14';
 
+// The PLPD palette (the design system's tokens; "gold" and "teal" keep their names as the
+// waterfall's two directions, now brand-amber for what helps the pitcher and brand-cyan for what hurts)
 export const C = {
-  card: '#292C42',
-  raise: '#30344F',
-  ink: '#E3E9F1',
-  muted: '#8A96A6',
-  faint: '#6B7684',
-  grid: '#3A3E5A',
-  gold: '#F1C647',
-  teal: '#00D4FF',
+  card: '#292c42', // card-bg
+  raise: '#34374c', // card-bg-hover
+  ink: '#f0f1f5', // text-cell
+  muted: '#cbd7fd', // text-nav (chart axis labels)
+  faint: '#8a8eb0', // lgd-text-dim
+  grid: '#404460', // navy-500
+  gold: '#ffc277', // brand-amber
+  teal: '#55e8ff', // brand-cyan
 };
-// the card's navy palette (card.js, and the phone's drilldown): the ground, its tiles, rules and text
+// the drilldown card (card.js, and the phone's drilldown): its ground, tiles, rules and text
 export const K = {
-  ground: '#13263F',
-  panel: '#172D4A',
-  line: '#2A3A57',
-  ink: '#E8EEF7',
-  muted: '#93A3BC',
-  faint: '#6C7C96',
-  sub: '#7F9CD6',
-  dot: '#9FB3CF',
-  conn: '#B4BECC',
+  ground: '#292c42', // card-bg
+  panel: '#2e3150', // lgd-surface-2
+  line: '#404460', // navy-500
+  ink: '#f0f1f5', // text-cell
+  muted: '#cbd7fd', // text-nav
+  faint: '#8a8eb0', // lgd-text-dim
+  sub: '#98b3de', // blue-200
+  dot: '#a4aaca', // navy-300
+  conn: '#a4aaca', // navy-300
 };
 const FONT = '"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
 export const WORDMARK_URL =
@@ -87,10 +89,10 @@ export function formats(target) {
   return { d: (v) => sgn(v, 2), v: (v) => `${v.toFixed(1)}%`, tick: (v) => `${+v.toFixed(2)}`, unit: 'pp', pad: 0.3 };
 }
 
-// t = -1 pure teal, 0 white, +1 pure gold (shap_values_card.kpi_color)
+// t = -1 pure cyan (brand-cyan), 0 white, +1 pure amber (brand-amber); shap_values_card.kpi_color's scale
 export function kpiColor(t) {
   t = Math.max(-1, Math.min(1, t));
-  const to = t < 0 ? [0x00, 0xd4, 0xff] : [0xf1, 0xc6, 0x47];
+  const to = t < 0 ? [0x55, 0xe8, 0xff] : [0xff, 0xc2, 0x77];
   const a = Math.abs(t);
   return `rgb(${to.map((c) => Math.round(255 + (c - 255) * a)).join(',')})`;
 }
@@ -163,11 +165,12 @@ function ribbon(x0, a0, a1, x1, b0, b1) {
   return `M${x0},${a0}C${m},${a0} ${m},${b0} ${x1},${b0}L${x1},${b1}C${m},${b1} ${m},${a1} ${x0},${a1}Z`;
 }
 
-// feature value -> colour: blue (low) through grey to pink (high), the beeswarm's scale
+// feature value -> colour: blue (low) through grey to pink (high), the beeswarm's scale (the
+// Process+ decisions blue, navy-400 and lgd-hl-elite)
 function valueColor(t) {
-  const lo = [0x33, 0x9c, 0xff],
-    mid = [0x8a, 0x96, 0xa6],
-    hi = [0xff, 0x66, 0x83];
+  const lo = [0x53, 0xaa, 0xf8],
+    mid = [0x8d, 0x96, 0xb3],
+    hi = [0xff, 0x83, 0x9b];
   const [a, b, u] = t < 0.5 ? [lo, mid, t * 2] : [mid, hi, (t - 0.5) * 2];
   return `rgb(${a.map((c, i) => Math.round(c + (b[i] - c) * u)).join(',')})`;
 }
@@ -373,7 +376,7 @@ const flowPanelText = (FS) => ({
   dot: 13,
 });
 const HILITE = 0.16; // the selected row's tint: the same colour and opacity as its funnel
-const CONNECTOR = '#B4BECC'; // the waterfall's bar-to-bar connectors
+const CONNECTOR = '#a4aaca'; // the waterfall's bar-to-bar connectors (navy-300)
 
 // The width of bold text in DM Sans, measured on a canvas once the font is in (app.js waits for
 // it), else estimated per character.
@@ -411,7 +414,7 @@ export function flowSvg(ctx) {
             : f.unit === 'runs'
               ? `Expected runs per 9 IP (league ERA ${unit.league.toFixed(2)})`
               : `Per-pitch probability (league ${unit.league.toFixed(1)}%)`;
-  const foot = `${note}; ${ctx.byOutcome ? 'an exact split, no proxy' : 'feature contributions from a proxy model'}. ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`;
+  const foot = `${note}; ${ctx.byOutcome ? 'an exact split, no proxy' : 'feature contributions from a proxy model'}. ${good > 0 ? 'Amber raises, cyan lowers' : 'Amber lowers, cyan raises'}.`;
   // The body takes whatever height makes H = 1200, or more if the rows, the league card or the
   // arsenal need it. Rows and pitch types are spread evenly
   // over it; bars thicken a little with the spacing (up to 1.5x the card's), and the league
@@ -1313,7 +1316,7 @@ export function phoneFlowSvg(ctx, W) {
               ? `Expected runs per 9 IP (league ERA ${unit.league.toFixed(2)}); feature contributions from a proxy model.`
               : `Per-pitch probability (league ${unit.league.toFixed(1)}%); feature contributions from a proxy model.`;
   const lines = wrapLines(
-    `${note} ${good > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`,
+    `${note} ${good > 0 ? 'Amber raises, cyan lowers' : 'Amber lowers, cyan raises'}.`,
     PHONE_MIN,
     W - 2 * P,
   );
