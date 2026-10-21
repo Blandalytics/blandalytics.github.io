@@ -19,13 +19,13 @@ window.ReleaseAngles = (() => {
 
   const NAMES = {
     FF: "Four-Seam", SI: "Sinker", CH: "Changeup", FS: "Splitter", SL: "Slider", ST: "Sweeper",
-    CU: "Curveball", FC: "Cutter", KC: "Knuckle Curve", SV: "Slurve", FO: "Forkball",
-    KN: "Knuckleball", EP: "Eephus", SC: "Screwball", CS: "Slow Curve", FA: "Fastball",
+    CU: "Curveball", FC: "Cutter", KC: "Knuckle Curve", FO: "Forkball",
+    KN: "Knuckleball", EP: "Eephus", SC: "Screwball", FA: "Fastball",
     FT: "Two-Seam", GY: "Gyroball", PO: "Pitchout",
   };
   const HUES = {
     FF: "#FF6683", SI: "#F2B24B", FS: "#83D6FF", FO: "#83D6FF", FC: "#C59C9C", SL: "#CE66FF",
-    ST: "#FFAAF7", CU: "#339cff", CS: "#2A98FF", SV: "#2A98FF", CH: "#6DE95D", SC: "#6DE95D",
+    ST: "#FFAAF7", CU: "#339cff", CH: "#6DE95D", SC: "#6DE95D",
     KN: "#999999", UN: "#999999",
   };
 

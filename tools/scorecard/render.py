@@ -750,7 +750,7 @@ a.pl-n:focus-visible{outline:2px solid var(--ink); outline-offset:1px; border-ra
 """
 
 JS = """
-var PITCH_NAME = {"FF":"Four-Seam","SI":"Sinker","FT":"Two-Seam","FC":"Cutter","SL":"Slider","ST":"Sweeper","SV":"Slurve","CU":"Curveball","KC":"Knuckle Cv","CS":"Slow Curve","CH":"Changeup","FS":"Splitter","FO":"Forkball","SC":"Screwball","KN":"Knuckler","EP":"Eephus","PO":"Pitchout"};
+var PITCH_NAME = {"FF":"Four-Seam","SI":"Sinker","FT":"Two-Seam","FC":"Cutter","SL":"Slider","ST":"Sweeper","CU":"Curveball","KC":"Knuckle Cv","CH":"Changeup","FS":"Splitter","FO":"Forkball","SC":"Screwball","KN":"Knuckler","EP":"Eephus","PO":"Pitchout"};
 var VIDEO = "https://baseballsavant.mlb.com/sporty-videos?playId=";
 var RESULT_NAME = {"Swinging Strike (Blocked)":"Swinging Strike",
   "In play, out(s)":"In play, out", "In play, no out":"In play",

@@ -90,6 +90,8 @@ const openSeason = (year) => once(files, year, async () => {
   }
 });
 const COLUMNS = ["pitcher", "game_date", "pitch_type", "HRA", "VRA"];
+// Slow Curve (CS) and Slurve (SV) are counted as Curveballs (CU): one ellipse, one count, one usage
+const FOLD = { CS: "CU", SV: "CU" };
 
 const isoDate = (v) => {
   if (v instanceof Date) return v.toISOString().slice(0, 10);
@@ -122,7 +124,7 @@ function readPitcher(year, id) {
     await file.prefetch(byteStart, byteEnd);
     const rows = await parquetReadObjects({ file, metadata, compressors, rowStart, rowEnd, columns: COLUMNS });
     return rows.filter((r) => Number(r.pitcher) === id)
-      .map((r) => ({ t: r.pitch_type, x: Number(r.HRA), y: Number(r.VRA), d: isoDate(r.game_date) }));
+      .map((r) => ({ t: FOLD[r.pitch_type] ?? r.pitch_type, x: Number(r.HRA), y: Number(r.VRA), d: isoDate(r.game_date) }));
   });
 }
 
