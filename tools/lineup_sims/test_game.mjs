@@ -15,6 +15,7 @@ const parkFile = join(repo, "lineup-sims", "park.js");
 const loadFile = join(repo, "lineup-sims", "game-load.js");
 const fixtureFile = join(repo, "tools", "lineup_sims", "fixtures", "game_822778.json");
 const colorsFile = join(repo, "lineup-sims", "team-colors.js"), pageFile = join(repo, "lineup-sims", "game.html");
+const gameFile = join(repo, "lineup-sims", "game.js"), plpdFile = join(repo, "shared", "plpd.css");
 const data = JSON.parse(readFileSync(join(dataDir, `${season}.json`), "utf8"));
 const SD = JSON.parse(readFileSync(join(dataDir, `${season}-steal.json`), "utf8"));
 const PD = JSON.parse(readFileSync(join(dataDir, `${season}-parks.json`), "utf8"));
@@ -328,6 +329,16 @@ function bookkeeping(res, teams, label) {
   check(mlb === readable(pair[1], surface), "MLB at the Yankees: MLB takes the page's orange, the Yankees their blue");
   check(teamColors(["MIA", "TB"], surface, pair)[0] === readable(TEAM_HEX.MIA[1], surface), "Marlins at Rays: the one pairing where the away team takes its secondary");
   check(deltaE(readable("#ec424f", surface), readable("#ff1f23", surface)) < MIN_DE && deltaE(...teamColors(["PHI", "WSH"], surface, pair)) >= MIN_DE, "Phillies red and Nationals red count as alike");
+
+  // the score grid's final-score outline: amber (PLPD's, the share image's copy the same) reads on the card, and
+  // the card-colored keyline inside it reads on the ramp's bright steps, where amber alone doesn't
+  const js = readFileSync(gameFile, "utf8"), css = readFileSync(plpdFile, "utf8");
+  const tile = js.match(/const TILE = \{[^}]*bg: "(#[0-9a-f]{6})"[^}]*amber: "(#[0-9a-f]{6})"/), amber = css.match(/--brand-brand-amber:(#[0-9a-f]{6})/)?.[1];
+  const steps = JSON.parse(js.match(/const SG_RAMP = (\[\[[\d, \[\]]+\]\]);/)[1]).map((c) => `#${c.map((x) => x.toString(16).padStart(2, "0")).join("")}`);
+  check(tile && amber && tile[2] === amber && tile[1] === surface, "the outline's amber is PLPD's, and the share image's card is the page's");
+  check(contrast(amber, surface) >= 3 && steps.every((s) => contrast(surface, s) >= 3),
+    `amber reads on the card (${contrast(amber, surface).toFixed(1)}:1) and the keyline on every ramp step (${steps.map((s) => contrast(surface, s).toFixed(1)).join(", ")}:1)`);
+  check(steps.some((s) => contrast(amber, s) < 3), "amber alone doesn't read on the bright squares (why the keyline is there)");
 }
 
 // 4. the engine draws only from its seeded generator

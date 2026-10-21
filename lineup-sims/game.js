@@ -815,6 +815,9 @@ function renderResults() {
 const SG_FLOOR = 0.005, SG_FADE = 0.0045;
 // sparse to dense, after the card's color: brand-cyan halfway, white (base-white) at the likeliest score
 const SG_RAMP = [[85, 232, 255], [255, 255, 255]];
+// the squares' corners and the final score's amber outline and keyline, in proportion to the square: these
+// px at a square of `at` px (the page's at full width, with 0 to 9 runs a side), wherever the grid is drawn
+const SG_SHAPE = { at: 406 / 10, radius: 2, final: 3.5, key: 1 };
 let sgView = null; // what's drawn, for the hover readout
 function renderScoreGrid() {
   const { res, sides, games } = last, N = 31;
@@ -843,7 +846,7 @@ function renderScoreGrid() {
   $("sg").setAttribute("aria-label", `Every simulated final score, ${nm(1)} runs across and ${nm(0)} runs up, each to ${M}; the likeliest: ${top.slice(0, 3).map(say).join("; ")}`);
   $("sg_note").textContent = `Each square is one final score, ${nm(1)} runs across and ${nm(0)} runs up; brighter is likelier, and the number is its share of games (%); scores under ${SG_FLOOR * 100}% have no square. `
     + `Above the dotted line the ${nm(0)} won, below it the ${nm(1)}; no game ends tied. `
-    + (fin ? `The outlined square is how the game actually ended (${ab(0)} ${last.final[0]}, ${ab(1)} ${last.final[1]}). ` : "")
+    + (fin ? `The square outlined in amber is how the game actually ended (${ab(0)} ${last.final[0]}, ${ab(1)} ${last.final[1]}). ` : "")
     + "Hover or tap a square for its share.";
 }
 // The grid, on the page's canvas, with the square at `hot` ([away, home]) ringed
@@ -859,10 +862,10 @@ function drawScoreGrid(hot) {
   const c = P / k.n1;
   paintScoreGrid(ctx, { l: m.l, t: m.t, P }, {
     bg: v("--surface"), ink: v("--ink"), ground: v("--ground"), tick: v("--muted"),
-    label: c >= 15 ? `600 ${c >= 30 ? 11 : c >= 22 ? 10 : 8.5}px "DM Sans", system-ui, sans-serif` : null, radius: 2, gap: 1,
+    label: c >= 15 ? `600 ${c >= 30 ? 11 : c >= 22 ? 10 : 8.5}px "DM Sans", system-ui, sans-serif` : null, gap: 1,
     tickFont: `11.5px "DM Sans", system-ui, sans-serif`, tickGap: 6,
     titleFont: `12.5px "DM Sans", system-ui, sans-serif`, dot: 4, xTitleY: H - 12, yTitleX: 13,
-    tie: { width: 1.75, dash: [2, 4] }, ring: 1.5, final: 2.5,
+    tie: { width: 1.75, dash: [2, 4] }, ring: 1.5, amber: v("--brand-brand-amber") || TILE.amber,
   }, hot);
   Object.assign(k, { m, c, P });
 }
@@ -876,44 +879,57 @@ const shareText = (n, games) => {
 // The grid in a box ({ l, t, P }: left, top, side) with a look (colors, fonts, spacing): the page's
 // canvas and the share image both draw it here. The ramp starts at the look's background at SG_FADE.
 function paintScoreGrid(ctx, box, L, hot) {
-  const k = sgView, { D, n1, M, games } = k, { l, t, P } = box, c = P / n1;
+  const k = sgView, { D, n1, M, games } = k, { l, t, P } = box, c = P / n1, z = c / SG_SHAPE.at;
   const hex = (h) => [1, 3, 5].map((j) => parseInt(h.slice(j, j + 2), 16));
   const lum = (rgb) => { const [r, g, b] = rgb.map((x) => ((x /= 255) <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
   const contrast = (x, y) => (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
   const cx = (h) => l + (h + 0.5) * c, cy = (a) => t + (M - a + 0.5) * c; // a square's center
-  const square = (h, a, inset) => {
+  const R = SG_SHAPE.radius * z;
+  const square = (h, a, inset, r = R, begin = true) => {
     const x = l + h * c + inset, y = t + (M - a) * c + inset, w = c - 2 * inset;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, y, w, w, L.radius); else ctx.rect(x, y, w, w);
+    if (begin) ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, w, Math.max(0, r)); else ctx.rect(x, y, w, w);
+  };
+  // a band `width` wide just inside the edge at `inset` (corner radius r), its inner corners concentric
+  // (r - width), so it lies flush on the square with no gaps at the corners, as a stroke's wouldn't
+  const band = (h, a, inset, width, r, color) => {
+    square(h, a, inset, r);
+    square(h, a, inset + width, r - width, false);
+    ctx.fillStyle = color; ctx.fill("evenodd");
   };
   const ramp = [hex(L.bg), ...SG_RAMP], lo = SG_FADE * games;
+  // a score's square color (null under the floor: no square), and whichever of ink and ground reads on it
+  const fillOf = (n) => {
+    if (!n || n < SG_FLOOR * games) return null;
+    const f = k.max > lo ? Math.min(1, (n - lo) / (k.max - lo)) : 1, u = f * (ramp.length - 1), i = Math.min(ramp.length - 2, Math.floor(u)), w = u - i;
+    return ramp[i].map((x, j) => Math.round(x + (ramp[i + 1][j] - x) * w));
+  };
+  const inkOn = (rgb) => (rgb && contrast(lum(hex(L.ground)), lum(rgb)) > contrast(lum(hex(L.ink)), lum(rgb)) ? L.ground : L.ink);
   if (L.label) ctx.font = L.label;
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   for (let a = 0; a < n1; a++) for (let h = 0; h < n1; h++) {
-    const n = D[a * n1 + h];
-    if (!n || n < SG_FLOOR * games) continue; // under the floor: no square
+    const n = D[a * n1 + h], rgb = fillOf(n);
+    if (!rgb) continue; // under the floor: no square
     square(h, a, L.gap); // the background between squares
-    const f = k.max > lo ? Math.min(1, (n - lo) / (k.max - lo)) : 1, u = f * (ramp.length - 1), i = Math.min(ramp.length - 2, Math.floor(u)), w = u - i;
-    const rgb = ramp[i].map((x, j) => Math.round(x + (ramp[i + 1][j] - x) * w));
     ctx.fillStyle = `rgb(${rgb.join(",")})`;
     ctx.fill();
     if (L.label) {
-      // the share in whichever of ink and ground contrasts more with its square
-      const sq = lum(rgb);
-      ctx.fillStyle = contrast(lum(hex(L.ground)), sq) > contrast(lum(hex(L.ink)), sq) ? L.ground : L.ink;
+      ctx.fillStyle = inkOn(rgb);
       ctx.fillText((100 * n / games).toFixed(1), cx(h), cy(a) + 0.5);
     }
   }
   // a real game's final score: its share even without a square (to the first digit that isn't 0), outlined
+  // in amber with a keyline of the card's color just inside, so the outline reads on the cyan and white
+  // squares too (amber is about as light as both)
   if (k.fin) {
-    const [fa, fh] = k.fin, n = D[fa * n1 + fh];
-    if (L.label && (!n || n < SG_FLOOR * games)) {
+    const [fa, fh] = k.fin, n = D[fa * n1 + fh], F = SG_SHAPE.final * z, K = SG_SHAPE.key * z;
+    if (L.label && !fillOf(n)) {
       ctx.font = L.label;
       ctx.fillStyle = L.ink;
       ctx.fillText(shareText(n, games), cx(fh), cy(fa) + 0.5);
     }
-    square(fh, fa, L.gap + L.final / 2);
-    ctx.lineWidth = L.final; ctx.strokeStyle = L.ink; ctx.stroke();
+    band(fh, fa, L.gap, F, R, L.amber);
+    band(fh, fa, L.gap + F, K, R - F, L.bg);
   }
   // the tie line, dotted, through the diagonal squares
   ctx.save();
@@ -922,7 +938,7 @@ function paintScoreGrid(ctx, box, L, hot) {
   ctx.restore();
   if (hot) {
     square(hot[1], hot[0], L.gap / 2);
-    ctx.lineWidth = L.ring; ctx.strokeStyle = L.ink; ctx.stroke();
+    ctx.lineWidth = L.ring; ctx.strokeStyle = inkOn(fillOf(D[hot[0] * n1 + hot[1]])); ctx.stroke();
   }
   // ticks: every run (every other one past 10)
   ctx.font = L.tickFont;
@@ -952,7 +968,7 @@ function paintScoreGrid(ctx, box, L, hot) {
 // card-bg, a brand-cyan title, blue-200 subtitles, text-nav ticks, the wordmark top right), to copy or download with the Share image
 // button (shared/share-image.js): the matchup and starters, each side's win share, the grid, what a
 // square is, and how many games.
-const TILE = { W: 900, bg: "#292c42", cyan: "#55e8ff", sub: "#98b3de", axis: "#cbd7fd" };
+const TILE = { W: 900, bg: "#292c42", cyan: "#55e8ff", sub: "#98b3de", axis: "#cbd7fd", amber: "#ffc277" };
 let logoImg = null;
 const loadLogo = () => logoImg || (logoImg = new Promise((res, rej) => {
   const im = new Image();
@@ -1000,16 +1016,16 @@ async function scoreGridBlob() {
   const P = 540, l = 200, t = 182, c = P / k.n1;
   paintScoreGrid(g, { l, t, P }, {
     bg: TILE.bg, ink: "#ffffff", ground: "#13152a", tick: TILE.axis,
-    label: `600 ${Math.max(13, Math.min(20, Math.round(c * 0.3)))}px "DM Sans"`, radius: 4, gap: 2,
+    label: `600 ${Math.max(13, Math.min(20, Math.round(c * 0.3)))}px "DM Sans"`, gap: 2,
     tickFont: '400 17px "Work Sans"', tickGap: 12,
     titleFont: '400 18px "DM Sans"', dot: 6, xTitleY: t + P + 62, yTitleX: l - 62,
-    tie: { width: 2.5, dash: [3, 7] }, ring: 0, final: 4,
+    tie: { width: 2.5, dash: [3, 7] }, ring: 0, amber: TILE.amber,
   }, null);
   // the footer: what a square is, and how many games
   g.textAlign = "left";
   g.textBaseline = "alphabetic";
   g.fillStyle = TILE.sub;
-  const what = `Each square is a final score and its share of games (%).${last.final ? " The outlined square is how the game ended." : ""}`;
+  const what = `Each square is a final score and its share of games (%).${last.final ? " The square outlined in amber is how the game ended." : ""}`;
   const where = `${games.toLocaleString()} simulated games`;
   fitFont(g, what, 400, 16, '"DM Sans"', W - 96);
   g.fillText(what, 48, 836);
