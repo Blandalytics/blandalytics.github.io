@@ -34,14 +34,34 @@ export function parkAdjust(q, f, eh, ep) {
 
 // Home field, on one plate appearance (after the park): the home team's batters strike out less,
 // walk more and get more hits on the balls they put in play; the road team's the reverse. From 2026's
-// regular season at the home team's own park, park-neutral, each PA's batter and pitcher accounted for
-// (the Lineup Sim's dev analysis, hfa/outcomes.py; backtested on every 2026 game): home over road, K 0.958, BB 1.033, HBP 1.00, hits per
-// ball in play 1.015, split evenly between the two sides (home x m, road / m). K and BB move per PA;
-// the balls in play are what that leaves, the hits keep their share of them times HperBIP (their mix
-// of 1B, 2B, 3B and HR kept) and the outs in play take the rest, in their own proportions.
+// regular season at the home team's own park, park-neutral, each PA's batter and pitching (the starter,
+// or his team's bullpen) accounted for, fitted together with BULLPEN_LEAD below (the Game Sim's dev
+// analysis, scores/joint.py): home over road, K 0.954, BB 1.035, HBP 1.00, hits per ball in play 1.016,
+// split evenly between the two sides (home x m, road / m). Then, with the bullpen by the score in the
+// sim, each multiplier raised to the 1.25 power: that put the home team's wins over every 2026 game at
+// 2026's own 52.9% (52.3% as fitted) and gave the best log loss on who won (scores/calib.mjs).
+// K and BB move per PA; the balls in play are what that leaves, the hits keep their share of them times
+// HperBIP (their mix of 1B, 2B, 3B and HR kept) and the outs in play take the rest, in their own proportions.
 // sign: +1 the batter is at home, -1 on the road, 0 neither (a neutral site): q unchanged.
-export const HOME_FIELD = { K: 0.979, BB: 1.016, HBP: 1, HperBIP: 1.0077 };
+export const HOME_FIELD = { K: 0.9711, BB: 1.0218, HBP: 1, HperBIP: 1.0100 };
 const HITS = [3, 4, 5, 6];        // 1B, 2B, 3B, HR
+
+// The bullpen by the score (the Game Sim's dev analysis, scores/joint.py, fitted together with home
+// field): teams bring in their best relievers to hold a close lead and their mop-up men when a game is
+// out of hand either way, so a bullpen's K, BB and hits per ball in play move with the pitching side's
+// lead as each plate appearance begins. Its 2026 rates are the average over all of them, so these average
+// 1 over 2026's relief plate appearances. Applied as homeField() applies its multipliers (sign +1).
+// Leads: down 5+, down 3-4, down 1-2, tied, up 1-2, up 3-4, up 5+ (leadBucket()).
+export const BULLPEN_LEAD = [
+  { K: 0.871, BB: 0.966, HBP: 1, HperBIP: 1.023 },
+  { K: 0.927, BB: 1.082, HBP: 1, HperBIP: 1.022 },
+  { K: 1.000, BB: 0.990, HBP: 1, HperBIP: 1.011 },
+  { K: 1.041, BB: 1.012, HBP: 1, HperBIP: 1.040 },
+  { K: 1.082, BB: 1.018, HBP: 1, HperBIP: 0.963 },
+  { K: 1.091, BB: 1.001, HBP: 1, HperBIP: 0.963 },
+  { K: 0.994, BB: 0.918, HBP: 1, HperBIP: 0.978 },
+];
+export const leadBucket = (lead) => (lead <= -5 ? 0 : lead <= -3 ? 1 : lead < 0 ? 2 : lead === 0 ? 3 : lead <= 2 ? 4 : lead <= 4 ? 5 : 6);
 
 export function homeField(q, sign, hf = HOME_FIELD) {
   if (!sign) return q;
