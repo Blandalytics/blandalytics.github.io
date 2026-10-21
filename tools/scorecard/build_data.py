@@ -25,6 +25,9 @@ HIT_LABEL = {"single": "1B", "double": "2B", "triple": "3B", "home_run": "HR"}
 
 BB_LABEL = {6: "BRL", 5: "SLD", 3: "UND", 2: "TOP", 1: "WEAK", 0: "UNC"}
 
+# Slow Curve (CS) and Slurve (SV) are counted as Curveballs: in the pitcher's mix and every pitch
+FOLD = {"CS": "CU", "SV": "CU"}
+
 
 def batted_ball(speed, angle):
     """Return (code, short label) for an exit velocity / launch angle pair."""
@@ -235,7 +238,7 @@ def build(game_pk, feed_json, pitches_df):
     box = feed["liveData"]["boxscore"]
     line = feed["liveData"]["linescore"]
     plays = feed["liveData"]["plays"]["allPlays"]
-    df = pitches_df
+    df = pitches_df.assign(pitch_type=pitches_df.pitch_type.astype("object").replace(FOLD))
 
     # --- per-at-bat aggregates from the scraper -------------------------------
     pit = {}

@@ -21,11 +21,11 @@ const SPORT = 'mlb';
 
 export const COLORS = {
   FF: '#FF6683', SI: '#F2B24B', FS: '#83D6FF', FC: '#C59C9C', SL: '#CE66FF', ST: '#FFAAF7',
-  CU: '#339cff', KC: '#339cff', CS: '#2A98FF', SV: '#2A98FF', CH: '#6DE95D', KN: '#c7c7c7', SC: '#c7c7c7', UN: '#c7c7c7',
+  CU: '#339cff', KC: '#339cff', CH: '#6DE95D', KN: '#c7c7c7', SC: '#c7c7c7', UN: '#c7c7c7',
 };
 const PITCH_NAMES = {
   FF: 'Four-Seam Fastball', FA: 'Fastball', SI: 'Sinker', FC: 'Cutter', SL: 'Slider', ST: 'Sweeper',
-  CU: 'Curveball', KC: 'Knuckle Curve', CS: 'Slow Curve', SV: 'Slurve', CH: 'Changeup', FS: 'Splitter',
+  CU: 'Curveball', KC: 'Knuckle Curve', CH: 'Changeup', FS: 'Splitter',
   FO: 'Forkball', SC: 'Screwball', KN: 'Knuckleball', EP: 'Eephus', PO: 'Pitchout', UN: 'Unknown',
 };
 // How a plate appearance ended, in top-to-bottom order; ending nodes share one face and
@@ -331,6 +331,9 @@ function gameLine(pas, pitches, recorded) {
 export function buildFlow(rows, meta) {
   const pitches = rows.slice().sort((a, b) => a.at_bat_index - b.at_bat_index || a.pitch_number - b.pitch_number);
   pitches.forEach(p => { if (!p.pitch_type) p.pitch_type = 'UN'; });
+  // Slow Curve (CS) and Slurve (SV) are counted as Curveballs: one node, named Curveball (the parquet's
+  // pitch_name says Slurve or Slow Curve, so it goes too)
+  pitches.forEach(p => { if (p.pitch_type === 'CS' || p.pitch_type === 'SV') { p.pitch_type = 'CU'; p.pitch_name = 'Curveball'; } });
   const typeCounts = new Map();
   pitches.forEach(p => typeCounts.set(p.pitch_type, (typeCounts.get(p.pitch_type) || 0) + 1));
   const palette = Object.keys(COLORS);

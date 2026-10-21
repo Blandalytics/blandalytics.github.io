@@ -265,8 +265,9 @@ table{border-collapse:collapse; font-variant-numeric:tabular-nums}
     return '#ffffff';
   }
 
-  var PITCH_NAME = {FF:"Four-Seam", SI:"Sinker", FT:"Two-Seam", FC:"Cutter", SL:"Slider", ST:"Sweeper", SV:"Slurve",
-    CU:"Curveball", KC:"Knuckle Cv", CS:"Slow Curve", CH:"Changeup", FS:"Splitter", FO:"Forkball", SC:"Screwball",
+  // Slow Curve (CS) and Slurve (SV) are counted as Curveballs: fetchDetail folds them into CU as a game arrives
+  var PITCH_NAME = {FF:"Four-Seam", SI:"Sinker", FT:"Two-Seam", FC:"Cutter", SL:"Slider", ST:"Sweeper",
+    CU:"Curveball", KC:"Knuckle Cv", CH:"Changeup", FS:"Splitter", FO:"Forkball", SC:"Screwball",
     KN:"Knuckler", EP:"Eephus", PO:"Pitchout", FA:"Fastball"};
   var RESULT_NAME = {"Swinging Strike (Blocked)":"Swinging Strike", "In play, out(s)":"In play, out",
     "In play, no out":"In play", "In play, run(s)":"In play, run", "Ball In Dirt":"Ball in dirt"};
@@ -584,7 +585,10 @@ table{border-collapse:collapse; font-variant-numeric:tabular-nums}
     if (inflight === g.gamePk) return;
     inflight = g.gamePk;
     fetch(DATA + '/live/games/' + g.gamePk + '.json').then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(function (d) { detail[g.gamePk] = d; if (String(selected) === String(g.gamePk)) renderStage(); })
+      .then(function (d) {
+        (d.pitches || []).forEach(function (p) { if (p.type === 'CS' || p.type === 'SV') p.type = 'CU'; });
+        detail[g.gamePk] = d; if (String(selected) === String(g.gamePk)) renderStage();
+      })
       .catch(function () {})
       .then(function () { inflight = null; });
   }
