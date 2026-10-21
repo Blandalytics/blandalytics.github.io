@@ -21,7 +21,7 @@ import {
   targetName,
   rowValue,
   rowInput,
-} from './data.js?v=13';
+} from './data.js?v=14';
 import {
   C,
   K,
@@ -35,7 +35,7 @@ import {
   ord,
   bar,
   widestKpiName,
-} from './charts.js?v=78';
+} from './charts.js?v=79';
 
 export const CARD = { W: 1280, H: 720 };
 const FONT = '"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
@@ -101,7 +101,7 @@ function footnote(ctx) {
         : f.unit === 'runs'
           ? `Expected runs per 9 IP (league ERA ${unit.league.toFixed(2)}); feature contributions from a proxy model`
           : `Per-pitch probability (league ${unit.league.toFixed(1)}%); feature contributions from a proxy model`;
-  return `${note}. ${targetGood(target) > 0 ? 'Gold raises, teal lowers' : 'Gold lowers, teal raises'}.`;
+  return `${note}. ${targetGood(target) > 0 ? 'Amber raises, cyan lowers' : 'Amber lowers, cyan raises'}.`;
 }
 
 export function cardSvg(ctx) {

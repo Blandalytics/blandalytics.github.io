@@ -166,14 +166,14 @@ TEMPLATE = r"""<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="/shared/plpd.css?v=2">
+<link rel="stylesheet" href="/shared/plpd.css?v=3">
 <style>
 /* Park Factors on the PLPD design system (/shared/plpd.css): the page's own layout, its filter bar,
    season slider and leaderboard, all in the system's tokens */
 main{max-width:var(--layout-pl-site-max); margin:0 auto; padding:32px var(--layout-page-content-gutter) 48px; display:flex; flex-direction:column; gap:var(--space-600)}
 @media (max-width:700px){main{padding:24px 16px 40px; gap:var(--space-400)}}
 header{display:flex; flex-direction:column; gap:var(--space-400)}
-.intro{max-width:var(--layout-pl-prose-max); margin:0; font-size:15px; line-height:1.45; color:var(--text-text-meta)}
+.intro{max-width:var(--layout-pl-prose-max); margin:0; font-size:15px; line-height:1.45; color:var(--text-text-cell)}
 p{margin:0}
 
 /* the filter bar: View (amber) and Batter side (cyan) chips, five dropdowns, Qualified parks */
@@ -187,7 +187,7 @@ p{margin:0}
 .seasonbar[hidden]{display:none}
 @media (max-width:900px){.seasonbar{grid-template-columns:auto minmax(0,1fr)} .seasonbar .base{grid-column:1 / -1}}
 .slider{display:flex; flex-direction:column; gap:var(--space-200); min-width:0}
-.slider .now{display:flex; flex-wrap:wrap; justify-content:space-between; gap:2px 14px; font-size:14px; color:var(--text-text-meta)}
+.slider .now{display:flex; flex-wrap:wrap; justify-content:space-between; gap:2px 14px; font-size:14px; color:var(--text-text-nav)}
 .slider .now b{font-family:var(--font-display); font-size:16px; font-weight:600; color:var(--text-text-cell)}
 .slider input[type=range]{width:100%}
 .months{position:relative; height:16px; margin:0 7px; font-size:12px; color:var(--text-text-zero)}
@@ -196,8 +196,8 @@ p{margin:0}
 /* the toolbar over the board: the count, the heat legend, Copy link, Download CSV, Reset filters */
 .row{display:flex; flex-wrap:wrap; gap:var(--space-300) var(--space-400); align-items:center; justify-content:space-between}
 .tools{display:flex; flex-wrap:wrap; gap:var(--space-300) var(--space-400); align-items:center}
-.status{font-size:14px; color:var(--text-text-meta)}
-.legend{display:flex; align-items:center; gap:var(--space-200); font-family:var(--font-display); font-size:13px; color:var(--text-text-meta)}
+.status{font-size:14px; color:var(--text-text-nav)}
+.legend{display:flex; align-items:center; gap:var(--space-200); font-family:var(--font-display); font-size:13px; color:var(--text-text-nav)}
 .legend .bar{width:160px; height:10px; border-radius:var(--radius-xs)}
 .legend span{white-space:nowrap}
 @media (max-width:480px){.legend .bar{width:72px}}
@@ -225,10 +225,10 @@ p{margin:0}
 #board tbody tr:nth-child(even) td:not(.stat){background:linear-gradient(var(--data-table-pl-data-table-row-bg-stripe-dark),var(--data-table-pl-data-table-row-bg-stripe-dark)),var(--data-table-pl-data-table-scroll-base-bg)}
 #board tbody tr:hover td:not(.stat){background:linear-gradient(var(--data-table-pl-data-table-row-hover-bg),var(--data-table-pl-data-table-row-hover-bg)),var(--data-table-pl-data-table-scroll-base-bg)}
 #board tbody tr:hover td.stat{box-shadow:inset 0 0 0 999px rgba(19,21,42,.12)}
-#board tbody tr.league td{background:var(--data-table-pl-data-table-row-bg-section); color:var(--text-text-meta); font-style:italic; text-align:right}
+#board tbody tr.league td{background:var(--data-table-pl-data-table-row-bg-section); color:var(--text-text-nav); font-style:italic; text-align:right}
 #board tr.league td.venue,#board tr.league td.txt{text-align:left}
 #board tbody tr:last-child td{border-bottom:0}
-#board .empty td{text-align:center; color:var(--text-text-meta); padding:28px}
+#board .empty td{text-align:center; color:var(--text-text-nav); padding:28px}
 /* pinned at full width the longest venue takes ~215px of a phone's 343px table: capped, the stats keep the room */
 @media (max-width:640px){#board th.venue,#board td.venue{max-width:132px; overflow:hidden; text-overflow:ellipsis}}
 

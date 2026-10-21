@@ -30,19 +30,19 @@ export const PITCH_NAMES = {
   FS: 'Splitter',
   FO: 'Forkball',
 };
-// the Sequencing Flow palette
+// the PLPD design system's pitch-* colours; knuckle curves and slurves take the curveball's
 export const PITCH_COLORS = {
-  FF: '#FF6683',
-  SI: '#F2B24B',
-  FS: '#83D6FF',
-  FC: '#C59C9C',
-  SL: '#CE66FF',
-  ST: '#FFAAF7',
-  CU: '#339cff',
-  KC: '#339cff',
-  SV: '#2A98FF',
-  CH: '#6DE95D',
-  FO: '#83D6FF',
+  FF: '#ff839b', // pitch-four-seamer
+  SI: '#ffc277', // pitch-sinker
+  FS: '#83d6ff', // pitch-splitter
+  FC: '#c59c9c', // pitch-cutter
+  SL: '#ce66ff', // pitch-slider
+  ST: '#ffaaf7', // pitch-sweeper
+  CU: '#2a98ff', // pitch-curveball
+  KC: '#2a98ff',
+  SV: '#2a98ff',
+  CH: '#6de95d', // pitch-changeup
+  FO: '#78e0ae', // pitch-forkball
 };
 
 export const MODELS = {
@@ -93,19 +93,21 @@ export const OUTCOME_NAMES = {
   triple: 'Triple',
   home_run: 'Home Run',
 };
-// Sequencing Flow's ending colours: walks amber, strikes green, outs blue, hits red, homers pink
+// the outcomes in PLPD tokens, as Sequencing Flow colours them: balls amber (brand-amber), strikes
+// green (brand-up-pale, brand-up), fouls off-white and outs blue (the Process+ total line and
+// decisions), hits red (red-400), homers pink (lgd-scored)
 export const OUTCOME_COLORS = {
-  ball: '#FFC46A',
-  called_strike: '#A6FFC4',
-  swinging_strike: '#65FF9C',
-  foul: '#F4F1EA',
-  field_out: '#65BAFF',
-  single: '#F4707C',
-  double: '#F4707C',
-  triple: '#F4707C',
-  home_run: '#FF5EDC',
+  ball: '#ffc277',
+  called_strike: '#b4ecc3',
+  swinging_strike: '#7ddf9a',
+  foul: '#f4f1ea',
+  field_out: '#53aaf8',
+  single: '#f4707c',
+  double: '#f4707c',
+  triple: '#f4707c',
+  home_run: '#ff5edc',
 };
-// targets where lower is better for the pitcher: gold and teal swap
+// targets where lower is better for the pitcher: amber and cyan swap
 export const LOWER_IS_BETTER = new Set([
   'p_ball',
   'p_single',

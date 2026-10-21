@@ -2,10 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="modulepreload" href="app.js?v=108" />
-    <link rel="modulepreload" href="data.js?v=13" />
-    <link rel="modulepreload" href="charts.js?v=78" />
-    <link rel="modulepreload" href="card.js?v=54" />
+    <link rel="modulepreload" href="app.js?v=109" />
+    <link rel="modulepreload" href="data.js?v=14" />
+    <link rel="modulepreload" href="charts.js?v=79" />
+    <link rel="modulepreload" href="card.js?v=55" />
     <link rel="modulepreload" href="morph.js?v=2" />
     <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/hyparquet@1.31.1/+esm" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -19,83 +19,43 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&display=swap"
     />
+    <link rel="stylesheet" href="/shared/plpd.css?v=3" />
     <style>
-      :root {
-        --ground: #0d1117;
-        --surface: #151b23;
-        --raise: #1b222c;
-        --ink: #e3e9f1;
-        --muted: #8a96a6;
-        --faint: #6b7684;
-        --rule: #242c37;
-        --accent: #6cb4ff;
-        --good: #7bd88f;
-        --bad: #ff8a80;
-        --warn: #ffd166;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        min-height: 100vh;
-        background: var(--ground);
-        color: var(--ink);
-        font-family:
-          'DM Sans',
-          system-ui,
-          -apple-system,
-          'Segoe UI',
-          sans-serif;
-        font-size: 15px;
-        line-height: 1.45;
-        -webkit-font-smoothing: antialiased;
-        padding: 24px 16px;
-      }
+      /* Model Drilldown on the PLPD design system (/shared/plpd.css, page-composition.md): the page's own
+         layout, controls, figures, stat tiles and tooltip, in the system's tokens */
       main {
-        max-width: 1240px;
+        max-width: var(--layout-pl-site-max);
         margin: 0 auto;
+        padding: 32px var(--layout-page-content-gutter) 48px;
         display: flex;
         flex-direction: column;
-        gap: 18px;
+        gap: var(--space-600);
       }
-      h1 {
-        margin: 0;
-        font-size: 30px;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        line-height: 1.1;
+      @media (max-width: 700px) {
+        main {
+          padding: 24px 16px 40px;
+          gap: var(--space-400);
+        }
       }
-      h2 {
-        margin: 0;
-        font-size: 17px;
-        font-weight: 600;
+      header {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-400);
       }
       p {
         margin: 0;
       }
-      .tag {
-        margin: 6px 0 0;
-        color: var(--muted);
-        font-size: 14px;
-        max-width: 860px;
-      }
-      a {
-        color: var(--accent);
-      }
-      .card {
-        background: var(--surface);
-        border: 1px solid var(--rule);
-        border-radius: 8px;
-        padding: 16px 18px;
-      }
       .controls {
         display: grid;
-        grid-template-columns: 96px minmax(200px, 1fr) 250px 130px 150px;
-        gap: 12px 14px;
+        grid-template-columns: 110px minmax(220px, 1fr) 270px 150px 170px;
+        gap: var(--space-400);
         align-items: end;
+      }
+      .controls .plpd-filter-field,
+      .controls select.plpd-filter-dropdown {
+        width: 100%;
       }
       /* narrower: the pitcher field takes the first row, the rest pair up under it */
       @media (max-width: 980px) {
@@ -121,158 +81,53 @@
           grid-column: 1 / -1;
           order: -1;
         }
-        .controls label:has(#target) {
+        .controls .plpd-filter-field:has(#target) {
           grid-column: 1 / -1;
         }
       }
-      label {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        font-size: 13px;
-        color: var(--muted);
-      }
-      label b {
-        color: var(--ink);
-        font-weight: 500;
-      }
-      input,
-      select,
-      button {
-        font: inherit;
-        color: var(--ink);
-      }
-      input[type='text'],
-      select {
-        background: var(--ground);
-        border: 1px solid var(--rule);
-        border-radius: 6px;
-        padding: 7px 9px;
-        width: 100%;
-      }
-      input:focus,
-      select:focus {
-        outline: 2px solid var(--accent);
-        outline-offset: 1px;
-        border-color: var(--accent);
-      }
-      select:disabled,
-      input:disabled {
-        opacity: 0.45;
-      }
-      button {
-        background: var(--raise);
-        border: 1px solid var(--rule);
-        border-radius: 6px;
-        padding: 7px 12px;
-        cursor: pointer;
-      }
-      button:hover:not(:disabled) {
-        border-color: var(--faint);
-        background: #222b36;
-      }
-      button:disabled {
-        opacity: 0.45;
-        cursor: default;
-      }
-      .row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px 16px;
-        align-items: center;
-      }
+      /* the status line under the controls: text-nav, a warning in brand-amber, an error in red */
       .status {
-        color: var(--muted);
-        font-size: 13px;
-        min-height: 19px;
-      }
-      .status.err {
-        color: var(--bad);
+        margin-top: var(--space-300);
+        min-height: 20px;
+        font-family: var(--font-text);
+        font-size: 14px;
+        line-height: 1.45;
+        color: var(--text-text-nav);
       }
       .status.warn {
-        color: var(--warn);
+        font-weight: 700;
+        color: var(--brand-brand-amber);
       }
-      .suggest {
-        position: relative;
+      .status.err {
+        font-weight: 700;
+        color: var(--status-message-error);
       }
       .suggest-list {
         --rows: 10;
-        position: absolute;
-        top: calc(100% + 4px);
-        left: 0;
-        right: 0;
-        z-index: 5;
-        margin: 0;
-        padding: 4px;
-        list-style: none;
-        background: var(--raise);
-        border: 1px solid var(--rule);
-        border-radius: 6px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-        max-height: calc(var(--rows) * 32px + 10px);
+        max-height: calc(var(--rows) * 34px + 14px);
         overflow-y: auto;
         overscroll-behavior: contain;
         scrollbar-width: thin;
-        scrollbar-color: var(--faint) transparent;
-      }
-      .suggest-list li {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 6px 9px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-        line-height: 20px;
-        color: var(--ink);
-      }
-      .suggest-list li small {
-        color: var(--muted);
-        font-size: 12px;
-        white-space: nowrap;
-      }
-      .suggest-list li.active {
-        background: #222b36;
+        scrollbar-color: var(--navy-500) transparent;
       }
 
-      /* the figures: one card each, a wide chart scrolls sideways inside its box on a phone */
-      .card-head {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 6px 16px;
-        margin-bottom: 12px;
-      }
-      .card-head p {
-        color: var(--muted);
-        font-size: 13.5px;
-        max-width: 720px;
+      /* each section: a cyan heading with its description right under it */
+      .sec-head {
+        margin-bottom: var(--space-400);
       }
       .opts {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px 16px;
+        gap: var(--space-300) var(--space-400);
         align-items: end;
-        margin-bottom: 12px;
+        margin-bottom: var(--space-400);
       }
-      .opts label {
-        flex-direction: row;
-        align-items: center;
-        gap: 8px;
-      }
-      .opts select {
+      .opts select.plpd-filter-dropdown {
         width: auto;
       }
-      .opts input[type='checkbox'] {
-        width: 16px;
-        height: 16px;
-        margin: 0;
-        accent-color: var(--accent);
-      }
       .figure {
-        background: #292c42;
-        border-radius: 10px;
+        background: var(--card-card-bg);
+        border-radius: var(--radius-xl);
         overflow-x: auto;
         overscroll-behavior-x: contain;
       }
@@ -285,8 +140,8 @@
         -webkit-user-select: none;
       }
       /* the drilldown is 16:9 and scales to the screen instead of scrolling: as wide as its card allows,
-   and short enough to fit on screen whole (the viewport height, less a 40 px margin). The box is
-   the card's own size, centred, so no background shows either side of it. */
+         and short enough to fit on screen whole (the viewport height, less a 40 px margin). The box is
+         the card's own size, centred, so no background shows either side of it. */
       #flow {
         overflow: hidden;
         background: none;
@@ -301,14 +156,10 @@
         #flow {
           width: auto;
         }
-      }
-      @media (max-width: 600px) {
         #out {
-          padding: 12px 8px;
+          padding: 16px 8px;
         }
-      }
-      /* a phone shows only the waterfall and the stat tiles: no beeswarm or outcome Sankey */
-      @media (max-width: 600px) {
+        /* a phone shows only the waterfall and the stat tiles: no beeswarm or outcome Sankey */
         #swarm-card,
         #sankey-card {
           display: none !important;
@@ -333,7 +184,7 @@
       }
       .figure [data-pt]:focus-visible rect[data-m^='band'],
       .figure .row:focus-visible .hit {
-        stroke: #fff;
+        stroke: var(--brand-brand-cyan);
         stroke-width: 1.5;
       }
       /* one row lit across every chart: the rest fade, as a traced plate appearance does in Sequencing Flow */
@@ -359,17 +210,18 @@
         transition: fill-opacity 0.12s;
       }
       /* a row's parts sit in separate layers, so hover reads the shared focus (.hot), not :hover;
-   the selected row keeps its own tint (the funnel's colour, from its fill-opacity attribute) */
+         the selected row keeps its own tint (the funnel's colour, from its fill-opacity attribute) */
       .figure .row.hot:not(.sel) .hit {
         fill-opacity: 0.08;
       }
 
-      /* the three numbers under the waterfall, each with its league KDE (Swing Profiles' stat tiles) */
+      /* the three numbers under the waterfall, each with its league KDE: a mini heading (text-cell),
+         the value, and its line under it (text-nav) */
       .stats {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px 20px;
-        margin-top: 14px;
+        gap: var(--space-400) var(--space-500);
+        margin-top: var(--space-400);
       }
       @media (max-width: 760px) {
         .stats {
@@ -379,37 +231,51 @@
       .stat {
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        gap: 4px;
         min-width: 0;
+        padding: var(--space-400);
+        border-radius: var(--radius-xl);
+        background: var(--card-card-bg-hover);
         transition: opacity 0.12s;
       }
       .stat.fx {
         cursor: default;
       }
-      .stat span {
-        color: var(--muted);
-        font-size: 12.5px;
+      .stat span:first-child {
+        font-family: var(--font-display);
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.2;
+        color: var(--text-text-cell);
       }
       .stat b {
-        font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
-        font-size: 17px;
+        font-family: var(--font-text);
+        font-size: 20px;
         font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-text-cell);
+      }
+      .stat span:not(:first-child) {
+        font-family: var(--font-text);
+        font-size: 14px;
+        line-height: 20px;
+        color: var(--text-text-nav);
       }
       .stat svg.kde {
         display: block;
         width: 100%;
         height: auto;
-        margin-top: 8px;
+        margin-top: var(--space-200);
         overflow: visible;
       }
       .kde text {
-        fill: var(--faint);
-        font-size: 10px;
-        font-family: 'DM Sans', system-ui, sans-serif;
+        fill: var(--lgd-text-dim);
+        font-size: 12px;
+        font-family: var(--font-text);
       }
       .kde .base,
       .kde .tick {
-        stroke: var(--rule);
+        stroke: var(--navy-500);
         stroke-width: 1;
       }
       .kde .curve {
@@ -426,86 +292,72 @@
         stroke-dasharray: 2 2;
       }
       .kde .dot {
-        stroke: var(--surface);
+        stroke: var(--card-card-bg-hover);
         stroke-width: 2;
       }
-      .note {
-        color: var(--faint);
-        font-size: 12.5px;
-        margin-top: 8px;
+      /* the drilldown's notes (the proxy's fit, a small sample) sit in its description */
+      #notes b.warn {
+        font-weight: 700;
+        color: var(--brand-brand-amber);
       }
       .actions {
-        margin-top: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-300);
+        margin-top: var(--space-400);
       }
+      /* the hover readout: PlTooltip (plpd-tooltip), placed by app.js */
       #tip {
         position: fixed;
         z-index: 20;
         pointer-events: none;
-        max-width: 340px;
-        background: var(--raise);
-        color: var(--ink);
-        border: 1px solid var(--rule);
-        border-radius: 8px;
-        padding: 8px 11px;
-        font-size: 12.5px;
-        line-height: 1.4;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
       }
       #tip .name {
         font-weight: 600;
+        color: var(--text-text-cell);
       }
       #tip .meta {
-        color: var(--muted);
+        color: var(--text-text-nav);
       }
       #tip .parts {
         display: grid;
         grid-template-columns: 1fr auto;
-        gap: 1px 16px;
-        margin-top: 4px;
-        color: var(--ink);
+        gap: 2px 16px;
+        margin-top: 6px;
+        color: var(--text-text-cell);
       }
       #tip .parts .v {
         text-align: right;
         font-variant-numeric: tabular-nums;
-        color: var(--ink);
       }
+      /* How it works: one mini heading per topic, its description under it */
       .method {
-        color: var(--muted);
-        font-size: 14px;
-      }
-      .method p {
-        margin: 0 0 10px;
-      }
-      .method p:last-child {
-        margin-bottom: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-400);
+        margin-top: var(--space-400);
       }
       .method code {
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
-        font-size: 12.5px;
-        background: var(--ground);
-        border: 1px solid var(--rule);
-        border-radius: 4px;
+        font-family: var(--font-text);
+        font-size: 13px;
+        background: var(--surfaces-surface-3);
+        border-radius: var(--radius-sm);
         padding: 1px 5px;
-        color: var(--ink);
+        color: var(--text-text-cell);
       }
-      .method b {
-        color: var(--ink);
-        font-weight: 500;
+      .method em {
+        font-style: normal;
+        color: var(--text-text-cell);
       }
       [hidden] {
         display: none !important;
       }
       details summary {
         cursor: pointer;
-        font-size: 17px;
-        font-weight: 600;
         list-style: none;
       }
       details summary::-webkit-details-marker {
         display: none;
-      }
-      details[open] summary {
-        margin-bottom: 10px;
       }
       @media (prefers-reduced-motion: reduce) {
         .figure .fx,
@@ -514,72 +366,47 @@
           transition: none;
         }
       }
-      /* polish: balanced headings, prose without orphan words, a slight scale on press, and
-         controls at least 44px tall on touch screens */
       h1,
       h2,
       h3 {
         text-wrap: balance;
       }
-      p,
-      li {
+      p {
         text-wrap: pretty;
       }
-      .actions button {
-        transition: transform 0.12s cubic-bezier(0.2, 0, 0, 1);
-      }
-      .actions button:active:not(:disabled) {
-        transform: scale(0.96);
-      }
       @media (pointer: coarse) {
-        button,
-        select,
-        input[type='text'],
-        input[type='number'],
-        input[type='search'],
-        input[type='date'] {
-          min-height: 44px;
-        }
-        /* "Show every row": an 18px box in a 40px label tap */
-        .opts label:has(#all) {
-          min-height: 40px;
-        }
-        #all {
-          width: 18px;
-          height: 18px;
-        }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .actions button:active:not(:disabled) {
-          transform: none;
+        details summary {
+          padding-block: 8px;
         }
       }
     </style>
   </head>
-  <body>
+  <body class="plpd">
     <main>
-      <header>
-        <h1>Model Drilldown</h1>
-        <p class="tag">
+      <header class="plpd-page-header">
+        <h1 class="plpd-page-header__title">Model Drilldown</h1>
+        <p class="plpd-page-header__meta">Stuff+ and PLV+ SHAP values · per pitcher, season and pitch type</p>
+        <p class="plpd-pane__desc">
           Why a pitch grades the way it does. Pick a season, a pitcher and a pitch type to see its Stuff+ or PLV+ (or
           any of their outcome probabilities) split into what each trait adds or takes away, and then see where each
           trait sits against the league.
         </p>
       </header>
 
-      <section class="card">
+      <section class="plpd-pane" aria-label="Filters">
         <form id="form" class="controls">
-          <label
-            ><b>Season</b
-            ><select id="season" disabled></select
+          <label class="plpd-filter-field"
+            ><span class="plpd-filter-field__label">Season</span
+            ><select id="season" class="plpd-filter-dropdown" disabled></select
           ></label>
-          <label class="player"
-            ><b>Pitcher</b>
-            <div class="suggest">
+          <label class="plpd-filter-field player"
+            ><span class="plpd-filter-field__label">Pitcher</span>
+            <div class="plpd-autocomplete" style="width: 100%">
               <input
                 id="player"
+                class="plpd-autocomplete__input"
                 type="text"
-                placeholder="name or MLBAM id"
+                placeholder="Name or MLBAM ID"
                 autocomplete="off"
                 spellcheck="false"
                 role="combobox"
@@ -588,40 +415,45 @@
                 aria-controls="suggest"
                 disabled
               />
-              <ul id="suggest" class="suggest-list" role="listbox" hidden></ul>
+              <ul id="suggest" class="plpd-autocomplete__menu suggest-list" role="listbox" hidden></ul>
             </div>
           </label>
-          <label class="ptype"
-            ><b>Pitch type</b
-            ><select id="pt" disabled></select
+          <label class="plpd-filter-field ptype"
+            ><span class="plpd-filter-field__label">Pitch type</span
+            ><select id="pt" class="plpd-filter-dropdown" disabled></select
           ></label>
-          <label
-            ><b>Model</b
-            ><select id="model" disabled></select
+          <label class="plpd-filter-field"
+            ><span class="plpd-filter-field__label">Model</span
+            ><select id="model" class="plpd-filter-dropdown" disabled></select
           ></label>
-          <label
-            ><b>Target</b
-            ><select id="target" disabled></select
+          <label class="plpd-filter-field"
+            ><span class="plpd-filter-field__label">Target</span
+            ><select id="target" class="plpd-filter-dropdown" disabled></select
           ></label>
         </form>
-        <div class="row" style="margin-top: 12px">
-          <span id="status" class="status">loading the SHAP tables…</span>
-        </div>
+        <p id="status" class="status">loading the SHAP tables…</p>
       </section>
 
-      <section id="out" class="card" hidden>
+      <section id="out" class="plpd-pane" hidden>
+        <div class="sec-head">
+          <h2 class="plpd-pane__title">How the grade adds up</h2>
+          <p class="plpd-pane__desc">
+            Each bar is what one trait adds to the pitch's value or takes from it, starting from the league. Click a
+            pitch type to switch to it, or a row to see it against the league. <span id="notes"></span>
+          </p>
+        </div>
         <div class="opts">
-          <label
-            >Compare with
-            <select id="vs">
+          <label class="plpd-filter-field"
+            ><span class="plpd-filter-field__label">Compare with</span>
+            <select id="vs" class="plpd-filter-dropdown">
               <option value="pt">the same pitch type</option>
               <option value="group">the same pitch group</option>
               <option value="all">every pitch type</option>
             </select>
           </label>
-          <label
-            >Min. pitches
-            <select id="minn">
+          <label class="plpd-filter-field"
+            ><span class="plpd-filter-field__label">Min. pitches</span>
+            <select id="minn" class="plpd-filter-dropdown">
               <option>1</option>
               <option selected>20</option>
               <option>50</option>
@@ -629,96 +461,112 @@
               <option>250</option>
             </select>
           </label>
-          <label><input id="all" type="checkbox" /> Show every row</label>
+          <label class="plpd-check"><input id="all" type="checkbox" /> Show every row</label>
         </div>
         <div id="flow" class="figure"></div>
         <div id="stats" class="stats"></div>
-        <div id="notes"></div>
-        <div class="row actions">
-          <button id="share_flow" type="button">Share image ▾</button>
-          <button id="dl_csv" type="button">Download SHAP values (CSV)</button>
+        <div class="actions">
+          <button id="share_flow" class="plpd-btn" type="button">Share image ▾</button>
+          <button id="dl_csv" class="plpd-btn" type="button">Download SHAP values (CSV)</button>
         </div>
       </section>
 
-      <section id="swarm-card" class="card" hidden>
-        <div class="card-head">
-          <h2>Against the league</h2>
-          <p>
+      <section id="swarm-card" class="plpd-pane" hidden>
+        <div class="sec-head">
+          <h2 class="plpd-pane__title">Against the league</h2>
+          <p class="plpd-pane__desc">
             Every row's SHAP value for each pitch in the comparison group, coloured by that pitch's own input, with this
             pitch marked. Hover a dot for the pitcher; click to open them.
           </p>
         </div>
         <div id="swarm" class="figure"></div>
-        <div class="row actions"><button id="share_swarm" type="button">Share image ▾</button></div>
+        <div class="actions"><button id="share_swarm" class="plpd-btn" type="button">Share image ▾</button></div>
       </section>
 
-      <section id="sankey-card" class="card" hidden>
-        <div class="card-head">
-          <h2>Where the probability goes</h2>
-          <p>
+      <section id="sankey-card" class="plpd-pane" hidden>
+        <div class="sec-head">
+          <h2 class="plpd-pane__title">Where the probability goes</h2>
+          <p class="plpd-pane__desc">
             A pitch's nine outcome probabilities always sum to 100%, so any rise in one comes out of the others. Each
             row takes probability from the outcomes on the left and gives it to those on the right.
           </p>
         </div>
         <div id="sankey" class="figure"></div>
-        <div class="row actions"><button id="share_sankey" type="button">Share image ▾</button></div>
+        <div class="actions"><button id="share_sankey" class="plpd-btn" type="button">Share image ▾</button></div>
       </section>
 
-      <section class="card">
+      <section class="plpd-pane">
         <details>
-          <summary>How it works</summary>
+          <summary><h2 class="plpd-pane__title">How it works</h2></summary>
           <div class="method">
-            <p>
-              <b>Models:</b> <em>Stuff+</em> grades a pitch on its shape, release, spin and how it plays off the
-              pitcher's primary fastball, assuming a league-average location and count. <em>PLV+</em> adds where the
-              pitch was thrown (<code>x_b</code>, <code>z_n</code>) and the count it was thrown in. Both are on a 100 ±
-              15 scale per pitcher, season, and pitch type. Each also gives nine outcome probabilities (ball+HBP, called
-              strike, swinging strike, foul, in-play out, single, double, triple, home run). wOBA on contact is built
-              from the batted-ball outcomes
-              <code>(0.9 * 1B_prob + 1.25 * 2B_prob + 1.6 * 3B_prob + 2 * HR_prob) / in_play_prob</code>.
-            </p>
-            <p>
-              <b>SHAP values:</b> neither model is a single tree model, so for each model, target and pitch group ×
-              matchup, an XGBoost proxy was trained to reproduce the final output from the same inputs. Its held-out R²
-              is 0.965 or higher for Stuff+/PLV+ and 0.906 or higher for every probability. TreeSHAP on that proxy
-              splits every pitch's value into one contribution per input, and a pitcher's pitch type is the average over
-              its pitches. Its value then adds up exactly:
-              <code>league + pitch group &amp; matchup + Σ features + residual</code>, where the residual is the proxy's
-              miss.
-            </p>
-            <p>
-              <b>Waterfall chart:</b> starting at the league reference (100, or the league rate), adds
-              <em>Pitch Group &amp; Matchup</em> (what that pitch type is worth given its share of same-handed batters),
-              then each input, largest first. It shows up to the eight largest features: any others (or any under 1
-              plus-scale point / 0.1 percentage points / .002 wOBAcon) are folded into <em>Other</em>, along with the
-              season and the residual, so the bars end on the actual value. Gold helps the pitcher and teal hurts. Click
-              a row to see it against the league. Each dot is another pitcher's version of the same pitch, with its
-              input on the x-axis and its SHAP on the y-axis, and the white line is the binned mean; for <em>Other</em>,
-              each dot is that pitch's sum of the same folded rows, plus its own season and residual. Click a pitch type
-              under <em>Pitches</em> to switch to it.
-            </p>
-            <p>
-              <b>Location+:</b> what the location adds: PLV minus Stuff at the count the pitch was thrown in, on the
-              same 100 ± 15 scale. It is split by outcome only.
-            </p>
-            <p>
-              <b>Model ERA:</b> <em>Stuff ERA</em> and <em>PLV ERA</em> turn each model's run values into runs per nine
-              innings: a season constant, minus nine times the pitch's run value per pitch times the pitches per inning
-              its predicted outcomes imply. The waterfall starts at the season's league ERA, and lower is better.
-            </p>
-            <p>
-              <b>By outcome:</b> the <em>(outcomes)</em> target splits the Stuff+ or PLV+ score another way, with no
-              proxy. Each of the nine outcomes contributes its predicted rate times its average run value, and the nine
-              add up to the score. PLV+ prices outcomes at the count each pitch was thrown in, and the difference is
-              shown as <em>Count Leverage</em>. Every outcome gets a bar, and the league charts plot each one against
-              the pitch's predicted rate of it.
-            </p>
+            <div class="plpd-mini">
+              <h3 class="plpd-mini__title">Models</h3>
+              <p class="plpd-mini__desc">
+                <em>Stuff+</em> grades a pitch on its shape, release, spin and how it plays off the pitcher's primary
+                fastball, assuming a league-average location and count. <em>PLV+</em> adds where the pitch was thrown
+                (<code>x_b</code>, <code>z_n</code>) and the count it was thrown in. Both are on a 100 ± 15 scale per
+                pitcher, season, and pitch type. Each also gives nine outcome probabilities (ball+HBP, called strike,
+                swinging strike, foul, in-play out, single, double, triple, home run). wOBA on contact is built from the
+                batted-ball outcomes
+                <code>(0.9 * 1B_prob + 1.25 * 2B_prob + 1.6 * 3B_prob + 2 * HR_prob) / in_play_prob</code>.
+              </p>
+            </div>
+            <div class="plpd-mini">
+              <h3 class="plpd-mini__title">SHAP values</h3>
+              <p class="plpd-mini__desc">
+                Neither model is a single tree model, so for each model, target and pitch group × matchup, an XGBoost
+                proxy was trained to reproduce the final output from the same inputs. Its held-out R² is 0.965 or higher
+                for Stuff+/PLV+ and 0.906 or higher for every probability. TreeSHAP on that proxy splits every pitch's
+                value into one contribution per input, and a pitcher's pitch type is the average over its pitches. Its
+                value then adds up exactly: <code>league + pitch group &amp; matchup + Σ features + residual</code>,
+                where the residual is the proxy's miss.
+              </p>
+            </div>
+            <div class="plpd-mini">
+              <h3 class="plpd-mini__title">Waterfall chart</h3>
+              <p class="plpd-mini__desc">
+                Starting at the league reference (100, or the league rate), adds
+                <em>Pitch Group &amp; Matchup</em> (what that pitch type is worth given its share of same-handed
+                batters), then each input, largest first. It shows up to the eight largest features: any others (or any
+                under 1 plus-scale point / 0.1 percentage points / .002 wOBAcon) are folded into <em>Other</em>, along
+                with the season and the residual, so the bars end on the actual value. Amber helps the pitcher and cyan
+                hurts. Click a row to see it against the league. Each dot is another pitcher's version of the same
+                pitch, with its input on the x-axis and its SHAP on the y-axis, and the white line is the binned mean;
+                for <em>Other</em>, each dot is that pitch's sum of the same folded rows, plus its own season and
+                residual. Click a pitch type under <em>Pitches</em> to switch to it.
+              </p>
+            </div>
+            <div class="plpd-mini">
+              <h3 class="plpd-mini__title">Location+</h3>
+              <p class="plpd-mini__desc">
+                What the location adds: PLV minus Stuff at the count the pitch was thrown in, on the same 100 ± 15
+                scale. It is split by outcome only.
+              </p>
+            </div>
+            <div class="plpd-mini">
+              <h3 class="plpd-mini__title">Model ERA</h3>
+              <p class="plpd-mini__desc">
+                <em>Stuff ERA</em> and <em>PLV ERA</em> turn each model's run values into runs per nine innings: a
+                season constant, minus nine times the pitch's run value per pitch times the pitches per inning its
+                predicted outcomes imply. The waterfall starts at the season's league ERA, and lower is better.
+              </p>
+            </div>
+            <div class="plpd-mini">
+              <h3 class="plpd-mini__title">By outcome</h3>
+              <p class="plpd-mini__desc">
+                The <em>(outcomes)</em> target splits the Stuff+ or PLV+ score another way, with no proxy. Each of the
+                nine outcomes contributes its predicted rate times its average run value, and the nine add up to the
+                score. PLV+ prices outcomes at the count each pitch was thrown in, and the difference is shown as
+                <em>Count Leverage</em>. Every outcome gets a bar, and the league charts plot each one against the
+                pitch's predicted rate of it.
+              </p>
+            </div>
           </div>
         </details>
       </section>
     </main>
-    <div id="tip" hidden role="tooltip"></div>
+    <div id="tip" class="plpd-tooltip" hidden role="tooltip"></div>
     <script src="/shared/share-image.js?v=2"></script>
-    <script type="module" src="app.js?v=108"></script>
+    <script type="module" src="app.js?v=109"></script>
   </body>
 </html>
