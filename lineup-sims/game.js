@@ -948,11 +948,11 @@ function paintScoreGrid(ctx, box, L, hot) {
 }
 
 // ---------- the score grid as an image ----------
-// The grid above as a 900 x 900 image in the site's share-image style (the Lineup Sim's: the Pitcher
-// List Stats ground, a cyan title, the wordmark top right), to copy or download with the Share image
+// The grid above as a 900 x 900 image in the site's share-image style (the Lineup Sim's: the PLPD
+// card-bg, a brand-cyan title, blue-200 subtitles, text-nav ticks, the wordmark top right), to copy or download with the Share image
 // button (shared/share-image.js): the matchup and starters, each side's win share, the grid, what a
 // square is, and how many games.
-const TILE = { W: 900, bg: "#292c42", cyan: "rgb(4,209,249)", sub: "#9aa0b8", axis: "#c0c4d3" };
+const TILE = { W: 900, bg: "#292c42", cyan: "#55e8ff", sub: "#98b3de", axis: "#cbd7fd" };
 let logoImg = null;
 const loadLogo = () => logoImg || (logoImg = new Promise((res, rej) => {
   const im = new Image();
@@ -974,7 +974,7 @@ function fitFont(g, text, weight, size, family, width) {
 async function scoreGridBlob() {
   const k = sgView, { res, sides, games } = last;
   await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 17px "DM Sans"',
-    '400 17px "JetBrains Mono"'].map((f) => document.fonts.load(f)));
+    '400 17px "Work Sans"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
   const { W } = TILE;
   const cv = document.createElement("canvas");
@@ -999,9 +999,9 @@ async function scoreGridBlob() {
   // the grid, square, centered under the subtitle
   const P = 540, l = 200, t = 182, c = P / k.n1;
   paintScoreGrid(g, { l, t, P }, {
-    bg: TILE.bg, ink: "#ffffff", ground: "#0d1117", tick: TILE.axis,
+    bg: TILE.bg, ink: "#ffffff", ground: "#13152a", tick: TILE.axis,
     label: `600 ${Math.max(13, Math.min(20, Math.round(c * 0.3)))}px "DM Sans"`, radius: 4, gap: 2,
-    tickFont: '400 17px "JetBrains Mono"', tickGap: 12,
+    tickFont: '400 17px "Work Sans"', tickGap: 12,
     titleFont: '400 18px "DM Sans"', dot: 6, xTitleY: t + P + 62, yTitleX: l - 62,
     tie: { width: 2.5, dash: [3, 7] }, ring: 0, final: 4,
   }, null);
