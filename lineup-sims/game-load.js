@@ -85,6 +85,11 @@ export function completedGames(sched) {
   return [...new Set(finals(sched).map((x) => x.gamePk))].sort((a, b) => a - b);
 }
 
+// A link's Lineup choice for a team (the kind in a=/h=): "recent" (its most recent nine against the
+// other starter's hand, the default) or "spots"; links from before "recent" said "most_used" (the
+// most-used order, now gone), which lands on the default. Anything else: null, the page's own default.
+export const lineupKind = (v) => (v === "recent" || v === "spots" ? v : v === "most_used" ? "recent" : null);
+
 // The most recent game in a seasonUrl reply that loads: the latest start (gameDate, an ISO time in UTC),
 // not the highest gamePk (the postseason's are numbered ahead of the season's last days; a made-up game
 // keeps its old one). null when there's none.

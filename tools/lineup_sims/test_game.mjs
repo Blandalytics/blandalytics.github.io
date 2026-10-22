@@ -22,7 +22,7 @@ const PD = JSON.parse(readFileSync(join(dataDir, `${season}-parks.json`), "utf8"
 // game-sim.js imports sim.js with the page's ?v=; this file imports it plain, so the engine is loaded by URL
 const { BAT, PIT, prepareSteal, simulateGames } = await import(pathToFileURL(engineFile).href);
 const { BULLPEN_LEAD, HOME_FIELD, PARK_N, homeField, leadBucket, parkAdjust } = await import(pathToFileURL(parkFile).href);
-const { bullpenDay, checkSchedule, completedGames, latestGame, parseGame, pkOf, scheduleUrl, seasonUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
+const { bullpenDay, checkSchedule, completedGames, latestGame, lineupKind, parseGame, pkOf, scheduleUrl, seasonUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
 
 let failed = 0, passed = 0;
 const check = (ok, what) => {
@@ -377,6 +377,20 @@ function bookkeeping(res, teams, label) {
   check(contrast(amber, surface) >= 3 && steps.every((s) => contrast(surface, s) >= 3),
     `amber reads on the card (${contrast(amber, surface).toFixed(1)}:1) and the keyline on every ramp step (${steps.map((s) => contrast(surface, s).toFixed(1)).join(", ")}:1)`);
   check(steps.some((s) => contrast(amber, s) < 3), "amber alone doesn't read on the bright squares (why the keyline is there)");
+}
+
+// 4d. default lineups (data/<season>-lineups.json, tools/lineup_sims/recent_lineups.py): each club's latest starting nine
+// against a right-handed and a left-handed starter
+{
+  const LU = JSON.parse(readFileSync(join(dataDir, `${season}-lineups.json`), "utf8"));
+  const clubs = data.teams.map((t) => t.abbr), hitterIds = new Set(data.players.map((p) => p[0])), teamIds = new Set(clubs);
+  const all = clubs.flatMap((t) => ["R", "L"].map((h) => [t, h, LU.teams[t]?.[h]]));
+  check(all.every(([, , e]) => e), "every club has a most recent lineup against each hand");
+  check(all.every(([t, , e]) => e.ids.length === 9 && new Set(e.ids).size === 9 && e.ids.every((id) => hitterIds.has(id)) && teamIds.has(e.opp) && e.opp !== t),
+    "each is nine different hitters in the data, against another club");
+  check(all.every(([, , e]) => e.date <= LU.through && e.date.startsWith(String(season))), `each from ${season}, no later than the data (${LU.through})`);
+  check(lineupKind("recent") === "recent" && lineupKind("spots") === "spots" && lineupKind("most_used") === "recent" && lineupKind("") === null && lineupKind("x") === null,
+    "a link's Lineup: recent or spots as named; an older link's most_used lands on the default (recent); anything else, the page's default");
 }
 
 // 4. the engine draws only from its seeded generator

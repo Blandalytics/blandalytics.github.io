@@ -10,7 +10,7 @@
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
 import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=3";
 import { BULLPEN_LEAD, PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=3";
-import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, latestGame, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=6";
+import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, latestGame, lineupKind, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=7";
 import { teamColors } from "./team-colors.js?v=2";
 
 const SEASON = 2026;
@@ -27,8 +27,8 @@ const pitchers = new Map(); // "P<id>", and "PRHP" / "PLHP" for an MLB-average a
 
 // the two teams; SIDES[0] bats first (away)
 const SIDES = [
-  { k: "a", where: "Away", team: "CLE", kind: "spots", lineup: [], edited: false, sp: null, plan: "hook", c: 8 },
-  { k: "h", where: "Home", team: "DET", kind: "spots", lineup: [], edited: false, sp: null, plan: "hook", c: 8 },
+  { k: "a", where: "Away", team: "CLE", kind: "recent", lineup: [], edited: false, sp: null, plan: "hook", c: 8 },
+  { k: "h", where: "Home", team: "DET", kind: "recent", lineup: [], edited: false, sp: null, plan: "hook", c: 8 },
 ];
 
 // ---------- formatting ----------
@@ -134,6 +134,19 @@ async function loadStealData() {
   stealData = await r.json();
 }
 const stealOn = () => !!stealData && $("steals").value === "model";
+
+// data/<season>-lineups.json (tools/lineup_sims/recent_lineups.py): each team's starting nine in its latest 2026
+// game against a right-handed and against a left-handed starter. A team's default lineup ("recent") is
+// the one against the hand of the other team's starter, and follows it when that starter changes.
+let lineupData = null;
+async function loadLineupData() {
+  const r = await fetch(new URL(`data/${SEASON}-lineups.json?v=1`, import.meta.url));
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  lineupData = await r.json();
+}
+const otherSide = (s) => SIDES[s === SIDES[0] ? 1 : 0];
+const handFaced = (s) => otherSide(s).sp?.throws === "L" ? "L" : "R";
+const recentOf = (s) => lineupData?.teams[s.team]?.[handFaced(s)] ?? null;
 const CATCH_SHARE = 0.05; // a spot catches if 5% of its team's catching was done from it
 // What slot i does behind the plate: [attempt, success, how much] (a catcher's: his opportunities
 // caught; a spot's: its share of the team's), or null if it didn't catch in 2026.
@@ -404,10 +417,21 @@ function defaultStarter(abbr) {
   return arms[0] ?? pitchers.get("PRHP");
 }
 function loadPreset(s) {
-  if (s.team === "MLB" && s.kind === "most_used") s.kind = "spots";
-  if (s.kind === "most_used") s.lineup = teamOf(s.team).most_used.orders[0].ids.map((id) => `p${id}`);
-  else s.lineup = Array.from({ length: 9 }, (_, i) => `s${s.team}-${i + 1}`);
+  const r = s.kind === "recent" ? recentOf(s) : null;
+  if (s.kind === "recent" && !r) s.kind = "spots"; // MLB, or no lineup data
+  s.lineup = Array.from({ length: 9 }, (_, i) => (r && entries.has(`p${r.ids[i]}`) ? `p${r.ids[i]}` : `s${s.team}-${i + 1}`));
   s.edited = false;
+}
+// After the starter a side faces changes (that starter, or the other team): a side whose lineup is its
+// most recent, untouched, takes the one against the new starter's hand; either way its panel is redrawn
+// (the Lineup menu names the hand)
+function followHand(s) {
+  if (s.kind === "recent" && !s.edited) {
+    const was = s.lineup.join();
+    loadPreset(s);
+    if (stealData && s.lineup.join() !== was) s.c = defaultCatcher(s);
+  }
+  renderSide(s);
 }
 // When the starter gives way to the bullpen: "hook" (the hook model), or outs into the game. Nine
 // innings goes to the bullpen in extra innings. Starts and the hook need 2026 starts.
@@ -459,8 +483,8 @@ function sideHTML(s) {
     <div class="loader">
       <label><b>Team</b><select id="${k}_team"></select></label>
       <label><b>Lineup</b><select id="${k}_kind">
+        <option value="recent">Most recent vs RHP</option>
         <option value="spots">Lineup spots</option>
-        <option value="most_used">Most-used batting order</option>
       </select></label>
       <div class="field">
         <label for="${k}_sp"><b>Starting pitcher</b></label>
@@ -508,7 +532,12 @@ function renderSide(s) {
   const k = s.k;
   paintTeams(document.documentElement, SIDES);
   $(`${k}_team`).value = s.team;
-  $(`${k}_kind`).querySelector("[value=most_used]").disabled = s.team === "MLB";
+  const rec = $(`${k}_kind`).querySelector("[value=recent]"), r = recentOf(s);
+  rec.disabled = !r;
+  rec.textContent = `Most recent vs ${handFaced(s)}HP`;
+  $(`${k}_kind`).title = s.kind === "recent" && r
+    ? `${teamName(s.team)}' starting nine on ${new Date(`${r.date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })} against ${teamName(r.opp)}' ${pitchers.get(`P${r.sp}`)?.name ?? "starter"}, their latest ${SEASON} game against a ${handFaced(s) === "L" ? "left" : "right"}-hander`
+    : "";
   $(`${k}_kind`).value = s.kind;
   $(`${k}_title`).textContent = teamName(s.team);
   $(`${k}_sp`).value = s.sp.name;
@@ -1226,7 +1255,7 @@ function readHash() {
   for (const s of SIDES) {
     const [team, kind, sp, plan, c] = (p.get(s.k) ?? "").split(".");
     if (team && (team === "MLB" || teamOf(team))) s.team = team;
-    if (kind === "spots" || kind === "most_used") s.kind = kind;
+    s.kind = lineupKind(kind) ?? s.kind;
     loadPreset(s);
     s.sp = pitchers.get(`P${sp}`) ?? defaultStarter(s.team);
     if (["hook", "start", "bullpen", "game"].includes(plan)) s.plan = plan;
@@ -1236,6 +1265,12 @@ function readHash() {
       s.edited = true;
     }
     s.c = /^[0-8]$/.test(c ?? "") ? Number(c) : -1;
+    if (stealData) checkCatcher(s);
+  }
+  // a default lineup faces the other team's starter, now that both are read
+  for (const s of SIDES) {
+    if (s.kind !== "recent" || s.edited) continue;
+    loadPreset(s);
     if (stealData) checkCatcher(s);
   }
   if (parkData) {
@@ -1250,6 +1285,7 @@ function readHash() {
 async function boot() {
   const hookFile = loadHookData().catch(() => null);
   const stealFile = loadStealData().catch(() => null);
+  const lineupFile = loadLineupData().catch(() => null);
   const parkFile = loadParkData().catch(() => null);
   try {
     const r = await fetch(new URL(`data/${SEASON}.json?v=5`, import.meta.url));
@@ -1262,6 +1298,7 @@ async function boot() {
   }
   await hookFile;
   await stealFile;
+  await lineupFile;
   await parkFile;
   $("park_row").hidden = !parkData;
   if (!stealData) {
@@ -1285,6 +1322,7 @@ async function boot() {
       loadPreset(s);
       if (stealData) s.c = defaultCatcher(s);
       renderSide(s);
+      followHand(otherSide(s)); // a new starter for the other team to face
       run();
     });
     $(`${k}_kind`).addEventListener("change", () => {
@@ -1308,6 +1346,7 @@ async function boot() {
       choose: (e) => {
         s.sp = e;
         renderSide(s);
+        followHand(otherSide(s));
         run();
       } });
     renderSide(s);
@@ -1335,6 +1374,7 @@ async function boot() {
       SIDES[1][x] = a[x];
     }
     SIDES.forEach(renderSide);
+    SIDES.forEach(followHand); // each now faces the other starter
     fillPark();
     run();
   });
