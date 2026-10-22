@@ -66,23 +66,12 @@ a.plpd-btn{text-decoration:none; color:var(--base-white)}
 
 /* ---------- the table and the card ---------- */
 .split{flex:1; min-height:0; display:flex; flex-direction:column}
-/* with the table open on a landscape screen wide enough for both, the two split the window: the
-   table on the left, scrolling in its own box, and the card on the right at the window's height
-   and as wide as that makes it (its 3:4 at 100cqh, less the stage's padding, is 75cqh + 18px wide
-   with it). The table's box is the split's height less its padding and the summary's 30px. */
-@media (width >= 1000px) and (aspect-ratio >= 5/4){
-  .split:has(.grades:not([hidden]) #gradesBox[open]){flex-direction:row; container-type:size; min-height:520px}
-  .split:has(.grades:not([hidden]) #gradesBox[open]) .grades{flex:1 1 0; min-width:0;
-    padding:var(--space-300) var(--space-300) var(--space-300) var(--layout-page-content-gutter)}
-  .split:has(.grades:not([hidden]) #gradesBox[open]) .plpd-table-wrap{max-height:calc(100cqh - 54px)}
-  .split:has(.grades:not([hidden]) #gradesBox[open]) .stage{flex:none; width:min(75cqh + 18px, 60cqw);
-    padding-right:var(--layout-page-content-gutter)}
-}
-/* narrower or taller, the table sits above the card, the page scrolls as a whole, and the card keeps
-   a screen's height below the table (the one-screen layout would leave it what the table does not) */
-@media (width >= 761px) and ((width < 1000px) or (aspect-ratio < 5/4)){
-  html:has(.grades:not([hidden]) #gradesBox[open]) body{height:auto; min-height:100%}
-  .grades:not([hidden]):has(#gradesBox[open]) ~ .stage{flex:none; height:calc(100vh - 24px); min-height:520px}
+/* with the table open, the two split the window below the picker: the table on top, scrolling in
+   its own box and at most half the split's height (the box that less the padding and the summary's
+   30px), and the card below in the rest. The page scrolls only below the split's 520px floor. */
+@media (min-width:761px){
+  .split:has(.grades:not([hidden]) #gradesBox[open]){container-type:size; min-height:520px}
+  .split:has(.grades:not([hidden]) #gradesBox[open]) .plpd-table-wrap{max-height:calc(50cqh - 42px)}
 }
 
 /* ---------- the card ---------- */
@@ -556,8 +545,9 @@ p,li,.note,.prov{text-wrap:pretty}
     e.preventDefault();
     pitcherSel.value = a.getAttribute('data-key');
     onPitcher();
-    var stage = $('stage');
-    if (stage.getBoundingClientRect().top > window.innerHeight * 0.5) stage.scrollIntoView({behavior: 'smooth'});
+    // on a phone the card is below the table, out of view: bring it up (in the desktop split it shows)
+    var r = $('stage').getBoundingClientRect();
+    if (Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0) < r.height / 2) $('stage').scrollIntoView({behavior: 'smooth'});
   });
   try { if (localStorage.getItem(OPEN_KEY) === '0') gradesBox.open = false; } catch (e) {}
   gradesBox.addEventListener('toggle', function () {
