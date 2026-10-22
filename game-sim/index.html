@@ -135,6 +135,7 @@ details.minor{margin-top:16px}
 .winbar i:last-child{border-radius:0 4px 4px 0}
 /* even odds: a mark at 50:50, reaching past the bar */
 .winbar::after{content:""; position:absolute; left:calc(50% - 1px); top:-5px; bottom:-5px; border-left:2px solid var(--ink); opacity:.8}
+.winbar::before{content:"50%"; position:absolute; left:50%; bottom:calc(100% + 6px); transform:translateX(-50%); font-size:11px; line-height:1; color:var(--muted); pointer-events:none}
 .section{margin-top:22px}
 .scroll{overflow-x:auto}
 table.linescore,table.box{border-collapse:collapse; font-size:13px; width:100%}
