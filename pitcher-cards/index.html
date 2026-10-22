@@ -442,7 +442,7 @@ p,li,.note,.prov{text-wrap:pretty}
   var gradesEl = $('grades'), gradesBox = $('gradesBox'), gradesSum = $('gradesSum'), gradesTable = $('gradesTable');
   var SKILLS = [['stuff', 'Stuff'], ['loc', 'Locations'], ['plv', 'PLV']];
   var PITCH_ORDER = ['FF', 'SI', 'FC', 'SL', 'ST', 'CU', 'CH', 'FS', 'KN', 'UN'];
-  var sortBy = null, sortAsc = false;   // null: the Pitcher list's own order
+  var sortBy = 'stuff', sortAsc = false; // Stuff, A+ down to F, to start; ties in the Pitcher list's order
   var gradesDrawn = null;               // the rows and data last drawn, for a re-sort
   var rowShown = null;                  // the pitcher whose row was last scrolled into view
   var OPEN_KEY = 'pitcherCards.gradesOpen';
@@ -470,7 +470,6 @@ p,li,.note,.prov{text-wrap:pretty}
     return i < 0 ? null : i;
   }
   function sorted(list) {
-    if (!sortBy) return list;
     return list.map(function (x, i) { return {x: x, i: i, k: sortKey(x, sortBy)}; }).sort(function (a, b) {
       if (a.k === null || b.k === null) return (a.k === null) - (b.k === null) || a.i - b.i;
       var c = typeof a.k === 'string' ? a.k.localeCompare(b.k) : a.k - b.k;
