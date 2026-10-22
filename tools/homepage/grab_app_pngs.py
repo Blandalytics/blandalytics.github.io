@@ -173,6 +173,10 @@ PAGES = [
     ("lineup-sims", "https://blandalytics.com/lineup-sims/#t=LAD&k=spots",
      "!document.getElementById('out').hidden && document.querySelector('#compare tr svg')",
      "[document.getElementById('out')]", 1100),
+    # the 2026 Created Runs leaders: the page's title over the top of its table
+    ("created-runs", "https://blandalytics.com/created-runs/",
+     "document.querySelector('#rows tr') && document.fonts.status === 'loaded'",
+     "[document.querySelector('.plpd-page-header'), document.getElementById('wrap')]", 1100),
 ]
 
 
