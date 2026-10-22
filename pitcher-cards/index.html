@@ -66,11 +66,24 @@ a.plpd-btn{text-decoration:none; color:var(--base-white)}
 
 /* ---------- the table and the card ---------- */
 .split{flex:1; min-height:0; display:flex; flex-direction:column}
-/* with the table open, the two split the window below the picker: the table on top, scrolling in
-   its own box and at most half the split's height (the box that less the padding and the summary's
-   30px), and the card below in the rest. The page scrolls only below the split's 520px floor. */
+/* with the table open, the two split the window below the picker, the table scrolling in its own
+   box (its height less the padding and the summary's 30px). The page scrolls only below the split's
+   520px floor. */
 @media (min-width:761px){
   .split:has(.grades:not([hidden]) #gradesBox[open]){container-type:size; min-height:520px}
+}
+/* landscape: the table on the left, the card on the right at the split's height and as wide as that
+   makes it (its 3:4 at 100cqh, less the stage's padding, is 75cqh + 18px wide with it) */
+@media (min-width:761px) and (orientation:landscape){
+  .split:has(.grades:not([hidden]) #gradesBox[open]){flex-direction:row}
+  .split:has(.grades:not([hidden]) #gradesBox[open]) .grades{flex:1 1 0; min-width:0;
+    padding:var(--space-300) var(--space-300) var(--space-300) var(--layout-page-content-gutter)}
+  .split:has(.grades:not([hidden]) #gradesBox[open]) .plpd-table-wrap{max-height:calc(100cqh - 54px)}
+  .split:has(.grades:not([hidden]) #gradesBox[open]) .stage{flex:none; width:min(75cqh + 18px, 60cqw);
+    padding-right:var(--layout-page-content-gutter)}
+}
+/* portrait: the table on top, at most half the split's height, and the card below in the rest */
+@media (min-width:761px) and (orientation:portrait){
   .split:has(.grades:not([hidden]) #gradesBox[open]) .plpd-table-wrap{max-height:calc(50cqh - 42px)}
 }
 
@@ -545,7 +558,7 @@ p,li,.note,.prov{text-wrap:pretty}
     e.preventDefault();
     pitcherSel.value = a.getAttribute('data-key');
     onPitcher();
-    // on a phone the card is below the table, out of view: bring it up (in the desktop split it shows)
+    // on a phone the card is below the table, out of view: bring it up (in a desktop split it shows)
     var r = $('stage').getBoundingClientRect();
     if (Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0) < r.height / 2) $('stage').scrollIntoView({behavior: 'smooth'});
   });
