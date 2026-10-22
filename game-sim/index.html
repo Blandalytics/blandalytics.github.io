@@ -123,13 +123,18 @@ details.minor summary:hover{color:var(--ink)}
 details.minor{margin-top:16px}
 
 /* results */
-.kpis{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px 20px; margin-bottom:12px}
-@media (max-width:640px){.kpis{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .kpis .kpi:last-child{grid-column:1 / -1}}
+/* the two teams' chances, each over its end of the bar: the away team's at the left, the home team's flush right */
+.kpis{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px 20px; margin-bottom:12px}
+.kpis .kpi:nth-child(2){text-align:right}
 .kpi span{display:block; color:var(--muted); font-size:12.5px}
 .kpi b{display:block; font-size:30px; font-weight:600; letter-spacing:-.01em; line-height:1.15}
 .kpi small{display:block; color:var(--muted); font-size:12.5px}
-.winbar{display:flex; height:8px; border-radius:4px; overflow:hidden; gap:2px; background:var(--rule)}
+.winbar{position:relative; display:flex; height:8px; border-radius:4px; gap:2px; background:var(--rule)}
 .winbar i{display:block; height:100%}
+.winbar i:first-child{border-radius:4px 0 0 4px}
+.winbar i:last-child{border-radius:0 4px 4px 0}
+/* even odds: a mark at 50:50, reaching past the bar */
+.winbar::after{content:""; position:absolute; left:calc(50% - 1px); top:-5px; bottom:-5px; border-left:2px solid var(--ink); opacity:.8}
 .section{margin-top:22px}
 .scroll{overflow-x:auto}
 table.linescore,table.box{border-collapse:collapse; font-size:13px; width:100%}
@@ -358,6 +363,6 @@ details.minor summary:hover{color:var(--brand-brand-cyan)}
   </section>
 </main>
 <script src="/shared/share-image.js?v=2"></script>
-<script type="module" src="/lineup-sims/game.js?v=18"></script>
+<script type="module" src="/lineup-sims/game.js?v=19"></script>
 </body>
 </html>
