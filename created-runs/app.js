@@ -89,12 +89,11 @@ function renderRows() {
   return list.length;
 }
 
-function renderDetails(count) {
+// The visible subtitle is fixed; the table's caption names the current ranking for screen readers.
+function renderCaption(count) {
   const col = COLS.find((c) => c.key === sort.key);
   const order = sort.dir === "desc" ? "highest first" : "lowest first";
-  const who = `${count} hitters with ${DATA.minPa}+ PA`;
-  $("details").textContent = `${DATA.season} regular season · ${who} ranked by ${col.label}, ${order} · Runs above an RE24 baseline`;
-  $("caption").textContent = `${who} ranked by ${col.label}, ${order}, ${DATA.season}`;
+  $("caption").textContent = `${count} hitters with ${DATA.minPa}+ PA ranked by ${col.label}, ${order}, ${DATA.season}`;
 }
 
 // Size the scroll box to the two header rows plus VISIBLE_ROWS body rows, measured, so it holds
@@ -111,7 +110,7 @@ function fitHeight() {
 
 function render() {
   renderHead();
-  renderDetails(renderRows());
+  renderCaption(renderRows());
   fitHeight();
 }
 

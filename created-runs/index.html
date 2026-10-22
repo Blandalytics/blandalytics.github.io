@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <title>Created Runs Leaders</title>
-<meta name="description" content="2026 hitters ranked by runs created above an RE24 baseline, at the plate and on the bases: state change on balls in play, hit luck, walks, hit-by-pitches and strikeouts; home-to-first, baserunning, steals, caught stealing and pickoffs.">
+<meta name="description" content="2026 hitters ranked by created runs above an RE24 baseline, at the plate and on the bases: state change on balls in play, hit luck, walks, hit-by-pitches and strikeouts; home-to-first, baserunning, steals, caught stealing and pickoffs.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600;700&display=swap">
@@ -102,13 +102,17 @@
 .glossary .gl-group{display:flex; flex-direction:column; gap:12px}
 .glossary h3{margin:0; font-family:var(--font-display); font-weight:700; font-size:16px; line-height:1.2; color:var(--group)}
 .status{margin:0; color:#cbd7fd}
+/* the subtitle's link: brand-cyan, underlined, cyan-300 on hover */
+.plpd-page-header__meta a{color:#55e8ff; text-decoration:underline; text-underline-offset:3px}
+.plpd-page-header__meta a:hover{color:#73efff}
+.plpd-page-header__meta a:focus-visible{outline:2px solid #55e8ff; outline-offset:2px; border-radius:2px}
 </style>
 </head>
 <body class="plpd">
 <div class="page">
   <header class="plpd-page-header">
     <h1 class="plpd-page-header__title">Created Runs Leaders</h1>
-    <p class="plpd-page-header__meta" id="details">2026 regular season · hitters with 400+ PA · Runs above an RE24 baseline</p>
+    <p class="plpd-page-header__meta"><span class="season">2026</span> - Runs Above an <a href="https://library.fangraphs.com/misc/re24/" target="_blank" rel="noopener">RE24 Baseline</a></p>
   </header>
 
   <div class="table-wrap" id="wrap" role="region" aria-label="Hitters, sortable by any stat" tabindex="0">
@@ -129,19 +133,19 @@
 
   <section class="glossary" aria-labelledby="gl-title">
     <h2 id="gl-title">Reading the table</h2>
-    <p>Every number is runs created above an RE24 baseline built from the <span class="season">2026</span> season. The table covers the <span id="gl-count">205</span> hitters with at least <span class="min-pa">400</span> PA. Pick any column heading to rank them by it, highest first; pick it again for lowest first. It shows 20 hitters at a time, so scroll it for the rest. Values shade from white at zero toward red at the highest value among these hitters and blue at the lowest.</p>
+    <p>Every number is created runs above an RE24 baseline built from the <span class="season">2026</span> season. The table covers the <span id="gl-count">205</span> hitters with at least <span class="min-pa">400</span> PA. Pick any column heading to rank them by it, highest first; pick it again for lowest first. It shows 20 hitters at a time, so scroll it for the rest. Values shade from white at zero toward red at the highest value among these hitters and blue at the lowest.</p>
     <div class="gl-groups">
       <div class="gl-group g-created">
         <h3>Created Runs</h3>
         <dl>
-          <div><dt>CR</dt><dd>Total runs created, batting plus running.</dd></div>
+          <div><dt>CR</dt><dd>Total created runs, batting plus running.</dd></div>
           <div><dt>CR/600</dt><dd>CR scaled to 600 plate appearances.</dd></div>
         </dl>
       </div>
       <div class="gl-group g-batting">
         <h3>Batting</h3>
         <dl>
-          <div><dt>bCR</dt><dd>Runs created at the plate: every column in this group added together.</dd></div>
+          <div><dt>bCR</dt><dd>Created runs at the plate: every column in this group added together.</dd></div>
           <div><dt>State Change</dt><dd>Expected runs from each ball in play, given the base-out state, exit velocity, launch angle and spray angle.</dd></div>
           <div><dt>Hit Luck</dt><dd>How much more or less a line drive, fly ball or popup was worth than its contact deserved: a blooper falling in, or a hard liner caught.</dd></div>
           <div><dt>BB, HBP, K</dt><dd>Runs from walks (intentional included), hit-by-pitches and strikeouts.</dd></div>
@@ -150,7 +154,7 @@
       <div class="gl-group g-running">
         <h3>Running</h3>
         <dl>
-          <div><dt>rCR</dt><dd>Runs created on the bases: every column in this group added together.</dd></div>
+          <div><dt>rCR</dt><dd>Created runs on the bases: every column in this group added together.</dd></div>
           <div><dt>Home-to-First</dt><dd>How much more or less a ground ball was worth than its contact deserved: beating out the throw, or being thrown out on a grounder that should have been a hit.</dd></div>
           <div><dt>BsR</dt><dd>Extra bases taken or given away on balls in play, against the average runner from the same spot.</dd></div>
           <div><dt>SB</dt><dd>Runs from stolen bases.</dd></div>
@@ -160,6 +164,6 @@
     </div>
   </section>
 </div>
-<script type="module" src="app.js?v=1"></script>
+<script type="module" src="app.js?v=2"></script>
 </body>
 </html>
