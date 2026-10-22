@@ -15,7 +15,10 @@
  *   live/cards/index.json                  the games and pitchers, as a day manifest
  *                                          (cards/days/<date>.json) plus status, final
  *                                          and each pitcher's pitch count and box-score
- *                                          line at his build
+ *                                          line at his build, and his grades for the
+ *                                          picker's table: the card's skills (mean
+ *                                          Stuff, Location and PLV) and each pitch
+ *                                          type's Stuff+
  *
  * Inputs the Python pipeline publishes to the bucket: cards/models/scorer.pack (the
  * models, see bundle.js), cards/pitchers/<id>.json (packs.py) and cards/arms/<year>.json.
@@ -114,6 +117,8 @@ function entry(pk, card, pitches, box) {
     file: `${DATA_URL}/live/cards/${pk}-${card.pitcher_id}.json`,
     pitches,
     box,
+    skills: card.skills,
+    stuff: Object.fromEntries(card.types.map((t) => [t.code, t.values["plvStuff+"]])),
   };
 }
 
@@ -151,7 +156,9 @@ export class LiveCards {
     const final = status.abstractGameState === "Final";
     const lastPass = final && !followed?.final; // every pitcher once more when it ends
     const built = new Map((followed?.pitchers ?? []).map((p) => [p.id, p]));
-    const moved = (pid) => built.get(pid)?.pitches !== counts.get(pid) || built.get(pid)?.box !== boxLine(feed, pid);
+    // an entry from before the index carried the grades (`stuff`) is rebuilt once too
+    const moved = (pid) => built.get(pid)?.pitches !== counts.get(pid) || built.get(pid)?.box !== boxLine(feed, pid)
+      || !built.get(pid)?.stuff;
     const todo = pitcherOrder(feed).filter((pid) => counts.has(pid) && (lastPass || moved(pid)));
     const n = todo.length ? await this.build(feed, rows, todo, counts) : 0;
     const game = this.index.games[pk];

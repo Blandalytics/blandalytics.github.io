@@ -35,6 +35,41 @@ body.plpd{display:flex; flex-direction:column}
 .open[hidden],.btn[hidden]{display:none}
 a.plpd-btn{text-decoration:none; color:var(--base-white)}
 
+/* ---------- the day's grades: every pitcher the Pitcher list offers ---------- */
+.grades{flex:none; padding:var(--space-300) var(--layout-page-content-gutter) 0}
+.grades[hidden]{display:none}
+.grades summary{cursor:pointer; width:max-content; padding:2px 0 8px; font-family:var(--font-display); font-size:14px;
+  font-weight:600; color:var(--text-text-cell)}
+.grades summary .n{color:var(--text-text-nav); font-weight:500}
+.grades .plpd-table-wrap{max-height:min(34vh, 380px)}
+#gradesTable{width:100%}
+#gradesTable th,#gradesTable td{padding:6px 10px; text-align:center}
+#gradesTable thead th{position:sticky; top:0; z-index:2; font-size:13px}
+/* the group labels over the columns, then the columns: the second row sticks below the first */
+#gradesTable thead tr.group th{height:26px; padding-block:4px; color:var(--text-text-nav); font-weight:500}
+#gradesTable thead tr.cols th{top:26px}
+#gradesTable th button{all:unset; cursor:pointer}
+#gradesTable th button:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:2px}
+#gradesTable thead th:hover{color:var(--data-table-pl-data-table-cell-text)}
+#gradesTable td{font-size:14px; background:var(--data-table-pl-data-table-scroll-base-bg)}
+#gradesTable .who{position:sticky; left:0; z-index:1; text-align:left}
+#gradesTable thead .who{z-index:3}
+#gradesTable td.who{max-width:300px; overflow:hidden; text-overflow:ellipsis}
+#gradesTable td.who a{color:var(--brand-brand-cyan); text-decoration:none; font-family:var(--font-display); font-weight:600}
+#gradesTable td.who a:hover,#gradesTable td.who a:focus-visible{text-decoration:underline}
+#gradesTable td.who .meta{margin-left:8px; color:var(--text-text-nav); font-size:13px}
+#gradesTable td.g{font-family:var(--font-display); font-weight:700}
+#gradesTable .first{border-left:1px solid var(--data-table-pl-data-table-header-border)}
+#gradesTable tbody tr:hover td{background:var(--data-table-pl-data-table-row-hover-bg)}
+#gradesTable tbody tr.on td{background:var(--data-table-pl-data-table-row-open-bg)}
+#gradesTable tbody tr:last-child td{border-bottom:0}
+/* with the table open the page scrolls as a whole, and the card keeps a screen's height below it
+   (the one-screen layout would leave it what the table does not take) */
+@media (min-width:761px){
+  html:has(.grades:not([hidden]) #gradesBox[open]) body{height:auto; min-height:100%}
+  .grades:not([hidden]):has(#gradesBox[open]) ~ .stage{flex:none; height:calc(100vh - 24px); min-height:520px}
+}
+
 /* ---------- the card ---------- */
 .stage{flex:1; min-height:0; position:relative; display:flex; justify-content:center; overflow:auto; padding:var(--space-300)}
 .card,iframe{border:0; background:var(--card-card-bg); height:100%; aspect-ratio:3/4; max-width:100%; border-radius:var(--radius-xl); display:block; overflow:hidden;
@@ -76,6 +111,10 @@ a.plpd-btn{text-decoration:none; color:var(--base-white)}
   .stage{flex:none; overflow:visible; display:block; padding:8px; min-height:160px}
   .card,iframe{width:100%; height:auto}
   .note,.prov{padding-inline:12px}
+  .grades{padding:8px 8px 0}
+  .grades .plpd-table-wrap{max-height:55vh}
+  #gradesTable th,#gradesTable td{padding:6px 8px}
+  #gradesTable td.who{max-width:190px}
 }
 @media (max-width:359px){
   .field:has(#date){flex:1 1 100%}     /* too narrow for both: the date takes the row, the level the next */
@@ -121,7 +160,14 @@ p,li,.note,.prov{text-wrap:pretty}
   <a class="open plpd-btn" id="open" href="#" target="_blank" rel="noopener" hidden>Open full page ↗</a>
 </header>
 
-<main class="stage">
+<section class="grades" id="grades" hidden>
+  <details id="gradesBox" open>
+    <summary id="gradesSum">Grades</summary>
+    <div class="plpd-table-wrap"><table class="plpd-table" id="gradesTable"></table></div>
+  </details>
+</section>
+
+<main class="stage" id="stage">
   <div class="card" id="card" hidden></div>
   <iframe id="frame" title="PLV Pitcher Game Card" hidden></iframe>
   <div class="empty" id="empty">Pick a date, a game and a pitcher.</div>
@@ -139,7 +185,7 @@ p,li,.note,.prov{text-wrap:pretty}
 </footer>
 
 <script src="/shared/share-image.js?v=2"></script>
-<script src="card.js?v=3"></script>
+<script src="card.js?v=4"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -248,25 +294,33 @@ p,li,.note,.prov{text-wrap:pretty}
       return [pk, g.away + ' @ ' + g.home + (g.status && isLive() ? '  ·  ' + g.status : '')];
     })), true);
   }
-  function pitcherItems() {
-    var pk = gameSel.value, items = [];
-    if (pk && day[pk]) {                // the game's pitchers in the card order: starters first
-      day[pk].pitchers.forEach(function (p) {
-        items.push([pk + '-' + p.id, p.name + ' (' + team(day[pk], p) + (p.start ? ', SP' : '') + ')']);
-      });
-      return items;
-    }
-    pks().forEach(function (k) {        // every pitcher that day, by last name
-      day[k].pitchers.forEach(function (p) {
-        items.push([k + '-' + p.id, p.name + '  ·  ' + team(day[k], p) + ' ' + opp(day[k], p), lastName(p.name)]);
-      });
+  // the pitchers on offer, for the Pitcher list and the grades table alike: a game's in the
+  // card order (starters first), or every pitcher that day by last name
+  function oneGame() { return gameSel.value && day[gameSel.value] ? gameSel.value : null; }
+  function matchup(r) { return team(r.game, r.p) + ' ' + opp(r.game, r.p); }
+  function pitcherRows() {
+    var rows = [];
+    (oneGame() ? [oneGame()] : pks()).forEach(function (k) {
+      day[k].pitchers.forEach(function (p) { rows.push({pk: k, game: day[k], p: p, key: k + '-' + p.id}); });
     });
-    items.sort(function (a, b) { return a[2].localeCompare(b[2]) || a[1].localeCompare(b[1]); });
-    return items;
+    if (!oneGame()) {
+      rows.sort(function (a, b) {
+        return lastName(a.p.name).localeCompare(lastName(b.p.name))
+          || (a.p.name + matchup(a)).localeCompare(b.p.name + matchup(b));
+      });
+    }
+    return rows;
+  }
+  function pitcherItems() {
+    return pitcherRows().map(function (r) {
+      return [r.key, oneGame() ? r.p.name + ' (' + team(r.game, r.p) + (r.p.start ? ', SP' : '') + ')'
+        : r.p.name + '  ·  ' + matchup(r)];
+    });
   }
   function fillPitchers() {
     fill(pitcherSel, pitcherItems(), true);
     onPitcher();
+    renderGrades();
   }
 
   // ---- the card itself: a day's are in one data file, a live one in its own, versioned
@@ -327,6 +381,7 @@ p,li,.note,.prov{text-wrap:pretty}
   }
   function onPitcher() {
     var sel = selected();
+    markGradeRow();
     if (!sel) {
       clearStage('No cards match.');
       document.title = 'PLV Pitcher Game Card';
@@ -360,6 +415,124 @@ p,li,.note,.prov{text-wrap:pretty}
     // an old page comes from the bucket, another origin, so it is asked by message
     else frame.contentWindow.postMessage({type: 'cmp', year: cmpYear()}, '*');
   }
+
+  // ---- the grades table: every pitcher the Pitcher list offers, with his Stuff, Locations,
+  // PLV and box-score letters and each pitch type's Stuff+, as his card has them. A day's
+  // come from its card data (fetched for the card on stage anyway), a live game's from the
+  // live index. A name opens that card; a column header sorts by it.
+  var gradesEl = $('grades'), gradesBox = $('gradesBox'), gradesSum = $('gradesSum'), gradesTable = $('gradesTable');
+  var SKILLS = [['stuff', 'Stuff'], ['loc', 'Locations'], ['plv', 'PLV']];
+  var PITCH_ORDER = ['FF', 'SI', 'FC', 'SL', 'ST', 'CU', 'CH', 'FS', 'KN', 'UN'];
+  var sortBy = null, sortAsc = false;   // null: the Pitcher list's own order
+  var gradesDrawn = null;               // the rows and data last drawn, for a re-sort
+  var OPEN_KEY = 'pitcherCards.gradesOpen';
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; });
+  }
+  function gradesOf(r, data) {
+    var card = data && data[r.key];
+    var g = {game: r.p.grade || '-', pitches: {}};
+    SKILLS.forEach(function (s) {
+      g[s[0]] = card ? PitcherCard.skill(card, s[0]) : r.p.skills ? PitcherCard.letter(r.p.skills[s[0]], s[0]) : '-';
+    });
+    if (card) card.types.forEach(function (t) { g.pitches[t.code] = t.values['plvStuff+']; });
+    else if (r.p.stuff) g.pitches = r.p.stuff;
+    return g;
+  }
+  function sortKey(x, col) {                // null sorts last either way
+    if (col === 'who') return lastName(x.r.p.name) + ' ' + x.r.p.name;
+    if (col.indexOf('pt:') === 0) {
+      var v = x.g.pitches[col.slice(3)];
+      return v == null ? null : v;
+    }
+    var i = PitcherCard.LETTERS.indexOf(x.g[col]);
+    return i < 0 ? null : i;
+  }
+  function sorted(list) {
+    if (!sortBy) return list;
+    return list.map(function (x, i) { return {x: x, i: i, k: sortKey(x, sortBy)}; }).sort(function (a, b) {
+      if (a.k === null || b.k === null) return (a.k === null) - (b.k === null) || a.i - b.i;
+      var c = typeof a.k === 'string' ? a.k.localeCompare(b.k) : a.k - b.k;
+      return (sortAsc ? c : -c) || a.i - b.i;
+    }).map(function (y) { return y.x; });
+  }
+  function headCell(col, label, cls, title) {
+    var sort = sortBy === col ? (sortAsc ? 'ascending' : 'descending') : 'none';
+    return '<th scope="col" class="' + (cls || '') + '" aria-sort="' + sort + '"' + (title ? ' title="' + esc(title) + '"' : '')
+      + '><button type="button" data-sort="' + col + '">' + label + '</button></th>';
+  }
+  function letterCell(l, cls) {
+    return '<td class="g' + (cls ? ' ' + cls : '') + '" style="color:' + (PitcherCard.GRADE_COLORS[l] || '') + '">' + esc(l) + '</td>';
+  }
+  function drawGrades(rows, data) {
+    gradesDrawn = {rows: rows, data: data};
+    var list = rows.map(function (r) { return {r: r, g: gradesOf(r, data)}; });
+    var codes = PITCH_ORDER.filter(function (c) { return list.some(function (x) { return c in x.g.pitches; }); });
+    var head = '<thead><tr class="group"><th class="who"></th><th colspan="4" class="first">Grades</th>'
+      + (codes.length ? '<th colspan="' + codes.length + '" class="first">Stuff+ by pitch type</th>' : '') + '</tr>'
+      + '<tr class="cols">' + headCell('who', 'Pitcher', 'who')
+      + SKILLS.map(function (s, i) { return headCell(s[0], s[1], i ? '' : 'first'); }).join('')
+      + headCell('game', 'Box Score')
+      + codes.map(function (c, i) {
+        return headCell('pt:' + c, '<span style="color:' + PitcherCard.MARKER_COLORS[c] + '">' + c + '</span>',
+          i ? '' : 'first', PitcherCard.PITCH_NAMES[c] + ' Stuff+');
+      }).join('') + '</tr></thead>';
+    var body = sorted(list).map(function (x) {
+      var r = x.r, g = x.g;
+      return '<tr data-key="' + r.key + '"' + (r.key === pitcherSel.value ? ' class="on"' : '') + '>'
+        + '<td class="who"><a href="#' + r.key + '" data-key="' + r.key + '">' + esc(r.p.name) + '</a>'
+        + '<span class="meta">' + esc(matchup(r)) + (r.p.start ? ' · SP' : '') + '</span></td>'
+        + SKILLS.map(function (s, i) { return letterCell(g[s[0]], i ? '' : 'first'); }).join('')
+        + letterCell(g.game)
+        + codes.map(function (c, i) {
+          var cls = i ? '' : ' class="first"';
+          if (!(c in g.pitches)) return '<td' + cls + '></td>';
+          var cell = PitcherCard.statCell(c, 'plvStuff+', g.pitches[c]);
+          return '<td' + cls + ' style="color:' + cell.color + '">' + esc(cell.text) + '</td>';
+        }).join('') + '</tr>';
+    }).join('');
+    var wrap = gradesTable.parentNode, top = wrap.scrollTop, left = wrap.scrollLeft;
+    gradesTable.innerHTML = head + '<tbody>' + body + '</tbody>';
+    wrap.scrollTop = top; wrap.scrollLeft = left;
+    gradesSum.innerHTML = 'Grades and Stuff+ <span class="n">· ' + rows.length + ' pitcher' + (rows.length === 1 ? '' : 's') + '</span>';
+    gradesEl.hidden = false;
+  }
+  function renderGrades() {
+    var rows = pitcherRows();
+    if (!rows.length) { gradesEl.hidden = true; gradesDrawn = null; return; }
+    var date = dateSel.value, lvl = level;
+    (isLive() ? Promise.resolve(null) : loadData(date)).then(function (data) {
+      if (dateSel.value === date && level === lvl) drawGrades(rows, data);
+    });
+  }
+  function markGradeRow() {
+    [].forEach.call(gradesTable.querySelectorAll('tbody tr'), function (tr) {
+      tr.classList.toggle('on', tr.getAttribute('data-key') === pitcherSel.value);
+    });
+  }
+  gradesTable.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-sort]');
+    if (b && gradesDrawn) {
+      var col = b.getAttribute('data-sort');
+      if (sortBy === col) sortAsc = !sortAsc;
+      else { sortBy = col; sortAsc = col === 'who'; }  // names A-Z, grades best first
+      drawGrades(gradesDrawn.rows, gradesDrawn.data);
+      return;
+    }
+    var a = e.target.closest('a[data-key]');
+    // a plain click opens the card here; with a modifier the link opens a new tab as usual
+    if (!a || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    pitcherSel.value = a.getAttribute('data-key');
+    onPitcher();
+    var stage = $('stage');
+    if (stage.getBoundingClientRect().top > window.innerHeight * 0.5) stage.scrollIntoView({behavior: 'smooth'});
+  });
+  try { if (localStorage.getItem(OPEN_KEY) === '0') gradesBox.open = false; } catch (e) {}
+  gradesBox.addEventListener('toggle', function () {
+    try { localStorage.setItem(OPEN_KEY, gradesBox.open ? '1' : '0'); } catch (e) {}
+  });
 
   // ---- loading a date ----
   function loadLive() {
@@ -400,6 +573,7 @@ p,li,.note,.prov{text-wrap:pretty}
         fillGames();
         fill(pitcherSel, pitcherItems(), true);
         onPitcher();                   // redraws only if the pitcher's count has moved
+        renderGrades();
       }).catch(function () {});
     }, LIVE_POLL_MS);
   }
@@ -488,6 +662,7 @@ p,li,.note,.prov{text-wrap:pretty}
       fill(pitcherSel, pitcherItems(), false);
       pitcherSel.value = m[1] + '-' + m[2];
       onPitcher();
+      renderGrades();
       watchLive();
     });
     return true;

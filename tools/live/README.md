@@ -41,7 +41,7 @@ Objects written:
 | `live/games/<gamePk>.json` | plays and pitches (type, velo, location, spin, EV/LA) for tracked games | 20s, 1h once final |
 | `state/games.json` | what the poller knows about each game (tracked? last feed timestamp? finalised?); not served | — |
 | `live/cards/<gamePk>-<pitcherId>.json` | one MLB pitcher's card dict, as `tools/pitcher_card/build_data.py` makes it | 60s |
-| `live/cards/index.json` | the games and pitchers with cards, as a day manifest plus each game's status and each pitcher's pitch count at his last build | 15s |
+| `live/cards/index.json` | the games and pitchers with cards, as a day manifest plus each game's status and each pitcher's pitch count and box-score line at his last build, and his grades for the picker's table (the card's `skills` and each pitch type's Stuff+ as `stuff`) | 15s |
 
 The feed is fetched with a `fields=` filter (~400 KB instead of ~800 KB per game)
 and a game is only re-written when the feed's `metaData.timeStamp` has moved. A

@@ -74,6 +74,11 @@ const pid = game.pitchers[0].id;
 const want = build({ feed: half, pitcherId: pid, rows: halfRows.filter((r) => r.pitcher === pid), values, scale: b.scale, xslg: b.xslg, arm: arms[pid] ?? {}, pack: packs[pid] });
 check("the card file is build()'s dict", store.get(`live/cards/${pk}-${pid}.json`) === JSON.stringify(want));
 check("entries point at the card files", game.pitchers.every((p) => p.file.endsWith(`/live/cards/${pk}-${p.id}.json`)));
+check("entries carry the card's grades for the picker's table", game.pitchers.every((p) => {
+  const c = JSON.parse(store.get(`live/cards/${pk}-${p.id}.json`));
+  return JSON.stringify(p.skills) === JSON.stringify(c.skills)
+    && c.types.every((t) => p.stuff[t.code] === t.values["plvStuff+"]);
+}));
 
 // the same feed again: nothing has moved
 check("an unchanged feed rebuilds nothing", (await tick(half, Date.UTC(2026, 8, 20, 22, 1))) === 0);

@@ -160,6 +160,13 @@ linked in the picker as `pitcher-cards/#<gamePk>-<pitcherId>`, at any level (the
 both pages note that PLV and Location are provisional. Either page reads an index from before
 the levels as MLB's alone.
 
+Above the card, the picker's grades table lists every pitcher the Pitcher list offers (the
+chosen date, level and game), with his Stuff, Locations, PLV and box-score letters and each
+pitch type's Stuff+, as his card shows them; a header sorts by its column and a name opens
+that card. A day's rows come from its card data (the file the card on stage is drawn from), a
+live game's from the live index, whose entries carry each card's `skills` and per-type Stuff+
+(`stuff`). The table collapses, and remembers it.
+
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones
   [Blandalytics/statcast_scraper](https://github.com/Blandalytics/statcast_scraper) (the
