@@ -47,6 +47,7 @@ CROPS = {
     "promotion-timelines": (0.0, 0.0),   # top of the leaderboard
     "lineup-sims": (0.0, 0.0),           # the KPIs and the comparison strips
     "game-sim": None,                    # square already: the score grid's share image
+    "created-runs": (0.0, 0.0),          # the title over the top of the leaderboard: names, CR and the batting columns
 }
 
 
