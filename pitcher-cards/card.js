@@ -24,6 +24,9 @@
 //   PitcherCard.copyPng(svgEl, name)     ...onto the clipboard, else downloaded
 //   PitcherCard.filename(card)           the name to save it under
 //   PitcherCard.letter(value, grade)     the letter for a mean Stuff, Location or PLV
+//   PitcherCard.skill(card, key)         a card's stuff, loc, plv, loc_vl or loc_vr letter
+//   PitcherCard.statCell(code, stat, v)  a table stat's text and colour, as the card shows it
+//   PitcherCard.GRADE_COLORS, PITCH_NAMES, MARKER_COLORS, LETTERS
 //
 // A classic <script> defines window.PitcherCard; require() returns the same object.
 
@@ -980,6 +983,6 @@
 
   return {
     VERSION, LOGO, GRADE_CUTS, svg, draw, show, comparisonYear, png, download, copyPng, filename, letter,
-    fixed, pyRound,
+    skill, statCell: cell, GRADE_COLORS, PITCH_NAMES, MARKER_COLORS, LETTERS, fixed, pyRound,
   };
 });
