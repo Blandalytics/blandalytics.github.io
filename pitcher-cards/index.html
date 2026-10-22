@@ -39,7 +39,7 @@ a.plpd-btn{text-decoration:none; color:var(--base-white)}
 .grades{flex:none; padding:var(--space-300) var(--layout-page-content-gutter) 0}
 .grades[hidden]{display:none}
 .grades summary{cursor:pointer; width:max-content; padding:2px 0 8px; font-family:var(--font-display); font-size:14px;
-  font-weight:600; color:var(--text-text-cell)}
+  font-weight:600; line-height:20px; color:var(--text-text-cell)}
 .grades summary .n{color:var(--text-text-nav); font-weight:500}
 .grades .plpd-table-wrap{max-height:min(34vh, 380px)}
 #gradesTable{width:100%}
@@ -63,9 +63,24 @@ a.plpd-btn{text-decoration:none; color:var(--base-white)}
 #gradesTable tbody tr:hover td{background:var(--data-table-pl-data-table-row-hover-bg)}
 #gradesTable tbody tr.on td{background:var(--data-table-pl-data-table-row-open-bg)}
 #gradesTable tbody tr:last-child td{border-bottom:0}
-/* with the table open the page scrolls as a whole, and the card keeps a screen's height below it
-   (the one-screen layout would leave it what the table does not take) */
-@media (min-width:761px){
+
+/* ---------- the table and the card ---------- */
+.split{flex:1; min-height:0; display:flex; flex-direction:column}
+/* with the table open on a landscape screen wide enough for both, the two split the window: the
+   table on the left, scrolling in its own box, and the card on the right at the window's height
+   and as wide as that makes it (its 3:4 at 100cqh, less the stage's padding, is 75cqh + 18px wide
+   with it). The table's box is the split's height less its padding and the summary's 30px. */
+@media (width >= 1000px) and (aspect-ratio >= 5/4){
+  .split:has(.grades:not([hidden]) #gradesBox[open]){flex-direction:row; container-type:size; min-height:520px}
+  .split:has(.grades:not([hidden]) #gradesBox[open]) .grades{flex:1 1 0; min-width:0;
+    padding:var(--space-300) var(--space-300) var(--space-300) var(--layout-page-content-gutter)}
+  .split:has(.grades:not([hidden]) #gradesBox[open]) .plpd-table-wrap{max-height:calc(100cqh - 54px)}
+  .split:has(.grades:not([hidden]) #gradesBox[open]) .stage{flex:none; width:min(75cqh + 18px, 60cqw);
+    padding-right:var(--layout-page-content-gutter)}
+}
+/* narrower or taller, the table sits above the card, the page scrolls as a whole, and the card keeps
+   a screen's height below the table (the one-screen layout would leave it what the table does not) */
+@media (width >= 761px) and ((width < 1000px) or (aspect-ratio < 5/4)){
   html:has(.grades:not([hidden]) #gradesBox[open]) body{height:auto; min-height:100%}
   .grades:not([hidden]):has(#gradesBox[open]) ~ .stage{flex:none; height:calc(100vh - 24px); min-height:520px}
 }
@@ -160,6 +175,7 @@ p,li,.note,.prov{text-wrap:pretty}
   <a class="open plpd-btn" id="open" href="#" target="_blank" rel="noopener" hidden>Open full page ↗</a>
 </header>
 
+<div class="split" id="split">
 <section class="grades" id="grades" hidden>
   <details id="gradesBox" open>
     <summary id="gradesSum">Grades</summary>
@@ -172,6 +188,7 @@ p,li,.note,.prov{text-wrap:pretty}
   <iframe id="frame" title="PLV Pitcher Game Card" hidden></iframe>
   <div class="empty" id="empty">Pick a date, a game and a pitcher.</div>
 </main>
+</div>
 
 <div class="prov" id="prov" hidden><b>PLV and Location are provisional below MLB</b> (the models aren't yet calibrated to minor-league strike zones and parks).</div>
 <footer class="note">
@@ -425,6 +442,7 @@ p,li,.note,.prov{text-wrap:pretty}
   var PITCH_ORDER = ['FF', 'SI', 'FC', 'SL', 'ST', 'CU', 'CH', 'FS', 'KN', 'UN'];
   var sortBy = null, sortAsc = false;   // null: the Pitcher list's own order
   var gradesDrawn = null;               // the rows and data last drawn, for a re-sort
+  var rowShown = null;                  // the pitcher whose row was last scrolled into view
   var OPEN_KEY = 'pitcherCards.gradesOpen';
 
   function esc(s) {
@@ -497,6 +515,7 @@ p,li,.note,.prov{text-wrap:pretty}
     wrap.scrollTop = top; wrap.scrollLeft = left;
     gradesSum.innerHTML = 'Grades and Stuff+ <span class="n">· ' + rows.length + ' pitcher' + (rows.length === 1 ? '' : 's') + '</span>';
     gradesEl.hidden = false;
+    showGradeRow();
   }
   function renderGrades() {
     var rows = pitcherRows();
@@ -510,6 +529,17 @@ p,li,.note,.prov{text-wrap:pretty}
     [].forEach.call(gradesTable.querySelectorAll('tbody tr'), function (tr) {
       tr.classList.toggle('on', tr.getAttribute('data-key') === pitcherSel.value);
     });
+    showGradeRow();
+  }
+  // a newly picked pitcher's row, scrolled into the table's own box (never the page) clear of its
+  // sticky head; once a pick, so a live redraw doesn't undo the reader's own scrolling
+  function showGradeRow() {
+    var tr = gradesTable.querySelector('tbody tr.on'), wrap = gradesTable.parentNode;
+    if (!tr || !gradesBox.open || rowShown === pitcherSel.value) return;
+    rowShown = pitcherSel.value;
+    var head = gradesTable.tHead.offsetHeight, top = tr.offsetTop, bottom = top + tr.offsetHeight;
+    if (top - head < wrap.scrollTop) wrap.scrollTop = top - head;
+    else if (bottom > wrap.scrollTop + wrap.clientHeight) wrap.scrollTop = bottom - wrap.clientHeight;
   }
   gradesTable.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-sort]');
@@ -532,6 +562,7 @@ p,li,.note,.prov{text-wrap:pretty}
   try { if (localStorage.getItem(OPEN_KEY) === '0') gradesBox.open = false; } catch (e) {}
   gradesBox.addEventListener('toggle', function () {
     try { localStorage.setItem(OPEN_KEY, gradesBox.open ? '1' : '0'); } catch (e) {}
+    showGradeRow();
   });
 
   // ---- loading a date ----
