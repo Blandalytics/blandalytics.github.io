@@ -135,7 +135,7 @@ async function loadStealData() {
 }
 const stealOn = () => !!stealData && $("steals").value === "model";
 
-// data/<season>-lineups.json (pipeline/recent_lineups.py): each team's starting nine in its latest 2026
+// data/<season>-lineups.json (tools/lineup_sims/recent_lineups.py): each team's starting nine in its latest 2026
 // game against a right-handed and against a left-handed starter. A team's default lineup ("recent") is
 // the one against the hand of the other team's starter, and follows it when that starter changes.
 let lineupData = null;

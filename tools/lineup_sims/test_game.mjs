@@ -379,7 +379,7 @@ function bookkeeping(res, teams, label) {
   check(steps.some((s) => contrast(amber, s) < 3), "amber alone doesn't read on the bright squares (why the keyline is there)");
 }
 
-// 4d. default lineups (data/<season>-lineups.json, pipeline/recent_lineups.py): each club's latest starting nine
+// 4d. default lineups (data/<season>-lineups.json, tools/lineup_sims/recent_lineups.py): each club's latest starting nine
 // against a right-handed and a left-handed starter
 {
   const LU = JSON.parse(readFileSync(join(dataDir, `${season}-lineups.json`), "utf8"));
