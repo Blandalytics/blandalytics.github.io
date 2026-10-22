@@ -442,7 +442,7 @@ p,li,.note,.prov{text-wrap:pretty}
   var gradesEl = $('grades'), gradesBox = $('gradesBox'), gradesSum = $('gradesSum'), gradesTable = $('gradesTable');
   var SKILLS = [['stuff', 'Stuff'], ['loc', 'Locations'], ['plv', 'PLV']];
   var PITCH_ORDER = ['FF', 'SI', 'FC', 'SL', 'ST', 'CU', 'CH', 'FS', 'KN', 'UN'];
-  var sortBy = null, sortAsc = false;   // null: the Pitcher list's own order
+  var sortBy = 'stuff', sortAsc = false; // Stuff, A+ down to F (ties in the Pitcher list's order), until a header is picked
   var gradesDrawn = null;               // the rows and data last drawn, for a re-sort
   var rowShown = null;                  // the pitcher whose row was last scrolled into view
   var OPEN_KEY = 'pitcherCards.gradesOpen';

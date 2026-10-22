@@ -162,7 +162,8 @@ the levels as MLB's alone.
 
 The picker's grades table lists every pitcher the Pitcher list offers (the chosen date, level
 and game), with his Stuff, Locations, PLV and box-score letters and each pitch type's Stuff+,
-as his card shows them; a header sorts by its column and a name opens that card. A day's rows
+as his card shows them, sorted by Stuff from A+ down to F; a header sorts by its column instead
+and a name opens that card. A day's rows
 come from its card data (the file the card on stage is drawn from), a live game's from the
 live index, whose entries carry each card's `skills` and per-type Stuff+ (`stuff`). On a
 desktop the two split the window below the picker, the table scrolling in its own box: on a
