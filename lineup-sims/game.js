@@ -497,7 +497,7 @@ function sideHTML(s) {
       <label><b>He pitches</b><select id="${k}_plan">
         <option value="hook">Modeled hook</option>
         <option value="start">Average start</option>
-        <option value="bullpen">Bullpen day (opener)</option>
+        <option value="bullpen">Bullpen day</option>
         <option value="game">Nine innings</option>
       </select></label>
       <label class="catcher"><b>Catcher</b><select id="${k}_c"></select></label>
@@ -545,7 +545,7 @@ function renderSide(s) {
   opt("start").disabled = !s.sp.gs;
   opt("hook").disabled = !s.sp.gs || !hookData;
   opt("start").textContent = s.sp.gs ? `Average start (${fmtIP(startOutsOf(s.sp))} IP)` : "Average start";
-  opt("bullpen").textContent = `Bullpen day (opener, ${fmtIP(data.pitching.opener.outs)} IP)`;
+  opt("bullpen").textContent = `Bullpen day (${fmtIP(data.pitching.opener.outs)} IP)`;
   if (opt(s.plan).disabled) s.plan = opt("start").disabled ? "bullpen" : "start";
   sel.value = s.plan;
   // his 2026 line, then who follows him
@@ -824,8 +824,6 @@ function renderResults() {
   const same = sides[0].team === sides[1].team;
   kpi(`${same ? "Away" : name(0)} win`, pct(res.wins[0] / games), `${f2(per(runs[0]))} runs a game`, "var(--t-away)");
   kpi(`${same ? "Home" : name(1)} win`, pct(res.wins[1] / games), `${f2(per(runs[1]))} runs a game`, "var(--t-home)");
-  kpi("Extra innings", pct(res.extras / games), `Walk-offs ${pct(res.walkoffs / games)} · ${f2(per(res.innings))} innings a game`
-    + (res.ties ? ` · ${res.ties} called at 40 innings` : ""));
   const bar = $("winbar");
   bar.children[0].style.width = `${(100 * res.wins[0]) / games}%`;
   bar.children[1].style.width = `${(100 * res.wins[1]) / games}%`;
