@@ -6,7 +6,7 @@
 // sim.js is the Lineup Sim's engine: when its ?v= changes there (app.js), change it here too, or the
 // two pages load two copies of it
 import { prepare } from "./sim.js?v=8";
-import { prepareSteal, simulateGames } from "./game-sim.js?v=4";
+import { prepareSteal, simulateGames } from "./game-sim.js?v=5";
 
 let model = null, steal = null;
 

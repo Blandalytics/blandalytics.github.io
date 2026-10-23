@@ -8,7 +8,7 @@
 // sim.js is the Lineup Sim's engine: when its ?v= changes there (app.js), change it here too, or the
 // two pages load two copies of it
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
-import { BAT, HIST_BINS, HIST_NP_WIDTH, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=4";
+import { BAT, HIST_BINS, HIST_NP_WIDTH, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=5";
 import { BULLPEN_LEAD, PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=3";
 import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, latestGame, lineupKind, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=7";
 import { teamColors } from "./team-colors.js?v=2";
@@ -588,7 +588,7 @@ function renderLineup(s) {
     w.textContent = fmtRate(wobaOf(e.counts));
     if (e.kind === "player" && e.pa < 100) {
       w.classList.add("small");
-      w.title = "Small sample: Sim settings can add MLB-average PA";
+      w.title = "Small sample: Sim Settings can add MLB-average PA";
     }
     const [upB, downB] = tr.querySelectorAll(".move button");
     upB.disabled = i === 0;
@@ -735,7 +735,7 @@ let job = null, jobs = 0, worker = null, last = null;
 let useWorker = typeof Worker !== "undefined";
 
 function startWorker() {
-  const w = new Worker(new URL("./game-worker.js?v=4", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./game-worker.js?v=5", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance }, steal: stealData });
   w.onmessage = ({ data: msg }) => {
     if (job && msg.id === job.id) finish(job, msg.res, msg.ms);
@@ -792,7 +792,7 @@ function finish(j, res, ms) {
   last = { res, sides: j.sides, games: j.games, ms, steal: j.steal, park: j.park, week: j.week, home: j.home, final: j.final };
   $("out").hidden = $("box").hidden = false;
   $("out").style.opacity = $("box").style.opacity = "";
-  $("status").textContent = res.capped ? `${res.capped.toLocaleString()} innings were called off at 60 plate appearances; adding MLB-average PA under Sim settings fixes that.` : "";
+  $("status").textContent = res.capped ? `${res.capped.toLocaleString()} innings were called off at 60 plate appearances; adding MLB-average PA under Sim Settings fixes that.` : "";
   $("status").classList.toggle("err", res.capped > 0);
   renderResults();
   renderBox();
@@ -1120,7 +1120,7 @@ function sgHover(ev) {
 // is under HIST_MIN left out (and those beyond them at either end).
 const HIST_MIN = 0.02;
 const STAT_NAME = { PA: "Plate appearances", AB: "At bats", R: "Runs", H: "Hits", "2B": "Doubles", "3B": "Triples", HR: "Home runs",
-  RBI: "RBI", BB: "Walks", HBP: "Hit by pitch", K: "Strikeouts", SB: "Stolen bases", CS: "Caught stealing",
+  TB: "Total bases", RBI: "RBI", BB: "Walks", HBP: "Hit by pitch", K: "Strikeouts", SB: "Stolen bases", CS: "Caught stealing",
   OUTS: "Innings pitched", BF: "Batters faced", ER: "Earned runs", NP: "Pitches" };
 const histCells = new WeakMap(); // a box-score cell -> { who, stat, mean, counts, width }
 const regHist = (td, cell) => { histCells.set(td, cell); td.classList.add("hist"); };
@@ -1221,7 +1221,7 @@ const RATE = (b) => {
   return { AVG: g("H") / g("AB"), OBP: (g("H") + g("BB") + g("HBP")) / (g("AB") + g("BB") + g("HBP") + g("SF")),
     SLG: (one + 2 * g("2B") + 3 * g("3B") + 4 * g("HR")) / g("AB") };
 };
-const BAT_COLS = () => ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "HBP", "K", ...(last.steal ? ["SB", "CS"] : [])];
+const BAT_COLS = () => ["PA", "AB", "R", "H", "2B", "3B", "HR", "TB", "RBI", "BB", "HBP", "K", ...(last.steal ? ["SB", "CS"] : [])];
 
 function battingTable(arr, s, t) {
   const wrap = document.createElement("div");

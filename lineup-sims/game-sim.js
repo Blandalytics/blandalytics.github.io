@@ -36,7 +36,7 @@ import { leadBucket } from "./park.js?v=3";
 const C = Object.fromEntries(CATS.map((c, i) => [c, i]));
 
 // box-score columns, as the result's flat arrays hold them
-export const BAT = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "HBP", "K", "SF", "SB", "CS"];
+export const BAT = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "HBP", "K", "SF", "SB", "CS", "TB"];
 export const PIT = ["G", "OUTS", "BF", "H", "R", "ER", "BB", "HBP", "K", "HR", "NP", "W", "L", "SV", "QS", "SB", "CS"];
 const nB = BAT.length, nP = PIT.length;
 const B = Object.fromEntries(BAT.map((k, i) => [k, i])), P = Object.fromEntries(PIT.map((k, i) => [k, i]));
@@ -315,10 +315,10 @@ export function simulateGames(model, teams, games, seed = 1, pitches = null, ste
         case C.BB: mine[H + B.BB]++; arms[A + P.BB]++; break;
         case C.HBP: mine[H + B.HBP]++; arms[A + P.HBP]++; break;
         case C.K: mine[H + B.K]++; mine[H + B.AB]++; arms[A + P.K]++; reached = false; break;
-        case C["1B"]: mine[H + B.H]++; mine[H + B.AB]++; arms[A + P.H]++; break;
-        case C["2B"]: mine[H + B.H]++; mine[H + B["2B"]]++; mine[H + B.AB]++; arms[A + P.H]++; break;
-        case C["3B"]: mine[H + B.H]++; mine[H + B["3B"]]++; mine[H + B.AB]++; arms[A + P.H]++; break;
-        case C.HR: mine[H + B.H]++; mine[H + B.HR]++; mine[H + B.AB]++; arms[A + P.H]++; arms[A + P.HR]++; break;
+        case C["1B"]: mine[H + B.H]++; mine[H + B.TB]++; mine[H + B.AB]++; arms[A + P.H]++; break;
+        case C["2B"]: mine[H + B.H]++; mine[H + B["2B"]]++; mine[H + B.TB] += 2; mine[H + B.AB]++; arms[A + P.H]++; break;
+        case C["3B"]: mine[H + B.H]++; mine[H + B["3B"]]++; mine[H + B.TB] += 3; mine[H + B.AB]++; arms[A + P.H]++; break;
+        case C.HR: mine[H + B.H]++; mine[H + B.HR]++; mine[H + B.TB] += 4; mine[H + B.AB]++; arms[A + P.H]++; arms[A + P.HR]++; break;
         default: if (o.sf) mine[H + B.SF]++; else mine[H + B.AB]++; reached = false;
       }
       up[b] = (i + 1) % 9;
