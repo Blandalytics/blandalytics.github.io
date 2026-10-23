@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <title>Created Runs Leaders</title>
-<meta name="description" content="2026 hitters ranked by created runs above an RE24 baseline, at the plate and on the bases: state change on balls in play, hit luck, walks, hit-by-pitches and strikeouts; home-to-first, baserunning, steals, caught stealing and pickoffs.">
+<meta name="description" content="2026 hitters ranked by created runs above an RE24 baseline, at the plate and on the bases: batted ball quality, hit luck, walks, hit-by-pitches and strikeouts; home-to-first, baserunning, steals, caught stealing and pickoffs.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600;700&display=swap">
@@ -34,6 +34,15 @@
   display:flex; flex-direction:column; gap:28px}
 @media (min-width:720px){.page{padding-left:max(24px, env(safe-area-inset-left, 0px)); padding-right:max(24px, env(safe-area-inset-right, 0px))}}
 .plpd-page-header__title{text-wrap:balance}
+
+/* the Total / Per 600 PA switch: a segmented pill, the pressed side filled brand-cyan */
+.toolbar{display:flex; margin-bottom:-12px}
+.seg{display:inline-flex; gap:2px; padding:3px; border-radius:999px; border:1px solid var(--dt-wrap-border); background:var(--dt-scroll-bg)}
+.seg button{all:unset; box-sizing:border-box; cursor:pointer; padding:6px 14px; border-radius:999px;
+  font-family:var(--font-text); font-size:14px; font-weight:600; line-height:1.2; color:#cbd7fd}
+.seg button:hover{color:#f0f1f5}
+.seg button[aria-pressed="true"]{background:#55e8ff; color:#13152a}
+.seg button:focus-visible{outline:2px solid #55e8ff; outline-offset:2px}
 
 /* PlDataTableWrap (raised): scrolls both ways; its height is set in script to the header plus 20 rows */
 .table-wrap{box-sizing:border-box; max-width:100%; overflow:auto; overscroll-behavior:contain;
@@ -115,12 +124,14 @@
     <p class="plpd-page-header__meta"><span class="season">2026</span> - Runs Above an <a href="https://library.fangraphs.com/misc/re24/" target="_blank" rel="noopener">RE24 Baseline</a></p>
   </header>
 
+  <div class="toolbar"><div class="seg" id="mode" role="group" aria-label="Show values as"><button type="button" data-mode="total" aria-pressed="true">Total</button><button type="button" data-mode="per600" aria-pressed="false">Per 600 PA</button></div></div>
+
   <div class="table-wrap" id="wrap" role="region" aria-label="Hitters, sortable by any stat" tabindex="0">
     <table>
       <caption id="caption">Hitters ranked by CR, 2026</caption>
       <thead>
         <tr>
-          <th class="group g-created" colspan="4" scope="colgroup">Created Runs</th>
+          <th class="group g-created" colspan="3" scope="colgroup">Created Runs</th>
           <th class="group g-batting div" colspan="7" scope="colgroup">Batting</th>
           <th class="group g-running div" colspan="6" scope="colgroup">Running</th>
         </tr>
@@ -133,13 +144,12 @@
 
   <section class="glossary" aria-labelledby="gl-title">
     <h2 id="gl-title">Reading the table</h2>
-    <p>Every number is created runs above an RE24 baseline built from the <span class="season">2026</span> season. The table covers the <span id="gl-count">205</span> hitters with at least <span class="min-pa">400</span> PA. Pick any column heading to rank them by it, highest first; pick it again for lowest first. It shows 20 hitters at a time, so scroll it for the rest. Values shade from white at zero toward red at the highest value among these hitters and blue at the lowest.</p>
+    <p>Every number is created runs above an RE24 baseline built from the <span class="season">2026</span> season. The table covers the <span id="gl-count">205</span> hitters with at least <span class="min-pa">400</span> PA. Pick any column heading to rank them by it, highest first; pick it again for lowest first. It shows 20 hitters at a time, so scroll it for the rest. The Total / Per 600 PA switch above the table shows every column after PA as a season total or scaled to 600 plate appearances. Values shade from white at zero toward red at the highest value among these hitters and blue at the lowest.</p>
     <div class="gl-groups">
       <div class="gl-group g-created">
         <h3>Created Runs</h3>
         <dl>
           <div><dt>CR</dt><dd>Total created runs, batting plus running.</dd></div>
-          <div><dt>CR/600</dt><dd>CR scaled to 600 plate appearances.</dd></div>
         </dl>
       </div>
       <div class="gl-group g-batting">
@@ -166,6 +176,6 @@
     </div>
   </section>
 </div>
-<script type="module" src="app.js?v=3"></script>
+<script type="module" src="app.js?v=4"></script>
 </body>
 </html>
