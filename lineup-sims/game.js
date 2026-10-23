@@ -1047,7 +1047,7 @@ function fitFont(g, text, weight, size, family, width) {
 }
 async function scoreGridBlob() {
   const k = sgView, { res, sides, games } = last;
-  await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 17px "DM Sans"',
+  await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '700 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 17px "DM Sans"',
     '400 17px "Work Sans"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
   const { W } = TILE;
@@ -1063,13 +1063,24 @@ async function scoreGridBlob() {
   g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
   // the starters by surname; the first line stops short of the wordmark beside it
   const who = (t) => `${k.nm(t)} (${surname(sides[t].sp.name)})`;
-  const lines = [`${who(0)} at ${who(1)}`, `${k.nm(0)} win ${pct(res.wins[0] / games)} · ${k.nm(1)} win ${pct(res.wins[1] / games)}`
-    + (last.final ? ` · Final: ${k.ab(0)} ${last.final[0]}, ${k.ab(1)} ${last.final[1]}` : "")];
+  const lines = [`${who(0)} at ${who(1)}`, `${k.ab(0)} ${pct(res.wins[0] / games)} - ${pct(res.wins[1] / games)} ${k.ab(1)}`];
   g.fillStyle = TILE.sub;
   lines.forEach((line, i) => {
     fitFont(g, line, 400, 21, '"DM Sans"', i ? W - 96 : W - 32 - 236 - 24 - 48);
     g.fillText(line, 48, 100 + 28 * i);
   });
+  // a real game's final score, laid out as the win shares are, the winner's side in bold amber (the
+  // outline's color); a game called tied has none
+  if (last.final) {
+    const [fa, fh] = last.final, won = fa > fh ? 0 : fh > fa ? 1 : -1;
+    let x = 48;
+    for (const [text, bold] of [[`${k.ab(0)} ${fa}`, won === 0], [" - ", false], [`${fh} ${k.ab(1)}`, won === 1]]) {
+      g.font = `${bold ? 700 : 400} 21px "DM Sans"`;
+      g.fillStyle = bold ? TILE.amber : TILE.sub;
+      g.fillText(text, x, 156);
+      x += g.measureText(text).width;
+    }
+  }
   // the grid, square, centered under the subtitle
   const P = 540, l = 200, t = 182, c = P / k.n1;
   paintScoreGrid(g, { l, t, P }, {
