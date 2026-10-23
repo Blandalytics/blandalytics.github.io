@@ -801,6 +801,7 @@ function finish(j, res, ms) {
 // ---------- results ----------
 const per = (x) => x / last.games;
 const f2 = (x) => x.toFixed(2);
+const f1 = (x) => x.toFixed(1); // the box score's counts: one decimal (its rates keep their own)
 
 function renderResults() {
   const { res, sides, games } = last;
@@ -1170,7 +1171,7 @@ function showHist(td) {
   if (!cell || !last?.res?.hist) return hideHist();
   const box = $("box").getBoundingClientRect(), r = td.getBoundingClientRect();
   const maxW = Math.min(520, box.width - 24);
-  const avg = cell.stat === "OUTS" ? `${fmtIP(Math.round(cell.mean))} IP a game` : `${cell.width > 1 ? cell.mean.toFixed(1) : f2(cell.mean)} a game`;
+  const avg = cell.stat === "OUTS" ? `${fmtIP(Math.round(cell.mean))} IP a game` : `${f1(cell.mean)} a game`;
   tip.innerHTML = `<b></b><small></small>${histSVG(cell, maxW - 26)}<small>Share of games; under ${100 * HIST_MIN}% left out</small>`;
   tip.querySelector("b").textContent = `${cell.who} · ${STAT_NAME[cell.stat] ?? cell.stat}`;
   tip.querySelector("small").textContent = avg;
@@ -1207,7 +1208,7 @@ function renderBox() {
       // the catcher's running game: steals and runners caught against him, per game
       const [sb, cs] = res.caught[t], p = document.createElement("p");
       p.className = "note catch-line";
-      p.textContent = `Catcher: ${catcherName(s)} · ${f2(per(sb))} SB and ${f2(per(cs))} CS against a game`
+      p.textContent = `Catcher: ${catcherName(s)} · ${f1(per(sb))} SB and ${f1(per(cs))} CS against a game`
         + (sb + cs ? ` (${pct(cs / (sb + cs))} caught)` : "");
       sec.append(p);
     }
@@ -1239,7 +1240,7 @@ function battingTable(arr, s, t) {
     if (cls) tr.className = cls;
     const r = RATE(b);
     tr.innerHTML = `<td class="who"><span class="nm"><b class="sp">${spot}</b></span><span class="who-sub"></span></td>`
-      + BAT_COLS().map((k) => `<td class="num">${f2(per(b[Bi[k]]))}</td>`).join("")
+      + BAT_COLS().map((k) => `<td class="num">${f1(per(b[Bi[k]]))}</td>`).join("")
       + `<td class="num rate">${fmtRate(r.AVG)}</td><td class="num">${fmtRate(r.OBP)}</td><td class="num">${fmtRate(r.SLG)}</td>`;
     if (spread) BAT_COLS().forEach((k, j) => regHist(tr.cells[1 + j], { who, stat: k, mean: per(b[Bi[k]]), counts: spread(k), width: 1 }));
     tr.querySelector(".nm").append(name);
@@ -1285,7 +1286,7 @@ function pitchingTable(arr, s, won, lost, t) {
     const ip = g("OUTS") / 3;
     const [w, l, sv] = decisions ?? [g("W"), g("L"), g("SV")];
     tr.innerHTML = `<td class="who"><span class="nm"></span><span class="who-sub"></span></td><td class="num">${fmtIP(Math.round(per(g("OUTS"))))}</td>`
-      + ["H", "R", "ER", "BB", "K", "HR", "BF"].map((k) => `<td class="num">${f2(per(g(k)))}</td>`).join("")
+      + ["H", "R", "ER", "BB", "K", "HR", "BF"].map((k) => `<td class="num">${f1(per(g(k)))}</td>`).join("")
       + (np ? `<td class="num">${per(g("NP")).toFixed(1)}</td>` : "")
       + `<td class="num rate">${ip ? ((9 * g("ER")) / ip).toFixed(2) : "—"}</td><td class="num">${ip ? ((g("BB") + g("H")) / ip).toFixed(2) : "—"}</td>`
       + `<td class="num">${pct(w / G)}</td><td class="num">${pct(l / G)}</td><td class="num">${pct(sv / G)}</td>`
@@ -1434,6 +1435,13 @@ async function boot() {
     renderSide(s);
   }
   $("gpk_go").addEventListener("click", onLoadGame);
+  // the Matchup card folds from its heading; Swap goes with what it folds away
+  $("matchup_fold").addEventListener("click", () => {
+    const open = $("matchup_fold").getAttribute("aria-expanded") !== "true";
+    $("matchup_fold").setAttribute("aria-expanded", String(open));
+    $("matchup_body").hidden = !open;
+    $("swap").hidden = !open;
+  });
   // the score grid's readout: hover, or a tap on touch (a tap elsewhere puts it away)
   const sgOff = () => { if (!$("sg_tip").hidden) { $("sg_tip").hidden = true; if (sgView) drawScoreGrid(null); } };
   $("sg").addEventListener("pointermove", sgHover);
