@@ -58,6 +58,8 @@ function bookkeeping(res, teams, label) {
       check(sum(bat, 9, nB, Bi(b)) === sum(opp, nS, nP, Pi(p)), `${label}: team ${t} batting ${b} = pitching ${p}`);
     }
     check(sum(bat, 9, nB, Bi("R")) === res.line[t].reduce((a, x) => a + x, 0), `${label}: team ${t} runs = line score`);
+    check(Array.from({ length: 9 }, (_, i) => bat.slice(i * nB, (i + 1) * nB)).every((b) => b[Bi("TB")] === b[Bi("H")] + b[Bi("2B")] + 2 * b[Bi("3B")] + 3 * b[Bi("HR")]),
+      `${label}: team ${t} each slot's TB = H + 2B + 2x3B + 3xHR`);
     check(sum(opp, nS, nP, Pi("ER")) <= sum(opp, nS, nP, Pi("R")), `${label}: ER <= R`);
     check(res.caught[1 - t][0] === sum(bat, 9, nB, Bi("SB")) && res.caught[1 - t][1] === sum(bat, 9, nB, Bi("CS")), `${label}: catcher SB/CS = runners'`);
     check(res.pit[t][Pi("QS")] <= res.games && res.pit[t].slice(nP).every((x, i) => i % nP !== Pi("QS") || x === 0), `${label}: QS only for starters`);
