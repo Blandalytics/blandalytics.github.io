@@ -7,10 +7,12 @@ hitter, every column runs above an RE24 baseline. The page shows hitters with MI
 the page's columns:
 
     CR      off_val           CR/600  off_val per 600 PA
-    bCR     batting           State Change  contact      Hit Luck  hit_luck
+    bCR     batting           Batted Ball Quality  contact    Hit Luck  hit_luck
     BB      walk              HBP     hit_by_pitch       K         strikeout
+    State Context  state_context (batting)
     rCR     running           Home-to-First  home_to_first          BsR  baserunning
     SB      stolen_base       CS+PO   caught_stealing + pickoff
+    State Context  running_context (running)
 
 with each column's lowest and highest value among them (the heat cells' ends). After a rebuild,
 bump data.json?v= in created-runs/app.js and app.js?v= in created-runs/index.html.
@@ -23,16 +25,17 @@ from pathlib import Path
 MIN_PA = 400
 OUT = Path(__file__).resolve().parents[2] / "created-runs" / "data.json"
 KEYS = ["name", "pa", "cr", "cr600", "bcr", "state", "luck", "bb", "hbp", "k",
-        "rcr", "h2f", "bsr", "sb", "cspo"]
+        "ctx", "rcr", "h2f", "bsr", "sb", "cspo", "rctx"]
 
 
 def row_of(r):
     pa = int(r["PA"])
     f = lambda k: float(r[k])
     return [r["player_name"], pa, f("off_val"), round(f("off_val") * 600 / pa, 2), f("batting"),
-            f("contact"), f("hit_luck"), f("walk"), f("hit_by_pitch"), f("strikeout"), f("running"),
+            f("contact"), f("hit_luck"), f("walk"), f("hit_by_pitch"), f("strikeout"), f("state_context"),
+            f("running"),
             f("home_to_first"), f("baserunning"), f("stolen_base"),
-            round(f("caught_stealing") + f("pickoff"), 2)]
+            round(f("caught_stealing") + f("pickoff"), 2), f("running_context")]
 
 
 def main(path):

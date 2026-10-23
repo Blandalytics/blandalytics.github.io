@@ -3,22 +3,25 @@
 
 const VISIBLE_ROWS = 20; // the table is this many rows tall and scrolls for the rest
 
-// Columns after the name, by group. hl marks the group's headline column.
+// Columns after the name, by group. hl marks the group's headline column; spoken, when given, names
+// the column in the caption where its label alone is ambiguous.
 const COLS = [
   { key: "pa", label: "PA", group: "created", heat: false, digits: 0 },
   { key: "cr", label: "CR", group: "created", hl: true },
   { key: "cr600", label: "CR/600", group: "created" },
   { key: "bcr", label: "bCR", group: "batting", hl: true, divider: true },
-  { key: "state", label: "State Change", group: "batting" },
+  { key: "state", label: "Batted Ball Quality", group: "batting" },
   { key: "luck", label: "Hit Luck", group: "batting" },
   { key: "bb", label: "BB", group: "batting" },
   { key: "hbp", label: "HBP", group: "batting" },
   { key: "k", label: "K", group: "batting" },
+  { key: "ctx", label: "State Context", spoken: "batting State Context", group: "batting" },
   { key: "rcr", label: "rCR", group: "running", hl: true, divider: true },
   { key: "h2f", label: "Home-to-First", group: "running" },
   { key: "bsr", label: "BsR", group: "running" },
   { key: "sb", label: "SB", group: "running" },
   { key: "cspo", label: "CS+PO", group: "running" },
+  { key: "rctx", label: "State Context", spoken: "running State Context", group: "running" },
 ];
 
 // The PLPD heat-cell stops, coldest to hottest, with base-white at zero
@@ -93,7 +96,7 @@ function renderRows() {
 function renderCaption(count) {
   const col = COLS.find((c) => c.key === sort.key);
   const order = sort.dir === "desc" ? "highest first" : "lowest first";
-  $("caption").textContent = `${count} hitters with ${DATA.minPa}+ PA ranked by ${col.label}, ${order}, ${DATA.season}`;
+  $("caption").textContent = `${count} hitters with ${DATA.minPa}+ PA ranked by ${col.spoken || col.label}, ${order}, ${DATA.season}`;
 }
 
 // Size the scroll box to the two header rows plus VISIBLE_ROWS body rows, measured, so it holds
@@ -126,7 +129,7 @@ $("col-head").addEventListener("click", (e) => {
 
 async function boot() {
   try {
-    const r = await fetch("data.json?v=1");
+    const r = await fetch("data.json?v=2");
     if (!r.ok) throw new Error(`data ${r.status}`);
     DATA = await r.json();
   } catch (e) {
