@@ -99,7 +99,7 @@
 .table-wrap tbody td.heat{text-align:center; min-width:76px}
 .table-wrap tbody td.heat.hl{font-weight:700; min-width:84px}
 
-/* the metric glossary card */
+/* the metric glossary card: CR on its own, then the Batting and Running terms side by side */
 .glossary{box-sizing:border-box; background:#292c42; border-radius:10px; padding:24px; display:flex; flex-direction:column; gap:20px}
 .glossary h2{margin:0; font-family:var(--font-display); font-weight:900; font-size:24px; line-height:1.2; color:#73efff}
 .glossary > p{margin:0; max-width:72ch; font-size:16px; line-height:1.5; color:#f0f1f5}
@@ -144,18 +144,15 @@
 
   <section class="glossary" aria-labelledby="gl-title">
     <h2 id="gl-title">Reading the table</h2>
-    <p>Every number is created runs above an RE24 baseline built from the <span class="season">2026</span> season. The table covers the <span id="gl-count">205</span> hitters with at least <span class="min-pa">400</span> PA. Pick any column heading to rank them by it, highest first; pick it again for lowest first. It shows 20 hitters at a time, so scroll it for the rest. The Total / Per 600 PA switch above the table shows every column after PA as a season total or scaled to 600 plate appearances. Values shade from white at zero toward red at the highest value among these hitters and blue at the lowest.</p>
+    <p>Every number is created runs above an RE24 baseline built from the <span class="season">2026</span> season. The table covers the <span id="gl-count">205</span> hitters with at least <span class="min-pa">400</span> PA. The Total / Per 600 PA switch above the table shows every column after PA as a season total or scaled to 600 plate appearances.</p>
+    <dl>
+      <div><dt>CR</dt><dd>Total created runs, batting plus running.</dd></div>
+    </dl>
     <div class="gl-groups">
-      <div class="gl-group g-created">
-        <h3>Created Runs</h3>
-        <dl>
-          <div><dt>CR</dt><dd>Total created runs, batting plus running.</dd></div>
-        </dl>
-      </div>
       <div class="gl-group g-batting">
         <h3>Batting</h3>
         <dl>
-          <div><dt>bCR</dt><dd>Created runs at the plate: every column in this group added together.</dd></div>
+          <div><dt>bCR</dt><dd>Created Runs from batting.</dd></div>
           <div><dt>Batted Ball Quality</dt><dd>Expected runs from each ball in play, given its exit velocity, launch angle and spray angle, in an average base-out state.</dd></div>
           <div><dt>Hit Luck</dt><dd>How much more or less a line drive, fly ball or popup was worth than its contact deserved: a blooper falling in, or a hard liner caught. Valued in an average base-out state.</dd></div>
           <div><dt>BB, HBP, K</dt><dd>Runs from walks (intentional included), hit-by-pitches and strikeouts, each at its league-average value.</dd></div>
@@ -165,11 +162,11 @@
       <div class="gl-group g-running">
         <h3>Running</h3>
         <dl>
-          <div><dt>rCR</dt><dd>Created runs on the bases: every column in this group added together.</dd></div>
+          <div><dt>rCR</dt><dd>Created Runs from running the bases.</dd></div>
           <div><dt>Home-to-First</dt><dd>How much more or less a ground ball was worth than its contact deserved: beating out the throw, or being thrown out on a grounder that should have been a hit. Valued in an average base-out state.</dd></div>
-          <div><dt>BsR</dt><dd>Extra bases taken or given away on balls in play, against the average runner from the same spot, each at its league-average value.</dd></div>
+          <div><dt>BsR</dt><dd>Extra bases taken or given away on balls in play, against the average runner from the same spot and batted ball quality, each at its league-average value.</dd></div>
           <div><dt>SB</dt><dd>Runs from stolen bases, each at its league-average value.</dd></div>
-          <div><dt>CS+PO</dt><dd>Runs lost to times caught stealing and pickoffs, together, each at its league-average value.</dd></div>
+          <div><dt>CS+PO</dt><dd>Runs lost to times caught stealing and pickoffs, each at its league-average value.</dd></div>
           <div><dt>State Context</dt><dd>What the base-out state added to or took from every running play: a steal of second is worth more than twice as much with no outs as with two. Like the batting State Context, it does not carry over from one season to the next.</dd></div>
         </dl>
       </div>
