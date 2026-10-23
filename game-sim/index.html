@@ -247,6 +247,11 @@ details summary::before{color:var(--brand-brand-cyan)}
 .card > details > summary{font-size:24px; font-weight:900; color:var(--brand-brand-cyan-header)}
 details.minor summary{font-family:var(--font-display); font-size:14px; font-weight:600; color:var(--text-text-nav)}
 details.minor summary:hover{color:var(--brand-brand-cyan)}
+/* the Matchup card folds from its heading (a button, since the heading row also holds Swap), marked as the folds are */
+.fold{all:unset; cursor:pointer}
+.fold::before{content:"▾ "; color:var(--brand-brand-cyan)}
+.fold[aria-expanded="false"]::before{content:"▸ "}
+.fold:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:2px; border-radius:4px}
 /* How it works: one mini heading per topic, its description under it */
 .method{display:flex; flex-direction:column; gap:var(--space-400); color:var(--text-text-nav)}
 .method b{color:var(--text-text-cell); font-weight:600}
@@ -263,9 +268,10 @@ details.minor summary:hover{color:var(--brand-brand-cyan)}
 
   <section class="card" aria-labelledby="matchup_h">
     <div class="card-head">
-      <h2 id="matchup_h">Matchup</h2>
+      <h2 id="matchup_h"><button id="matchup_fold" class="fold" type="button" aria-expanded="true" aria-controls="matchup_body">Matchup</button></h2>
       <button id="swap" type="button" title="The away team bats first; the home team bats last">⇄ Swap home and away</button>
     </div>
+    <div id="matchup_body">
     <div class="loadgame">
       <label for="gpk"><b>Load a 2026 game</b></label>
       <div class="gpk-row">
@@ -313,6 +319,7 @@ details.minor summary:hover{color:var(--brand-brand-cyan)}
         </label>
       </div>
     </details>
+    </div>
     <p id="hook_missing" class="note" hidden style="margin-top:10px">The hook model didn't load, so starters go for their average start, and there are no pitch counts.</p>
     <p id="status" class="status" style="margin-top:10px" role="status">loading 2026 data…</p>
   </section>
@@ -372,6 +379,6 @@ details.minor summary:hover{color:var(--brand-brand-cyan)}
   </section>
 </main>
 <script src="/shared/share-image.js?v=2"></script>
-<script type="module" src="/lineup-sims/game.js?v=21"></script>
+<script type="module" src="/lineup-sims/game.js?v=22"></script>
 </body>
 </html>
