@@ -121,7 +121,7 @@
       <thead>
         <tr>
           <th class="group g-created" colspan="4" scope="colgroup">Created Runs</th>
-          <th class="group g-batting div" colspan="6" scope="colgroup">Batting</th>
+          <th class="group g-batting div" colspan="7" scope="colgroup">Batting</th>
           <th class="group g-running div" colspan="5" scope="colgroup">Running</th>
         </tr>
         <tr id="col-head"></tr>
@@ -146,9 +146,10 @@
         <h3>Batting</h3>
         <dl>
           <div><dt>bCR</dt><dd>Created runs at the plate: every column in this group added together.</dd></div>
-          <div><dt>State Change</dt><dd>Expected runs from each ball in play, given the base-out state, exit velocity, launch angle and spray angle.</dd></div>
+          <div><dt>Batted Ball Quality</dt><dd>Expected runs from each ball in play, given its exit velocity, launch angle and spray angle, in an average base-out state.</dd></div>
           <div><dt>Hit Luck</dt><dd>How much more or less a line drive, fly ball or popup was worth than its contact deserved: a blooper falling in, or a hard liner caught.</dd></div>
-          <div><dt>BB, HBP, K</dt><dd>Runs from walks (intentional included), hit-by-pitches and strikeouts.</dd></div>
+          <div><dt>BB, HBP, K</dt><dd>Runs from walks (intentional included), hit-by-pitches and strikeouts, each at its league-average value.</dd></div>
+          <div><dt>State Context</dt><dd>What the base-out state added to or took from every plate appearance: a bases-loaded walk is worth about three bases-empty ones. The hitter does not choose the state, and this does not carry over from one season to the next.</dd></div>
         </dl>
       </div>
       <div class="gl-group g-running">
@@ -164,6 +165,6 @@
     </div>
   </section>
 </div>
-<script type="module" src="app.js?v=2"></script>
+<script type="module" src="app.js?v=3"></script>
 </body>
 </html>

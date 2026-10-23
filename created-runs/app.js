@@ -9,11 +9,12 @@ const COLS = [
   { key: "cr", label: "CR", group: "created", hl: true },
   { key: "cr600", label: "CR/600", group: "created" },
   { key: "bcr", label: "bCR", group: "batting", hl: true, divider: true },
-  { key: "state", label: "State Change", group: "batting" },
+  { key: "state", label: "Batted Ball Quality", group: "batting" },
   { key: "luck", label: "Hit Luck", group: "batting" },
   { key: "bb", label: "BB", group: "batting" },
   { key: "hbp", label: "HBP", group: "batting" },
   { key: "k", label: "K", group: "batting" },
+  { key: "ctx", label: "State Context", group: "batting" },
   { key: "rcr", label: "rCR", group: "running", hl: true, divider: true },
   { key: "h2f", label: "Home-to-First", group: "running" },
   { key: "bsr", label: "BsR", group: "running" },
@@ -126,7 +127,7 @@ $("col-head").addEventListener("click", (e) => {
 
 async function boot() {
   try {
-    const r = await fetch("data.json?v=1");
+    const r = await fetch("data.json?v=2");
     if (!r.ok) throw new Error(`data ${r.status}`);
     DATA = await r.json();
   } catch (e) {
