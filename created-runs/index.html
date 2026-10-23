@@ -122,7 +122,7 @@
         <tr>
           <th class="group g-created" colspan="4" scope="colgroup">Created Runs</th>
           <th class="group g-batting div" colspan="7" scope="colgroup">Batting</th>
-          <th class="group g-running div" colspan="5" scope="colgroup">Running</th>
+          <th class="group g-running div" colspan="6" scope="colgroup">Running</th>
         </tr>
         <tr id="col-head"></tr>
       </thead>
@@ -147,19 +147,20 @@
         <dl>
           <div><dt>bCR</dt><dd>Created runs at the plate: every column in this group added together.</dd></div>
           <div><dt>Batted Ball Quality</dt><dd>Expected runs from each ball in play, given its exit velocity, launch angle and spray angle, in an average base-out state.</dd></div>
-          <div><dt>Hit Luck</dt><dd>How much more or less a line drive, fly ball or popup was worth than its contact deserved: a blooper falling in, or a hard liner caught.</dd></div>
+          <div><dt>Hit Luck</dt><dd>How much more or less a line drive, fly ball or popup was worth than its contact deserved: a blooper falling in, or a hard liner caught. Valued in an average base-out state.</dd></div>
           <div><dt>BB, HBP, K</dt><dd>Runs from walks (intentional included), hit-by-pitches and strikeouts, each at its league-average value.</dd></div>
-          <div><dt>State Context</dt><dd>What the base-out state added to or took from every plate appearance: a bases-loaded walk is worth about three bases-empty ones. The hitter does not choose the state, and this does not carry over from one season to the next.</dd></div>
+          <div><dt>State Context</dt><dd>What the base-out state added to or took from every plate appearance, Hit Luck included: a bases-loaded walk is worth about three bases-empty ones. The hitter does not choose the state, and this does not carry over from one season to the next.</dd></div>
         </dl>
       </div>
       <div class="gl-group g-running">
         <h3>Running</h3>
         <dl>
           <div><dt>rCR</dt><dd>Created runs on the bases: every column in this group added together.</dd></div>
-          <div><dt>Home-to-First</dt><dd>How much more or less a ground ball was worth than its contact deserved: beating out the throw, or being thrown out on a grounder that should have been a hit.</dd></div>
-          <div><dt>BsR</dt><dd>Extra bases taken or given away on balls in play, against the average runner from the same spot.</dd></div>
-          <div><dt>SB</dt><dd>Runs from stolen bases.</dd></div>
-          <div><dt>CS+PO</dt><dd>Runs lost to times caught stealing and pickoffs, together.</dd></div>
+          <div><dt>Home-to-First</dt><dd>How much more or less a ground ball was worth than its contact deserved: beating out the throw, or being thrown out on a grounder that should have been a hit. Valued in an average base-out state.</dd></div>
+          <div><dt>BsR</dt><dd>Extra bases taken or given away on balls in play, against the average runner from the same spot, each at its league-average value.</dd></div>
+          <div><dt>SB</dt><dd>Runs from stolen bases, each at its league-average value.</dd></div>
+          <div><dt>CS+PO</dt><dd>Runs lost to times caught stealing and pickoffs, together, each at its league-average value.</dd></div>
+          <div><dt>State Context</dt><dd>What the base-out state added to or took from every running play: a steal of second is worth more than twice as much with no outs as with two. Like the batting State Context, it does not carry over from one season to the next.</dd></div>
         </dl>
       </div>
     </div>
