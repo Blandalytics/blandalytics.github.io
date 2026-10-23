@@ -20,7 +20,7 @@ const data = JSON.parse(readFileSync(join(dataDir, `${season}.json`), "utf8"));
 const SD = JSON.parse(readFileSync(join(dataDir, `${season}-steal.json`), "utf8"));
 const PD = JSON.parse(readFileSync(join(dataDir, `${season}-parks.json`), "utf8"));
 // game-sim.js imports sim.js with the page's ?v=; this file imports it plain, so the engine is loaded by URL
-const { BAT, PIT, prepareSteal, simulateGames } = await import(pathToFileURL(engineFile).href);
+const { BAT, HIST_BINS, HIST_NP_WIDTH, PIT, prepareSteal, simulateGames } = await import(pathToFileURL(engineFile).href);
 const { BULLPEN_LEAD, HOME_FIELD, PARK_N, homeField, leadBucket, parkAdjust } = await import(pathToFileURL(parkFile).href);
 const { bullpenDay, checkSchedule, completedGames, latestGame, lineupKind, parseGame, pkOf, scheduleUrl, seasonUrl, boxscoreUrl } = await import(pathToFileURL(loadFile).href);
 
@@ -391,6 +391,40 @@ function bookkeeping(res, teams, label) {
   check(all.every(([, , e]) => e.date <= LU.through && e.date.startsWith(String(season))), `each from ${season}, no later than the data (${LU.through})`);
   check(lineupKind("recent") === "recent" && lineupKind("spots") === "spots" && lineupKind("most_used") === "recent" && lineupKind("") === null && lineupKind("x") === null,
     "a link's Lineup: recent or spots as named; an older link's most_used lands on the default (recent); anything else, the page's default");
+}
+
+// 4e. each box-score count's spread over the games (res.hist, the box score's hover charts): every cell's games add
+// up to all of them, and its values average to the box score's per-game number
+{
+  const teams = [team("NYY", "BOS", true), team("BOS", "NYY", true)];
+  const res = simulateGames(model, teams, G, 2026, null, steal), NB = HIST_BINS, h = res.hist;
+  const games = (a, i) => { let n = 0; for (let j = 0; j < NB; j++) n += a[i * NB + j]; return n; };
+  const total = (a, i, w = 1) => { let x = 0; for (let j = 0; j < NB; j++) x += a[i * NB + j] * j * w; return x; };
+  const full = (a, i) => a[i * NB + NB - 1] === 0; // nothing in the last bucket (that many or more): the average is exact
+  let ok = true, exact = true;
+  for (let t = 0; t < 2; t++) {
+    for (let i = 0; i < 9 * nB; i++) {
+      ok &&= games(h.bat[t], i) === G;
+      if (full(h.bat[t], i)) exact &&= total(h.bat[t], i) === res.bat[t][i];
+    }
+    for (let k = 0; k < nB; k++) {
+      ok &&= games(h.batTot[t], k) === G;
+      if (full(h.batTot[t], k)) exact &&= total(h.batTot[t], k) === sum(res.bat[t], 9, nB, k);
+    }
+    for (let i = 0; i < teams[t].stages.length * nP; i++) {
+      ok &&= games(h.pit[t], i) === G;
+      if (i % nP !== Pi("NP") && full(h.pit[t], i)) exact &&= total(h.pit[t], i) === res.pit[t][i];
+    }
+    for (let k = 0; k < nP; k++) ok &&= games(h.pitTot[t], k) === G;
+  }
+  check(ok, `every box-score cell's spread covers all ${G.toLocaleString()} games`);
+  check(exact, "each spread averages to the box score's own number (the counts, pitches aside)");
+  // pitches in tens: the bucket a game lands in holds its count
+  const npLo = total(h.pit[0], Pi("NP"), HIST_NP_WIDTH), npHi = npLo + games(h.pit[0], Pi("NP")) * (HIST_NP_WIDTH - 1);
+  check(res.pit[0][Pi("NP")] >= npLo && res.pit[0][Pi("NP")] <= npHi, "the starter's pitches, in buckets of ten, hold his pitch count");
+  // runs per game, team totals: the same games as the final scores
+  const runs = (t) => Array.from({ length: 31 }, (_, r) => res.scoreDist.reduce((a, n, i) => a + ((t ? i % 31 : Math.floor(i / 31)) === r ? n : 0), 0));
+  check([0, 1].every((t) => runs(t).slice(0, 30).every((n, r) => n === h.batTot[t][Bi("R") * NB + r])), "a team's runs a game match its final scores'");
 }
 
 // 4. the engine draws only from its seeded generator
