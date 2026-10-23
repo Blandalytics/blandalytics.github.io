@@ -59,6 +59,7 @@ a.plpd-btn{text-decoration:none; color:var(--base-white)}
 #gradesTable td.who a:hover,#gradesTable td.who a:focus-visible{text-decoration:underline}
 #gradesTable td.who .meta{margin-left:8px; color:var(--text-text-nav); font-size:13px}
 #gradesTable td.g{font-family:var(--font-display); font-weight:700}
+#gradesTable td.n{font-variant-numeric:tabular-nums}
 #gradesTable .first{border-left:1px solid var(--data-table-pl-data-table-header-border)}
 #gradesTable tbody tr:hover td{background:var(--data-table-pl-data-table-row-hover-bg)}
 #gradesTable tbody tr.on td{background:var(--data-table-pl-data-table-row-open-bg)}
@@ -450,9 +451,14 @@ p,li,.note,.prov{text-wrap:pretty}
   function esc(s) {
     return String(s).replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; });
   }
+  // the box score's count, from the card line ('... 96 Pitches'); a live entry without one has its own
+  function pitchCount(p) {
+    var m = /(\d+) Pitches/.exec(p.line || '');
+    return m ? +m[1] : p.pitches != null ? +p.pitches : null;
+  }
   function gradesOf(r, data) {
     var card = data && data[r.key];
-    var g = {game: r.p.grade || '-', pitches: {}};
+    var g = {n: pitchCount(r.p), game: r.p.grade || '-', pitches: {}};
     SKILLS.forEach(function (s) {
       g[s[0]] = card ? PitcherCard.skill(card, s[0]) : r.p.skills ? PitcherCard.letter(r.p.skills[s[0]], s[0]) : '-';
     });
@@ -462,6 +468,7 @@ p,li,.note,.prov{text-wrap:pretty}
   }
   function sortKey(x, col) {                // null sorts last either way
     if (col === 'who') return lastName(x.r.p.name) + ' ' + x.r.p.name;
+    if (col === 'n') return x.g.n;
     if (col.indexOf('pt:') === 0) {
       var v = x.g.pitches[col.slice(3)];
       return v == null ? null : v;
@@ -489,9 +496,9 @@ p,li,.note,.prov{text-wrap:pretty}
     gradesDrawn = {rows: rows, data: data};
     var list = rows.map(function (r) { return {r: r, g: gradesOf(r, data)}; });
     var codes = PITCH_ORDER.filter(function (c) { return list.some(function (x) { return c in x.g.pitches; }); });
-    var head = '<thead><tr class="group"><th class="who"></th><th colspan="4" class="first">Grades</th>'
+    var head = '<thead><tr class="group"><th class="who"></th><th></th><th colspan="4" class="first">Grades</th>'
       + (codes.length ? '<th colspan="' + codes.length + '" class="first">Stuff+ by pitch type</th>' : '') + '</tr>'
-      + '<tr class="cols">' + headCell('who', 'Pitcher', 'who')
+      + '<tr class="cols">' + headCell('who', 'Pitcher', 'who') + headCell('n', '#', 'n', 'Pitches')
       + SKILLS.map(function (s, i) { return headCell(s[0], s[1], i ? '' : 'first'); }).join('')
       + headCell('game', 'Box Score')
       + codes.map(function (c, i) {
@@ -503,6 +510,7 @@ p,li,.note,.prov{text-wrap:pretty}
       return '<tr data-key="' + r.key + '"' + (r.key === pitcherSel.value ? ' class="on"' : '') + '>'
         + '<td class="who"><a href="#' + r.key + '" data-key="' + r.key + '">' + esc(r.p.name) + '</a>'
         + '<span class="meta">' + esc(matchup(r)) + (r.p.start ? ' · SP' : '') + '</span></td>'
+        + '<td class="n">' + (g.n == null ? '' : g.n) + '</td>'
         + SKILLS.map(function (s, i) { return letterCell(g[s[0]], i ? '' : 'first'); }).join('')
         + letterCell(g.game)
         + codes.map(function (c, i) {
@@ -548,7 +556,7 @@ p,li,.note,.prov{text-wrap:pretty}
     if (b && gradesDrawn) {
       var col = b.getAttribute('data-sort');
       if (sortBy === col) sortAsc = !sortAsc;
-      else { sortBy = col; sortAsc = col === 'who'; }  // names A-Z, grades best first
+      else { sortBy = col; sortAsc = col === 'who'; }  // names A-Z, grades best first, most pitches first
       drawGrades(gradesDrawn.rows, gradesDrawn.data);
       return;
     }
