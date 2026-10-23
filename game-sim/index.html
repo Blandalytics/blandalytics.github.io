@@ -166,6 +166,13 @@ table.linescore,table.box{border-collapse:collapse; font-size:13px; width:100%}
 .box .rate{border-left:1px solid var(--rule)}
 .box tr.total td{border-top:2px solid var(--rule); font-weight:600; color:var(--ink)}
 .box td.num{color:var(--ink)}
+/* a count's spread over the games: its chart above the cell (below it near the top of the screen) */
+#box{position:relative}
+.box td.hist{cursor:default}
+.box td.hist:hover{background:rgba(85,232,255,.08)}
+.sgrid-tip.box-tip{z-index:5; white-space:normal; background:var(--gradient-pl-data-table-header-tooltip-bg), var(--raise)}
+.box-tip.below{transform:translate(-50%, 10px)}
+.box-tip svg{display:block; margin:6px 0 2px}
 /* phones: the names stay in view while the stats scroll */
 @media (max-width:720px){
   .box th:first-child,.box td.who{position:sticky; left:0; z-index:1; background:var(--surface); box-shadow:inset -1px 0 0 var(--rule); min-width:130px; max-width:150px}
@@ -341,8 +348,9 @@ details.minor summary:hover{color:var(--brand-brand-cyan)}
 
   <section id="box" class="card" hidden aria-labelledby="box_h">
     <h2 id="box_h">Box score</h2>
-    <p class="note">Each stat is per game, averaged over every simulated game. AVG, OBP, SLG, ERA and WHIP are over all the games together; W, L, SV and QS are the share of games with that decision, or with a quality start.</p>
+    <p class="note">Each stat is per game, averaged over every simulated game; hover over or tap a count to see how often each value came up in a game. AVG, OBP, SLG, ERA and WHIP are over all the games together; W, L, SV and QS are the share of games with that decision, or with a quality start.</p>
     <div id="box_teams"></div>
+    <div class="sgrid-tip box-tip" id="bx_tip" hidden></div>
   </section>
 
   <section class="card">
@@ -364,6 +372,6 @@ details.minor summary:hover{color:var(--brand-brand-cyan)}
   </section>
 </main>
 <script src="/shared/share-image.js?v=2"></script>
-<script type="module" src="/lineup-sims/game.js?v=19"></script>
+<script type="module" src="/lineup-sims/game.js?v=20"></script>
 </body>
 </html>
