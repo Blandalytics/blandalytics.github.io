@@ -110,6 +110,8 @@
 .glossary dd{margin:0; font-size:14px; line-height:20px; color:#cbd7fd}
 .glossary .gl-group{display:flex; flex-direction:column; gap:12px}
 .glossary h3{margin:0; font-family:var(--font-display); font-weight:700; font-size:16px; line-height:1.2; color:var(--group)}
+/* CR's group has only the one term, so its definition sits under the heading itself */
+.glossary .gl-group > p{margin:0; font-size:14px; line-height:20px; color:#cbd7fd}
 .status{margin:0; color:#cbd7fd}
 /* the subtitle's link: brand-cyan, underlined, cyan-300 on hover */
 .plpd-page-header__meta a{color:#55e8ff; text-decoration:underline; text-underline-offset:3px}
@@ -145,9 +147,10 @@
   <section class="glossary" aria-labelledby="gl-title">
     <h2 id="gl-title">Reading the table</h2>
     <p>Every number is Created Runs above an RE24 baseline built from the <span class="season">2026</span> season. The table covers the <span id="gl-count">205</span> hitters with at least <span class="min-pa">400</span> PA. The Total / Per 600 PA switch above the table shows every column after PA as a season total or scaled to 600 plate appearances.</p>
-    <dl>
-      <div><dt>CR</dt><dd>Total Created Runs, batting plus running.</dd></div>
-    </dl>
+    <div class="gl-group g-created">
+      <h3>Created Runs (CR)</h3>
+      <p>Total Created Runs, batting plus running.</p>
+    </div>
     <div class="gl-groups">
       <div class="gl-group g-batting">
         <h3>Batting</h3>
