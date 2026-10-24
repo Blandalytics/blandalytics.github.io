@@ -17,7 +17,14 @@
 export const STATS_API = "https://statsapi.mlb.com/api/v1";
 // the gamePk is the only thing of the visitor's in either request
 export const scheduleUrl = (pk) => `${STATS_API}/schedule?gamePk=${pk}&fields=dates,games,gamePk,season,gameType,officialDate,status,codedGameState,detailedState,venue,id,name,teams,away,home,team,score`;
-export const boxscoreUrl = (pk) => `${STATS_API}/game/${pk}/boxscore?fields=teams,away,home,team,id,pitchers,players,person,fullName,position,abbreviation,battingOrder,stats,pitching,outs`;
+export const boxscoreUrl = (pk) => `${STATS_API}/game/${pk}/boxscore?fields=teams,away,home,team,id,pitchers,players,person,fullName,position,abbreviation,battingOrder,stats,batting,pitching,`
+  + "outs,plateAppearances,atBats,runs,hits,doubles,triples,homeRuns,totalBases,rbi,baseOnBalls,hitByPitch,strikeOuts,stolenBases,caughtStealing,earnedRuns,battersFaced,numberOfPitches";
+
+// The Game Sim's box-score columns (game-sim.js BAT and PIT) as the Stats API's box score names them
+export const BAT_API = { PA: "plateAppearances", AB: "atBats", R: "runs", H: "hits", "2B": "doubles", "3B": "triples", HR: "homeRuns",
+  TB: "totalBases", RBI: "rbi", BB: "baseOnBalls", HBP: "hitByPitch", K: "strikeOuts", SB: "stolenBases", CS: "caughtStealing" };
+export const PIT_API = { OUTS: "outs", H: "hits", R: "runs", ER: "earnedRuns", BB: "baseOnBalls", K: "strikeOuts", HR: "homeRuns",
+  BF: "battersFaced", NP: "numberOfPitches" };
 
 // the season's MLB regular-season and postseason games, with each one's start time (for Random Game
 // and the latest game: about 12 KB gzipped)
@@ -40,7 +47,10 @@ const malformed = () => new Error("the Stats API's reply wasn't a game this page
 // Returns { pk, date, venue, sides: { away, home }, park, week, missing, final }; final: the game's
 // [away, home] runs (null if the schedule doesn't give both); each side is
 // { team, short, lineup: [entry ids: "p<id>" or "s<team>-<spot>"], sp: "P<id>" or "PRHP", spName, spOuts: the outs he
-// recorded in this game (null if the box score doesn't say), c: catcher slot or -1 }.
+// recorded in this game (null if the box score doesn't say), c: catcher slot or -1, observed }; observed is what
+// happened, as the Game Sim's box score has it: bat (each lineup spot, the starter and anyone who batted in his
+// spot after him), batTot, sp (the starting pitcher), pen (everyone who pitched after him) and pitTot, each
+// { stat: count } in BAT_API's or PIT_API's keys (a stat the box score doesn't give is left out).
 // The schedule's game, and its kind ("regular" or "postseason"), if it's one that loads
 // (checked before the larger box score is asked for); otherwise throws the reason. teams: the data's
 // MLB clubs ([{ id }]).
@@ -102,6 +112,28 @@ export function latestGame(sched) {
   return best ? best.pk : null;
 }
 
+// one team's real lines (see parseGame's observed): its players' game stats, summed by lineup spot (a
+// battingOrder's hundreds), the starter, the rest of the staff, and all
+function observedOf(b, spId) {
+  const add = (into, from, keys) => {
+    for (const [k, api] of Object.entries(keys)) if (Number.isInteger(from?.[api])) into[k] = (into[k] ?? 0) + from[api];
+  };
+  const bat = Array.from({ length: 9 }, () => ({})), batTot = {}, sp = {}, pen = {}, pitTot = {};
+  for (const x of Object.values(b.players)) {
+    const spot = Math.floor(Number(x?.battingOrder) / 100) - 1, line = x?.stats?.batting;
+    if (spot >= 0 && spot < 9 && line) add(bat[spot], line, BAT_API);
+    if (line) add(batTot, line, BAT_API);
+  }
+  for (const id of b.pitchers ?? []) {
+    const line = b.players[`ID${id}`]?.stats?.pitching;
+    add(id === spId ? sp : pen, line, PIT_API);
+    add(pitTot, line, PIT_API);
+  }
+  // a complete game by the starter: the bullpen's line is all zeros
+  if (!Object.keys(pen).length) for (const k of Object.keys(sp)) pen[k] = 0;
+  return { bat, batTot, sp, pen, pitTot };
+}
+
 export function parseGame(pk, sched, box, ctx) {
   const { g, kind } = checkSchedule(pk, sched, ctx.season, ctx.teams);
   if (!box?.teams?.away?.players || !box?.teams?.home?.players || !g.officialDate || !g.venue?.name) throw malformed();
@@ -127,7 +159,7 @@ export function parseGame(pk, sched, box, ctx) {
     }
     const outs = b.players[`ID${spId}`]?.stats?.pitching?.outs;
     sides[where] = { team: t.abbr, short: t.short, lineup, sp, spName, spOuts: Number.isInteger(outs) ? outs : null,
-      c: starters.findIndex((x) => x.position?.abbreviation === "C") };
+      c: starters.findIndex((x) => x.position?.abbreviation === "C"), observed: observedOf(b, spId) };
   }
   // the park by venue name (-1: none of the season's parks; the page uses the home team's); the week by
   // the game's date, or for the postseason the regular season's last

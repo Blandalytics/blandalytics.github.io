@@ -10,7 +10,7 @@
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
 import { BAT, HIST_BINS, HIST_NP_WIDTH, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=5";
 import { BULLPEN_LEAD, PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=3";
-import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, latestGame, lineupKind, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=7";
+import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, latestGame, lineupKind, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=8";
 import { teamColors } from "./team-colors.js?v=2";
 
 const SEASON = 2026;
@@ -299,6 +299,8 @@ async function loadGame(pk) {
 let realGame = null;
 const gameKey = () => JSON.stringify(SIDES.map((s) => [s.team, s.lineup, s.sp?.id]));
 const realFinal = () => (realGame && realGame.key === gameKey() ? realGame.final : null);
+// and what each side actually did in it ([away, home], game-load.js observed), for the box score's hover charts
+const realLines = () => (realGame && realGame.key === gameKey() ? realGame.observed : null);
 function applyGame(G) {
   [["away", SIDES[0]], ["home", SIDES[1]]].forEach(([where, s]) => {
     const x = G.sides[where];
@@ -314,7 +316,7 @@ function applyGame(G) {
     if (park.auto) park.at = homePark();
     park.week = G.week;
   }
-  realGame = G.final ? { final: G.final, key: gameKey() } : null;
+  realGame = G.final ? { final: G.final, observed: [G.sides.away.observed, G.sides.home.observed], key: gameKey() } : null;
   SIDES.forEach(renderSide);
   fillPark();
   run();
@@ -759,7 +761,7 @@ function go() {
   const teams = [pitchingOf(SIDES[0], SIDES[1]), pitchingOf(SIDES[1], SIDES[0])];
   const games = Number($("games").value);
   const busy = job != null;
-  job = { id: ++jobs, teams, games, steal: stealOn(), park: parkName(), home: homeEdge(), final: realFinal(), week: park.week >= 0 ? parkData.weeks[park.week][2] : null, sides: SIDES.map((s) => ({ ...s, lineup: [...s.lineup], from: fromOf(s) })) };
+  job = { id: ++jobs, teams, games, steal: stealOn(), park: parkName(), home: homeEdge(), final: realFinal(), observed: realLines(), week: park.week >= 0 ? parkData.weeks[park.week][2] : null, sides: SIDES.map((s) => ({ ...s, lineup: [...s.lineup], from: fromOf(s) })) };
   $("status").textContent = "simulating…";
   $("status").classList.remove("err");
   $("out").style.opacity = $("box").style.opacity = last ? ".55" : "";
@@ -789,7 +791,7 @@ function runHere(j) {
 }
 function finish(j, res, ms) {
   job = null;
-  last = { res, sides: j.sides, games: j.games, ms, steal: j.steal, park: j.park, week: j.week, home: j.home, final: j.final };
+  last = { res, sides: j.sides, games: j.games, ms, steal: j.steal, park: j.park, week: j.week, home: j.home, final: j.final, observed: j.observed };
   $("out").hidden = $("box").hidden = false;
   $("out").style.opacity = $("box").style.opacity = "";
   $("status").textContent = res.capped ? `${res.capped.toLocaleString()} innings were called off at 60 plate appearances; adding MLB-average PA under Sim Settings fixes that.` : "";
@@ -1137,16 +1139,19 @@ const STAT_NAME = { PA: "Plate appearances", AB: "At bats", R: "Runs", H: "Hits"
 const histCells = new WeakMap(); // a box-score cell -> { who, stat, mean, counts, width }
 const regHist = (td, cell) => { histCells.set(td, cell); td.classList.add("hist"); };
 // the bars to draw: [{ label, p }] from the first value with HIST_MIN of the games to the last (null: under it)
-function histBars({ stat, counts, width }) {
+// A loaded real game's value (`seen`) gets its bar whatever its share, marked `seen`.
+function histBars({ stat, counts, width, seen }) {
   const n = counts.reduce((a, x) => a + x, 0), keep = (i) => counts[i] / n >= HIST_MIN;
-  let lo = 0, hi = counts.length - 1;
+  const top = counts.length - 1, at = Number.isInteger(seen) ? Math.min(top, Math.floor(seen / width)) : -1;
+  let lo = 0, hi = top;
   while (lo < hi && !keep(lo)) lo++;
   while (hi > lo && !keep(hi)) hi--;
-  const top = counts.length - 1, bars = [];
+  if (at >= 0) { lo = Math.min(lo, at); hi = Math.max(hi, at); }
+  const bars = [];
   for (let i = lo; i <= hi; i++) {
     const label = width > 1 ? (i === top ? `${i * width}+` : `${i * width}–${i * width + width - 1}`)
       : stat === "OUTS" ? fmtIP(i) + (i === top ? "+" : "") : `${i}${i === top ? "+" : ""}`;
-    bars.push({ label, p: keep(i) ? counts[i] / n : null });
+    bars.push({ label, p: keep(i) || i === at ? counts[i] / n : null, seen: i === at });
   }
   return bars;
 }
@@ -1158,7 +1163,8 @@ function histSVG(cell, maxW) {
   const slot = Math.max(15, Math.min(Math.max(40, 180 / n), (maxW - 52) / n)), W = Math.round(40 + n * slot + 12), H = 172, tight = slot < 24;
   const L = 40, T = 14, B = H - 38, x0 = (i) => L + i * slot, y = (p) => B - (p / ymax) * (B - T);
   const step = [0.02, 0.05, 0.1, 0.2, 0.25].find((st) => top / st <= 4) ?? 0.5, ymax = Math.ceil(top / step) * step;
-  const wide = slot >= 30, lab = (p) => (100 * p >= 9.95 || !wide ? `${Math.round(100 * p)}%` : `${(100 * p).toFixed(1)}%`);
+  // shares: one decimal under 10% where there's room (a share under 1%, the real game's, always gets one; none at all is 0%)
+  const wide = slot >= 30, lab = (p) => (!p ? "0%" : 100 * p >= 9.95 || (!wide && p >= 0.01) ? `${Math.round(100 * p)}%` : `${(100 * p).toFixed(1)}%`);
   const xs = cell.width > 1 || tight ? 9.5 : 11, bs = tight ? 8.5 : 10;
   let g = "";
   for (let v = 0; v <= ymax + 1e-9; v += step) {
@@ -1168,8 +1174,12 @@ function histSVG(cell, maxW) {
   bars.forEach((b, i) => {
     const cx = x0(i) + slot / 2, bw = slot * 0.62;
     if (b.p != null) {
-      g += `<path d="M${cx - bw / 2},${B} V${y(b.p) + 3} q0,-3 3,-3 H${cx + bw / 2 - 3} q3,0 3,3 V${B} Z" fill="var(--brand-brand-cyan)"/>`
-        + `<text x="${cx}" y="${y(b.p) - 4}" text-anchor="middle" font-size="${bs}" fill="var(--ink)">${lab(b.p)}</text>`;
+      // a bar at least 3px tall, so even the real game's rare value shows
+      const yt = Math.min(y(b.p), B - 3);
+      g += `<path d="M${cx - bw / 2},${B} V${yt + 3} q0,-3 3,-3 H${cx + bw / 2 - 3} q3,0 3,3 V${B} Z" fill="var(--brand-brand-cyan)"/>`;
+      // the real game's value: outlined in amber just outside the bar, on the card, where amber reads
+      if (b.seen) g += `<rect x="${cx - bw / 2 - 2.5}" y="${yt - 2.5}" width="${bw + 5}" height="${B - yt + 2.5}" rx="4" fill="none" stroke="var(--brand-brand-amber)" stroke-width="2"/>`;
+      g += `<text x="${cx}" y="${yt - (b.seen ? 7 : 4)}" text-anchor="middle" font-size="${bs}" fill="var(--ink)">${lab(b.p)}</text>`;
     }
     if (!tight || i % 2 === 0) g += `<text x="${cx}" y="${B + 14}" text-anchor="middle" font-size="${xs}" fill="var(--muted)">${b.label}</text>`;
   });
@@ -1183,7 +1193,8 @@ function showHist(td) {
   const box = $("box").getBoundingClientRect(), r = td.getBoundingClientRect();
   const maxW = Math.min(520, box.width - 24);
   const avg = cell.stat === "OUTS" ? `${fmtIP(Math.round(cell.mean))} IP a game` : `${f1(cell.mean)} a game`;
-  tip.innerHTML = `<b></b><small></small>${histSVG(cell, maxW - 26)}<small>Share of games; under ${100 * HIST_MIN}% left out</small>`;
+  tip.innerHTML = `<b></b><small></small>${histSVG(cell, maxW - 26)}<small>Share of games; under ${100 * HIST_MIN}% left out</small>`
+    + (Number.isInteger(cell.seen) ? `<small class="seen">Outlined in amber: this game's ${cell.stat === "OUTS" ? `${fmtIP(cell.seen)} IP` : cell.seen}</small>` : "");
   tip.querySelector("b").textContent = `${cell.who} · ${STAT_NAME[cell.stat] ?? cell.stat}`;
   tip.querySelector("small").textContent = avg;
   tip.hidden = false;
@@ -1245,15 +1256,17 @@ function battingTable(arr, s, t) {
     <th scope="col" class="rate">AVG</th><th scope="col">OBP</th><th scope="col">SLG</th></tr></thead><tbody></tbody>`;
   const body = table.querySelector("tbody");
   const total = new Float64Array(nB);
-  // spread(k): that count's games by value (res.hist), for its chart on hover, titled `who`
-  const row = (spot, name, sub, b, cls = "", spread = null, who = name) => {
+  // spread(k): that count's games by value (res.hist), for its chart on hover, titled `who`; seen: a loaded
+  // game's real line for the row ({ stat: count }), marked on the chart
+  const seenB = last.observed?.[t];
+  const row = (spot, name, sub, b, cls = "", spread = null, who = name, seen = null) => {
     const tr = document.createElement("tr");
     if (cls) tr.className = cls;
     const r = RATE(b);
     tr.innerHTML = `<td class="who"><span class="nm"><b class="sp">${spot}</b></span><span class="who-sub"></span></td>`
       + BAT_COLS().map((k) => `<td class="num">${f1(per(b[Bi[k]]))}</td>`).join("")
       + `<td class="num rate">${fmtRate(r.AVG)}</td><td class="num">${fmtRate(r.OBP)}</td><td class="num">${fmtRate(r.SLG)}</td>`;
-    if (spread) BAT_COLS().forEach((k, j) => regHist(tr.cells[1 + j], { who, stat: k, mean: per(b[Bi[k]]), counts: spread(k), width: 1 }));
+    if (spread) BAT_COLS().forEach((k, j) => regHist(tr.cells[1 + j], { who, stat: k, mean: per(b[Bi[k]]), counts: spread(k), width: 1, seen: seen?.[k] }));
     tr.querySelector(".nm").append(name);
     tr.querySelector(".who-sub").textContent = sub;
     tr.querySelector(".who-sub").hidden = !sub;
@@ -1266,9 +1279,9 @@ function battingTable(arr, s, t) {
     const other = e.team !== s.team && e.team !== "MLB" ? `${teamName(e.team)} ` : "";
     const name = e.kind === "spot" ? `${other ? `${teamName(e.team)}: ` : ""}${e.lead}` : e.name;
     row(i + 1, name, e.kind === "spot" && e.team !== "MLB" ? `${other}${e.spot}: ${e.sub}` : "", b, "",
-      (k) => last.res.hist.bat[t].subarray((i * nB + Bi[k]) * HIST_BINS, (i * nB + Bi[k] + 1) * HIST_BINS));
+      (k) => last.res.hist.bat[t].subarray((i * nB + Bi[k]) * HIST_BINS, (i * nB + Bi[k] + 1) * HIST_BINS), name, seenB?.bat[i]);
   });
-  row("", "Totals", "", total, "total", (k) => last.res.hist.batTot[t].subarray(Bi[k] * HIST_BINS, (Bi[k] + 1) * HIST_BINS), teamName(s.team));
+  row("", "Totals", "", total, "total", (k) => last.res.hist.batTot[t].subarray(Bi[k] * HIST_BINS, (Bi[k] + 1) * HIST_BINS), teamName(s.team), seenB?.batTot);
   wrap.append(table);
   return wrap;
 }
@@ -1290,7 +1303,7 @@ function pitchingTable(arr, s, won, lost, t) {
   // qs: the starter's quality-start share, shown on his row and the totals (a bullpen has none)
   // spread(k): that count's games by value (res.hist), for its chart on hover; the rates and W, L, SV and
   // QS (already shares of games) have none
-  const row = (name, sub, p, cls = "", decisions = null, qs = true, spread = null, who = name) => {
+  const row = (name, sub, p, cls = "", decisions = null, qs = true, spread = null, who = name, seen = null) => {
     const g = (k) => p[Pi[k]];
     const tr = document.createElement("tr");
     if (cls) tr.className = cls;
@@ -1303,7 +1316,7 @@ function pitchingTable(arr, s, won, lost, t) {
       + `<td class="num">${pct(w / G)}</td><td class="num">${pct(l / G)}</td><td class="num">${pct(sv / G)}</td>`
       + `<td class="num">${qs ? pct(g("QS") / G) : "—"}</td>`;
     if (spread) ["OUTS", "H", "R", "ER", "BB", "K", "HR", "BF", ...(np ? ["NP"] : [])].forEach((k, j) =>
-      regHist(tr.cells[1 + j], { who, stat: k, mean: per(g(k)), counts: spread(k), width: k === "NP" ? HIST_NP_WIDTH : 1 }));
+      regHist(tr.cells[1 + j], { who, stat: k, mean: per(g(k)), counts: spread(k), width: k === "NP" ? HIST_NP_WIDTH : 1, seen: seen?.[k] }));
     tr.querySelector(".nm").textContent = name;
     tr.querySelector(".who-sub").textContent = sub;
     tr.querySelector(".who-sub").hidden = !sub;
@@ -1312,10 +1325,11 @@ function pitchingTable(arr, s, won, lost, t) {
   const H = last.res.hist, cut = (a, i) => a.subarray(i * HIST_BINS, (i + 1) * HIST_BINS);
   const sp = arr.slice(0, nP), pen = arr.slice(nP, 2 * nP);
   const how = { hook: "until the modeled hook", game: "nine innings", bullpen: "opener" }[s.plan] ?? `average start, ${fmtIP(s.from)} IP`;
-  row(s.sp.name, `Starter · ${how}`, sp, "", null, true, (k) => cut(H.pit[t], Pi[k]));
-  row(penName(s), `In ${pct(pen[Pi.G] / G)} of games`, pen, "", null, false, (k) => cut(H.pit[t], nP + Pi[k]));
+  const seen = last.observed?.[t];
+  row(s.sp.name, `Starter · ${how}`, sp, "", null, true, (k) => cut(H.pit[t], Pi[k]), s.sp.name, seen?.sp);
+  row(penName(s), `In ${pct(pen[Pi.G] / G)} of games`, pen, "", null, false, (k) => cut(H.pit[t], nP + Pi[k]), penName(s), seen?.pen);
   const total = sp.map((x, i) => x + pen[i]);
-  row("Totals", "", total, "total", [won, lost, total[Pi.SV]], true, (k) => cut(H.pitTot[t], Pi[k]), `${teamName(s.team)} pitchers`);
+  row("Totals", "", total, "total", [won, lost, total[Pi.SV]], true, (k) => cut(H.pitTot[t], Pi[k]), `${teamName(s.team)} pitchers`, seen?.pitTot);
   wrap.append(table);
   return wrap;
 }
