@@ -206,7 +206,7 @@ function rim(ctx) {
   ctx.setLineDash([]);
 }
 
-// misses as an open cyan X over a white one, makes as an amber dot with a white edge
+// misses as an open cyan X over an opaque white one, makes as an amber dot with a white edge
 function shots(ctx, marked) {
   const xPath = (x, y, r) => {
     const t = r * 0.32;   // matplotlib's "X": a filled cross, drawn here by its outline
@@ -219,8 +219,8 @@ function shots(ctx, marked) {
   for (const s of marked) {
     if (s.made) continue;
     xPath(cx(s.x), cy(s.y), 8.5);
-    ctx.globalAlpha = 0.75; ctx.strokeStyle = C.outline; ctx.lineWidth = 4.5; ctx.stroke();
-    ctx.globalAlpha = 1; ctx.strokeStyle = C.cyan; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = C.outline; ctx.lineWidth = 4.5; ctx.stroke();
+    ctx.strokeStyle = C.cyan; ctx.lineWidth = 2; ctx.stroke();
   }
   for (const s of marked) {
     if (!s.made) continue;
