@@ -337,10 +337,18 @@ p,li,.note,.prov{text-wrap:pretty}
         : r.p.name + '  ·  ' + matchup(r)];
     });
   }
+  // a new date, level or game opens on the top of the Stuff leaderboard (A+ down, ties in the
+  // Pitcher list's order), once the day's grades are in
   function fillPitchers() {
-    fill(pitcherSel, pitcherItems(), true);
-    onPitcher();
-    renderGrades();
+    fill(pitcherSel, pitcherItems(), false);
+    var rows = pitcherRows(), date = dateSel.value, lvl = level, game = gameSel.value;
+    (isLive() ? Promise.resolve(null) : loadData(date)).then(function (data) {
+      if (dateSel.value !== date || level !== lvl || gameSel.value !== game) return;
+      var top = topByStuff(rows, data);
+      if (top) pitcherSel.value = top;
+      onPitcher();
+      renderGrades();
+    });
   }
 
   // ---- the card itself: a day's are in one data file, a live one in its own, versioned
@@ -475,6 +483,15 @@ p,li,.note,.prov{text-wrap:pretty}
     }
     var i = PitcherCard.LETTERS.indexOf(x.g[col]);
     return i < 0 ? null : i;
+  }
+  // the pitcher the Stuff column ranks first; the list's first when no one has a grade
+  function topByStuff(rows, data) {
+    var best = null, bestK = -1;
+    rows.forEach(function (r) {
+      var k = sortKey({r: r, g: gradesOf(r, data)}, 'stuff');
+      if (k !== null && k > bestK) { best = r.key; bestK = k; }
+    });
+    return best || (rows[0] ? rows[0].key : null);
   }
   function sorted(list) {
     if (!sortBy) return list;
