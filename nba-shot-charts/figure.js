@@ -346,7 +346,7 @@ function colorbar(ctx, sum, heat) {
     ctx.strokeStyle = C.outline; ctx.lineWidth = 2; ctx.lineJoin = "miter"; ctx.lineCap = "butt";
     ctx.stroke(lines);
     const mid = (edge + inner) / 2;
-    text(ctx, name, mid, y0 + 24, { font: `500 16px ${DISPLAY}`, align: "center", color: C.bg });
+    text(ctx, name, mid, y0 + 24, { font: `700 16px ${DISPLAY}`, align: "center", color: C.bg });
     text(ctx, Number.isFinite(v) ? v.toFixed(2) : "–", mid, y0 + 58,
       { font: `700 36px ${DISPLAY}`, align: "center", color: valueColor(v) });
   }
