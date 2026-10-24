@@ -565,16 +565,25 @@
 
   // One side's usage bars, each running from the centre outward so the clip can cut it at
   // the gap's edge. A side the pitcher never faced gets no bar: a zero-width one would have
-  // its own edge on the clip's, which is what leaves a hairline.
+  // its own edge on the clip's, which is what leaves a hairline. Each is square at the centre
+  // (clipped anyway) and rounded at its outer end, by the share, as Model Drilldown's bars are
+  // (r = the smaller of 9, half its height and its width).
   function bars(ax, types, shares, fw, sign) {
-    const rx = 2.5 * ax.sx;
-    const ry = 0.25 * -ax.sy;
     const out = [];
+    const h = 0.8 * -ax.sy;
     types.forEach((t, i) => {
       if (!shares[i]) return;
       const width = (shares[i] + fw) * ax.sx;
-      const x = sign > 0 ? ax.x(0) : ax.x(0) - width;
-      out.push(rect(x, ax.y(i - 0.4), width, 0.8 * -ax.sy, { fill: get(MARKER_COLORS, t.code, MARKER_COLORS.UN), rx, ry }));
+      const y0 = ax.y(i - 0.4);
+      const y1 = y0 + h;
+      const r = Math.min(9, h / 2, width);
+      const inner = ax.x(0);
+      const outer = inner + sign * width;
+      const bend = outer - sign * r;
+      const d =
+        `M${fmt(inner)},${fmt(y0)}H${fmt(bend)}Q${fmt(outer)},${fmt(y0)} ${fmt(outer)},${fmt(y0 + r)}` +
+        `V${fmt(y1 - r)}Q${fmt(outer)},${fmt(y1)} ${fmt(bend)},${fmt(y1)}H${fmt(inner)}Z`;
+      out.push(`<path d="${d}" fill="${get(MARKER_COLORS, t.code, MARKER_COLORS.UN)}"/>`);
     });
     return out;
   }
@@ -612,8 +621,8 @@
     // the bars go under the labels, which sit in the gap, and are clipped to their own side
     // of it rather than having the gap painted over them; the hover's bands go under both
     const bands = types.flatMap((t, i) => [
-      band(`u:L:${t.code}`, fx(0.445), ax.y(i - 0.5), ax.x(0), ax.y(i + 0.5)),
-      band(`u:R:${t.code}`, ax.x(0), ax.y(i - 0.5), fx(0.98), ax.y(i + 0.5)),
+      band(`u:L:${t.code}`, fx(0.445), ax.y(i - 0.5), ax.x(-fw), ax.y(i + 0.5)), // to the bar's base, clear of the
+      band(`u:R:${t.code}`, ax.x(fw), ax.y(i - 0.5), fx(0.98), ax.y(i + 0.5)), // type's label in the gap
     ]);
     out.splice(
       3,
@@ -907,6 +916,7 @@
     X: "In Play, Out(s)", D: "In Play, No Out", E: "In Play, Run(s)",
   };
   const IN_PLAY = new Set(["X", "D", "E"]);
+  const LIT = "0.07"; // a lit band's white: a light wash, the row still reading as before
   const words = (s) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   // what happened on the pitch: the call, or for a ball in play the plate appearance's event
@@ -916,23 +926,26 @@
     return get(RESULTS, p.d, null);
   }
 
-  // The tooltip's lines. A card built before the hover's fields were added has only the
-  // type and movement, so a line whose field is absent is left out (one present but blank
-  // shows "-"); xSLGcon is shown only for a ball in play.
-  function tipLines(card, p) {
+  // The tooltip's groups of lines: the pitch and its result, the model grades, then what was
+  // measured. A card built before the hover's fields were added has only the type and
+  // movement, so a line whose field is absent is left out (one present but blank shows "-"),
+  // and an empty group with it; xSLGcon is shown only for a ball in play.
+  function tipGroups(card, p) {
     const color = get(MARKER_COLORS, p.t, MARKER_COLORS.UN);
     const n1 = (v) => (isNum(v) ? fixed(v, 1) : "-");
     const whole = (v) => (isNum(v) ? pyRound(v) : "-");
     const hb = isNum(p.hb) ? p.hb * (card.hand === "L" ? -1 : 1) : null; // the table's sign
-    const lines = [`<b style="color:${color};font-weight:700">${esc(get(PITCH_NAMES, p.t, p.t))}</b>`];
+    const outcome = [`<b style="color:${color};font-weight:700">${esc(get(PITCH_NAMES, p.t, p.t))}</b>`];
     const res = result(p);
-    if (res) lines.push(esc(res));
-    if ("plvStuff+" in p) lines.push(`Stuff+: ${whole(p["plvStuff+"])}`);
-    if ("PLV+" in p) lines.push(`PLV+: ${whole(p["PLV+"])}`);
-    if ("velo" in p) lines.push(`Velo: ${n1(p.velo)} mph`);
-    lines.push(`IVB: ${n1(p.ivb)}"`, `HB: ${n1(hb)}"`);
-    if (isNum(p.xSLGcon)) lines.push(`xSLGcon: ${fixed(p.xSLGcon, 3).replace(/^0+/, "")}`);
-    return lines;
+    if (res) outcome.push(esc(res));
+    const grades = [];
+    if ("plvStuff+" in p) grades.push(`Stuff+: ${whole(p["plvStuff+"])}`);
+    if ("PLV+" in p) grades.push(`PLV+: ${whole(p["PLV+"])}`);
+    const measured = [];
+    if ("velo" in p) measured.push(`Velo: ${n1(p.velo)} mph`);
+    measured.push(`IVB: ${n1(p.ivb)}"`, `HB: ${n1(hb)}"`);
+    if (isNum(p.xSLGcon)) measured.push(`xSLGcon: ${fixed(p.xSLGcon, 3).replace(/^0+/, "")}`);
+    return [outcome, grades, measured].filter((g) => g.length);
   }
 
   // Hovering (or tapping) a pitch: its tooltip by it, its type's bands lit (Usage on the
@@ -965,18 +978,18 @@
       on = null;
       tip.hidden = true;
       layer.innerHTML = "";
-      svgEl.querySelectorAll('[data-hl][opacity="0.14"]').forEach((b) => b.setAttribute("opacity", "0"));
+      svgEl.querySelectorAll(`[data-hl][opacity="${LIT}"]`).forEach((b) => b.setAttribute("opacity", "0"));
     }
     function light(i) {
       clear();
       on = i;
       const p = card.pitches[i];
-      svgEl.querySelectorAll(`[data-hl="u:${p.stand}:${p.t}"],[data-hl="m:${p.t}"]`).forEach((b) => b.setAttribute("opacity", "0.14"));
+      svgEl.querySelectorAll(`[data-hl="u:${p.stand}:${p.t}"],[data-hl="m:${p.t}"]`).forEach((b) => b.setAttribute("opacity", LIT));
       const color = get(MARKER_COLORS, p.t, MARKER_COLORS.UN);
       layer.innerHTML = dots.filter((d) => d.i === i).map((d) =>
         `<use href="#m" x="${d.x}" y="${d.y}" fill="${color}"/>` +
         `<circle cx="${d.x}" cy="${d.y}" r="${fmt(MARKER_R + 5)}" fill="none" stroke="${WHITE}" stroke-width="3"/>`).join("");
-      tip.innerHTML = tipLines(card, p).join("<br>");
+      tip.innerHTML = tipGroups(card, p).map((g) => `<div>${g.join("<br>")}</div>`).join('<div style="height:7px"></div>');
       tip.hidden = false;
     }
     function nearest(e) {
