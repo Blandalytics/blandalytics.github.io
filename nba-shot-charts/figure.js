@@ -54,16 +54,6 @@ function rgb(color) {
   return color.match(/\d+/g).slice(0, 3).map(Number);
 }
 
-// WCAG contrast between two colours
-function contrast(a, b) {
-  const lum = (c) => {
-    const [r, g, bl] = rgb(c).map((x) => { x /= 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; });
-    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
-  };
-  const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
-  return (x + 0.05) / (y + 0.05);
-}
-
 // ---- layout ------------------------------------------------------------------------------
 
 // the court: data x -250..250, y -53..400 (the app's xlim / ylim), hoop at (0, 0)
@@ -350,12 +340,9 @@ function colorbar(ctx, sum, heat) {
     text(ctx, Number.isFinite(v) ? v.toFixed(2) : "–", mid, y0 + 58,
       { font: `700 36px ${DISPLAY}`, align: "center", color: valueColor(v) });
   }
-  // the scale's colour at the value, clipped to the bar's span, or the background's where that colour
-  // sits too close to the pill's (the mid blues and the pinks; the red, white and background ends clear it)
+  // the colour the value has on the bar above, clipped to the bar's span
   function valueColor(v) {
-    if (!Number.isFinite(v)) return C.bg;
-    const c = heat(clip(v));
-    return contrast(c, C.pill) >= 2.5 ? c : C.bg;
+    return Number.isFinite(v) ? heat(clip(v)) : C.bg;
   }
 }
 
