@@ -108,7 +108,7 @@ p{text-wrap:pretty}
 
   <section class="plpd-pane" aria-labelledby="chart_title">
     <h2 class="plpd-pane__title" id="chart_title">Scoring Chart</h2>
-    <p class="plpd-pane__desc">How a player scored, or didn't, in one game or across the season. Points come from shot volume (the average shot is worth 1.09 points), shot quality (expected points per shot above or below that), shot making (points above expected), free throws a player's shots should earn (about 0.78 points per attempt), free throws drawn beyond that, and free throws made. Green marks makes and points added; purple marks misses and points given back. The court is shaded by each spot's expected points per shot, and the bar above it shows the player's spread of shots across that scale.</p>
+    <p class="plpd-pane__desc">How a player scored, or didn't, in one game or across the season. Points come from shot volume (the average shot is worth 1.09 points), shot quality (expected points per shot above or below that), shot making (points above expected), free throws a player's shots should earn (about 0.78 points per attempt), free throws drawn beyond that, and free throws made. Amber marks makes and points added; cyan marks misses and points given back. The court is shaded by each spot's expected points per shot, and the bar above it shows the player's spread of shots across that scale.</p>
     <div class="controls">
       <label class="plpd-filter-field"><span class="plpd-filter-field__label">Season</span>
         <select id="season" class="plpd-filter-dropdown" disabled></select></label>
@@ -130,7 +130,7 @@ p{text-wrap:pretty}
         <select id="game" class="plpd-filter-dropdown" disabled></select></label>
     </div>
     <p id="status" class="plpd-status">Loading the seasons…</p>
-    <div class="figure chart" id="chart_box" hidden><canvas id="fig" width="1600" height="2880" role="img" aria-label="Scoring summary"></canvas></div>
+    <div class="figure chart" id="chart_box" hidden><canvas id="fig" width="1600" height="2780" role="img" aria-label="Scoring summary"></canvas></div>
     <div class="actions"><button id="share_png" class="plpd-btn" type="button" hidden>Share image ▾</button></div>
   </section>
 
@@ -192,6 +192,6 @@ p{text-wrap:pretty}
   </section>
 </div>
 <script src="/shared/share-image.js?v=2"></script>
-<script type="module" src="app.js?v=4"></script>
+<script type="module" src="app.js?v=5"></script>
 </body>
 </html>
