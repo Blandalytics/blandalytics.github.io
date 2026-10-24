@@ -4,8 +4,8 @@
 // each season's files fetched under its manifest stamp so a morning's update shows at once.
 // A chart is linkable as #<season>/<player id>/<game id | season>.
 
-import { prepare, defaultPick, summary, seasonBoard, gameBoard, valueAdded, teamMinutes } from "./model.js?v=1";
-import { draw, W as FIG_W } from "./figure.js?v=9";
+import { prepare, defaultPick, summary, seasonBoard, gameBoard, valueAdded, teamMinutes, PTS_PER_FT } from "./model.js?v=2";
+import { draw, shotAt, W as FIG_W } from "./figure.js?v=10";
 import { drawScatter, SW } from "./scatter.js?v=4";
 
 const params = new URLSearchParams(location.search);
@@ -13,7 +13,7 @@ const DATA = new URL(params.get("data") || "https://data.blandalytics.com/", loc
 const $ = (id) => document.getElementById(id);
 const el = {
   season: $("season"), player: $("player"), playerList: $("player_list"), game: $("game"), status: $("status"),
-  seasonLabel: $("season_label"), through: $("through"), chartBox: $("chart_box"), fig: $("fig"), share: $("share_png"),
+  seasonLabel: $("season_label"), through: $("through"), chartBox: $("chart_box"), fig: $("fig"), figTip: $("fig_tip"), share: $("share_png"),
   sliders: $("sliders"), seasonMin: $("season_min"), gameMin: $("game_min"), seasonMinV: $("season_min_v"), gameMinV: $("game_min_v"),
   seasonBoard: $("season_board"), gameBoard: $("game_board"), seasonBoardDesc: $("season_board_desc"), gameBoardDesc: $("game_board_desc"),
   va: $("va"), vaBox: $("va_box"), vaTip: $("va_tip"), vaDesc: $("va_desc"), team: $("team"), allTeams: $("all_teams"), minutes: $("minutes"),
@@ -143,8 +143,11 @@ function renderChart() {
   writeHash();
 }
 
+let charted = null;   // the summary on the chart, for the court's hover
 function drawChart() {
   const sum = current();
+  charted = sum;
+  el.figTip.hidden = true;
   draw(el.fig, sum, state.grid, { scale: screenScale(el.fig, FIG_W), title: title(sum) });
   el.fig.setAttribute("aria-label", `${title(sum)}: ${Math.round(sum.fgPts + sum.ftm)} points on ${sum.n} shots`);
   drawnAt.set(el.chartBox, el.chartBox.clientWidth);
@@ -337,6 +340,29 @@ for (const [box, which] of [[el.seasonBoard, "season"], [el.gameBoard, "game"]])
     el.chartBox.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 }
+
+// ---- the court's hover: a shot's zone, xPts, result and the free throws a shot there draws ----
+function showShot(e) {
+  if (!charted) return;
+  const rect = el.fig.getBoundingClientRect();
+  const k = FIG_W / rect.width;
+  const hit = shotAt(charted, (e.clientX - rect.left) * k, (e.clientY - rect.top) * k);
+  if (!hit) { el.figTip.hidden = true; el.fig.style.cursor = ""; return; }
+  const s = hit.shot;
+  const what = `${s.made ? "Made" : "Missed"} ${s.value === 3 ? "3-pointer" : "2-pointer"}`;
+  const when = s.game ? `<br>${esc(shortDate(s.game.date))} · ${esc(s.game.matchup)}` : "";
+  el.figTip.innerHTML = `<b>${what}</b><span class="big">xPts: ${s.xpts == null ? "–" : num(s.xpts, 2)}</span>`
+    + `<br>${esc(s.zone ?? "Off the zone map")}`
+    + `<br>Expected free throws drawn: ${num(s.xfta, 2)} (${num(s.xfta * PTS_PER_FT, 2)} pts)${when}`;
+  el.figTip.hidden = false;
+  el.fig.style.cursor = "default";
+  const left = hit.x / k + 14, top = hit.y / k + 14;
+  el.figTip.style.left = `${Math.max(8, Math.min(left, rect.width - el.figTip.offsetWidth - 8))}px`;
+  el.figTip.style.top = `${Math.min(top, rect.height - el.figTip.offsetHeight - 8)}px`;
+}
+el.fig.addEventListener("pointermove", showShot);
+el.fig.addEventListener("pointerdown", showShot);   // a tap, on a phone
+el.fig.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") el.figTip.hidden = true; });
 
 // ---- shot value added --------------------------------------------------------------------
 

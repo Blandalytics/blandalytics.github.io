@@ -3,7 +3,7 @@
 // on top, the points waterfall under it. Amber where a player made shots and added points, cyan
 // where they missed and gave some back, the xPTS court in seaborn's vlag.
 
-import { SEASON_SHOT_LIMIT, density } from "./model.js?v=1";
+import { SEASON_SHOT_LIMIT, density } from "./model.js?v=2";
 
 export const W = 800, H = 1390;
 
@@ -212,6 +212,19 @@ function rim(ctx) {
 }
 
 // misses as an open cyan X over an opaque white one, makes as an amber dot with a white edge
+/** The charted shot nearest a point in the figure's own pixels (W x H), within a marker's reach
+ *  (or null), with its centre: for the court's hover. */
+export function shotAt(sum, x, y) {
+  let best = null, dist = 12 * 12;
+  for (const s of sum.marked) {
+    const sx = cx(s.x), sy = cy(s.y);
+    if (sy < COURT.top || sy > COURT.bottom) continue;   // clipped off the court
+    const d = (sx - x) ** 2 + (sy - y) ** 2;
+    if (d <= dist) { dist = d; best = { shot: s, x: sx, y: sy }; }
+  }
+  return best;
+}
+
 function shots(ctx, marked) {
   const xPath = (x, y, r) => {
     const t = r * 0.32;   // matplotlib's "X": a filled cross, drawn here by its outline
@@ -364,17 +377,19 @@ function waterfall(ctx, sum) {
   ctx.strokeStyle = "rgba(255,255,255,.25)"; ctx.lineWidth = 1.4;
   ctx.beginPath(); ctx.moveTo(fx(2.5), fy(0)); ctx.lineTo(fx(2.5), fy(ymax * 0.95)); ctx.stroke();
 
+  // dotted steps from each bar's end to the next bar, drawn first so the bars sit on them: each starts
+  // where its bar's rounded corner begins, so it meets the bar rather than stopping short of the curve
+  ctx.strokeStyle = C.outline; ctx.lineWidth = 1.4; ctx.setLineDash([1.5, 1.5]);
+  cum.forEach((c, i) => {
+    const r = barRadius(fx(i - 0.4), fx(i + 0.4), fy(c - values[i]), fy(c));
+    ctx.beginPath(); ctx.moveTo(fx(i + 0.4) - r, fy(c)); ctx.lineTo(fx(i + 0.61), fy(c)); ctx.stroke();
+  });
+  ctx.setLineDash([]);
   values.forEach((v, i) => {
     const start = fy(cum[i] - v), end = fy(cum[i]);
     ctx.fillStyle = v >= 0 ? C.amber : C.cyan;
     ctx.fill(bar(fx(i - 0.4), fx(i + 0.4), start, end));
   });
-  // dotted steps from each bar's top to the next
-  ctx.strokeStyle = C.outline; ctx.lineWidth = 1.4; ctx.setLineDash([1.5, 1.5]);
-  cum.forEach((c, i) => {
-    ctx.beginPath(); ctx.moveTo(fx(i + 0.39), fy(c)); ctx.lineTo(fx(i + 0.61), fy(c)); ctx.stroke();
-  });
-  ctx.setLineDash([]);
   // the total, across
   ctx.strokeStyle = C.outline; ctx.lineWidth = 1.4;
   ctx.beginPath(); ctx.moveTo(fx(-0.48), fy(total)); ctx.lineTo(fx(5.5), fy(total)); ctx.stroke();
@@ -395,9 +410,10 @@ function waterfall(ctx, sum) {
 // A waterfall bar as Model Drilldown draws them (charts.js bar()): square where it starts (the
 // running total before it) and rounded where it ends, on top for a gain and underneath for a loss
 const BAR_R = 9;
+const barRadius = (x0, x1, start, end) => Math.min(BAR_R, (x1 - x0) / 2, Math.max(1, Math.abs(end - start)));
 function bar(x0, x1, start, end) {
   if (Math.abs(end - start) < 1) end = start + (end < start ? -1 : 1);
-  const r = Math.min(BAR_R, (x1 - x0) / 2, Math.abs(end - start));
+  const r = barRadius(x0, x1, start, end);
   const d = end < start ? 1 : -1;   // from the end's edge back toward the start (canvas y runs down)
   const p = new Path2D();
   p.moveTo(x0, start);
