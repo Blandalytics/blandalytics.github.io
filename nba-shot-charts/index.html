@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>NBA Shot Charts · Blandalytics</title>
+<meta name="description" content="How an NBA player scored in any game or across a season: shot volume, shot quality and shot making, then free throws earned, drawn and made, over a court shaded by each spot's expected points per shot.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://data.blandalytics.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&display=swap">
+<link rel="stylesheet" href="/shared/plpd.css?v=3">
+<style>
+/* NBA Shot Charts on the PLPD design system (/shared/plpd.css): the page header over five cards --
+   the scoring chart with its pickers, the two leaderboards, shot value added, team minutes, and
+   how the numbers are made */
+.page{box-sizing:border-box; max-width:1600px; margin:0 auto; padding-block:32px 48px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px));
+  display:flex; flex-direction:column; gap:28px}
+@media (min-width:720px){.page{padding-left:max(24px, env(safe-area-inset-left, 0px)); padding-right:max(24px, env(safe-area-inset-right, 0px))}}
+.home{font-family:var(--font-display); font-size:14px; color:var(--text-text-nav); text-decoration:none}
+.home:hover{color:var(--brand-brand-cyan)}
+@media (pointer:coarse){.home{display:inline-block; padding:10px 0; margin:-10px 0}}
+.plpd-page-header__title{text-wrap:balance}
+.plpd-pane{display:flex; flex-direction:column; gap:18px}
+.plpd-pane__desc{margin-top:-12px}
+.plpd-pane__desc + .plpd-pane__desc{margin-top:-8px}
+
+/* the pickers: wrap onto as many rows as the width needs */
+.controls{display:flex; flex-wrap:wrap; align-items:flex-end; gap:16px 20px}
+.controls .player{width:280px; max-width:100%}
+.controls .game select{width:260px}
+.plpd-autocomplete__menu{max-height:calc(10 * 32px + 14px); overflow-y:auto; overscroll-behavior:contain;
+  scrollbar-width:thin; scrollbar-color:var(--data-table-pl-data-table-scrollbar-thumb) transparent}
+.plpd-autocomplete__menu[hidden]{display:none}
+.plpd-autocomplete__menu li small{font-variant-numeric:tabular-nums}
+
+/* the figures fill the card's width and keep their own proportions */
+.figure{position:relative; border-radius:var(--radius-lg); overflow:hidden; background:var(--card-card-bg)}
+.figure canvas{display:block; width:100%; height:auto}
+.figure.chart{max-width:1400px}
+.figure.scatter{max-width:1100px}
+.actions{display:flex; flex-wrap:wrap; gap:12px; align-items:center}
+.plpd-tooltip{position:absolute; pointer-events:none; z-index:4}
+.plpd-tooltip b{display:block; font-family:var(--font-display); font-size:15px; font-weight:700; color:var(--base-white)}
+.plpd-tooltip .big{font-family:var(--font-display); font-weight:600; color:var(--brand-brand-cyan)}
+
+/* leaderboards side by side when there is room */
+.boards{display:grid; grid-template-columns:minmax(0,1fr); gap:24px}
+@media (min-width:1280px){.boards{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.board{display:flex; flex-direction:column; gap:12px; min-width:0}
+.sliders{display:flex; flex-wrap:wrap; gap:16px 32px}
+.slider{display:flex; flex-direction:column; gap:10px; width:280px; max-width:100%}
+.slider .plpd-filter-field__label b{font-weight:600; color:var(--text-text-cell); font-variant-numeric:tabular-nums}
+.slider input{width:100%}
+
+/* PlDataTableWrap: scrolls both ways, the header and the name column stay put */
+.plpd-table-wrap{max-height:620px; overscroll-behavior:contain}
+.plpd-table{width:100%}
+.plpd-table caption{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+.plpd-table thead th{position:sticky; top:0; z-index:2; height:34px; padding:0; text-align:right}
+.plpd-table thead th.left{text-align:left}
+.plpd-table thead th > span,.plpd-table thead th > button{display:block; padding:8px 12px}
+.plpd-table thead th > button{all:unset; box-sizing:border-box; display:block; width:100%; padding:8px 12px; cursor:pointer; text-align:inherit; color:inherit; font:inherit}
+.plpd-table thead th > button:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:-2px}
+.plpd-table td{height:36px; box-sizing:border-box; padding:8px 12px; font-size:15px; line-height:1.2; text-align:right}
+.plpd-table tbody tr:nth-child(odd) td{background:var(--data-table-pl-data-table-row-bg-stripe-light)}
+.plpd-table tbody tr:nth-child(even) td{background:var(--data-table-pl-data-table-row-bg-stripe-dark)}
+.plpd-table tbody tr:hover td{background:var(--data-table-pl-data-table-row-hover-bg)}
+.plpd-table tbody tr:last-child td{border-bottom:0}
+.plpd-table td.name,.plpd-table th.name{position:sticky; left:0; z-index:1; text-align:left}
+.plpd-table thead th.name{z-index:3}
+.plpd-table tbody tr:nth-child(odd) td.name{background:var(--data-table-pl-data-table-sticky-row-bg-light)}
+.plpd-table tbody tr:nth-child(even) td.name{background:var(--data-table-pl-data-table-sticky-row-bg-dark)}
+.plpd-table tbody tr:hover td.name{background:var(--data-table-pl-data-table-row-hover-bg)}
+.plpd-table td.name{font-weight:500; color:var(--text-text-player)}
+.plpd-table td.name button{all:unset; cursor:pointer; color:inherit; text-decoration:underline; text-decoration-color:transparent; text-underline-offset:3px}
+.plpd-table td.name button:hover{color:var(--brand-brand-cyan); text-decoration-color:currentColor}
+.plpd-table td.name button:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:2px}
+.plpd-table td.name small{display:block; margin-top:3px; font-size:13px; font-weight:400; color:var(--text-text-nav)}
+.plpd-table td.zero{color:var(--data-table-pl-data-table-cell-zero)}
+.plpd-table td.up{color:var(--brand-brand-amber)}
+.plpd-table td.down{color:var(--brand-brand-cyan)}
+
+/* team minutes: one team, or every team by conference and division */
+.minutes{display:flex; flex-direction:column; gap:24px}
+.conferences{display:grid; grid-template-columns:minmax(0,1fr); gap:28px}
+@media (min-width:1280px){.conferences{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.conference{display:flex; flex-direction:column; gap:20px; min-width:0}
+.conference h3{margin:0; font-family:var(--font-display); font-size:20px; font-weight:700; color:var(--brand-brand-cyan-header)}
+.team{display:flex; flex-direction:column; gap:10px; min-width:0}
+.team .plpd-mini__title{display:flex; align-items:center; gap:10px}
+.team .swatch{width:14px; height:14px; border-radius:3px; flex:none; box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
+.minutes .plpd-table-wrap{max-height:none}
+
+.how{display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:20px 32px}
+[hidden]{display:none !important}
+h1,h2,h3{text-wrap:balance}
+p{text-wrap:pretty}
+@media (pointer:coarse){select.plpd-filter-dropdown,.plpd-btn,.plpd-chip,.plpd-autocomplete__input{min-height:44px}}
+</style>
+</head>
+<body class="plpd">
+<div class="page">
+  <header class="plpd-page-header">
+    <a class="home" href="/">← Blandalytics</a>
+    <h1 class="plpd-page-header__title">NBA Shot Charts</h1>
+    <p class="plpd-page-header__meta"><span id="season_label">NBA</span> Regular Season<span id="through"></span></p>
+  </header>
+
+  <section class="plpd-pane" aria-labelledby="chart_title">
+    <h2 class="plpd-pane__title" id="chart_title">Scoring Chart</h2>
+    <p class="plpd-pane__desc">How a player scored, or didn't, in one game or across the season. Points come from shot volume (the average shot is worth 1.09 points), shot quality (expected points per shot above or below that), shot making (points above expected), free throws a player's shots should earn (about 0.78 points per attempt), free throws drawn beyond that, and free throws made. Amber marks makes and points added; cyan marks misses and points given back. The court is shaded by each spot's expected points per shot, and the bar above it shows the player's spread of shots across that scale.</p>
+    <div class="controls">
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">Season</span>
+        <select id="season" class="plpd-filter-dropdown" disabled></select></label>
+      <div class="plpd-filter-field player">
+        <label class="plpd-filter-field__label" for="player">Player</label>
+        <div class="plpd-autocomplete" style="width:100%">
+          <input id="player" class="plpd-autocomplete__input" type="text" placeholder="Search players" autocomplete="off" spellcheck="false"
+            role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="player_list" disabled>
+          <ul id="player_list" class="plpd-autocomplete__menu" role="listbox" hidden></ul>
+        </div>
+      </div>
+      <div class="plpd-filter-field"><span class="plpd-filter-field__label" id="view_label">Chart</span>
+        <div class="plpd-chips" role="group" aria-labelledby="view_label">
+          <button type="button" class="plpd-chip plpd-chip--amber" data-view="game" aria-pressed="true">One game</button>
+          <button type="button" class="plpd-chip plpd-chip--amber" data-view="season" aria-pressed="false">Season</button>
+        </div>
+      </div>
+      <label class="plpd-filter-field game"><span class="plpd-filter-field__label">Game</span>
+        <select id="game" class="plpd-filter-dropdown" disabled></select></label>
+    </div>
+    <p id="status" class="plpd-status">Loading the seasons…</p>
+    <div class="figure chart" id="chart_box" hidden><canvas id="fig" width="2800" height="1600" role="img" aria-label="Scoring summary"></canvas></div>
+    <div class="actions"><button id="share_png" class="plpd-btn" type="button" hidden>Share image ▾</button></div>
+  </section>
+
+  <section class="plpd-pane" aria-labelledby="boards_title">
+    <h2 class="plpd-pane__title" id="boards_title">Leaderboards</h2>
+    <p class="plpd-pane__desc" id="boards_desc">Every player's season, and the season's best games, in the chart's six parts. Pick a column to sort by it; pick a player or a game to chart it.</p>
+    <div class="controls">
+      <div class="plpd-chips" role="group" aria-label="Show values as">
+        <button type="button" class="plpd-chip" data-mode="total" aria-pressed="true">Totals</button>
+        <button type="button" class="plpd-chip" data-mode="per" aria-pressed="false">Per shot</button>
+      </div>
+      <div class="sliders" id="sliders" hidden>
+        <label class="slider"><span class="plpd-filter-field__label">Min shots in season: <b id="season_min_v">50</b></span>
+          <input id="season_min" class="plpd-range" type="range" min="1" max="100" value="50"></label>
+        <label class="slider"><span class="plpd-filter-field__label">Min shots in a game: <b id="game_min_v">5</b></span>
+          <input id="game_min" class="plpd-range" type="range" min="1" max="40" value="5"></label>
+      </div>
+    </div>
+    <div class="boards">
+      <div class="board">
+        <div class="plpd-mini"><h3 class="plpd-mini__title">Season</h3><p class="plpd-mini__desc" id="season_board_desc">Every player, most points first.</p></div>
+        <div class="plpd-table-wrap" id="season_board" role="region" aria-label="Season leaderboard" tabindex="0"></div>
+      </div>
+      <div class="board">
+        <div class="plpd-mini"><h3 class="plpd-mini__title">Games</h3><p class="plpd-mini__desc" id="game_board_desc">The season's 100 highest-scoring games.</p></div>
+        <div class="plpd-table-wrap" id="game_board" role="region" aria-label="Game leaderboard" tabindex="0"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="plpd-pane" aria-labelledby="va_title">
+    <h2 class="plpd-pane__title" id="va_title">Shot Value Added</h2>
+    <p class="plpd-pane__desc" id="va_desc">Points added by the shots a player takes (quality, up) and by making them (across), for the top quarter of players by shots. Each diagonal is a line of equal points added, the solid one through the league average; the dashed ones step out by one standard deviation at a time.</p>
+    <div class="figure scatter" id="va_box"><canvas id="va" width="2200" height="1520" role="img" aria-label="Shot quality against shot making points added"></canvas>
+      <div class="plpd-tooltip" id="va_tip" hidden></div></div>
+  </section>
+
+  <section class="plpd-pane" aria-labelledby="min_title">
+    <h2 class="plpd-pane__title" id="min_title">Team Minutes</h2>
+    <p class="plpd-pane__desc">Each player's average minutes over the team's last 3, 5 and 10 games and the season, then minutes in each of the team's last five games, latest first. A blank means the player didn't play that game.</p>
+    <div class="controls">
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">Team</span>
+        <select id="team" class="plpd-filter-dropdown"></select></label>
+      <label class="plpd-check"><input type="checkbox" id="all_teams">Every team</label>
+    </div>
+    <div class="minutes" id="minutes"><p class="plpd-status">Loading minutes…</p></div>
+  </section>
+
+  <section class="plpd-pane" aria-labelledby="how_title">
+    <h2 class="plpd-pane__title" id="how_title">How it works</h2>
+    <p class="plpd-pane__desc">This is <a href="https://nba-scoring-chart.streamlit.app/" target="_blank" rel="noopener">NBA Scoring Chart</a> (<a href="https://github.com/Blandalytics/nba_shot_chart" target="_blank" rel="noopener">source</a>) rebuilt for the browser, with the same models and the same arithmetic. The data is every regular-season field goal attempt and box score from stats.nba.com, refreshed each morning.</p>
+    <div class="how">
+      <div class="plpd-mini"><h3 class="plpd-mini__title">xFG% model</h3><p class="plpd-mini__desc">Expected field goal percentage at each spot on the floor, trained on shot locations from 2022-23 through 2024-25. Times the shot's value, it gives expected points (xPTS). See <a href="https://github.com/Blandalytics/nba_shot_chart/blob/main/xFG.png?raw=true" target="_blank" rel="noopener">the model's map</a> and <a href="https://github.com/Blandalytics/nba_shot_chart/blob/main/nba_xFG_values.csv?raw=true" target="_blank" rel="noopener">every spot's value</a>.</p></div>
+      <div class="plpd-mini"><h3 class="plpd-mini__title">xFTA model</h3><p class="plpd-mini__desc">Expected free throw attempts per shot from where the shots come from, trained on 2022-23 through 2024-25 games: restricted area 0.375, paint 0.320, mid-range 0.293, above-the-break 3 0.143 and corner 3 0.021, plus 0.049 on every shot (<a href="https://github.com/Blandalytics/nba_shot_chart/blob/main/shot_loc_classes.png?raw=true" target="_blank" rel="noopener">the five areas</a>).</p></div>
+      <div class="plpd-mini"><h3 class="plpd-mini__title">Shot points</h3><p class="plpd-mini__desc">Volume is 1.09 points for every shot. Quality is each shot's xPTS less 1.09. Making is the points a shot scored less its xPTS. The three add up to the points scored from the field.</p></div>
+      <div class="plpd-mini"><h3 class="plpd-mini__title">Free throw points</h3><p class="plpd-mini__desc">xFT volume is expected free throw attempts at 0.78 points each. Drawing is attempts beyond expected, at the same rate. Making is free throws made less 0.78 per attempt. The three add up to free throws made.</p></div>
+      <div class="plpd-mini"><h3 class="plpd-mini__title">Season charts</h3><p class="plpd-mini__desc">A season chart counts every shot in the breakdown and the scale above the court, and marks the player's last 200 on the court.</p></div>
+    </div>
+  </section>
+</div>
+<script src="/shared/share-image.js?v=2"></script>
+<script type="module" src="app.js?v=1"></script>
+</body>
+</html>

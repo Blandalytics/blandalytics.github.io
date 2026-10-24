@@ -13,7 +13,7 @@ Cards is hidden from all three for now: its tile and links are commented out in 
 
 | file | role |
 |---|---|
-| `index.html` | the page: the definition, a section of tiles per sport (Baseball, then Hockey), the menu grouped the same way, and the footer |
+| `index.html` | the page: the definition, a section of tiles per sport (Baseball, Hockey, then Basketball), the menu grouped the same way, and the footer |
 | `assets/css/main.css`, `assets/js/` | the Phantom template, unchanged |
 | `assets/css/blandalytics.css` | the site's palette and font over the template, the tile scrim, the footer wordmark |
 | `shared/share-image.js` | **Share image**, the one export button of every tool that makes a figure: a menu of Copy image and Download PNG (plus a tool's other downloads, such as Release Angles' GIF). Copy image falls back to a download where the browser refuses the clipboard. Each tool hands it a function that draws the PNG and one that names the file; the menu items get ids (`<button id>_copy`, `<button id>_download`) for `grab_app_pngs.py`. Pages load it as `/shared/share-image.js?v=N`: bump N with each change |
@@ -1492,3 +1492,78 @@ with a new export of the sheet (same columns), then bump `VERSION` in `app.js` a
 `app.js?v=` query in `index.html` so browsers fetch the new files. The same bump is needed
 after any change to the Python under `nhl-draft/py/`. A different projections file can also
 be loaded on the page itself, without deploying, through the *Projections* file input.
+
+## NBA Shot Charts
+
+[blandalytics.com/nba-shot-charts/](https://blandalytics.com/nba-shot-charts/) — how an NBA
+player scored in one game or across a season. It is the
+[nba-scoring-chart.streamlit.app](https://nba-scoring-chart.streamlit.app/) app
+([Blandalytics/nba_shot_chart](https://github.com/Blandalytics/nba_shot_chart)) rebuilt for the
+browser on the PLPD design system: the scoring chart (the six-part points waterfall beside the
+court, shaded by the xFG model's expected points per shot, with the shots and their xPTS spread
+on the scale above), the season and game leaderboards (totals or per shot, with the app's two
+minimum-shot sliders), Shot Value Added (shot quality against shot making for the top quarter
+of players by shots) and Team Minutes (one team, or every team by division). Pick a season, a
+player and a game, or the season-long chart; a chart is linkable as
+`nba-shot-charts/#<season>/<player id>/<game id | season>`. A leaderboard row or a scatter
+point opens that player or game in the chart. **Share image** exports the chart at 2x.
+
+It departs from the app in a few places, all deliberate:
+
+- **PLPD colours.** Amber marks makes and points added, cyan misses and points given back (the
+  app's green and purple); the court and its scale use the heat cell's blue-white-red over the
+  app's `CenteredNorm(1.09, 0.42)` instead of seaborn's `vlag`.
+- **Every player.** The app keeps players on `nba_api`'s bundled active list, which lags the
+  season (rookies and since-retired players missing, some names spelled differently from the
+  stats API, which breaks its name-to-id lookup). Here everyone who logged a game is listed,
+  each id under its most frequent spelling.
+- **The whole season.** The app's one league-wide `ShotChartDetail` call silently stops at
+  102,400 rows (about half a season); the build asks a month at a time.
+- **Per-shot game Volume.** The app's per-shot game leaderboard folds xFTA points into Volume;
+  here Volume is 1.09 a shot in both tables, so it is left out of the per-shot views.
+
+### How it works
+
+[`tools/nba_shot_charts/build_data.py`](tools/nba_shot_charts/build_data.py) pulls a season's
+game logs and shots from stats.nba.com with `nba_api`, retrying until the two agree on every
+player-game's FGA (the API's caches can lag each other by a night's games), and writes JSON to
+the `blandalytics-live` bucket under `nba/`:
+
+| key | contents |
+|---|---|
+| `nba/manifest.json` | the seasons on offer, each with its `updated` stamp, games, shots and last date; written last |
+| `nba/<season>/shots.json` | every regular-season FGA (player, game, location, make, 2 or 3, xPTS, shot zone) and each player-game's FTA, FTM and matchup (~7 MB a full season, ~1.5 MB compressed) |
+| `nba/<season>/minutes.json` | every player-game's minutes |
+| `nba/xfg_grid.json` | the court's background: matplotlib's hexbin of the xFG grid with the app's gridsize and extent, and the `vlag` colormap |
+
+The page fetches the manifest under a ten-minute `?v=` and each season's files under its
+`updated` stamp, so a morning's upload shows at once despite the edge cache.
+[`nba-shot-charts/model.js`](nba-shot-charts/model.js) is the app's pandas arithmetic as pure
+functions (checked against the app's own code on all of 2025-26: every leaderboard total,
+per-shot mean, waterfall part, the scatter's threshold and guides, and team minutes agree to
+display precision); `figure.js` draws the chart and `scatter.js` the value-added plot, both on
+canvases at 2x.
+
+| file | role |
+|---|---|
+| `nba-shot-charts/index.html`, `app.js` | the page: pickers, leaderboards, minutes tables, the link hash |
+| `nba-shot-charts/model.js` | the app's arithmetic (summary, leaderboards, value added, team minutes, the colorbar's KDE) |
+| `nba-shot-charts/figure.js`, `scatter.js` | the scoring chart and the value-added scatter |
+| `tools/nba_shot_charts/build_data.py` | stats.nba.com → `nba/` in R2 |
+
+### Updating
+
+stats.nba.com answers a home connection but not cloud runners, so the build runs on a desktop
+schedule rather than in GitHub Actions: a Claude scheduled task (`nba-shot-charts-daily`) runs it
+every morning for the current season, uploading with the wrangler login. By hand, from the repo
+root (Python with `tools/nba_shot_charts/requirements.txt`, and `npx wrangler` signed in):
+
+```bash
+python tools/nba_shot_charts/build_data.py                    # the current season, uploaded
+python tools/nba_shot_charts/build_data.py --season 2025-26   # any season (adds it to the manifest)
+python tools/nba_shot_charts/build_data.py --out /tmp/nba     # write the files, upload nothing
+```
+
+To try the page on local files, serve the repo on port 8000 and add
+`?data=/tools/nba_shot_charts/cache/web/` with the files under `cache/web/nba/`. After any change
+to the JavaScript, bump the `?v=` on `app.js` in `index.html` and on the module imports.
