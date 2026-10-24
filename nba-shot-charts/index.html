@@ -39,7 +39,7 @@
 /* the figures fill the card's width and keep their own proportions */
 .figure{position:relative; border-radius:var(--radius-lg); overflow:hidden; background:var(--card-card-bg)}
 .figure canvas{display:block; width:100%; height:auto}
-.figure.chart{max-width:1400px}
+.figure.chart{max-width:800px; width:100%; margin:0 auto}
 .figure.scatter{max-width:1100px}
 .actions{display:flex; flex-wrap:wrap; gap:12px; align-items:center}
 .plpd-tooltip{position:absolute; pointer-events:none; z-index:4}
@@ -130,7 +130,7 @@ p{text-wrap:pretty}
         <select id="game" class="plpd-filter-dropdown" disabled></select></label>
     </div>
     <p id="status" class="plpd-status">Loading the seasons…</p>
-    <div class="figure chart" id="chart_box" hidden><canvas id="fig" width="2800" height="1600" role="img" aria-label="Scoring summary"></canvas></div>
+    <div class="figure chart" id="chart_box" hidden><canvas id="fig" width="1600" height="2880" role="img" aria-label="Scoring summary"></canvas></div>
     <div class="actions"><button id="share_png" class="plpd-btn" type="button" hidden>Share image ▾</button></div>
   </section>
 
@@ -192,6 +192,6 @@ p{text-wrap:pretty}
   </section>
 </div>
 <script src="/shared/share-image.js?v=2"></script>
-<script type="module" src="app.js?v=3"></script>
+<script type="module" src="app.js?v=4"></script>
 </body>
 </html>
