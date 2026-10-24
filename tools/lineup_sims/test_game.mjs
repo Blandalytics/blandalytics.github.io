@@ -295,6 +295,18 @@ function bookkeeping(res, teams, label) {
   delete unscored.schedule.dates[0].games[0].teams.home.score;
   check(JSON.stringify(parseGame(pk, fx.schedule, fx.boxscore, ctx()).final) === "[3,5]" && parseGame(pk, unscored.schedule, unscored.boxscore, ctx()).final === null,
     "the final score comes back as [away, home] (BOS 3, TOR 5), or null without both");
+  // what each side actually did, for the hover charts' amber outline: by lineup spot, starter, bullpen and team
+  {
+    const G = parseGame(pk, fx.schedule, fx.boxscore, ctx()), A = G.sides.away.observed, Hm = G.sides.home.observed;
+    const sumOf = (rows, k) => rows.reduce((a, r) => a + (r[k] ?? 0), 0);
+    check(A.batTot.R === 3 && Hm.batTot.R === 5 && A.batTot.H === 7, "the real team lines: BOS 3 runs on 7 hits, TOR 5 runs");
+    check(["PA", "AB", "H", "TB", "BB", "K"].every((k) => sumOf(A.bat, k) === A.batTot[k] && sumOf(Hm.bat, k) === Hm.batTot[k]),
+      "each team's nine lineup spots (starters and those who batted after them) add up to the team");
+    check(A.sp.OUTS === 18 && Hm.sp.OUTS === 15 && Object.keys(A.pitTot).every((k) => A.sp[k] + A.pen[k] === A.pitTot[k]),
+      "the starters' real lines (18 and 15 outs), and starter plus bullpen is the staff");
+    check(A.pitTot.OUTS === 24 && Hm.pitTot.OUTS === 27 && A.pitTot.R === Hm.batTot.R && Hm.pitTot.R === A.batTot.R,
+      "the staffs' outs (TOR didn't bat in the 9th) and runs allowed match the other side's runs");
+  }
   const madeUpScore = (order) => {
     const f = copy(), fin = f.schedule.dates[0].games[0], post = JSON.parse(JSON.stringify(fin));
     post.status = { codedGameState: "D", detailedState: "Postponed" };
