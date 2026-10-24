@@ -1499,9 +1499,9 @@ be loaded on the page itself, without deploying, through the *Projections* file 
 player scored in one game or across a season. It is the
 [nba-scoring-chart.streamlit.app](https://nba-scoring-chart.streamlit.app/) app
 ([Blandalytics/nba_shot_chart](https://github.com/Blandalytics/nba_shot_chart)) rebuilt for the
-browser on the PLPD design system, its figures in the app's colours (green for makes and points
-added, purple for misses and points given back, the court in seaborn's `vlag`), the green and
-purple lightened to equal contrast against the background and the scale's white midpoint: the
+browser on the PLPD design system: amber for makes and points added and cyan for misses and
+points given back (as Model Drilldown uses them), each set to equal contrast against the
+background and white, and the court in the app's seaborn `vlag`. It holds the
 scoring chart (the app's two panels stacked, the court shaded by the xFG model's expected points
 per shot with the shots and their xPTS spread on the scale above it, then the six-part points
 waterfall underneath), the season and game leaderboards (totals or per shot, with the app's two

@@ -1,19 +1,20 @@
 // NBA Shot Charts: the app's scoring summary figure (shot_summary() in nba_shot_chart.py),
 // drawn on an 800 x 1440 canvas with the app's two panels stacked: the court and its xPTS scale
-// on top, the points waterfall under it. In the app's colours: green where a player made shots and added points, purple where they
-// missed and gave some back, the xPTS court in seaborn's vlag.
+// on top, the points waterfall under it. Amber where a player made shots and added points, cyan
+// where they missed and gave some back, the xPTS court in seaborn's vlag.
 
 import { SEASON_SHOT_LIMIT, density } from "./model.js?v=1";
 
-export const W = 800, H = 1440;
+export const W = 800, H = 1460;
 
 const C = {
   bg: "#292c42", ink: "#f0f1f5", nav: "#cbd7fd",
-  // the app's green and purple, each lightened to the luminance (0.234) that gives the same contrast
-  // against the background and the scale's white midpoint (~3.7:1 and ~3.4:1), so neither needs a
-  // white edge; the purple turned a little toward violet so it doesn't read as magenta
-  green: "#2c992c", purple: "#b662d2",
+  // PLPD's amber (made, points added) and cyan (missed, points given back), as Model Drilldown
+  // uses them, each set to the luminance (0.234) with the same contrast against the background and
+  // white (~3.7:1, ~3.4:1 against the scale's near-white midpoint)
+  amber: "#c86e00", cyan: "#0092a9",
   line: "#000000", outline: "#ffffff",
+  pill: "#34374c",   // PLPD card-bg-hover: a step up from the background, as Lineup Sim's stat box
 };
 const DISPLAY = '"DM Sans", system-ui, sans-serif';
 const TEXT = '"Work Sans", system-ui, sans-serif';
@@ -33,7 +34,7 @@ function colormap(cmap) {
 // ---- layout ------------------------------------------------------------------------------
 
 // the court: data x -250..250, y -53..400 (the app's xlim / ylim), hoop at (0, 0)
-const COURT = { x0: 40, scale: 1.44, top: 180, xlim: [-250, 250], ylim: [-53, 400] };
+const COURT = { x0: 40, scale: 1.44, top: 200, xlim: [-250, 250], ylim: [-53, 400] };
 COURT.w = (COURT.xlim[1] - COURT.xlim[0]) * COURT.scale;
 COURT.h = (COURT.ylim[1] - COURT.ylim[0]) * COURT.scale;
 COURT.bottom = COURT.top + COURT.h;
@@ -56,6 +57,9 @@ export function draw(canvas, sum, grid, { scale = 2, title } = {}) {
   canvas.height = H * scale;
   const ctx = canvas.getContext("2d");
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  // court line widths, held to at least 1.5 (black) and 3.5 (white) device pixels on a small canvas
+  LINE.inner = Math.max(2, 1.5 / scale);
+  LINE.outer = Math.max(4, 3.5 / scale);
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, W, H);
 
@@ -106,33 +110,36 @@ function court(ctx, sum, grid, heat) {
 
   courtLines(ctx);
   shots(ctx, sum.marked);
+  rim(ctx);   // over the shots: the hoop and backboard always show
   ctx.restore();
 
-  text(ctx, "@blandalytics", cx(242.5), cy(385), { font: `400 17px ${TEXT}`, align: "right" });
   if (sum.limited) {
     text(ctx, `Last ${SEASON_SHOT_LIMIT} shots`, cx(0), cy(-47.5), { font: `italic 300 14px ${TEXT}`, align: "center", baseline: "bottom" });
   }
 }
 
+const LINE = { inner: 2, outer: 4 };
+
+const Y_ADJ = 52.5;   // the baseline sits this far below the hoop
+const arc = (x, y, r, t1, t2, dash) => (c) => {
+  c.setLineDash(dash ? [6, 6] : []);
+  c.beginPath();
+  c.arc(cx(x), cy(y), r * COURT.scale, -t2 * Math.PI / 180, -t1 * Math.PI / 180);
+  c.stroke();
+};
+const seg = (x1, y1, x2, y2) => (c) => {
+  c.setLineDash([]);
+  c.beginPath();
+  c.moveTo(cx(x1), cy(y1));
+  c.lineTo(cx(x2), cy(y2));
+  c.stroke();
+};
+
 // every line twice, as the app draws them: a white outline under a black line
 function courtLines(ctx) {
-  const yAdj = 52.5;
-  const arc = (x, y, r, t1, t2, dash) => (c) => {
-    c.setLineDash(dash ? [6, 6] : []);
-    c.beginPath();
-    c.arc(cx(x), cy(y), r * COURT.scale, -t2 * Math.PI / 180, -t1 * Math.PI / 180);
-    c.stroke();
-  };
-  const seg = (x1, y1, x2, y2) => (c) => {
-    c.setLineDash([]);
-    c.beginPath();
-    c.moveTo(cx(x1), cy(y1));
-    c.lineTo(cx(x2), cy(y2));
-    c.stroke();
-  };
+  const yAdj = Y_ADJ;
   const pairs = [
-    // hoop, restricted area
-    [arc(0, 0, 7.5, 0, 360), 4, 2],
+    // restricted area
     [arc(0, 0, 40, 0, 180), 4, 2],
     // three-point arc and corners
     [arc(0, 0, 237.5, 22, 158), 4, 2],
@@ -143,26 +150,33 @@ function courtLines(ctx) {
     [seg(-80, -yAdj, -80, 190 - yAdj), 4, 2],
     [seg(80, -yAdj, 80, 190 - yAdj), 4, 2],
   ];
-  for (const [path, outer] of pairs) { ctx.strokeStyle = C.outline; ctx.lineWidth = outer; path(ctx); }
-  for (const [path, , inner] of pairs) { ctx.strokeStyle = C.line; ctx.lineWidth = inner; path(ctx); }
+  for (const [path] of pairs) { ctx.strokeStyle = C.outline; ctx.lineWidth = LINE.outer; path(ctx); }
+  for (const [path] of pairs) { ctx.strokeStyle = C.line; ctx.lineWidth = LINE.inner; path(ctx); }
 
   // the free-throw circle: a white ring, solid black on top, dashed black underneath
-  ctx.strokeStyle = C.outline; ctx.lineWidth = 4; arc(0, 190 - yAdj, 60, 0, 360)(ctx);
-  ctx.strokeStyle = C.line; ctx.lineWidth = 2;
+  ctx.strokeStyle = C.outline; ctx.lineWidth = LINE.outer; arc(0, 190 - yAdj, 60, 0, 360)(ctx);
+  ctx.strokeStyle = C.line; ctx.lineWidth = LINE.inner;
   arc(0, 190 - yAdj, 60, 0, 180)(ctx);
   arc(0, 190 - yAdj, 60, 180, 360, true)(ctx);
-  // the backboard: black under white
-  ctx.strokeStyle = C.line; ctx.lineWidth = 4; seg(-30, 40 - yAdj, 30, 40 - yAdj)(ctx);
-  ctx.strokeStyle = C.outline; ctx.lineWidth = 2; seg(-30, 40 - yAdj, 30, 40 - yAdj)(ctx);
   // baseline and sidelines, white
-  ctx.lineWidth = 2;
+  ctx.lineWidth = LINE.inner;
   seg(-250, -yAdj, 250, -yAdj)(ctx);
   seg(-249, -yAdj, -249, 470)(ctx);
   seg(249, -yAdj, 249, 470)(ctx);
   ctx.setLineDash([]);
 }
 
-// misses as an open purple X, makes as a green dot
+// the hoop (black over white) and backboard (white over black), drawn last
+function rim(ctx) {
+  const board = seg(-30, 40 - Y_ADJ, 30, 40 - Y_ADJ), hoop = arc(0, 0, 7.5, 0, 360);
+  ctx.strokeStyle = C.line; ctx.lineWidth = LINE.outer; board(ctx);
+  ctx.strokeStyle = C.outline; ctx.lineWidth = LINE.inner; board(ctx);
+  ctx.strokeStyle = C.outline; ctx.lineWidth = LINE.outer; hoop(ctx);
+  ctx.strokeStyle = C.line; ctx.lineWidth = LINE.inner; hoop(ctx);
+  ctx.setLineDash([]);
+}
+
+// misses as an open cyan X over a white one, makes as an amber dot with a white edge
 function shots(ctx, marked) {
   const xPath = (x, y, r) => {
     const t = r * 0.32;   // matplotlib's "X": a filled cross, drawn here by its outline
@@ -175,13 +189,15 @@ function shots(ctx, marked) {
   for (const s of marked) {
     if (s.made) continue;
     xPath(cx(s.x), cy(s.y), 8.5);
-    ctx.strokeStyle = C.purple; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.globalAlpha = 0.75; ctx.strokeStyle = C.outline; ctx.lineWidth = 4.5; ctx.stroke();
+    ctx.globalAlpha = 1; ctx.strokeStyle = C.cyan; ctx.lineWidth = 2; ctx.stroke();
   }
   for (const s of marked) {
     if (!s.made) continue;
     ctx.beginPath();
     ctx.arc(cx(s.x), cy(s.y), 7.5, 0, Math.PI * 2);
-    ctx.fillStyle = C.green; ctx.fill();
+    ctx.fillStyle = C.amber; ctx.fill();
+    ctx.strokeStyle = C.outline; ctx.lineWidth = 1.4; ctx.stroke();
   }
 }
 
@@ -213,28 +229,35 @@ function colorbar(ctx, sum, heat) {
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(CB.x0, top + h); ctx.lineTo(CB.x0 + CB.w, top + h); ctx.stroke();
 
-  // ticks along the top, as matplotlib places them
+  // ticks under the bar, in the empty band at the top of the court (the pills sit on top of it)
   for (let v = 0.7; v <= 1.5001; v += 0.1) {
     const x = cbx(v);
     ctx.strokeStyle = C.ink; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top - 5); ctx.stroke();
-    text(ctx, v.toFixed(1), x, top - 8, { font: `400 14px ${TEXT}`, align: "center", baseline: "bottom", color: C.nav });
+    ctx.beginPath(); ctx.moveTo(x, top + h); ctx.lineTo(x, top + h + 5); ctx.stroke();
+    text(ctx, v.toFixed(1), x, top + h + 8, { font: `400 14px ${TEXT}`, align: "center", baseline: "top", color: C.nav });
   }
 
   const { expected, actual } = sum;
   const clip = (v) => Math.min(Math.max(v, BAR.lo), BAR.hi);
   const up = actual - expected >= 0;
-  const tone = up ? C.green : C.purple;
+  const tone = up ? C.amber : C.cyan;
   const vline = (v, color, width) => {
     if (!Number.isFinite(v) || v < BAR.lo || v > BAR.hi) return;
     ctx.strokeStyle = color; ctx.lineWidth = width;
     ctx.beginPath(); ctx.moveTo(cbx(v), top); ctx.lineTo(cbx(v), top + h); ctx.stroke();
   };
-  // the arrow from xPts/Shot to Pts/Shot, its point on the coloured line's near edge
+  // the arrow from xPts/Shot to Pts/Shot: a white outline, then the line (white under its colour),
+  // then the arrow's fill, so its point ends on the coloured line's near edge
   const ACTUAL_W = 2.5;
   const shaft = Math.abs(actual - expected) >= 0.025 && Number.isFinite(actual) && Number.isFinite(expected)
     ? arrowPath(cbx(clip(expected)), cbx(clip(actual)) - (up ? 1 : -1) * ACTUAL_W / 2, top + h / 2)
     : null;
+  if (shaft) {
+    ctx.lineJoin = "miter";
+    ctx.strokeStyle = C.outline; ctx.lineWidth = 3;
+    ctx.stroke(shaft);
+  }
+  vline(actual, C.outline, 4.5);
   vline(actual, tone, ACTUAL_W);
   if (shaft) {
     ctx.fillStyle = tone;
@@ -242,18 +265,32 @@ function colorbar(ctx, sum, heat) {
   }
   vline(expected, C.bg, 2.5);   // xPts/Shot, in the background's colour
 
-  // each value in the scale's colour at that value, its label in white, the pair centred together
-  const label = (name, v, x) => {
-    const font = `500 25px ${DISPLAY}`;
-    const value = Number.isFinite(v) ? v.toFixed(2) : "–";
-    ctx.font = font;
-    const a = ctx.measureText(`${name}: `).width, b = ctx.measureText(value).width;
-    text(ctx, `${name}: `, x - (a + b) / 2, top - 46, { font });
-    text(ctx, value, x - (a + b) / 2 + a, top - 46, { font, color: Number.isFinite(v) ? heat(clip(v)) : C.ink });
-  };
-  label("xPts/Shot", expected, COURT.x0 + COURT.w * 0.27);
-  label("Pts/Shot", actual, COURT.x0 + COURT.w * 0.73);
+  // xPts/Shot and Pts/Shot in pills (Lineup Sim's stat box) standing on the bar, flush with the
+  // court's left and right sidelines: a small label over the value in bold, in the scale's colour
+  pill("xPts/Shot", expected, CB.x0);
+  pill("Pts/Shot", actual, CB.x0 + CB.w - PILL.w);
+
+  function pill(name, v, x0) {
+    const y0 = top - PILL.h, x1 = x0 + PILL.w, r = PILL.r;
+    const p = new Path2D();
+    p.moveTo(x0, top);
+    p.lineTo(x0, y0 + r);
+    p.arcTo(x0, y0, x0 + r, y0, r);
+    p.lineTo(x1 - r, y0);
+    p.arcTo(x1, y0, x1, y0 + r, r);
+    p.lineTo(x1, top);
+    ctx.fillStyle = C.pill;
+    ctx.fill(p);
+    ctx.strokeStyle = C.outline; ctx.lineWidth = 2; ctx.lineJoin = "miter";
+    ctx.stroke(p);
+    const mid = (x0 + x1) / 2;
+    text(ctx, name, mid, y0 + 24, { font: `500 16px ${DISPLAY}`, align: "center", color: C.nav });
+    text(ctx, Number.isFinite(v) ? v.toFixed(2) : "–", mid, y0 + 58,
+      { font: `700 36px ${DISPLAY}`, align: "center", color: Number.isFinite(v) ? heat(clip(v)) : C.ink });
+  }
 }
+
+const PILL = { w: 190, h: 84, r: 10 };
 
 // one outline for the shaft and head, from x1 to the point at x2
 function arrowPath(x1, x2, y) {
@@ -290,7 +327,7 @@ function waterfall(ctx, sum) {
 
   values.forEach((v, i) => {
     const start = fy(cum[i] - v), end = fy(cum[i]);
-    ctx.fillStyle = v >= 0 ? C.green : C.purple;
+    ctx.fillStyle = v >= 0 ? C.amber : C.cyan;
     ctx.fill(bar(fx(i - 0.4), fx(i + 0.4), start, end));
   });
   // dotted steps from each bar's top to the next
@@ -304,7 +341,7 @@ function waterfall(ctx, sum) {
   ctx.beginPath(); ctx.moveTo(fx(-0.48), fy(total)); ctx.lineTo(fx(5.5), fy(total)); ctx.stroke();
 
   values.forEach((v, i) => {
-    const tone = v >= 0 ? C.green : C.purple;
+    const tone = v >= 0 ? C.amber : C.cyan;
     text(ctx, cats[i][0], fx(i), fy(max * 1.075) - 10, { font: `500 15px ${DISPLAY}`, align: "center" });
     text(ctx, cats[i][1], fx(i), fy(max * 1.075) + 10, { font: `500 15px ${DISPLAY}`, align: "center" });
     tag(ctx, `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`, fx(i), fy(cum[i]), tone, sum.game == null ? 14 : 17);

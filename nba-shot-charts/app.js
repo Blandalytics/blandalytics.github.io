@@ -5,8 +5,8 @@
 // A chart is linkable as #<season>/<player id>/<game id | season>.
 
 import { prepare, defaultPick, summary, seasonBoard, gameBoard, valueAdded, teamMinutes } from "./model.js?v=1";
-import { draw, W as FIG_W } from "./figure.js?v=4";
-import { drawScatter, SW } from "./scatter.js?v=3";
+import { draw, W as FIG_W } from "./figure.js?v=5";
+import { drawScatter, SW } from "./scatter.js?v=4";
 
 const params = new URLSearchParams(location.search);
 const DATA = new URL(params.get("data") || "https://data.blandalytics.com/", location.href).href;
@@ -480,4 +480,13 @@ async function start() {
 
 resized.observe(el.chartBox);
 resized.observe(el.vaBox);
+// a change of pixel ratio at the same CSS width (a window dragged to another screen, some zooms)
+// redraws too; the query matches only the current ratio, so it re-arms after each change
+(function watchRatio() {
+  matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`).addEventListener("change", () => {
+    drawnAt.clear();
+    if (state.data) { if (!el.chartBox.hidden) drawChart(); renderValueAdded(); }
+    watchRatio();
+  }, { once: true });
+})();
 start();
