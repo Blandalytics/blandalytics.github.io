@@ -5,8 +5,8 @@
 // A chart is linkable as #<season>/<player id>/<game id | season>.
 
 import { prepare, defaultPick, summary, seasonBoard, gameBoard, valueAdded, teamMinutes } from "./model.js?v=1";
-import { draw } from "./figure.js?v=2";
-import { drawScatter } from "./scatter.js?v=1";
+import { draw } from "./figure.js?v=3";
+import { drawScatter } from "./scatter.js?v=2";
 
 const params = new URLSearchParams(location.search);
 const DATA = new URL(params.get("data") || "https://data.blandalytics.com/", location.href).href;
@@ -219,12 +219,12 @@ viewChips.forEach((b) => b.addEventListener("click", () => {
 // ---- leaderboards ------------------------------------------------------------------------
 
 const SEASON_COLS = {
-  // [key, header, decimals, signed: amber above zero, cyan below]
-  total: [["games", "G", 0], ["pts", "Pts", 0], ["fga", "FGA", 0], ["vol", "Vol Pts", 1], ["qual", "Qual Pts", 1, true],
-    ["make", "Make Pts", 1, true], ["fgPts", "FG Pts", 0], ["xfta", "xFTA Pts", 1], ["ftDraw", "FT Draw Pts", 1, true],
-    ["ftMake", "FT Make Pts", 1, true], ["ftPts", "FT Pts", 0]],
-  per: [["fga", "FGA", 0], ["pts", "Pts", 2], ["qual", "Qual Pts", 2, true], ["make", "Make Pts", 2, true],
-    ["xfta", "xFTA Pts", 2], ["ftDraw", "FT Draw Pts", 2, true]],
+  // [key, header, decimals]
+  total: [["games", "G", 0], ["pts", "Pts", 0], ["fga", "FGA", 0], ["vol", "Vol Pts", 1], ["qual", "Qual Pts", 1],
+    ["make", "Make Pts", 1], ["fgPts", "FG Pts", 0], ["xfta", "xFTA Pts", 1], ["ftDraw", "FT Draw Pts", 1],
+    ["ftMake", "FT Make Pts", 1], ["ftPts", "FT Pts", 0]],
+  per: [["fga", "FGA", 0], ["pts", "Pts", 2], ["qual", "Qual Pts", 2], ["make", "Make Pts", 2],
+    ["xfta", "xFTA Pts", 2], ["ftDraw", "FT Draw Pts", 2]],
 };
 const GAME_COLS = {
   total: SEASON_COLS.total.slice(1),
@@ -247,11 +247,7 @@ function board(rows, cols, which, nameCell) {
     const sorted = sort.key === k ? ` aria-sort="${sort.dir < 0 ? "descending" : "ascending"}"` : "";
     return `<th scope="col" class="${cls}"${sorted}><button type="button" data-sort="${k}">${label}</button></th>`;
   };
-  const cell = (r, [k, , d, signed]) => {
-    const v = r[k];
-    const cls = signed && Number.isFinite(v) ? (Math.abs(v) < 0.05 / 10 ** (d - 1) ? "zero" : v > 0 ? "up" : "down") : "";
-    return `<td class="${cls}">${d === 0 ? Math.round(v).toLocaleString() : num(v, d)}</td>`;
-  };
+  const cell = (r, [k, , d]) => `<td>${d === 0 ? Math.round(r[k]).toLocaleString() : num(r[k], d)}</td>`;
   return `<table class="plpd-table"><caption>${which === "game" ? "Game" : "Season"} leaderboard</caption>
     <thead><tr>${head("name", which === "game" ? "Player · Game" : "Player", "name left")}${cols.map(([k, l]) => head(k, l)).join("")}</tr></thead>
     <tbody>${shown.map((r) => `<tr><td class="name">${nameCell(r)}</td>${cols.map((c) => cell(r, c)).join("")}</tr>`).join("")}</tbody></table>`;
