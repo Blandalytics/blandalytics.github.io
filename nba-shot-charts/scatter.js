@@ -2,7 +2,7 @@
 // Shot making across, shot quality up; each dashed diagonal is one more standard deviation
 // of points added, the solid one through the average.
 
-const C = { bg: "#292c42", ink: "#f0f1f5", nav: "#cbd7fd", axis: "#cbd7fd", green: [0, 128, 0], purple: [128, 0, 128] };
+const C = { bg: "#292c42", ink: "#f0f1f5", nav: "#cbd7fd", axis: "#cbd7fd", green: [44, 153, 44], purple: [182, 98, 210] };   // figure.js's green and purple
 const DISPLAY = '"DM Sans", system-ui, sans-serif';
 const TEXT = '"Work Sans", system-ui, sans-serif';
 

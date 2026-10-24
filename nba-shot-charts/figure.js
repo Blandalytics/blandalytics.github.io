@@ -1,15 +1,18 @@
 // NBA Shot Charts: the app's scoring summary figure (shot_summary() in nba_shot_chart.py),
-// drawn on a canvas in the figure's own 1400 x 800 layout (the app's 14 x 8 in at 100 dpi),
-// in the app's colours: green where a player made shots and added points, purple where they
+// drawn on an 800 x 1440 canvas with the app's two panels stacked: the court and its xPTS scale
+// on top, the points waterfall under it. In the app's colours: green where a player made shots and added points, purple where they
 // missed and gave some back, the xPTS court in seaborn's vlag.
 
 import { SEASON_SHOT_LIMIT, density } from "./model.js?v=1";
 
-export const W = 1400, H = 800;
+export const W = 800, H = 1440;
 
 const C = {
   bg: "#292c42", ink: "#f0f1f5", nav: "#cbd7fd",
-  green: "#008000", purple: "#800080",   // matplotlib's "green" and "purple", as the app names them
+  // the app's green and purple, each lightened to the luminance (0.234) that gives the same contrast
+  // against the background and the scale's white midpoint (~3.7:1 and ~3.4:1), so neither needs a
+  // white edge; the purple turned a little toward violet so it doesn't read as magenta
+  green: "#2c992c", purple: "#b662d2",
   line: "#000000", outline: "#ffffff",
 };
 const DISPLAY = '"DM Sans", system-ui, sans-serif';
@@ -30,10 +33,10 @@ function colormap(cmap) {
 // ---- layout ------------------------------------------------------------------------------
 
 // the court: data x -250..250, y -53..400 (the app's xlim / ylim), hoop at (0, 0)
-const COURT = { x0: 760, scale: 1.2, bottom: 752, xlim: [-250, 250], ylim: [-53, 400] };
+const COURT = { x0: 40, scale: 1.44, top: 180, xlim: [-250, 250], ylim: [-53, 400] };
 COURT.w = (COURT.xlim[1] - COURT.xlim[0]) * COURT.scale;
 COURT.h = (COURT.ylim[1] - COURT.ylim[0]) * COURT.scale;
-COURT.top = COURT.bottom - COURT.h;
+COURT.bottom = COURT.top + COURT.h;
 const cx = (x) => COURT.x0 + (x - COURT.xlim[0]) * COURT.scale;
 const cy = (y) => COURT.bottom - (y - COURT.ylim[0]) * COURT.scale;
 
@@ -41,8 +44,8 @@ const cy = (y) => COURT.bottom - (y - COURT.ylim[0]) * COURT.scale;
 const CB = { x0: cx(-249), w: cx(249) - cx(-249), top: COURT.top - 30, h: 30 };
 const cbx = (v) => CB.x0 + ((v - BAR.lo) / (BAR.hi - BAR.lo)) * CB.w;
 
-// the waterfall: categories 0..5 across xlim (-0.6, 5.5), points 0..max * 1.25 up
-const FALL = { x0: 70, x1: 700, top: 112, bottom: 752, xlim: [-0.6, 5.5] };
+// the waterfall under the court: categories 0..5 across xlim (-0.6, 5.5), points 0..max * 1.25 up
+const FALL = { x0: 40, x1: 760, top: COURT.bottom + 52, bottom: H - 40, xlim: [-0.6, 5.5] };
 const fx = (x) => FALL.x0 + ((x - FALL.xlim[0]) / (FALL.xlim[1] - FALL.xlim[0])) * (FALL.x1 - FALL.x0);
 
 // ---- drawing -----------------------------------------------------------------------------
@@ -56,11 +59,17 @@ export function draw(canvas, sum, grid, { scale = 2, title } = {}) {
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, W, H);
 
-  text(ctx, title, W * 0.51, 46, { font: `700 33px ${DISPLAY}`, align: "center" });
+  text(ctx, title, W / 2, 46, { font: `700 ${fit(ctx, title, 700, 33, W - 48)}px ${DISPLAY}`, align: "center" });
   const heat = colormap(grid.cmap);
   court(ctx, sum, grid, heat);
   colorbar(ctx, sum, heat);
   waterfall(ctx, sum);
+}
+
+// the largest size up to `max` at which `s` fits in `room`
+function fit(ctx, s, weight, max, room) {
+  ctx.font = `${weight} ${max}px ${DISPLAY}`;
+  return Math.max(18, Math.floor(max * Math.min(1, room / ctx.measureText(s).width)));
 }
 
 function text(ctx, s, x, y, { font = `400 17px ${TEXT}`, color = C.ink, align = "left", baseline = "middle" } = {}) {
@@ -153,7 +162,7 @@ function courtLines(ctx) {
   ctx.setLineDash([]);
 }
 
-// misses as an open X (white under purple), makes as a green dot with a white edge
+// misses as an open purple X, makes as a green dot
 function shots(ctx, marked) {
   const xPath = (x, y, r) => {
     const t = r * 0.32;   // matplotlib's "X": a filled cross, drawn here by its outline
@@ -166,15 +175,13 @@ function shots(ctx, marked) {
   for (const s of marked) {
     if (s.made) continue;
     xPath(cx(s.x), cy(s.y), 8.5);
-    ctx.globalAlpha = 0.75; ctx.strokeStyle = C.outline; ctx.lineWidth = 4.5; ctx.stroke();
-    ctx.globalAlpha = 1; ctx.strokeStyle = C.purple; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = C.purple; ctx.lineWidth = 2.5; ctx.stroke();
   }
   for (const s of marked) {
     if (!s.made) continue;
     ctx.beginPath();
     ctx.arc(cx(s.x), cy(s.y), 7.5, 0, Math.PI * 2);
     ctx.fillStyle = C.green; ctx.fill();
-    ctx.strokeStyle = C.outline; ctx.lineWidth = 1.4; ctx.stroke();
   }
 }
 
@@ -184,7 +191,7 @@ function colorbar(ctx, sum, heat) {
     ctx.fillStyle = heat(BAR.lo + ((px + 0.5) / CB.w) * (BAR.hi - BAR.lo));
     ctx.fillRect(CB.x0 + px, top, 1.5, h);
   }
-  // the shots' xPTS distribution, as a shadow over the scale
+  // the shots' xPTS distribution, in the background's colour at half strength
   if (sum.xptsValues.length > 1) {
     const xs = Array.from({ length: 200 }, (_, i) => BAR.lo + (i / 199) * (BAR.hi - BAR.lo));
     const ys = density(sum.xptsValues, BAR.lo, BAR.hi, xs);
@@ -194,12 +201,17 @@ function colorbar(ctx, sum, heat) {
       xs.forEach((x, i) => ctx.lineTo(cbx(x), top + h - ys[i] * h));
       ctx.lineTo(cbx(xs[xs.length - 1]), top + h);
       ctx.closePath();
-      ctx.fillStyle = "rgba(0,0,0,.4)";
+      ctx.fillStyle = "rgba(41,44,66,.5)";   // C.bg at 50%
       ctx.fill();
     }
   }
-  ctx.strokeStyle = C.outline; ctx.lineWidth = 2;
-  ctx.strokeRect(CB.x0, top, CB.w, h);
+  // a white edge: 2 on the top and sides, half that along the bottom where it meets the court
+  ctx.strokeStyle = C.outline; ctx.lineWidth = 2; ctx.lineJoin = "miter";
+  ctx.beginPath();
+  ctx.moveTo(CB.x0, top + h); ctx.lineTo(CB.x0, top); ctx.lineTo(CB.x0 + CB.w, top); ctx.lineTo(CB.x0 + CB.w, top + h);
+  ctx.stroke();
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(CB.x0, top + h); ctx.lineTo(CB.x0 + CB.w, top + h); ctx.stroke();
 
   // ticks along the top, as matplotlib places them
   for (let v = 0.7; v <= 1.5001; v += 0.1) {
@@ -218,24 +230,17 @@ function colorbar(ctx, sum, heat) {
     ctx.strokeStyle = color; ctx.lineWidth = width;
     ctx.beginPath(); ctx.moveTo(cbx(v), top); ctx.lineTo(cbx(v), top + h); ctx.stroke();
   };
-  // the arrow from xPts/Shot to Pts/Shot: a white outline, then the line, then the arrow's fill, so
-  // its point ends on the coloured line's near edge
+  // the arrow from xPts/Shot to Pts/Shot, its point on the coloured line's near edge
   const ACTUAL_W = 2.5;
   const shaft = Math.abs(actual - expected) >= 0.025 && Number.isFinite(actual) && Number.isFinite(expected)
     ? arrowPath(cbx(clip(expected)), cbx(clip(actual)) - (up ? 1 : -1) * ACTUAL_W / 2, top + h / 2)
     : null;
-  if (shaft) {
-    ctx.lineJoin = "miter";
-    ctx.strokeStyle = C.outline; ctx.lineWidth = 3;
-    ctx.stroke(shaft);
-  }
-  vline(actual, C.outline, 4.5);
   vline(actual, tone, ACTUAL_W);
   if (shaft) {
     ctx.fillStyle = tone;
     ctx.fill(shaft);
   }
-  vline(expected, C.line, 2.5);
+  vline(expected, C.bg, 2.5);   // xPts/Shot, in the background's colour
 
   // each value in the scale's colour at that value, its label in white, the pair centred together
   const label = (name, v, x) => {

@@ -5,8 +5,8 @@
 // A chart is linkable as #<season>/<player id>/<game id | season>.
 
 import { prepare, defaultPick, summary, seasonBoard, gameBoard, valueAdded, teamMinutes } from "./model.js?v=1";
-import { draw } from "./figure.js?v=3";
-import { drawScatter } from "./scatter.js?v=2";
+import { draw, W as FIG_W } from "./figure.js?v=4";
+import { drawScatter, SW } from "./scatter.js?v=3";
 
 const params = new URLSearchParams(location.search);
 const DATA = new URL(params.get("data") || "https://data.blandalytics.com/", location.href).href;
@@ -16,7 +16,7 @@ const el = {
   seasonLabel: $("season_label"), through: $("through"), chartBox: $("chart_box"), fig: $("fig"), share: $("share_png"),
   sliders: $("sliders"), seasonMin: $("season_min"), gameMin: $("game_min"), seasonMinV: $("season_min_v"), gameMinV: $("game_min_v"),
   seasonBoard: $("season_board"), gameBoard: $("game_board"), seasonBoardDesc: $("season_board_desc"), gameBoardDesc: $("game_board_desc"),
-  va: $("va"), vaTip: $("va_tip"), vaDesc: $("va_desc"), team: $("team"), allTeams: $("all_teams"), minutes: $("minutes"),
+  va: $("va"), vaBox: $("va_box"), vaTip: $("va_tip"), vaDesc: $("va_desc"), team: $("team"), allTeams: $("all_teams"), minutes: $("minutes"),
 };
 const viewChips = [...document.querySelectorAll("[data-view]")];
 const modeChips = [...document.querySelectorAll("[data-mode]")];
@@ -94,6 +94,24 @@ function loadMinutes(entry) {
   return cache.get(k);
 }
 
+// On screen a canvas is drawn at its displayed width times the device's pixel ratio, so its text
+// is never shrunk by the browser (a fixed 2x canvas squeezed into ~950 px reads jagged); it is
+// redrawn whenever its box changes width. Share image still draws its own canvas at 2x.
+function screenScale(canvas, logicalWidth) {
+  const shown = canvas.getBoundingClientRect().width || canvas.parentElement.clientWidth || logicalWidth;
+  return Math.max(0.25, (shown * (window.devicePixelRatio || 1)) / logicalWidth);
+}
+const drawnAt = new Map();   // box -> the width it was last drawn for
+const resized = new ResizeObserver((entries) => requestAnimationFrame(() => {
+  if (!state.data) return;
+  for (const { target } of entries) {
+    const w = target.clientWidth;
+    if (!w || drawnAt.get(target) === w) continue;
+    if (target === el.chartBox) drawChart();
+    else renderValueAdded();
+  }
+}));
+
 // ---- the scoring chart -------------------------------------------------------------------
 
 function title(sum) {
@@ -118,13 +136,18 @@ function renderChart() {
   el.game.closest(".game").hidden = state.view !== "game";
   viewChips.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === state.view)));
 
-  const sum = current();
-  draw(el.fig, sum, state.grid, { scale: 2, title: title(sum) });
-  el.fig.setAttribute("aria-label", `${title(sum)}: ${Math.round(sum.fgPts + sum.ftm)} points on ${sum.n} shots`);
   el.chartBox.hidden = false;
   el.share.hidden = false;
+  drawChart();
   status("");
   writeHash();
+}
+
+function drawChart() {
+  const sum = current();
+  draw(el.fig, sum, state.grid, { scale: screenScale(el.fig, FIG_W), title: title(sum) });
+  el.fig.setAttribute("aria-label", `${title(sum)}: ${Math.round(sum.fgPts + sum.ftm)} points on ${sum.n} shots`);
+  drawnAt.set(el.chartBox, el.chartBox.clientWidth);
 }
 
 function writeHash() {
@@ -320,12 +343,13 @@ for (const [box, which] of [[el.seasonBoard, "season"], [el.gameBoard, "game"]])
 let vaPoints = [];
 function renderValueAdded() {
   const va = valueAdded(state.data);
-  vaPoints = drawScatter(el.va, va, { scale: 2 });
+  vaPoints = drawScatter(el.va, va, { scale: screenScale(el.va, SW) });
+  drawnAt.set(el.vaBox, el.vaBox.clientWidth);
   el.vaDesc.textContent = `Points added by the shots a player takes (quality, up) and by making them (across), for the ${va.rows.length} players with at least ${Math.ceil(va.threshold)} shots, the top quarter by volume. Each diagonal is a line of equal points added, the solid one through the league average; the dashed ones step out ${num(va.guideStep * 2, 1)} points (one standard deviation) at a time. Hover a player for the numbers.`;
 }
 el.va.addEventListener("pointermove", (e) => {
   const rect = el.va.getBoundingClientRect();
-  const k = 1100 / rect.width;
+  const k = SW / rect.width;
   const x = (e.clientX - rect.left) * k, y = (e.clientY - rect.top) * k;
   let best = null, dist = 16 * 16;
   for (const p of vaPoints) {
@@ -454,4 +478,6 @@ async function start() {
   useSeason(entry, want);
 }
 
+resized.observe(el.chartBox);
+resized.observe(el.vaBox);
 start();

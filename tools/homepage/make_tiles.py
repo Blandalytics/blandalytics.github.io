@@ -48,8 +48,8 @@ CROPS = {
     "lineup-sims": (0.0, 0.0),           # the KPIs and the comparison strips
     "game-sim": None,                    # square already: the score grid's share image
     "created-runs": (0.0, 0.0),          # the title over the top of the leaderboard: names, CR and the batting columns
-    # the court under its xPTS scale and per-shot line (a box, in the 2800 x 1600 export's pixels)
-    "nba-shot-charts": (1475, 218, 2765, 1508),
+    # the court under its xPTS scale and per-shot line (a box, in the 1600 x 2880 export's pixels)
+    "nba-shot-charts": (53, 170, 1547, 1664),
 }
 
 
