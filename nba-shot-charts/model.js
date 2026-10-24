@@ -40,7 +40,7 @@ export function prepare(data) {
 
   const lastDate = games.reduce((d, gm) => (gm.date > d ? gm.date : d), "");
   return {
-    season: data.season, updated: data.updated, shots: s, xfta, pts, players, games, playerGames, lastDate,
+    season: data.season, updated: data.updated, zones: data.zones || [], shots: s, xfta, pts, players, games, playerGames, lastDate,
     // the app's player list: most points first
     byPoints: players.filter((pl) => pl.shots.length).sort((a, b) => b.points - a.points || a.name.localeCompare(b.name)),
   };
@@ -99,7 +99,12 @@ export function summary(season, p, game) {
     parts,
     shotPoints: parts.volume + parts.quality + parts.making,
     ftPoints: parts.xftaVolume + parts.ftDrawing + parts.ftMaking,
-    marked: marked.map((i) => ({ x: s.x[i], y: s.y[i], made: s.made[i] === 1 })),
+    // each charted shot, with what the court's hover tells about it (its game too, on a season chart)
+    marked: marked.map((i) => ({
+      x: s.x[i], y: s.y[i], made: s.made[i] === 1, value: s.value[i], xpts: s.xpts[i], xfta: xfta[i],
+      zone: s.zone[i] == null ? null : season.zones[s.zone[i]] ?? null,
+      game: game == null ? { date: season.games[s.g[i]].date, matchup: season.playerGames.get(key(p, s.g[i]))?.matchup ?? "" } : null,
+    })),
     limited: game == null && n >= SEASON_SHOT_LIMIT,
   };
 }
