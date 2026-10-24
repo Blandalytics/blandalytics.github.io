@@ -1,0 +1,5 @@
+nba_api>=1.11
+numpy>=2.0
+pandas>=2.2
+matplotlib>=3.9
+seaborn>=0.13

@@ -31,3 +31,8 @@ tools/park_factors/cache/
 tools/xwoba/cache/
 # the Lineup Sim pipeline's FanGraphs extract and per-game play-by-play
 tools/lineup_sims/cache/
+
+# NBA Shot Charts: the downloaded xFG grid and the built JSON
+tools/nba_shot_charts/cache/
+# wrangler's local cache, from running the NBA build (or any wrangler command) at the repo root
+.wrangler/
