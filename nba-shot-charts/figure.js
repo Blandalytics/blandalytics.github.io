@@ -5,7 +5,7 @@
 
 import { SEASON_SHOT_LIMIT, density } from "./model.js?v=1";
 
-export const W = 800, H = 1460;
+export const W = 800, H = 1390;
 
 const C = {
   bg: "#292c42", ink: "#f0f1f5", nav: "#cbd7fd",
@@ -24,17 +24,47 @@ const TEXT = '"Work Sans", system-ui, sans-serif';
 const NORM = { lo: 1.09 - 0.42, hi: 1.09 + 0.42 };
 const BAR = { lo: 0.69, hi: 1.51 };   // the colorbar's span, cb.ax.set(xlim=(0.69, 1.51))
 
+// ...with its low half blended into the figure's background, all the way at the bottom, so the
+// worst spots sink into the card; white at 1.09 and the red half stay vlag's
+const faded = new WeakMap();
 function colormap(cmap) {
+  if (!faded.has(cmap)) {
+    const bg = rgb(C.bg), half = cmap.length / 2;
+    faded.set(cmap, cmap.map((hex, i) => {
+      if (i >= half) return hex;
+      const w = 1 - i / half;   // 1 at the bottom, 0 at the midpoint
+      return `rgb(${rgb(hex).map((c, k) => Math.round(c + (bg[k] - c) * w)).join(",")})`;
+    }));
+  }
+  const colors = faded.get(cmap);
   return (v) => {
     const t = (v - NORM.lo) / (NORM.hi - NORM.lo);
-    return cmap[Math.min(cmap.length - 1, Math.max(0, Math.floor(t * cmap.length)))];
+    return colors[Math.min(colors.length - 1, Math.max(0, Math.floor(t * colors.length)))];
   };
+}
+
+function rgb(color) {
+  if (color.startsWith("#")) {
+    const n = parseInt(color.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  return color.match(/\d+/g).slice(0, 3).map(Number);
+}
+
+// WCAG contrast between two colours
+function contrast(a, b) {
+  const lum = (c) => {
+    const [r, g, bl] = rgb(c).map((x) => { x /= 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
 }
 
 // ---- layout ------------------------------------------------------------------------------
 
 // the court: data x -250..250, y -53..400 (the app's xlim / ylim), hoop at (0, 0)
-const COURT = { x0: 40, scale: 1.44, top: 200, xlim: [-250, 250], ylim: [-53, 400] };
+const COURT = { x0: 40, scale: 1.44, top: 130, xlim: [-250, 250], ylim: [-53, 400] };
 COURT.w = (COURT.xlim[1] - COURT.xlim[0]) * COURT.scale;
 COURT.h = (COURT.ylim[1] - COURT.ylim[0]) * COURT.scale;
 COURT.bottom = COURT.top + COURT.h;
@@ -57,9 +87,9 @@ export function draw(canvas, sum, grid, { scale = 2, title } = {}) {
   canvas.height = H * scale;
   const ctx = canvas.getContext("2d");
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
-  // court line widths, held to at least 1.5 (black) and 3.5 (white) device pixels on a small canvas
-  LINE.inner = Math.max(2, 1.5 / scale);
-  LINE.outer = Math.max(4, 3.5 / scale);
+  // court line widths, held to at least 3 (black) and 7 (white) device pixels on a small canvas
+  LINE.inner = Math.max(4, 3 / scale);
+  LINE.outer = Math.max(8, 7 / scale);
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, W, H);
 
@@ -118,7 +148,7 @@ function court(ctx, sum, grid, heat) {
   }
 }
 
-const LINE = { inner: 2, outer: 4 };
+const LINE = { inner: 4, outer: 8 };
 
 const Y_ADJ = 52.5;   // the baseline sits this far below the hoop
 const arc = (x, y, r, t1, t2, dash) => (c) => {
@@ -159,7 +189,7 @@ function courtLines(ctx) {
   arc(0, 190 - yAdj, 60, 0, 180)(ctx);
   arc(0, 190 - yAdj, 60, 180, 360, true)(ctx);
   // baseline and sidelines, white
-  ctx.lineWidth = LINE.inner;
+  ctx.strokeStyle = C.outline; ctx.lineWidth = LINE.inner;
   seg(-250, -yAdj, 250, -yAdj)(ctx);
   seg(-249, -yAdj, -249, 470)(ctx);
   seg(249, -yAdj, 249, 470)(ctx);
@@ -219,6 +249,11 @@ function colorbar(ctx, sum, heat) {
       ctx.closePath();
       ctx.fillStyle = "rgba(41,44,66,.5)";   // C.bg at 50%
       ctx.fill();
+      // a thin white edge along the curve (not along the bar's floor)
+      ctx.beginPath();
+      xs.forEach((x, i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, cbx(x), top + h - ys[i] * h));
+      ctx.strokeStyle = C.outline; ctx.lineWidth = 1; ctx.lineJoin = "round";
+      ctx.stroke();
     }
   }
   // a white edge: 2 on the top and sides, half that along the bottom where it meets the court
@@ -229,12 +264,12 @@ function colorbar(ctx, sum, heat) {
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(CB.x0, top + h); ctx.lineTo(CB.x0 + CB.w, top + h); ctx.stroke();
 
-  // ticks under the bar, in the empty band at the top of the court (the pills sit on top of it)
+  // ticks along the top, as matplotlib places them
   for (let v = 0.7; v <= 1.5001; v += 0.1) {
     const x = cbx(v);
     ctx.strokeStyle = C.ink; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x, top + h); ctx.lineTo(x, top + h + 5); ctx.stroke();
-    text(ctx, v.toFixed(1), x, top + h + 8, { font: `400 14px ${TEXT}`, align: "center", baseline: "top", color: C.nav });
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top - 5); ctx.stroke();
+    text(ctx, v.toFixed(1), x, top - 8, { font: `400 14px ${TEXT}`, align: "center", baseline: "bottom", color: C.nav });
   }
 
   const { expected, actual } = sum;
@@ -265,20 +300,21 @@ function colorbar(ctx, sum, heat) {
   }
   vline(expected, C.bg, 2.5);   // xPts/Shot, in the background's colour
 
-  // xPts/Shot and Pts/Shot in pills (Lineup Sim's stat box) standing on the bar, flush with the
-  // court's left and right sidelines: a small label over the value in bold, in the scale's colour
+  // xPts/Shot and Pts/Shot in pills (Lineup Sim's stat box) hanging from the bar into the court's
+  // empty top corners, flush with its sidelines: a small label over the value in bold, in the
+  // scale's colour
   pill("xPts/Shot", expected, CB.x0);
   pill("Pts/Shot", actual, CB.x0 + CB.w - PILL.w);
 
   function pill(name, v, x0) {
-    const y0 = top - PILL.h, x1 = x0 + PILL.w, r = PILL.r;
+    const y0 = top + h, y1 = y0 + PILL.h, x1 = x0 + PILL.w, r = PILL.r;
     const p = new Path2D();
-    p.moveTo(x0, top);
-    p.lineTo(x0, y0 + r);
-    p.arcTo(x0, y0, x0 + r, y0, r);
-    p.lineTo(x1 - r, y0);
-    p.arcTo(x1, y0, x1, y0 + r, r);
-    p.lineTo(x1, top);
+    p.moveTo(x0, y0);
+    p.lineTo(x0, y1 - r);
+    p.arcTo(x0, y1, x0 + r, y1, r);
+    p.lineTo(x1 - r, y1);
+    p.arcTo(x1, y1, x1, y1 - r, r);
+    p.lineTo(x1, y0);
     ctx.fillStyle = C.pill;
     ctx.fill(p);
     ctx.strokeStyle = C.outline; ctx.lineWidth = 2; ctx.lineJoin = "miter";
@@ -286,11 +322,17 @@ function colorbar(ctx, sum, heat) {
     const mid = (x0 + x1) / 2;
     text(ctx, name, mid, y0 + 24, { font: `500 16px ${DISPLAY}`, align: "center", color: C.nav });
     text(ctx, Number.isFinite(v) ? v.toFixed(2) : "–", mid, y0 + 58,
-      { font: `700 36px ${DISPLAY}`, align: "center", color: Number.isFinite(v) ? heat(clip(v)) : C.ink });
+      { font: `700 36px ${DISPLAY}`, align: "center", color: valueColor(v) });
+  }
+  // the scale's colour at the value, or white where that colour fades too far into the pill
+  function valueColor(v) {
+    if (!Number.isFinite(v)) return C.ink;
+    const c = heat(clip(v));
+    return contrast(c, C.pill) >= 3 ? c : C.ink;
   }
 }
 
-const PILL = { w: 190, h: 84, r: 10 };
+const PILL = { w: 127, h: 84, r: 10 };
 
 // one outline for the shaft and head, from x1 to the point at x2
 function arrowPath(x1, x2, y) {
