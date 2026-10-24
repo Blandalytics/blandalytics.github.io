@@ -14,7 +14,10 @@ const C = {
   // white (~3.7:1, ~3.4:1 against the scale's near-white midpoint)
   amber: "#c86e00", cyan: "#0092a9",
   line: "#000000", outline: "#ffffff",
-  pill: "#34374c",   // PLPD card-bg-hover: a step up from the background, as Lineup Sim's stat box
+  // the stat pills' slate: the mix of the background and white that is furthest from all three of
+  // the background, the scale's deep red (#a9373b, the bar's end it hangs from) and white, ~2.5:1
+  // from the red and white (the most one fill can be) and 5.4:1 from the background
+  pill: "#a1a3ac",
 };
 const DISPLAY = '"DM Sans", system-ui, sans-serif';
 const TEXT = '"Work Sans", system-ui, sans-serif';
@@ -165,23 +168,39 @@ const seg = (x1, y1, x2, y2) => (c) => {
   c.stroke();
 };
 
-// every line twice, as the app draws them: a white outline under a black line
+// the three-point line as one path, up a corner, round the arc and down the other, so it joins where
+// they meet (the corner lines run to where the 23'9" arc reaches x = ±220)
+const THREE_T = Math.acos(220 / 237.5), THREE_Y = 237.5 * Math.sin(THREE_T);
+const threePoint = (c) => {
+  c.setLineDash([]);
+  c.beginPath();
+  c.moveTo(cx(-220), cy(-Y_ADJ));
+  c.lineTo(cx(-220), cy(THREE_Y));
+  c.arc(cx(0), cy(0), 237.5 * COURT.scale, -(Math.PI - THREE_T), -THREE_T);
+  c.lineTo(cx(220), cy(-Y_ADJ));
+  c.stroke();
+};
+// the lane, its sides and the free-throw line, as one path with square corners
+const lane = (c) => {
+  c.setLineDash([]);
+  c.beginPath();
+  c.moveTo(cx(-80), cy(-Y_ADJ));
+  c.lineTo(cx(-80), cy(190 - Y_ADJ));
+  c.lineTo(cx(80), cy(190 - Y_ADJ));
+  c.lineTo(cx(80), cy(-Y_ADJ));
+  c.stroke();
+};
+
+// every line twice, as the app draws them: a white outline under a black line. Joined lines are
+// one path with mitred corners, and open ends are square-capped in both passes, so the white
+// shows evenly all round, ends and corners included.
 function courtLines(ctx) {
   const yAdj = Y_ADJ;
-  const pairs = [
-    // restricted area
-    [arc(0, 0, 40, 0, 180), 4, 2],
-    // three-point arc and corners
-    [arc(0, 0, 237.5, 22, 158), 4, 2],
-    [seg(-220, -yAdj, -220, 141 - yAdj), 4, 2],
-    [seg(220, -yAdj, 220, 141 - yAdj), 4, 2],
-    // free-throw lane and line
-    [seg(-80, 190 - yAdj, 80, 190 - yAdj), 4, 2],
-    [seg(-80, -yAdj, -80, 190 - yAdj), 4, 2],
-    [seg(80, -yAdj, 80, 190 - yAdj), 4, 2],
-  ];
-  for (const [path] of pairs) { ctx.strokeStyle = C.outline; ctx.lineWidth = LINE.outer; path(ctx); }
-  for (const [path] of pairs) { ctx.strokeStyle = C.line; ctx.lineWidth = LINE.inner; path(ctx); }
+  const paths = [arc(0, 0, 40, 0, 180), threePoint, lane];   // the restricted area, then the rest
+  ctx.lineJoin = "miter"; ctx.lineCap = "square";
+  for (const path of paths) { ctx.strokeStyle = C.outline; ctx.lineWidth = LINE.outer; path(ctx); }
+  for (const path of paths) { ctx.strokeStyle = C.line; ctx.lineWidth = LINE.inner; path(ctx); }
+  ctx.lineCap = "butt";
 
   // the free-throw circle: a white ring, solid black on top, dashed black underneath
   ctx.strokeStyle = C.outline; ctx.lineWidth = LINE.outer; arc(0, 190 - yAdj, 60, 0, 360)(ctx);
@@ -301,34 +320,42 @@ function colorbar(ctx, sum, heat) {
   vline(expected, C.bg, 2.5);   // xPts/Shot, in the background's colour
 
   // xPts/Shot and Pts/Shot in pills (Lineup Sim's stat box) hanging from the bar into the court's
-  // empty top corners, flush with its sidelines: a small label over the value in bold, in the
-  // scale's colour
-  pill("xPts/Shot", expected, CB.x0);
-  pill("Pts/Shot", actual, CB.x0 + CB.w - PILL.w);
+  // empty top corners: a small label over the value in bold, in the scale's colour
+  pill("xPts/Shot", expected, -1);
+  pill("Pts/Shot", actual, 1);
 
-  function pill(name, v, x0) {
-    const y0 = top + h, y1 = y0 + PILL.h, x1 = x0 + PILL.w, r = PILL.r;
-    const p = new Path2D();
-    p.moveTo(x0, y0);
-    p.lineTo(x0, y1 - r);
-    p.arcTo(x0, y1, x0 + r, y1, r);
-    p.lineTo(x1 - r, y1);
-    p.arcTo(x1, y1, x1, y1 - r, r);
-    p.lineTo(x1, y0);
+  // A pill's borders are the ones it sits against, the sideline (side -1 left, 1 right) and the bar's
+  // bottom edge, left uncovered; its own lines are only its two free edges (the bottom and the inner
+  // side, as heavy as the bar's outline), with the one rounded corner between them
+  function pill(name, v, side) {
+    const edge = side < 0 ? CB.x0 : CB.x0 + CB.w, inner = edge - side * PILL.w;
+    const y0 = top + h, y1 = y0 + PILL.h, r = PILL.r, s = LINE.inner / 2;
+    const corner = (p) => { p.lineTo(inner + side * r, y1); p.arcTo(inner, y1, inner, y1 - r, r); };
+    const fill = new Path2D();
+    fill.moveTo(edge - side * s, y0 + 0.5);
+    fill.lineTo(edge - side * s, y1);
+    corner(fill);
+    fill.lineTo(inner, y0 + 0.5);
+    fill.closePath();
     ctx.fillStyle = C.pill;
-    ctx.fill(p);
-    ctx.strokeStyle = C.outline; ctx.lineWidth = 2; ctx.lineJoin = "miter";
-    ctx.stroke(p);
-    const mid = (x0 + x1) / 2;
-    text(ctx, name, mid, y0 + 24, { font: `500 16px ${DISPLAY}`, align: "center", color: C.nav });
+    ctx.fill(fill);
+    const lines = new Path2D();
+    lines.moveTo(edge, y1);
+    corner(lines);
+    lines.lineTo(inner, y0);
+    ctx.strokeStyle = C.outline; ctx.lineWidth = 2; ctx.lineJoin = "miter"; ctx.lineCap = "butt";
+    ctx.stroke(lines);
+    const mid = (edge + inner) / 2;
+    text(ctx, name, mid, y0 + 24, { font: `500 16px ${DISPLAY}`, align: "center", color: C.bg });
     text(ctx, Number.isFinite(v) ? v.toFixed(2) : "–", mid, y0 + 58,
       { font: `700 36px ${DISPLAY}`, align: "center", color: valueColor(v) });
   }
-  // the scale's colour at the value, or white where that colour fades too far into the pill
+  // the scale's colour at the value, clipped to the bar's span, or the background's where that colour
+  // sits too close to the pill's (the mid blues and the pinks; the red, white and background ends clear it)
   function valueColor(v) {
-    if (!Number.isFinite(v)) return C.ink;
+    if (!Number.isFinite(v)) return C.bg;
     const c = heat(clip(v));
-    return contrast(c, C.pill) >= 3 ? c : C.ink;
+    return contrast(c, C.pill) >= 2.5 ? c : C.bg;
   }
 }
 
