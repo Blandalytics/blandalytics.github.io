@@ -1192,11 +1192,16 @@ function showHist(td) {
   if (!cell || !last?.res?.hist) return hideHist();
   const box = $("box").getBoundingClientRect(), r = td.getBoundingClientRect();
   const maxW = Math.min(520, box.width - 24);
-  const avg = cell.stat === "OUTS" ? `${fmtIP(Math.round(cell.mean))} IP a game` : `${f1(cell.mean)} a game`;
-  tip.innerHTML = `<b></b><small></small>${histSVG(cell, maxW - 26)}<small>Share of games; under ${100 * HIST_MIN}% left out</small>`
-    + (Number.isInteger(cell.seen) ? `<small class="seen">Outlined in amber: this game's ${cell.stat === "OUTS" ? `${fmtIP(cell.seen)} IP` : cell.seen}</small>` : "");
+  // the subtitle: the simulated games' average, and a loaded game's real value (its bar's amber, in bold)
+  const val = (x) => (cell.stat === "OUTS" ? fmtIP(Math.round(x)) : f1(x));
+  tip.innerHTML = `<b></b><small></small>${histSVG(cell, maxW - 26)}<small>Share of games; under ${100 * HIST_MIN}% left out</small>`;
   tip.querySelector("b").textContent = `${cell.who} · ${STAT_NAME[cell.stat] ?? cell.stat}`;
-  tip.querySelector("small").textContent = avg;
+  const sub = tip.querySelector("small");
+  sub.textContent = `Avg: ${val(cell.mean)}`;
+  if (Number.isInteger(cell.seen)) {
+    sub.append(", ", Object.assign(document.createElement("strong"), { className: "seen",
+      textContent: `Actual: ${cell.stat === "OUTS" ? fmtIP(cell.seen) : cell.seen}` }));
+  }
   tip.hidden = false;
   // above the cell, or below it if there's no room; kept inside the card
   const w = tip.offsetWidth, h = tip.offsetHeight, cx = r.left + r.width / 2 - box.left;
