@@ -14,10 +14,6 @@ const C = {
   // white (~3.7:1, ~3.4:1 against the scale's near-white midpoint)
   amber: "#c86e00", cyan: "#0092a9",
   line: "#000000", outline: "#ffffff",
-  // the stat pills' slate: the mix of the background and white that is furthest from all three of
-  // the background, the scale's deep red (#a9373b, the bar's end it hangs from) and white, ~2.5:1
-  // from the red and white (the most one fill can be) and 5.4:1 from the background
-  pill: "#a1a3ac",
 };
 const DISPLAY = '"DM Sans", system-ui, sans-serif';
 const TEXT = '"Work Sans", system-ui, sans-serif';
@@ -310,39 +306,26 @@ function colorbar(ctx, sum, heat) {
   vline(expected, C.bg, 2.5);   // xPts/Shot, in the background's colour
 
   // xPts/Shot and Pts/Shot in pills (Lineup Sim's stat box) hanging from the bar into the court's
-  // empty top corners: a small label over the value in bold, in the scale's colour
+  // empty top corners: a small label over the value, both in bold white, on the figure's background
   pill("xPts/Shot", expected, -1);
   pill("Pts/Shot", actual, 1);
 
   // A pill's borders are the ones it sits against, the sideline (side -1 left, 1 right) and the bar's
-  // bottom edge, left uncovered; its own lines are only its two free edges (the bottom and the inner
-  // side, as heavy as the bar's outline), with the one rounded corner between them
+  // bottom edge; its own lines are only its two free edges (the bottom and the inner side, as heavy
+  // as the bar's outline), with the one rounded corner between them
   function pill(name, v, side) {
     const edge = side < 0 ? CB.x0 : CB.x0 + CB.w, inner = edge - side * PILL.w;
-    const y0 = top + h, y1 = y0 + PILL.h, r = PILL.r, s = LINE.inner / 2;
-    const corner = (p) => { p.lineTo(inner + side * r, y1); p.arcTo(inner, y1, inner, y1 - r, r); };
-    const fill = new Path2D();
-    fill.moveTo(edge - side * s, y0 + 0.5);
-    fill.lineTo(edge - side * s, y1);
-    corner(fill);
-    fill.lineTo(inner, y0 + 0.5);
-    fill.closePath();
-    ctx.fillStyle = C.pill;
-    ctx.fill(fill);
+    const y0 = top + h, y1 = y0 + PILL.h, r = PILL.r;
     const lines = new Path2D();
     lines.moveTo(edge, y1);
-    corner(lines);
+    lines.lineTo(inner + side * r, y1);
+    lines.arcTo(inner, y1, inner, y1 - r, r);
     lines.lineTo(inner, y0);
     ctx.strokeStyle = C.outline; ctx.lineWidth = 2; ctx.lineJoin = "miter"; ctx.lineCap = "butt";
     ctx.stroke(lines);
     const mid = (edge + inner) / 2;
-    text(ctx, name, mid, y0 + 24, { font: `700 16px ${DISPLAY}`, align: "center", color: C.bg });
-    text(ctx, Number.isFinite(v) ? v.toFixed(2) : "–", mid, y0 + 58,
-      { font: `700 36px ${DISPLAY}`, align: "center", color: valueColor(v) });
-  }
-  // the colour the value has on the bar above, clipped to the bar's span
-  function valueColor(v) {
-    return Number.isFinite(v) ? heat(clip(v)) : C.bg;
+    text(ctx, name, mid, y0 + 24, { font: `700 16px ${DISPLAY}`, align: "center" });
+    text(ctx, Number.isFinite(v) ? v.toFixed(2) : "–", mid, y0 + 58, { font: `700 36px ${DISPLAY}`, align: "center" });
   }
 }
 
