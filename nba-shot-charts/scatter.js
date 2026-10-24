@@ -2,7 +2,7 @@
 // Shot making across, shot quality up; each dashed diagonal is one more standard deviation
 // of points added, the solid one through the average.
 
-const C = { bg: "#292c42", ink: "#f0f1f5", nav: "#cbd7fd", axis: "#cbd7fd", amber: [255, 194, 119], cyan: [85, 232, 255] };
+const C = { bg: "#292c42", ink: "#f0f1f5", nav: "#cbd7fd", axis: "#cbd7fd", green: [0, 128, 0], purple: [128, 0, 128] };
 const DISPLAY = '"DM Sans", system-ui, sans-serif';
 const TEXT = '"Work Sans", system-ui, sans-serif';
 
@@ -44,12 +44,12 @@ export function drawScatter(canvas, va, { scale = 2 } = {}) {
   diagonal(0, "#ffffff", []);
   ctx.setLineDash([]);
 
-  // purple-white-green in the app; cyan-white-amber here, white at zero points added
+  // the app's colorscale: purple, white at zero points added, green
   const lo = Math.min(...added), hi = Math.max(...added);
   const white = hi > lo ? -lo / (hi - lo) : 0.5;
   const tone = (v) => {
     const t = hi > lo ? (v - lo) / (hi - lo) : 0.5;
-    const [a, b, f] = t < white ? [C.cyan, [255, 255, 255], t / white] : [[255, 255, 255], C.amber, (t - white) / (1 - white)];
+    const [a, b, f] = t < white ? [C.purple, [255, 255, 255], t / white] : [[255, 255, 255], C.green, (t - white) / (1 - white)];
     return `rgb(${a.map((x, i) => Math.round(x + (b[i] - x) * (Number.isFinite(f) ? f : 0))).join(",")})`;
   };
   const points = rows.map((r) => ({ row: r, x: px(r.make), y: py(r.qual) }));

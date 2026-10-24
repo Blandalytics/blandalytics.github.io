@@ -1,35 +1,30 @@
 // NBA Shot Charts: the app's scoring summary figure (shot_summary() in nba_shot_chart.py),
 // drawn on a canvas in the figure's own 1400 x 800 layout (the app's 14 x 8 in at 100 dpi),
-// in PLPD colours: amber where a player added points, cyan where they gave some back, the
-// xPTS court in the heat cell's blue and red, through the figure's background at the league average.
+// in the app's colours: green where a player made shots and added points, purple where they
+// missed and gave some back, the xPTS court in seaborn's vlag.
 
 import { SEASON_SHOT_LIMIT, density } from "./model.js?v=1";
 
 export const W = 1400, H = 800;
 
 const C = {
-  bg: "#292c42", ink: "#f0f1f5", nav: "#cbd7fd", amber: "#ffc277", cyan: "#55e8ff", navy: "#13152a",
+  bg: "#292c42", ink: "#f0f1f5", nav: "#cbd7fd",
+  green: "#008000", purple: "#800080",   // matplotlib's "green" and "purple", as the app names them
   line: "#000000", outline: "#ffffff",
 };
 const DISPLAY = '"DM Sans", system-ui, sans-serif';
 const TEXT = '"Work Sans", system-ui, sans-serif';
 
-// the PLPD heat cell's coldest and hottest, through the figure's background (not white) at the
-// midpoint, so an average spot sinks into the card; read continuously over the app's CenteredNorm(1.09, 0.42)
-const HEAT = ["#0066ff", C.bg, "#a9363b"].map(hex);
+// The app's cmap="vlag" over its CenteredNorm(1.09, 0.42): xfg_grid.json carries the 256 colours,
+// looked up as matplotlib does (no blending between them)
 const NORM = { lo: 1.09 - 0.42, hi: 1.09 + 0.42 };
 const BAR = { lo: 0.69, hi: 1.51 };   // the colorbar's span, cb.ax.set(xlim=(0.69, 1.51))
 
-function hex(h) {
-  const n = parseInt(h.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-export function heat(v) {
-  const t = Math.min(Math.max((v - NORM.lo) / (NORM.hi - NORM.lo), 0), 1) * (HEAT.length - 1);
-  const i = Math.min(Math.floor(t), HEAT.length - 2), f = t - i;
-  const [a, b] = [HEAT[i], HEAT[i + 1]];
-  return `rgb(${a.map((x, k) => Math.round(x + (b[k] - x) * f)).join(",")})`;
+function colormap(cmap) {
+  return (v) => {
+    const t = (v - NORM.lo) / (NORM.hi - NORM.lo);
+    return cmap[Math.min(cmap.length - 1, Math.max(0, Math.floor(t * cmap.length)))];
+  };
 }
 
 // ---- layout ------------------------------------------------------------------------------
@@ -62,8 +57,9 @@ export function draw(canvas, sum, grid, { scale = 2, title } = {}) {
   ctx.fillRect(0, 0, W, H);
 
   text(ctx, title, W * 0.51, 46, { font: `700 33px ${DISPLAY}`, align: "center" });
-  court(ctx, sum, grid);
-  colorbar(ctx, sum);
+  const heat = colormap(grid.cmap);
+  court(ctx, sum, grid, heat);
+  colorbar(ctx, sum, heat);
   waterfall(ctx, sum);
 }
 
@@ -75,7 +71,7 @@ function text(ctx, s, x, y, { font = `400 17px ${TEXT}`, color = C.ink, align = 
   ctx.fillText(s, x, y);
 }
 
-function court(ctx, sum, grid) {
+function court(ctx, sum, grid, heat) {
   ctx.save();
   ctx.beginPath();
   ctx.rect(COURT.x0, COURT.top, COURT.w, COURT.h);
@@ -157,7 +153,7 @@ function courtLines(ctx) {
   ctx.setLineDash([]);
 }
 
-// misses as an open X (white under cyan), makes as an amber dot with a white edge
+// misses as an open X (white under purple), makes as a green dot with a white edge
 function shots(ctx, marked) {
   const xPath = (x, y, r) => {
     const t = r * 0.32;   // matplotlib's "X": a filled cross, drawn here by its outline
@@ -171,18 +167,18 @@ function shots(ctx, marked) {
     if (s.made) continue;
     xPath(cx(s.x), cy(s.y), 8.5);
     ctx.globalAlpha = 0.75; ctx.strokeStyle = C.outline; ctx.lineWidth = 4.5; ctx.stroke();
-    ctx.globalAlpha = 1; ctx.strokeStyle = C.cyan; ctx.lineWidth = 2; ctx.stroke();
+    ctx.globalAlpha = 1; ctx.strokeStyle = C.purple; ctx.lineWidth = 2; ctx.stroke();
   }
   for (const s of marked) {
     if (!s.made) continue;
     ctx.beginPath();
     ctx.arc(cx(s.x), cy(s.y), 7.5, 0, Math.PI * 2);
-    ctx.fillStyle = C.amber; ctx.fill();
+    ctx.fillStyle = C.green; ctx.fill();
     ctx.strokeStyle = C.outline; ctx.lineWidth = 1.4; ctx.stroke();
   }
 }
 
-function colorbar(ctx, sum) {
+function colorbar(ctx, sum, heat) {
   const { top, h } = CB;
   for (let px = 0; px < CB.w; px++) {
     ctx.fillStyle = heat(BAR.lo + ((px + 0.5) / CB.w) * (BAR.hi - BAR.lo));
@@ -216,38 +212,60 @@ function colorbar(ctx, sum) {
   const { expected, actual } = sum;
   const clip = (v) => Math.min(Math.max(v, BAR.lo), BAR.hi);
   const up = actual - expected >= 0;
-  const tone = up ? C.amber : C.cyan;
+  const tone = up ? C.green : C.purple;
   const vline = (v, color, width) => {
     if (!Number.isFinite(v) || v < BAR.lo || v > BAR.hi) return;
     ctx.strokeStyle = color; ctx.lineWidth = width;
     ctx.beginPath(); ctx.moveTo(cbx(v), top); ctx.lineTo(cbx(v), top + h); ctx.stroke();
   };
+  // the arrow from xPts/Shot to Pts/Shot: a white outline, then the line, then the arrow's fill, so
+  // its point ends on the coloured line's near edge
+  const ACTUAL_W = 2.5;
+  const shaft = Math.abs(actual - expected) >= 0.025 && Number.isFinite(actual) && Number.isFinite(expected)
+    ? arrowPath(cbx(clip(expected)), cbx(clip(actual)) - (up ? 1 : -1) * ACTUAL_W / 2, top + h / 2)
+    : null;
+  if (shaft) {
+    ctx.lineJoin = "miter";
+    ctx.strokeStyle = C.outline; ctx.lineWidth = 3;
+    ctx.stroke(shaft);
+  }
   vline(actual, C.outline, 4.5);
-  vline(actual, tone, 2.5);
-  if (Math.abs(actual - expected) >= 0.025) {
-    const x1 = cbx(clip(expected)), x2 = cbx(clip(up ? actual + 0.0025 : actual - 0.0025)), y = top + h / 2;
-    arrow(ctx, x1, x2, y, "rgba(255,255,255,.75)", 7, 9);
-    arrow(ctx, x1, x2, y, tone, 3.5, 6);
+  vline(actual, tone, ACTUAL_W);
+  if (shaft) {
+    ctx.fillStyle = tone;
+    ctx.fill(shaft);
   }
   vline(expected, C.line, 2.5);
 
-  const label = (v) => (Number.isFinite(v) ? v.toFixed(2) : "–");
-  text(ctx, `xPts/Shot: ${label(expected)}`, COURT.x0 + COURT.w * 0.27, top - 46, { font: `500 25px ${DISPLAY}`, align: "center" });
-  text(ctx, `Pts/Shot: ${label(actual)}`, COURT.x0 + COURT.w * 0.73, top - 46, { font: `500 25px ${DISPLAY}`, align: "center" });
+  // each value in the scale's colour at that value, its label in white, the pair centred together
+  const label = (name, v, x) => {
+    const font = `500 25px ${DISPLAY}`;
+    const value = Number.isFinite(v) ? v.toFixed(2) : "–";
+    ctx.font = font;
+    const a = ctx.measureText(`${name}: `).width, b = ctx.measureText(value).width;
+    text(ctx, `${name}: `, x - (a + b) / 2, top - 46, { font });
+    text(ctx, value, x - (a + b) / 2 + a, top - 46, { font, color: Number.isFinite(v) ? heat(clip(v)) : C.ink });
+  };
+  label("xPts/Shot", expected, COURT.x0 + COURT.w * 0.27);
+  label("Pts/Shot", actual, COURT.x0 + COURT.w * 0.73);
 }
 
-function arrow(ctx, x1, x2, y, color, width, head) {
+// one outline for the shaft and head, from x1 to the point at x2
+function arrowPath(x1, x2, y) {
   const dir = Math.sign(x2 - x1) || 1;
-  ctx.strokeStyle = ctx.fillStyle = color;
-  ctx.lineWidth = width;
-  ctx.lineCap = "butt";
-  ctx.beginPath(); ctx.moveTo(x1 + dir * 2, y); ctx.lineTo(x2 - dir * head * 1.2, y); ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x2, y);
-  ctx.lineTo(x2 - dir * head * 1.6, y - head);
-  ctx.lineTo(x2 - dir * head * 1.6, y + head);
-  ctx.closePath();
-  ctx.fill();
+  const half = 2.5, head = 7;
+  const len = Math.min(13, Math.abs(x2 - x1) * 0.6);   // a short arrow keeps some shaft
+  const neck = x2 - dir * len;
+  const p = new Path2D();
+  p.moveTo(x1, y - half);
+  p.lineTo(neck, y - half);
+  p.lineTo(neck, y - head);
+  p.lineTo(x2, y);
+  p.lineTo(neck, y + head);
+  p.lineTo(neck, y + half);
+  p.lineTo(x1, y + half);
+  p.closePath();
+  return p;
 }
 
 function waterfall(ctx, sum) {
@@ -266,10 +284,9 @@ function waterfall(ctx, sum) {
   ctx.beginPath(); ctx.moveTo(fx(2.5), fy(0)); ctx.lineTo(fx(2.5), fy(ymax * 0.95)); ctx.stroke();
 
   values.forEach((v, i) => {
-    const tone = v >= 0 ? C.amber : C.cyan;
-    const top = fy(cum[i]), bottom = fy(cum[i] - v);
-    ctx.fillStyle = tone;
-    ctx.fillRect(fx(i - 0.4), Math.min(top, bottom), fx(i + 0.4) - fx(i - 0.4), Math.max(Math.abs(bottom - top), 1));
+    const start = fy(cum[i] - v), end = fy(cum[i]);
+    ctx.fillStyle = v >= 0 ? C.green : C.purple;
+    ctx.fill(bar(fx(i - 0.4), fx(i + 0.4), start, end));
   });
   // dotted steps from each bar's top to the next
   ctx.strokeStyle = C.outline; ctx.lineWidth = 1.4; ctx.setLineDash([1.5, 1.5]);
@@ -282,7 +299,7 @@ function waterfall(ctx, sum) {
   ctx.beginPath(); ctx.moveTo(fx(-0.48), fy(total)); ctx.lineTo(fx(5.5), fy(total)); ctx.stroke();
 
   values.forEach((v, i) => {
-    const tone = v >= 0 ? C.amber : C.cyan;
+    const tone = v >= 0 ? C.green : C.purple;
     text(ctx, cats[i][0], fx(i), fy(max * 1.075) - 10, { font: `500 15px ${DISPLAY}`, align: "center" });
     text(ctx, cats[i][1], fx(i), fy(max * 1.075) + 10, { font: `500 15px ${DISPLAY}`, align: "center" });
     tag(ctx, `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`, fx(i), fy(cum[i]), tone, sum.game == null ? 14 : 17);
@@ -294,13 +311,31 @@ function waterfall(ctx, sum) {
   text(ctx, "blandalytics.com", fx(4.1), FALL.bottom - 4, { font: `300 14px ${TEXT}`, align: "center", baseline: "bottom", color: C.nav });
 }
 
-// a value label: tone text in a background-coloured rounded box with a tone edge, so it reads in the bar's colour
+// A waterfall bar as Model Drilldown draws them (charts.js bar()): square where it starts (the
+// running total before it) and rounded where it ends, on top for a gain and underneath for a loss
+const BAR_R = 9;
+function bar(x0, x1, start, end) {
+  if (Math.abs(end - start) < 1) end = start + (end < start ? -1 : 1);
+  const r = Math.min(BAR_R, (x1 - x0) / 2, Math.abs(end - start));
+  const d = end < start ? 1 : -1;   // from the end's edge back toward the start (canvas y runs down)
+  const p = new Path2D();
+  p.moveTo(x0, start);
+  p.lineTo(x0, end + d * r);
+  p.quadraticCurveTo(x0, end, x0 + r, end);
+  p.lineTo(x1 - r, end);
+  p.quadraticCurveTo(x1, end, x1, end + d * r);
+  p.lineTo(x1, start);
+  p.closePath();
+  return p;
+}
+
+// a value label, as the app draws it: tone text in a white rounded box with a tone edge
 function tag(ctx, s, x, y, tone, size) {
   ctx.font = `600 ${size}px ${TEXT}`;
   const w = ctx.measureText(s).width + 14, h = size + 10;
   ctx.beginPath();
   ctx.roundRect(x - w / 2, y - h / 2, w, h, 6);
-  ctx.fillStyle = C.bg; ctx.fill();
+  ctx.fillStyle = "#ffffff"; ctx.fill();
   ctx.strokeStyle = tone; ctx.lineWidth = 1.5; ctx.stroke();
   text(ctx, s, x, y + 0.5, { font: `600 ${size}px ${TEXT}`, align: "center", color: tone });
 }

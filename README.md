@@ -1499,7 +1499,8 @@ be loaded on the page itself, without deploying, through the *Projections* file 
 player scored in one game or across a season. It is the
 [nba-scoring-chart.streamlit.app](https://nba-scoring-chart.streamlit.app/) app
 ([Blandalytics/nba_shot_chart](https://github.com/Blandalytics/nba_shot_chart)) rebuilt for the
-browser on the PLPD design system: the scoring chart (the six-part points waterfall beside the
+browser on the PLPD design system, its figures in the app's own colours (green for makes and points
+added, purple for misses and points given back, the court in seaborn's `vlag`): the scoring chart (the six-part points waterfall beside the
 court, shaded by the xFG model's expected points per shot, with the shots and their xPTS spread
 on the scale above), the season and game leaderboards (totals or per shot, with the app's two
 minimum-shot sliders), Shot Value Added (shot quality against shot making for the top quarter
@@ -1510,9 +1511,6 @@ point opens that player or game in the chart. **Share image** exports the chart 
 
 It departs from the app in a few places, all deliberate:
 
-- **PLPD colours.** Amber marks makes and points added, cyan misses and points given back (the
-  app's green and purple); the court and its scale use the heat cell's blue-white-red over the
-  app's `CenteredNorm(1.09, 0.42)` instead of seaborn's `vlag`.
 - **Every player.** The app keeps players on `nba_api`'s bundled active list, which lags the
   season (rookies and since-retired players missing, some names spelled differently from the
   stats API, which breaks its name-to-id lookup). Here everyone who logged a game is listed,
