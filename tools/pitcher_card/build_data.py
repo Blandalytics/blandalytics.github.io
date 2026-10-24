@@ -190,13 +190,35 @@ def comparisons(p: pd.DataFrame, table: pd.DataFrame, seasons: dict[int, pd.Data
 
 
 # ---- the plots ----------------------------------------------------------------------
+IN_PLAY = ("X", "D", "E")  # the feed's pitch codes for a ball put in play
+
+
+def _round(v, d: int) -> float | None:
+    """A number as DataFrame.round leaves it (rint(x * 10^d) / 10^d), None for NaN."""
+    v = _num(v)
+    return None if v is None else float(np.round(v, d))
+
+
+def _code(v) -> str | None:
+    return None if v is None or (isinstance(v, float) and math.isnan(v)) else str(v)
+
+
 def plot_points(p: pd.DataFrame) -> list[dict]:
     """Each pitch's movement (in its true direction) and its location on the standard
-    zone, from the batter's side of the plate."""
+    zone, from the batter's side of the plate, and what the card's hover shows of it: its
+    velo, the feed's code for it (``d``) and, put in play, the plate appearance's event
+    (``e``), and its Stuff+, PLV+ and xSLGcon, rounded as the table rounds them."""
     sign = np.where(p["hand"] == "R", 1, -1)
+    blank = pd.Series([None] * len(p), index=p.index, dtype=object)
+    codes = p["det_code"] if "det_code" in p else blank
+    events = p["events"] if "events" in p else blank
     return [
-        {"t": t, "hb": _num(hb), "ivb": _num(ivb), "x": _num(x), "z": _num(z), "stand": stand}
-        for t, hb, ivb, x, z, stand in zip(
+        {
+            "t": t, "hb": _num(hb), "ivb": _num(ivb), "x": _num(x), "z": _num(z), "stand": stand,
+            "velo": _num(velo), "d": _code(d), "e": _code(e) if _code(d) in IN_PLAY else None,
+            "plvStuff+": _round(stuff, 0), "PLV+": _round(plv, 0), "xSLGcon": _round(xs, 3),
+        }
+        for t, hb, ivb, x, z, stand, velo, d, e, stuff, plv, xs in zip(
             *(
                 p["pitchType"],
                 p["HB"] * sign,
@@ -204,6 +226,12 @@ def plot_points(p: pd.DataFrame) -> list[dict]:
                 (-p["pX"]).clip(-2, 2),
                 p["sz_plot_z"].clip(-0.25, 5.25),
                 p["stand"],
+                p["velo"],
+                codes,
+                events,
+                p["plvStuff+"],
+                p["PLV+"],
+                p["xSLGcon"],
             ),
             strict=True,
         )
