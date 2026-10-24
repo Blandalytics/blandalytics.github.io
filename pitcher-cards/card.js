@@ -17,7 +17,8 @@
 // side.
 //
 //   PitcherCard.svg(card, {logo})        the SVG markup
-//   PitcherCard.draw(el, card, opts)     ...drawn into an element; returns the <svg>
+//   PitcherCard.draw(el, card, opts)     ...drawn into an element, its pitches hoverable
+//                                        (opts.interactive false: not); returns the <svg>
 //   PitcherCard.show(el, year)           one comparison layer (0 for none)
 //   PitcherCard.comparisonYear(card, y)  y if the card has that season, else its latest
 //   PitcherCard.png(svgEl)               the card as a 3000 x 4000 PNG blob
@@ -422,15 +423,29 @@
     );
   }
 
-  // the pitches on a plot: one shared marker, placed per pitch and coloured per type
+  // the pitches on a plot: one shared marker, placed per pitch and coloured per type, each
+  // tagged with its index in card.pitches (see `indexed`) for the hover
   function markers(ax, pitches, xkey, ykey) {
     return [...new Set(pitches.map((p) => p.t))].map((code) => {
       const uses = pitches
         .filter((p) => p.t === code)
-        .map((p) => `<use href="#m" x="${fmt(ax.x(p[xkey]))}" y="${fmt(ax.y(p[ykey]))}"/>`)
+        .map((p) => `<use href="#m" x="${fmt(ax.x(p[xkey]))}" y="${fmt(ax.y(p[ykey]))}" data-i="${p.i}"/>`)
         .join("");
       return `<g fill="${get(MARKER_COLORS, code, MARKER_COLORS.UN)}">${uses}</g>`;
     });
+  }
+
+  // the card's pitches with their index, which a plot's filter would otherwise lose
+  const indexed = (card) => card.pitches.map((p, i) => ({ ...p, i }));
+
+  // A band behind one row of a panel, lit by the hover: `key` is u:<stand>:<type> for a
+  // Usage row's side, m:<type> for a metrics row. Invisible until then, so a card drawn
+  // without the hover (or exported) looks as it always has.
+  function band(key, x1, y1, x2, y2) {
+    return (
+      `<rect data-hl="${key}" x="${fmt(x1)}" y="${fmt(y1)}" width="${fmt(x2 - x1)}" height="${fmt(y2 - y1)}" ` +
+      'rx="8" fill="#FFFFFF" opacity="0" pointer-events="none"/>'
+    );
   }
 
   // ---- the header -------------------------------------------------------------------
@@ -595,10 +610,15 @@
       out.push(share(xli, ax.y(i), "", color, "left", arrowSpans(card, t.code, "vsL_arrow", true)));
     });
     // the bars go under the labels, which sit in the gap, and are clipped to their own side
-    // of it rather than having the gap painted over them
+    // of it rather than having the gap painted over them; the hover's bands go under both
+    const bands = types.flatMap((t, i) => [
+      band(`u:L:${t.code}`, fx(0.445), ax.y(i - 0.5), ax.x(0), ax.y(i + 0.5)),
+      band(`u:R:${t.code}`, ax.x(0), ax.y(i - 0.5), fx(0.98), ax.y(i + 0.5)),
+    ]);
     out.splice(
       3,
       0,
+      ...bands,
       clipped("ubr", ax.x(fw), W - ax.x(fw), bars(ax, types, vsR, fw, 1)),
       clipped("ubl", 0, ax.x(-fw), bars(ax, types, vsL, fw, -1)),
     );
@@ -696,7 +716,7 @@
       line(ax.x(-(lim - 4)), ax.y(0), ax.x(lim - 4), ax.y(0), { color: WHITE, width: 2, alpha: 0.5 }),
       ...rings(ax, lim),
       ...shapes(ax, card),
-      ...markers(ax, card.pitches.filter((p) => p.hb != null), "hb", "ivb"),
+      ...markers(ax, indexed(card).filter((p) => p.hb != null), "hb", "ivb"),
       ...armLines(ax, card, lim),
     ];
     const labels = [
@@ -753,7 +773,7 @@
     const ax = new Axes([x0, 0.275, 0.2675, 0.287], [-2, 2], [-0.5, 5.5], true);
     const name = `loc${stand}`;
     const out = [ax.clip(name), `<g clip-path="url(#${name})">`, ...zone(ax)];
-    const shown = card.pitches.filter((p) => p.stand === stand && p.x != null);
+    const shown = indexed(card).filter((p) => p.stand === stand && p.x != null);
     out.push(...markers(ax, shown, "x", "z"), "</g>");
     if (count) {
       const g = new Axes([gradeX0, 0.48, 0.1, 0.1], [0, 1], [0, 1]);
@@ -817,6 +837,7 @@
       out.push(text(veloX, fy(0.23), `Velo (vs '${String(c.year).slice(-2)})`, 16, { color: LINE, attrs: ` data-cmp="${c.year}"` }));
     }
     const bw = Math.max(0.5, Math.min(0.8, 2 / n));
+    out.push(...types.map((t, i) => band(`m:${t.code}`, fx(0.01), hdr.y(i - 0.5), fx(0.99), hdr.y(i + 0.5))));
     types.forEach((t, i) => {
       const color = get(MARKER_COLORS, t.code, MARKER_COLORS.UN);
       const y = hdr.y(i);
@@ -867,10 +888,136 @@
   }
 
   // ---- on a page --------------------------------------------------------------------
-  // the card drawn into `el` (replacing what was there); returns its <svg>
-  function draw(el, card, opts) {
+  // the card drawn into `el` (replacing what was there), its pitches hoverable unless
+  // opts.interactive is false; returns its <svg>
+  function draw(el, card, opts = {}) {
     el.innerHTML = svg(card, opts);
-    return el.querySelector("svg");
+    const svgEl = el.querySelector("svg");
+    if (opts.interactive !== false) interactive(el, svgEl, card);
+    return svgEl;
+  }
+
+  // ---- the hover --------------------------------------------------------------------
+  // the feed's pitch codes (details.code), as Gameday words them
+  const RESULTS = {
+    B: "Ball", "*B": "Ball in Dirt", P: "Pitchout", I: "Intentional Ball", V: "Automatic Ball",
+    C: "Called Strike", S: "Swinging Strike", W: "Swinging Strike (Blocked)", T: "Foul Tip",
+    F: "Foul", L: "Foul Bunt", M: "Missed Bunt", O: "Foul Tip Bunt", R: "Foul Pitchout",
+    Q: "Swinging Pitchout", K: "Automatic Strike", H: "Hit By Pitch",
+    X: "In Play, Out(s)", D: "In Play, No Out", E: "In Play, Run(s)",
+  };
+  const IN_PLAY = new Set(["X", "D", "E"]);
+  const words = (s) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+  // what happened on the pitch: the call, or for a ball in play the plate appearance's event
+  function result(p) {
+    if (!p.d) return null;
+    if (IN_PLAY.has(p.d) && p.e) return `In Play: ${words(p.e)}`;
+    return get(RESULTS, p.d, null);
+  }
+
+  // The tooltip's lines. A card built before the hover's fields were added has only the
+  // type and movement, so a line whose field is absent is left out (one present but blank
+  // shows "-"); xSLGcon is shown only for a ball in play.
+  function tipLines(card, p) {
+    const color = get(MARKER_COLORS, p.t, MARKER_COLORS.UN);
+    const n1 = (v) => (isNum(v) ? fixed(v, 1) : "-");
+    const whole = (v) => (isNum(v) ? pyRound(v) : "-");
+    const hb = isNum(p.hb) ? p.hb * (card.hand === "L" ? -1 : 1) : null; // the table's sign
+    const lines = [`<b style="color:${color};font-weight:700">${esc(get(PITCH_NAMES, p.t, p.t))}</b>`];
+    const res = result(p);
+    if (res) lines.push(esc(res));
+    if ("plvStuff+" in p) lines.push(`Stuff+: ${whole(p["plvStuff+"])}`);
+    if ("PLV+" in p) lines.push(`PLV+: ${whole(p["PLV+"])}`);
+    if ("velo" in p) lines.push(`Velo: ${n1(p.velo)} mph`);
+    lines.push(`IVB: ${n1(p.ivb)}"`, `HB: ${n1(hb)}"`);
+    if (isNum(p.xSLGcon)) lines.push(`xSLGcon: ${fixed(p.xSLGcon, 3).replace(/^0+/, "")}`);
+    return lines;
+  }
+
+  // Hovering (or tapping) a pitch: its tooltip by it, its type's bands lit (Usage on the
+  // side it was thrown to, and the metrics row), and the pitch ringed in every plot it is in,
+  // drawn again on top so others do not hide it. The nearest pitch within reach is the one
+  // picked, as a dot is only a few pixels across on a phone.
+  function interactive(el, svgEl, card) {
+    if (typeof document === "undefined" || !svgEl || !card.pitches || !card.pitches.length) return;
+    if (getComputedStyle(el).position === "static") el.style.position = "relative";
+    const dots = [].map.call(svgEl.querySelectorAll("use[data-i]"), (u) => ({
+      i: +u.getAttribute("data-i"), x: +u.getAttribute("x"), y: +u.getAttribute("y"), el: u,
+    }));
+    const layer = document.createElementNS(SVG_NS, "g");
+    layer.setAttribute("data-hover", "");
+    layer.setAttribute("pointer-events", "none");
+    svgEl.appendChild(layer);
+    const tip = document.createElement("div");
+    tip.setAttribute("role", "tooltip");
+    tip.hidden = true;
+    Object.assign(tip.style, {
+      position: "absolute", zIndex: "5", pointerEvents: "none", whiteSpace: "nowrap",
+      padding: "8px 11px", borderRadius: "8px", background: "rgba(19,21,42,.96)",
+      border: "1px solid rgba(118,138,190,.45)", boxShadow: "0 8px 20px rgba(0,0,0,.35)",
+      color: "#f0f1f5", font: "500 13px/1.5 'DM Sans', system-ui, sans-serif",
+    });
+    el.appendChild(tip);
+    let on = null;
+
+    function clear() {
+      on = null;
+      tip.hidden = true;
+      layer.innerHTML = "";
+      svgEl.querySelectorAll('[data-hl][opacity="0.14"]').forEach((b) => b.setAttribute("opacity", "0"));
+    }
+    function light(i) {
+      clear();
+      on = i;
+      const p = card.pitches[i];
+      svgEl.querySelectorAll(`[data-hl="u:${p.stand}:${p.t}"],[data-hl="m:${p.t}"]`).forEach((b) => b.setAttribute("opacity", "0.14"));
+      const color = get(MARKER_COLORS, p.t, MARKER_COLORS.UN);
+      layer.innerHTML = dots.filter((d) => d.i === i).map((d) =>
+        `<use href="#m" x="${d.x}" y="${d.y}" fill="${color}"/>` +
+        `<circle cx="${d.x}" cy="${d.y}" r="${fmt(MARKER_R + 5)}" fill="none" stroke="${WHITE}" stroke-width="3"/>`).join("");
+      tip.innerHTML = tipLines(card, p).join("<br>");
+      tip.hidden = false;
+    }
+    function nearest(e) {
+      const m = svgEl.getScreenCTM();
+      if (!m) return null;
+      const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+      const reach = Math.max(MARKER_R * 1.25, 14 / m.a); // at least 14 screen pixels
+      let best = null;
+      let dist = reach * reach;
+      for (const d of dots) {
+        const dd = (d.x - pt.x) ** 2 + (d.y - pt.y) ** 2;
+        if (dd <= dist) { dist = dd; best = d; }
+      }
+      return best;
+    }
+    function place(d) {
+      const r = d.el.getBoundingClientRect();
+      const box = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2 - box.left;
+      const cy = r.top + r.height / 2 - box.top;
+      let left = cx + 14;
+      if (left + tip.offsetWidth > box.width - 4) left = cx - 14 - tip.offsetWidth;
+      let top = cy + 14;
+      if (top + tip.offsetHeight > box.height - 4) top = cy - 14 - tip.offsetHeight;
+      tip.style.left = `${Math.max(4, left)}px`;
+      tip.style.top = `${Math.max(4, top)}px`;
+    }
+    function pick(e) {
+      const d = nearest(e);
+      if (!d) {
+        if (on !== null) clear();
+        svgEl.style.cursor = "";
+        return;
+      }
+      if (d.i !== on) light(d.i);
+      place(d);
+      svgEl.style.cursor = "pointer";
+    }
+    svgEl.addEventListener("pointermove", pick);
+    svgEl.addEventListener("pointerdown", pick); // a tap, on a phone
+    svgEl.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") clear(); });
   }
 
   // `year` if the card has that comparison season (0 asks for none), else its most recent
@@ -932,6 +1079,7 @@
     clone.querySelectorAll("[data-cmp]").forEach((node) => {
       if (node.style.display === "none") node.remove();
     });
+    clone.querySelectorAll("[data-hover],[data-hl]").forEach((node) => node.remove()); // the hover's marks
     return Promise.all([fontCss(), inlineImages(clone)]).then(([css]) => {
       const style = document.createElementNS(SVG_NS, "style");
       style.textContent = css + " text{font-family:'DM Sans',sans-serif;font-weight:700}";

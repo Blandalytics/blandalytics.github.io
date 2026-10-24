@@ -166,6 +166,7 @@ function base(rows) {
       vY0: r.vy0, vZ0: r.vz0, aY: r.ay, aZ: r.az, IVB: r.ivb,
       raw_type: r.pitch_type,
       pitchType: PITCH_TYPE_MAP[r.pitch_type] ?? "UN",
+      det_code: r.det_code ?? null, events: r.events ?? null,
       desc: DESC_MAP[r.det_code] ?? null,
       balls: Math.min(Math.max(balls, 0), 3),
       strikes: Math.min(Math.max(strikes, 0), 2),
@@ -416,8 +417,13 @@ function comparisons(p, table, pack) {
 }
 
 // ---- the plots ---------------------------------------------------------------------------
+const IN_PLAY = new Set(["X", "D", "E"]); // the feed's pitch codes for a ball put in play
+
+/** build_data.plot_points: movement, location, and what the card's hover shows (velo, the
+ * feed's code `d` and, put in play, the event `e`, and Stuff+, PLV+, xSLGcon as rounded). */
 function plotPoints(p) {
   const clip = (v, lo, hi) => (Number.isNaN(v) ? v : Math.min(Math.max(v, lo), hi));
+  const rounded = (v, d) => (missing(v) ? null : round64(v, d));
   return p.map((r) => ({
     t: r.pitchType,
     hb: num(r.HB * (r.hand === "R" ? 1 : -1)),
@@ -425,6 +431,12 @@ function plotPoints(p) {
     x: num(clip(-r.pX, -2, 2)),
     z: num(clip(r.sz_plot_z, -0.25, 5.25)),
     stand: r.stand,
+    velo: num(r.velo),
+    d: r.det_code ?? null,
+    e: IN_PLAY.has(r.det_code) ? r.events ?? null : null,
+    "plvStuff+": rounded(r["plvStuff+"], 0),
+    "PLV+": rounded(r["PLV+"], 0),
+    xSLGcon: rounded(r.xSLGcon, 3),
   }));
 }
 
