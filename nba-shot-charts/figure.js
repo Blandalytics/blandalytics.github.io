@@ -1,7 +1,7 @@
 // NBA Shot Charts: the app's scoring summary figure (shot_summary() in nba_shot_chart.py),
 // drawn on a canvas in the figure's own 1400 x 800 layout (the app's 14 x 8 in at 100 dpi),
 // in PLPD colours: amber where a player added points, cyan where they gave some back, the
-// xPTS court in the heat cell's blue-white-red.
+// xPTS court in the heat cell's blue and red, through the figure's background at the league average.
 
 import { SEASON_SHOT_LIMIT, density } from "./model.js?v=1";
 
@@ -14,8 +14,9 @@ const C = {
 const DISPLAY = '"DM Sans", system-ui, sans-serif';
 const TEXT = '"Work Sans", system-ui, sans-serif';
 
-// PLPD heat cell, coldest to hottest, read continuously over the app's CenteredNorm(1.09, 0.42)
-const HEAT = ["#0066ff", "#5599ff", "#aaccff", "#ffffff", "#e2bcbe", "#c6797c", "#a9363b"].map(hex);
+// the PLPD heat cell's coldest and hottest, through the figure's background (not white) at the
+// midpoint, so an average spot sinks into the card; read continuously over the app's CenteredNorm(1.09, 0.42)
+const HEAT = ["#0066ff", C.bg, "#a9363b"].map(hex);
 const NORM = { lo: 1.09 - 0.42, hi: 1.09 + 0.42 };
 const BAR = { lo: 0.69, hi: 1.51 };   // the colorbar's span, cb.ax.set(xlim=(0.69, 1.51))
 
@@ -41,8 +42,8 @@ COURT.top = COURT.bottom - COURT.h;
 const cx = (x) => COURT.x0 + (x - COURT.xlim[0]) * COURT.scale;
 const cy = (y) => COURT.bottom - (y - COURT.ylim[0]) * COURT.scale;
 
-// the colorbar over the court, 94% of its width (shrink=0.94)
-const CB = { x0: COURT.x0 + COURT.w * 0.03, w: COURT.w * 0.94, top: COURT.top - 36, h: 30 };
+// the colorbar sits on the court, its ends on the sidelines (x = ±249), so its outline runs into them
+const CB = { x0: cx(-249), w: cx(249) - cx(-249), top: COURT.top - 30, h: 30 };
 const cbx = (v) => CB.x0 + ((v - BAR.lo) / (BAR.hi - BAR.lo)) * CB.w;
 
 // the waterfall: categories 0..5 across xlim (-0.6, 5.5), points 0..max * 1.25 up
@@ -293,14 +294,14 @@ function waterfall(ctx, sum) {
   text(ctx, "blandalytics.com", fx(4.1), FALL.bottom - 4, { font: `300 14px ${TEXT}`, align: "center", baseline: "bottom", color: C.nav });
 }
 
-// a value label: tone text in a white rounded box with a tone edge
+// a value label: tone text in a background-coloured rounded box with a tone edge, so it reads in the bar's colour
 function tag(ctx, s, x, y, tone, size) {
   ctx.font = `600 ${size}px ${TEXT}`;
   const w = ctx.measureText(s).width + 14, h = size + 10;
   ctx.beginPath();
   ctx.roundRect(x - w / 2, y - h / 2, w, h, 6);
-  ctx.fillStyle = "#ffffff"; ctx.fill();
+  ctx.fillStyle = C.bg; ctx.fill();
   ctx.strokeStyle = tone; ctx.lineWidth = 1.5; ctx.stroke();
-  text(ctx, s, x, y + 0.5, { font: `600 ${size}px ${TEXT}`, align: "center", color: tone === C.amber ? "#8a5a12" : "#00708a" });
+  text(ctx, s, x, y + 0.5, { font: `600 ${size}px ${TEXT}`, align: "center", color: tone });
 }
 
