@@ -943,8 +943,8 @@
     const n1 = (v) => (isNum(v) ? fixed(v, 1) : "-");
     const hb = isNum(p.hb) ? p.hb * (card.hand === "L" ? -1 : 1) : null; // the table's sign
     const lines = [`<b style="color:${color};font-weight:700">${esc(get(PITCH_NAMES, p.t, p.t))}</b>`];
-    if ("plvStuff+" in p) lines.push(`Stuff+ ${whole(p["plvStuff+"])} | PLV+ ${whole(p["PLV+"])}`);
-    lines.push([...("velo" in p ? [`Velo ${n1(p.velo)}mph`] : []), `IVB ${n1(p.ivb)}"`, `HB ${n1(hb)}"`].join(" | "));
+    if ("plvStuff+" in p) lines.push(`Stuff+ ${whole(p["plvStuff+"])}  |  PLV+ ${whole(p["PLV+"])}`);
+    lines.push([...("velo" in p ? [`Velo ${n1(p.velo)}mph`] : []), `IVB ${n1(p.ivb)}"`, `HB ${n1(hb)}"`].join("  |  "));
     if (p.c && p.bat) lines.push(esc(`${p.c} vs ${p.bat}`));
     if (isNum(p.inn)) {
       const outs = isNum(p.outs) ? `${p.outs} Out${p.outs === 1 ? "" : "s"}` : "";
@@ -975,7 +975,7 @@
     tip.setAttribute("role", "tooltip");
     tip.hidden = true;
     Object.assign(tip.style, {
-      position: "absolute", zIndex: "5", pointerEvents: "none", whiteSpace: "nowrap",
+      position: "absolute", zIndex: "5", pointerEvents: "none", whiteSpace: "pre", // keeps the separators' double spaces
       padding: "8px 11px", borderRadius: "8px", background: "rgba(19,21,42,.96)",
       border: "1px solid rgba(118,138,190,.45)", boxShadow: "0 8px 20px rgba(0,0,0,.35)",
       color: "#f0f1f5", font: "500 13px/1.5 'DM Sans', system-ui, sans-serif",
