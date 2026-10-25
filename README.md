@@ -1556,8 +1556,8 @@ canvases at 2x.
 stats.nba.com answers a home connection but not cloud runners, so the build runs on the
 site owner's own machine, not in GitHub Actions or a Cloudflare Worker: a Windows Task Scheduler
 task (`\Blandalytics\NBA Shot Charts daily data`, 7:11 AM daily, waking the computer from sleep
-if need be; run only while the user is signed in, catching up at the next chance when a run is
-missed) runs a local PowerShell wrapper
+if need be; run whether or not the user is signed in, as the user without a stored password (S4U),
+catching up at the next chance when a run is missed) runs a local PowerShell wrapper
 around `build_data.py` for the current season, uploading with the local wrangler login. The
 wrapper retries a failed run once after 10 minutes, checks the manifest at origin afterwards and
 logs each day's run. By hand, from the repo root (Python with
