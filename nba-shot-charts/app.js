@@ -43,7 +43,7 @@ const GAME_ROWS = 100;
 const state = {
   manifest: null, season: null, data: null, grid: null, minutes: null,
   player: null, game: null, view: "game", mode: "total",
-  sort: { season: { key: "pts", dir: -1 }, game: { key: "pts", dir: -1 } },
+  sort: { season: { key: "pts", dir: -1 }, game: { key: "pts", dir: -1 }, minutes: { key: "last3", dir: -1 } },
 };
 const cache = new Map();
 
@@ -405,16 +405,32 @@ el.va.addEventListener("click", () => {
 
 // ---- team minutes ------------------------------------------------------------------------
 
+// One sort for every team's table. The day columns are keyed by how many games back they are
+// (day0 the latest), so they line up across teams whose dates differ. A blank stays last either
+// way, and ties keep the app's order (Last 3, then 5, then 10, then the season, most first).
 function minutesTable(teamId) {
   const { dates, rows } = teamMinutes(state.minutes, teamId);
   if (!rows.length) return `<p class="plpd-status">No games yet.</p>`;
   const cols = [["Last 3", "last3"], ["Last 5", "last5"], ["Last 10", "last10"], ["Season", "all"]];
-  return `<div class="plpd-table-wrap"><table class="plpd-table"><thead><tr><th scope="col" class="name left"><span>Player</span></th>
-    ${cols.map(([l]) => `<th scope="col"><span>${l}</span></th>`).join("")}${dates.map((d) => `<th scope="col"><span>${esc(shortDate(d))}</span></th>`).join("")}</tr></thead>
+  const sort = state.sort.minutes;
+  const val = (r) => (sort.key === "name" ? r.name : sort.key.startsWith("day") ? r.days[Number(sort.key.slice(3))] : r[sort.key]);
+  rows.sort((a, b) => {
+    const x = val(a), y = val(b);
+    if (typeof x === "string") return x.localeCompare(y) * sort.dir;
+    const nx = !Number.isFinite(x), ny = !Number.isFinite(y);
+    if (nx || ny) return nx - ny;
+    return (x - y) * sort.dir;
+  });
+  const head = (k, label, cls = "") => {
+    const sorted = sort.key === k ? ` aria-sort="${sort.dir < 0 ? "descending" : "ascending"}"` : "";
+    return `<th scope="col" class="${cls}"${sorted}><button type="button" data-sort="${k}">${label}</button></th>`;
+  };
+  return `<div class="plpd-table-wrap"><table class="plpd-table"><thead><tr>${head("name", "Player", "name left")}
+    ${cols.map(([l, k]) => head(k, l)).join("")}${dates.map((d, i) => head(`day${i}`, esc(shortDate(d)))).join("")}</tr></thead>
     <tbody>${rows.map((r) => `<tr><td class="name">${esc(r.name)}</td>${cols.map(([, k]) => `<td>${num(r[k])}</td>`).join("")}${r.days.map((m) => `<td>${num(m)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
-const teamBlock = (t) => `<div class="team"><div class="plpd-mini"><h3 class="plpd-mini__title"><span class="swatch" style="background:${t.color}"></span>${esc(t.name)}</h3></div>${minutesTable(t.id)}</div>`;
+const teamBlock = (t) => `<div class="team" data-team="${t.id}"><div class="plpd-mini"><h3 class="plpd-mini__title"><span class="swatch" style="background:${t.color}"></span>${esc(t.name)}</h3></div>${minutesTable(t.id)}</div>`;
 
 function renderMinutes() {
   if (!state.minutes) return;
@@ -436,6 +452,14 @@ document.querySelectorAll("[data-jump]").forEach((b) => b.addEventListener("clic
 
 el.team.addEventListener("change", renderMinutes);
 el.allTeams.addEventListener("change", () => { el.team.disabled = el.allTeams.checked; renderMinutes(); });
+el.minutes.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-sort]");
+  if (!btn) return;
+  const s = state.sort.minutes, k = btn.dataset.sort, team = btn.closest("[data-team]").dataset.team;
+  Object.assign(s, s.key === k ? { dir: -s.dir } : { key: k, dir: k === "name" ? 1 : -1 });
+  renderMinutes();
+  el.minutes.querySelector(`[data-team="${team}"] [data-sort="${k}"]`)?.focus();
+});
 
 // ---- seasons -----------------------------------------------------------------------------
 
