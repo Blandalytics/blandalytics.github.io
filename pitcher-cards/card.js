@@ -1001,6 +1001,7 @@
         `<use href="#m" x="${d.x}" y="${d.y}" fill="${color}"/>` +
         `<circle cx="${d.x}" cy="${d.y}" r="${fmt(MARKER_R + 5)}" fill="none" stroke="${WHITE}" stroke-width="3"/>`).join("");
       tip.innerHTML = tipLines(card, p).join("<br>");
+      tip.style.borderColor = color; // framed in its pitch type's colour
       tip.hidden = false;
     }
     function nearest(e) {
