@@ -1553,10 +1553,14 @@ canvases at 2x.
 
 ### Updating
 
-stats.nba.com answers a home connection but not cloud runners, so the build runs on a desktop
-schedule rather than in GitHub Actions: a Claude scheduled task (`nba-shot-charts-daily`) runs it
-every morning for the current season, uploading with the wrangler login. By hand, from the repo
-root (Python with `tools/nba_shot_charts/requirements.txt`, and `npx wrangler` signed in):
+stats.nba.com answers a home connection but not cloud runners, so the build runs on the
+site owner's own machine, not in GitHub Actions or a Cloudflare Worker: a Windows Task Scheduler
+task (`\Blandalytics\NBA Shot Charts daily data`, 7:11 AM daily, run only while the user is
+signed in, catching up at the next sign-in when a run is missed) runs a local PowerShell wrapper
+around `build_data.py` for the current season, uploading with the local wrangler login. The
+wrapper retries a failed run once after 10 minutes, checks the manifest at origin afterwards and
+logs each day's run. By hand, from the repo root (Python with
+`tools/nba_shot_charts/requirements.txt`, and `npx wrangler` signed in):
 
 ```bash
 python tools/nba_shot_charts/build_data.py                    # the current season, uploaded

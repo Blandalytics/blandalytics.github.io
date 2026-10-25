@@ -15,7 +15,7 @@ page only sums and draws.
                                the seaborn `vlag` colormap it is drawn in
 
 stats.nba.com answers from a home connection but not from cloud runners, so this runs on a
-desktop schedule rather than in GitHub Actions, uploading with the wrangler login.
+local Windows Task Scheduler task rather than in GitHub Actions, uploading with the wrangler login.
 
     python tools/nba_shot_charts/build_data.py                      # current season, upload
     python tools/nba_shot_charts/build_data.py --season 2025-26     # any season
