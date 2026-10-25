@@ -353,7 +353,7 @@ function showShot(e) {
   const when = s.game ? `<br>${esc(shortDate(s.game.date))} · ${esc(s.game.matchup)}` : "";
   el.figTip.innerHTML = `<b>${what}</b><span class="big">xPts: ${s.xpts == null ? "–" : num(s.xpts, 2)}</span>`
     + `<br>${esc(s.zone ?? "Off the zone map")}`
-    + `<br>Expected free throws drawn: ${num(s.xfta, 2)} (${num(s.xfta * PTS_PER_FT, 2)} pts)${when}`;
+    + `<br>xFT: ${num(s.xfta, 2)} (${num(s.xfta * PTS_PER_FT, 2)} pts)${when}`;
   el.figTip.hidden = false;
   el.fig.style.cursor = "default";
   const left = hit.x / k + 14, top = hit.y / k + 14;
