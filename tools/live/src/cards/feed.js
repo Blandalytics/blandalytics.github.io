@@ -136,4 +136,7 @@ export const ROW_FIELDS = [
   "coordinates", "pX", "pZ", "vX0", "vY0", "vZ0", "aX", "aY", "aZ", "x0", "y0", "z0",
   "breaks", "breakVerticalInduced", "breakHorizontal", "spinRate", "spinDirection",
   "hitData", "launchSpeed", "launchAngle",
+  // the card's hover: each pitch's situation (build.js situations)
+  "index", "outs", "fullName", "event", "postOnFirst", "postOnSecond", "postOnThird",
+  "runners", "movement", "start", "end", "isOut", "playIndex", "runner",
 ];

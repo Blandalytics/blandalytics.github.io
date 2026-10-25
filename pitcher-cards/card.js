@@ -919,33 +919,42 @@
   const LIT = "0.07"; // a lit band's white: a light wash, the row still reading as before
   const words = (s) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+  // a pitch's `on`, the runners as bits (1st 1, 2nd 2, 3rd 4)
+  const BASES = [
+    "Bases Empty", "Runner on 1st", "Runner on 2nd", "Runners on 1st & 2nd", "Runner on 3rd",
+    "Runners on 1st & 3rd", "Runners on 2nd & 3rd", "Bases Loaded",
+  ];
+
   // what happened on the pitch: the call, or for a ball in play the plate appearance's event
+  // (a card built before the event's name was kept has the feed's code, "field_out")
   function result(p) {
     if (!p.d) return null;
-    if (IN_PLAY.has(p.d) && p.e) return `In Play: ${words(p.e)}`;
+    if (IN_PLAY.has(p.d) && p.e) return words(p.e);
     return get(RESULTS, p.d, null);
   }
 
-  // The tooltip's groups of lines: the pitch and its result, the model grades, then what was
-  // measured. A card built before the hover's fields were added has only the type and
-  // movement, so a line whose field is absent is left out (one present but blank shows "-"),
-  // and an empty group with it; xSLGcon is shown only for a ball in play.
-  function tipGroups(card, p) {
+  // The tooltip: the pitch, its Stuff+ and PLV+, its velo and movement, the count and batter,
+  // the half inning with the runners and outs, and the outcome with a batted ball's exit
+  // velocity, launch angle and xSLGcon. An older card lacks some of these (one built before the hover
+  // had only the type and movement), and what is absent is left out.
+  function tipLines(card, p) {
     const color = get(MARKER_COLORS, p.t, MARKER_COLORS.UN);
-    const n1 = (v) => (isNum(v) ? fixed(v, 1) : "-");
     const whole = (v) => (isNum(v) ? pyRound(v) : "-");
+    const n1 = (v) => (isNum(v) ? fixed(v, 1) : "-");
     const hb = isNum(p.hb) ? p.hb * (card.hand === "L" ? -1 : 1) : null; // the table's sign
-    const outcome = [`<b style="color:${color};font-weight:700">${esc(get(PITCH_NAMES, p.t, p.t))}</b>`];
+    const lines = [`<b style="color:${color};font-weight:700">${esc(get(PITCH_NAMES, p.t, p.t))}</b>`];
+    if ("plvStuff+" in p) lines.push(`Stuff+ ${whole(p["plvStuff+"])}; PLV+ ${whole(p["PLV+"])}`);
+    lines.push([...("velo" in p ? [`Velo ${n1(p.velo)}mph`] : []), `IVB ${n1(p.ivb)}"`, `HB ${n1(hb)}"`].join("; "));
+    if (p.c && p.bat) lines.push(esc(`${p.c} vs ${p.bat}`));
+    if (isNum(p.inn)) {
+      const outs = isNum(p.outs) ? `${p.outs} Out${p.outs === 1 ? "" : "s"}` : "";
+      lines.push(esc(`${p.top ? "Top" : "Bot"} ${p.inn} - ${[get(BASES, p.on, ""), outs].filter(Boolean).join(", ")}`));
+    }
     const res = result(p);
-    if (res) outcome.push(esc(res));
-    const grades = [];
-    if ("plvStuff+" in p) grades.push(`Stuff+: ${whole(p["plvStuff+"])}`);
-    if ("PLV+" in p) grades.push(`PLV+: ${whole(p["PLV+"])}`);
-    const measured = [];
-    if ("velo" in p) measured.push(`Velo: ${n1(p.velo)} mph`);
-    measured.push(`IVB: ${n1(p.ivb)}"`, `HB: ${n1(hb)}"`);
-    if (isNum(p.xSLGcon)) measured.push(`xSLGcon: ${fixed(p.xSLGcon, 3).replace(/^0+/, "")}`);
-    return [outcome, grades, measured].filter((g) => g.length);
+    const xslg = isNum(p.xSLGcon) ? ` -> ${fixed(p.xSLGcon, 3).replace(/^0+/, "")} xSLG` : "";
+    const hit = isNum(p.ev) && isNum(p.la) ? `: ${fixed(p.ev, 1)} mph @ ${pyRound(p.la)}°${xslg}` : "";
+    if (res) lines.push(`<b style="font-weight:700">${esc(res)}</b>${hit}`);
+    return lines;
   }
 
   // Hovering (or tapping) a pitch: its tooltip by it, its type's bands lit (Usage on the
@@ -989,7 +998,7 @@
       layer.innerHTML = dots.filter((d) => d.i === i).map((d) =>
         `<use href="#m" x="${d.x}" y="${d.y}" fill="${color}"/>` +
         `<circle cx="${d.x}" cy="${d.y}" r="${fmt(MARKER_R + 5)}" fill="none" stroke="${WHITE}" stroke-width="3"/>`).join("");
-      tip.innerHTML = tipGroups(card, p).map((g) => `<div>${g.join("<br>")}</div>`).join('<div style="height:7px"></div>');
+      tip.innerHTML = tipLines(card, p).join("<br>");
       tip.hidden = false;
     }
     function nearest(e) {

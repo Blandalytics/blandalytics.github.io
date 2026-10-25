@@ -166,7 +166,7 @@ function base(rows) {
       vY0: r.vy0, vZ0: r.vz0, aY: r.ay, aZ: r.az, IVB: r.ivb,
       raw_type: r.pitch_type,
       pitchType: PITCH_TYPE_MAP[r.pitch_type] ?? "UN",
-      det_code: r.det_code ?? null, events: r.events ?? null,
+      det_code: r.det_code ?? null,
       desc: DESC_MAP[r.det_code] ?? null,
       balls: Math.min(Math.max(balls, 0), 3),
       strikes: Math.min(Math.max(strikes, 0), 2),
@@ -419,25 +419,102 @@ function comparisons(p, table, pack) {
 // ---- the plots ---------------------------------------------------------------------------
 const IN_PLAY = new Set(["X", "D", "E"]); // the feed's pitch codes for a ball put in play
 
-/** build_data.plot_points: movement, location, and what the card's hover shows (velo, the
- * feed's code `d` and, put in play, the event `e`, and Stuff+, PLV+, xSLGcon as rounded). */
-function plotPoints(p) {
+const BASES = { "1B": 1, "2B": 2, "3B": 4 }; // a base's bit in a pitch's `on`
+const POST = [["postOnFirst", "1B"], ["postOnSecond", "2B"], ["postOnThird", "3B"]];
+
+/**
+ * build_data.situations: each pitch's situation from the feed, keyed "atBatIndex:pitchNumber"
+ * (the batter, the half inning, the outs and the runners on base as it was thrown, and the
+ * plate appearance's event). A plate appearance starts from the bases the previous one in
+ * the half inning left, corrected by where each runner it moves started and by the runners
+ * its end leaves where they stood; a runner who moves during it has moved for every later
+ * pitch.
+ */
+export function situations(feed) {
+  const out = new Map();
+  let half = null;
+  let left = new Map(); // base -> runner id, as the last plate appearance left them
+  const runner = (m) => m.details?.runner?.id;
+  const without = (bases, id) => new Map([...bases].filter(([, r]) => r !== id));
+  for (const play of feed.liveData?.plays?.allPlays ?? []) {
+    const ab = play.about ?? {};
+    const mu = play.matchup ?? {};
+    const top = ab.isTopInning ?? ab.halfInning === "top";
+    if (!half || half[0] !== ab.inning || half[1] !== top) {
+      half = [ab.inning, top];
+      left = new Map();
+    }
+    const events = play.playEvents ?? [];
+    const moves = (play.runners ?? [])
+      .map((m, i) => [m.details?.playIndex ?? events.length, i, m])
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    let bases = new Map(left);
+    const moved = new Set();
+    for (const [, , m] of moves) { // each runner's first move says where he started
+      const id = runner(m);
+      if (moved.has(id)) continue;
+      moved.add(id);
+      bases = without(bases, id);
+      if (m.movement?.start in BASES) bases.set(m.movement.start, id);
+    }
+    const batter = mu.batter?.id;
+    const post = new Map(POST.filter(([k]) => mu[k]?.id).map(([k, b]) => [b, mu[k].id]));
+    const standing = new Set(bases.values());
+    for (const [b, id] of post) if (id !== batter && !moved.has(id) && !standing.has(id)) bases.set(b, id);
+    let done = 0;
+    for (const e of events) {
+      if (e.pitchNumber === undefined || e.pitchNumber === null) continue;
+      while (done < moves.length && moves[done][0] < (e.index ?? 0)) {
+        const m = moves[done][2];
+        bases = without(bases, runner(m));
+        if (!m.movement?.isOut && m.movement?.end in BASES) bases.set(m.movement.end, runner(m));
+        done += 1;
+      }
+      out.set(`${ab.atBatIndex}:${e.pitchNumber}`, {
+        bat: mu.batter?.fullName ?? null,
+        inn: ab.inning ?? null,
+        top: Boolean(top),
+        outs: e.count?.outs ?? null,
+        on: [...bases.keys()].reduce((s, b) => s + BASES[b], 0),
+        event: play.result?.event ?? null,
+      });
+    }
+    left = post;
+  }
+  return out;
+}
+
+/** build_data.plot_points: movement, location, and what the card's hover shows (the feed's
+ * code `d` and, put in play, the event `e`, Stuff+ and PLV+ as rounded, velo, the count `c`, the
+ * situation, and a batted ball's exit velocity `ev`, launch angle `la` and xSLGcon). */
+function plotPoints(p, situ) {
   const clip = (v, lo, hi) => (Number.isNaN(v) ? v : Math.min(Math.max(v, lo), hi));
   const rounded = (v, d) => (missing(v) ? null : round64(v, d));
-  return p.map((r) => ({
-    t: r.pitchType,
-    hb: num(r.HB * (r.hand === "R" ? 1 : -1)),
-    ivb: num(r.IVB),
-    x: num(clip(-r.pX, -2, 2)),
-    z: num(clip(r.sz_plot_z, -0.25, 5.25)),
-    stand: r.stand,
-    velo: num(r.velo),
-    d: r.det_code ?? null,
-    e: IN_PLAY.has(r.det_code) ? r.events ?? null : null,
-    "plvStuff+": rounded(r["plvStuff+"], 0),
-    "PLV+": rounded(r["PLV+"], 0),
-    xSLGcon: rounded(r.xSLGcon, 3),
-  }));
+  return p.map((r) => {
+    const sit = situ.get(`${r.abi}:${r.pitch_no}`) ?? {};
+    return {
+      t: r.pitchType,
+      hb: num(r.HB * (r.hand === "R" ? 1 : -1)),
+      ivb: num(r.IVB),
+      x: num(clip(-r.pX, -2, 2)),
+      z: num(clip(r.sz_plot_z, -0.25, 5.25)),
+      stand: r.stand,
+      velo: num(r.velo),
+      d: r.det_code ?? null,
+      e: IN_PLAY.has(r.det_code) ? sit.event ?? null : null,
+      "plvStuff+": rounded(r["plvStuff+"], 0),
+      "PLV+": rounded(r["PLV+"], 0),
+      c: `${r.balls}-${r.strikes}`,
+      bat: sit.bat ?? null,
+      inn: sit.inn ?? null,
+      top: sit.top ?? null,
+      outs: sit.outs ?? null,
+      on: sit.on ?? null,
+      ev: rounded(r.launch_speed, 1),
+      la: rounded(r.launch_angle, 0),
+      xSLGcon: rounded(r.xSLGcon, 3),
+    };
+  });
 }
 
 function chartLimit(p) {
@@ -478,7 +555,7 @@ export function build({ feed, pitcherId, rows, values, scale, xslg, arm, pack })
     chart_lim: chartLimit(p),
     fastball: fastballPanel(table),
     types: typeRows(table),
-    pitches: plotPoints(p),
+    pitches: plotPoints(p, situations(feed)),
     missing_data: p.some((r) => TRACKING.some((c) => missing(r[c]))),
     comparisons: comparisons(p, table, pack),
     // the live cards are MLB's: graded on the MLB scale, nothing provisional
