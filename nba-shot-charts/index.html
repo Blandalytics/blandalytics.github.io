@@ -23,6 +23,9 @@
 .home:hover{color:var(--brand-brand-cyan)}
 @media (pointer:coarse){.home{display:inline-block; padding:10px 0; margin:-10px 0}}
 .plpd-page-header__title{text-wrap:balance}
+/* the row of jumps to each card, under the season line */
+.jump{display:flex; flex-wrap:wrap; gap:10px}
+.plpd-pane{scroll-margin-top:16px}
 .plpd-pane{display:flex; flex-direction:column; gap:18px}
 .plpd-pane__desc{margin-top:-12px}
 .plpd-pane__desc + .plpd-pane__desc{margin-top:-8px}
@@ -104,6 +107,13 @@ p{text-wrap:pretty}
     <a class="home" href="/">← Blandalytics</a>
     <h1 class="plpd-page-header__title">NBA Shot Charts</h1>
     <p class="plpd-page-header__meta"><span id="season_label">NBA</span> Regular Season<span id="through"></span></p>
+    <nav class="jump plpd-chips" aria-label="Jump to a card">
+      <button type="button" class="plpd-chip" data-jump="chart_title">Scoring Chart</button>
+      <button type="button" class="plpd-chip" data-jump="boards_title">Leaderboards</button>
+      <button type="button" class="plpd-chip" data-jump="va_title">Shot Value Added</button>
+      <button type="button" class="plpd-chip" data-jump="min_title">Team Minutes</button>
+      <button type="button" class="plpd-chip" data-jump="how_title">How it works</button>
+    </nav>
   </header>
 
   <section class="plpd-pane" aria-labelledby="chart_title">
@@ -193,6 +203,6 @@ p{text-wrap:pretty}
   </section>
 </div>
 <script src="/shared/share-image.js?v=2"></script>
-<script type="module" src="app.js?v=11"></script>
+<script type="module" src="app.js?v=12"></script>
 </body>
 </html>

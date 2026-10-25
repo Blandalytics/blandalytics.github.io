@@ -428,6 +428,12 @@ function renderMinutes() {
 
 el.team.innerHTML = TEAMS.slice().sort((a, b) => a.name.localeCompare(b.name)).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("");
 el.team.value = String(DEFAULT_TEAM);
+// The header's jumps scroll to each card without a #anchor, which would replace the chart's hash
+document.querySelectorAll("[data-jump]").forEach((b) => b.addEventListener("click", () => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  $(b.dataset.jump).closest(".plpd-pane").scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+}));
+
 el.team.addEventListener("change", renderMinutes);
 el.allTeams.addEventListener("change", () => { el.team.disabled = el.allTeams.checked; renderMinutes(); });
 
