@@ -172,6 +172,16 @@ portrait one the table on top, at most half the height, and the card below in th
 phone the page scrolls, the card after the table. The table collapses, which gives the card
 the window again, and remembers it.
 
+A demo of a **season-long card** is at `pitcher-cards/season.html`, for six pitchers' 2026
+regular seasons (`pitcher-cards/season-demo/`, written by `tools/pitcher_card/season.py`
+from the bucket's day files). It is the game card for a whole season, with no comparison
+season: the summary line gives IP, ERA, WHIP, K% and BB% (MLB's season line) and SLGcon and
+CSW% (from the pitches); one Skills tile takes the room of Skills and Results, its letters
+the season means on `card.js`'s `SEASON_GRADE_CUTS` (`season.py --cuts` fits them as
+`grade_cuts.py` fits the game cuts, to every pitcher's season); and Movement and the
+locations show each pitch type as KDE tiers, the regions holding the densest 50%, 33% and
+17% of its pitches (seaborn's `kdeplot(levels=4, thresh=0.5)` per type).
+
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones
   [Blandalytics/statcast_scraper](https://github.com/Blandalytics/statcast_scraper) (the
@@ -245,6 +255,7 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 | `shapes.py` | the comparison season's movement regions (seaborn's 90%-mass KDE contours) as SVG paths |
 | `grades.py` | pitch-type maps, letter grades and both game-score formulas |
 | `grade_cuts.py` | fits the Stuff / Locations / PLV letter cuts (`card.js`'s `GRADE_CUTS`) to a target grade distribution |
+| `season.py` | the season card demo's dicts, pooled from the bucket's day files, and its season letter cuts |
 | `build_data.py` | assembles all of that into one card dict (numbers; `card.js` formats them) |
 | `render.py` | a standalone page around one card dict, drawn by `card.js` |
 | `build_site.py` | builds a date range into the bucket (or a folder with `--out`) and maintains the manifests; `--reindex` rebuilds the index alone; `--prune-pages` retires the old per-card pages |

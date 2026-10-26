@@ -1,0 +1,41 @@
+{
+ "season": 2026,
+ "pitchers": [
+  {
+   "id": 694819,
+   "name": "Jacob Misiorowski",
+   "team": "MIL",
+   "line": "174.2 IP, 1.80 ERA, 0.80 WHIP, 37.9% K, 6.6% BB, .419 SLGcon, 35.4% CSW"
+  },
+  {
+   "id": 808967,
+   "name": "Yoshinobu Yamamoto",
+   "team": "LAD",
+   "line": "185.0 IP, 2.53 ERA, 0.87 WHIP, 25.7% K, 5.9% BB, .427 SLGcon, 30.3% CSW"
+  },
+  {
+   "id": 650911,
+   "name": "Cristopher S\u00e1nchez",
+   "team": "PHI",
+   "line": "207.0 IP, 2.91 ERA, 1.20 WHIP, 27.0% K, 5.3% BB, .520 SLGcon, 31.9% CSW"
+  },
+  {
+   "id": 669373,
+   "name": "Tarik Skubal",
+   "team": "LAD",
+   "line": "158.2 IP, 2.72 ERA, 0.96 WHIP, 30.0% K, 4.4% BB, .504 SLGcon, 31.9% CSW"
+  },
+  {
+   "id": 663556,
+   "name": "Shane McClanahan",
+   "team": "TBR",
+   "line": "118.0 IP, 3.36 ERA, 1.12 WHIP, 21.8% K, 8.0% BB, .427 SLGcon, 29.5% CSW"
+  },
+  {
+   "id": 695243,
+   "name": "Mason Miller",
+   "team": "SDP",
+   "line": "70.0 IP, 1.67 ERA, 0.90 WHIP, 47.4% K, 9.6% BB, .430 SLGcon, 39.5% CSW"
+  }
+ ]
+}

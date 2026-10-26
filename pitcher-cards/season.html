@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>PLV Pitcher Season Card</title>
+<link rel="icon" href="https://res.cloudinary.com/dduabusaf/image/upload/v1772839606/teal_letter_logo_owufaj.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/shared/plpd.css?v=3">
+<style>
+/* a demo of the season-long card: the picker's bar (index.html) with a Pitcher list over
+   one card, which fills the rest of the screen */
+*{box-sizing:border-box}
+html,body{height:100%}
+body.plpd{display:flex; flex-direction:column}
+.bar{
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-300) var(--space-400);
+  padding:16px var(--layout-page-content-gutter); border-bottom:1px solid var(--surface-border-card); background:var(--surfaces-surface-2);
+}
+.brand{margin-right:auto; display:flex; align-items:center; gap:var(--space-300); align-self:center}
+.brand img{height:34px; width:auto}
+.brand div{display:flex; flex-direction:column; gap:2px}
+.brand h1{margin:0; font-family:var(--font-display); font-size:24px; font-weight:900; line-height:1.2; color:var(--brand-brand-cyan)}
+.brand .sub{font-family:var(--font-display); font-size:12px; line-height:1.25; letter-spacing:.36px; color:var(--text-text-zero)}
+.field select.plpd-filter-dropdown{width:auto; min-width:280px}
+.btn[hidden]{display:none}
+.stage{flex:1; min-height:0; display:flex; justify-content:center; overflow:auto; padding:var(--space-300)}
+.card{background:var(--card-card-bg); height:100%; aspect-ratio:3/4; max-width:100%; border-radius:var(--radius-xl); overflow:hidden;
+  box-shadow:var(--shadow-pl-data-table-wrap-shadow)}
+.card svg{display:block; width:100%; height:100%}
+.note{padding:8px var(--layout-page-content-gutter) 12px; color:var(--text-text-nav); font-size:13px; line-height:1.45;
+  border-top:1px solid var(--surface-border-card); background:var(--surfaces-surface-2); text-wrap:pretty}
+.note b{font-family:var(--font-display); color:var(--text-text-cell); font-weight:600}
+@media (max-width:760px){
+  .bar{padding:12px; gap:10px 12px}
+  .brand{flex-basis:100%}
+  .brand h1{font-size:20px}
+  .field{flex:1 1 100%}
+  .field select.plpd-filter-dropdown{width:100%; min-width:0}
+  html,body{height:auto}
+  .stage{flex:none; display:block; padding:8px}
+  .card{width:100%; height:auto}
+  .note{padding-inline:12px}
+}
+</style>
+</head>
+<body class="plpd">
+
+<header class="bar">
+  <div class="brand">
+    <img src="PitcherList_Stats_watermark_with_logo.webp" alt="Pitcher List Stats">
+    <div>
+      <h1>PLV Pitcher Season Card</h1>
+      <span class="sub" id="status">Loading…</span>
+    </div>
+  </div>
+  <div class="field plpd-filter-field">
+    <label class="plpd-filter-field__label" for="pitcher">Pitcher</label>
+    <select id="pitcher" class="plpd-filter-dropdown" disabled></select>
+  </div>
+  <button class="btn plpd-btn" id="save" type="button" hidden>Save image</button>
+</header>
+
+<main class="stage"><div class="card" id="cardBox"></div></main>
+
+<footer class="note">
+  <b>A demo.</b> Each card pools a pitcher's regular-season game cards: IP, ERA, WHIP, K% and BB% are MLB's
+  season line; SLGcon (total bases per at-bat ending in a ball in play) and CSW% come from his pitches. The
+  Stuff, Locations and PLV letters are his season means on season cuts, fitted to the same distribution as the
+  game letters. Movement and locations show each pitch type's KDE: the regions holding the densest 50%, 33% and
+  17% of its pitches.
+</footer>
+
+<script src="card.js?v=14"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var sel = $('pitcher'), cardEl = $('cardBox'), status = $('status'), save = $('save');
+  var cache = {}, shown = null;
+
+  function getJson(url) {
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error(url + ': ' + r.status);
+      return r.json();
+    });
+  }
+  function load(id) {
+    cache[id] = cache[id] || getJson('season-demo/' + id + '.json');
+    return cache[id];
+  }
+  function pick() {
+    var id = sel.value;
+    if (location.hash !== '#' + id) history.replaceState(null, '', '#' + id);
+    load(id).then(function (card) {
+      if (sel.value !== id) return;
+      PitcherCard.draw(cardEl, card);
+      shown = card;
+      save.hidden = false;
+      document.title = card.name + ' — ' + card.season + ' — PLV Pitcher Season Card';
+    }).catch(function () { cardEl.textContent = 'Could not load this card.'; });
+  }
+  save.addEventListener('click', function () {
+    var svgEl = cardEl.querySelector('svg');
+    if (svgEl && shown) PitcherCard.png(svgEl).then(function (blob) { PitcherCard.download(blob, PitcherCard.filename(shown)); });
+  });
+
+  getJson('season-demo/index.json').then(function (ix) {
+    sel.innerHTML = ix.pitchers.map(function (p) {
+      return '<option value="' + p.id + '">' + p.name + ' · ' + p.team + '</option>';
+    }).join('');
+    var want = location.hash.slice(1);
+    if (ix.pitchers.some(function (p) { return String(p.id) === want; })) sel.value = want;
+    sel.disabled = false;
+    status.textContent = ix.season + ' regular season · ' + ix.pitchers.length + ' pitchers';
+    sel.addEventListener('change', pick);
+    window.addEventListener('hashchange', function () {
+      var id = location.hash.slice(1);
+      if (id && id !== sel.value && sel.querySelector('option[value="' + id + '"]')) { sel.value = id; pick(); }
+    });
+    pick();
+  }).catch(function () { status.textContent = 'Could not load the demo.'; });
+})();
+</script>
+</body>
+</html>
