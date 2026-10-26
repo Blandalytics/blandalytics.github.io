@@ -47,6 +47,9 @@ CROPS = {
     "promotion-timelines": (0.0, 0.0),   # top of the leaderboard
     "lineup-sims": (0.0, 0.0),           # the KPIs and the comparison strips
     "game-sim": None,                    # square already: the score grid's share image
+    "created-runs": (0.0, 0.0),          # the title over the top of the leaderboard: names, CR and the batting columns
+    # the court under its xPTS scale and per-shot line (a box, in the 1600 x 2780 export's pixels)
+    "nba-shot-charts": (83, 130, 1518, 1565),
 }
 
 
@@ -123,6 +126,10 @@ def crop(name, anchor):
         return waterfall_tile(name)
     im = Image.open(CACHE / f"{name}.png").convert("RGB")
     w, h = im.size
+    if anchor is not None and len(anchor) == 4:
+        save(name, im.crop(anchor).resize((WIDTH, round(WIDTH / RATIO)), Image.LANCZOS))
+        print(f"tile-{name} from {w}x{h} box {anchor}")
+        return
     if anchor is None:
         pw, ph = max(w, round(h * RATIO)), max(h, round(w / RATIO))
         padded = Image.new("RGB", (pw, ph), im.getpixel((0, 0)))

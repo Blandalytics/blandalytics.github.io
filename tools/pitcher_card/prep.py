@@ -17,7 +17,7 @@ RENAME = {
 }  # fmt: skip
 KEEP = (
     "game_pk", "game_date", "inning", "stand", "sz_top", "sz_bot", "plate_time", "launch_speed",
-    "launch_angle", "play_id", "post_bat_score", "post_field_score",
+    "launch_angle", "play_id", "post_bat_score", "post_field_score", "det_code",
 )  # fmt: skip
 # what the stuff and PLV models need present on a pitch; the location model needs less
 TRACKING = (

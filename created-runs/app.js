@@ -3,22 +3,24 @@
 
 const VISIBLE_ROWS = 20; // the table is this many rows tall and scrolls for the rest
 
-// Columns after the name, by group. hl marks the group's headline column.
+// Columns after the name, by group. hl marks the group's headline column; spoken, when given, names
+// the column in the caption where its label alone is ambiguous.
 const COLS = [
   { key: "pa", label: "PA", group: "created", heat: false, digits: 0 },
   { key: "cr", label: "CR", group: "created", hl: true },
-  { key: "cr600", label: "CR/600", group: "created" },
   { key: "bcr", label: "bCR", group: "batting", hl: true, divider: true },
-  { key: "state", label: "State Change", group: "batting" },
+  { key: "state", label: "Batted Ball Quality", group: "batting" },
   { key: "luck", label: "Hit Luck", group: "batting" },
   { key: "bb", label: "BB", group: "batting" },
   { key: "hbp", label: "HBP", group: "batting" },
   { key: "k", label: "K", group: "batting" },
+  { key: "ctx", label: "State Context", spoken: "batting State Context", group: "batting" },
   { key: "rcr", label: "rCR", group: "running", hl: true, divider: true },
   { key: "h2f", label: "Home-to-First", group: "running" },
   { key: "bsr", label: "BsR", group: "running" },
   { key: "sb", label: "SB", group: "running" },
   { key: "cspo", label: "CS+PO", group: "running" },
+  { key: "rctx", label: "State Context", spoken: "running State Context", group: "running" },
 ];
 
 // The PLPD heat-cell stops, coldest to hottest, with base-white at zero
@@ -53,11 +55,15 @@ const fmt = (v, digits = 1) => {
 const escape = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 let DATA = null, PLAYERS = [];
+// the heat columns, every stat after PA; the Per 600 PA view scales each by 600/PA (PA stays a count)
+const STATS = COLS.filter((c) => c.heat !== false).map((c) => c.key);
+let VIEWS = {}, SCALES = {}; // each view's rows, and each view's {min, max} per stat over all its hitters
+let mode = "total";
 // Every column ranks highest first on its first pick; a second pick ranks lowest first.
 let sort = { key: "cr", dir: "desc" };
 
 function ranked() {
-  const pool = PLAYERS.filter((p) => p[sort.key] !== null);
+  const pool = VIEWS[mode].filter((p) => p[sort.key] !== null);
   const sign = sort.dir === "desc" ? -1 : 1;
   pool.sort((a, b) => sign * (a[sort.key] - b[sort.key]) || b.cr - a.cr || a.name.localeCompare(b.name));
   return pool;
@@ -81,7 +87,7 @@ function renderRows() {
       if (c.heat === false) return `<td class="plain">${fmt(r[c.key], c.digits)}</td>`;
       const cls = ["heat", c.hl ? "hl" : "", c.divider ? "div" : ""].join(" ").trim();
       if (r[c.key] === null) return `<td class="${cls} plain">${fmt(null)}</td>`;
-      const rgb = heat(r[c.key], DATA.scale[c.key]);
+      const rgb = heat(r[c.key], SCALES[mode][c.key]);
       return `<td class="${cls}" style="background:rgb(${rgb});color:${textOn(rgb)}">${fmt(r[c.key])}</td>`;
     }).join("");
     return `<tr><td class="name sticky">${escape(r.name)}</td>${cells}</tr>`;
@@ -89,12 +95,12 @@ function renderRows() {
   return list.length;
 }
 
-function renderDetails(count) {
+// The visible subtitle is fixed; the table's caption names the current ranking for screen readers.
+function renderCaption(count) {
   const col = COLS.find((c) => c.key === sort.key);
   const order = sort.dir === "desc" ? "highest first" : "lowest first";
-  const who = `${count} hitters with ${DATA.minPa}+ PA`;
-  $("details").textContent = `${DATA.season} regular season · ${who} ranked by ${col.label}, ${order} · Runs above an RE24 baseline`;
-  $("caption").textContent = `${who} ranked by ${col.label}, ${order}, ${DATA.season}`;
+  const per = mode === "per600" && col.key !== "pa" ? " per 600 PA" : "";
+  $("caption").textContent = `${count} hitters with ${DATA.minPa}+ PA ranked by ${col.spoken || col.label}${per}, ${order}, ${DATA.season}`;
 }
 
 // Size the scroll box to the two header rows plus VISIBLE_ROWS body rows, measured, so it holds
@@ -111,7 +117,7 @@ function fitHeight() {
 
 function render() {
   renderHead();
-  renderDetails(renderRows());
+  renderCaption(renderRows());
   fitHeight();
 }
 
@@ -125,9 +131,19 @@ $("col-head").addEventListener("click", (e) => {
   document.querySelector(`#col-head button[data-key="${key}"]`).focus({ preventScroll: true });
 });
 
+// Total / Per 600 PA: the sort column and direction carry over
+$("mode").addEventListener("click", (e) => {
+  const button = e.target.closest("button[data-mode]");
+  if (!button || !DATA) return;
+  mode = button.dataset.mode;
+  $("mode").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+  render();
+  $("wrap").scrollTop = 0;
+});
+
 async function boot() {
   try {
-    const r = await fetch("data.json?v=1");
+    const r = await fetch("data.json?v=3");
     if (!r.ok) throw new Error(`data ${r.status}`);
     DATA = await r.json();
   } catch (e) {
@@ -137,6 +153,16 @@ async function boot() {
   }
   // rows arrive as arrays in DATA.keys order; turn them into objects once
   PLAYERS = DATA.rows.map((row) => Object.fromEntries(DATA.keys.map((k, i) => [k, row[i]])));
+  VIEWS = {
+    total: PLAYERS,
+    per600: PLAYERS.map((p) => ({ ...p, ...Object.fromEntries(STATS.map((k) => [k, p[k] === null ? null : p[k] * 600 / p.pa])) })),
+  };
+  for (const [m, rows] of Object.entries(VIEWS)) {
+    SCALES[m] = Object.fromEntries(STATS.map((k) => {
+      const vals = rows.map((p) => p[k]).filter((v) => v !== null);
+      return [k, { min: Math.min(...vals), max: Math.max(...vals) }];
+    }));
+  }
   document.querySelectorAll(".season").forEach((el) => (el.textContent = DATA.season));
   document.querySelectorAll(".min-pa").forEach((el) => (el.textContent = DATA.minPa));
   $("gl-count").textContent = DATA.players;

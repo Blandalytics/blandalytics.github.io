@@ -51,6 +51,11 @@ python -I tools/lineup_sims/steal_model.py 2026 <running-game parquet>
 #     run this again, and if the data file changed, bump data/<season>-parks.json?v= in lineup-sims/game.js
 #     and game.js?v= in game-sim/index.html.
 python -I tools/lineup_sims/park_factors.py 2026
+# 3g. the Game Sim's default lineups: each team's starting nine in its latest game against a right-handed
+#     and against a left-handed starter, from the cached play-by-play and lineup-sims/data/<season>.json; it
+#     writes only lineup-sims/data/<season>-lineups.json. Run it after step 2 brings in new games, and if the
+#     file changed, bump data/<season>-lineups.json?v= in lineup-sims/game.js and game.js?v= in game-sim/index.html.
+python -I tools/lineup_sims/recent_lineups.py 2026
 # 4. every team's lineups and the contact-power curve, simulated into the data file (~1 min)
 node tools/lineup_sims/precompute.mjs 2026 100000
 # 5. engine checks against the new file, and the Game Sim's
@@ -65,10 +70,11 @@ checked without going online.
 Then bump `data/2026.json?v=` (and `data/2026-pitch.json?v=`, `data/2026-hook.json?v=` or `data/2026-quality.json?v=`, if step 3b, 3c or 3d ran) in
 `lineup-sims/app.js` and `app.js?v=` in `lineup-sims/index.html`; browsers and the edge
 hold them for hours. The Game Sim (`lineup-sims/game.js`) loads `data/2026.json`, `data/2026-hook.json`,
-`data/2026-steal.json` and `data/2026-parks.json` with their own `?v=`, so bump those there too (and `game.js?v=` in
+`data/2026-steal.json`, `data/2026-parks.json` and `data/2026-lineups.json` with their own `?v=`, so bump those there too (and `game.js?v=` in
 `game-sim/index.html`, the Game Sim's page; its modules and data stay in `lineup-sims/`). `game.js`, `game-sim.js` and `game-worker.js` import `sim.js` at the page's `?v=`:
 when `sim.js?v=` changes in `app.js`, change it in all three. `park.js` (the park adjustment and home field, used by `game.js`
-and `test_game.mjs`) imports nothing; bump `park.js?v=` in `game.js` when it changes.
+and `test_game.mjs`) imports nothing; bump `park.js?v=` in `game.js` when it changes (and `game-sim.js?v=` in `game.js` and `game-worker.js`, since
+`game-sim.js` imports `park.js`).
 
 `cache/` (git-ignored) holds the FanGraphs extract, the reduced per-game play-by-play and
 the Stats API player and team lists.

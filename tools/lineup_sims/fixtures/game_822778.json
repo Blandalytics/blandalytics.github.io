@@ -1,5 +1,5 @@
 {
- "about": "MLB Stats API, gamePk 822778 (BOS at TOR, 2026-08-11), trimmed to what lineup-sims/game-load.js reads: schedule?gamePk= and game/{pk}/boxscore with fields=, box score players cut to the batters and each starting pitcher. Saved once for tools/lineup_sims/test_game.mjs; never fetched by the test.",
+ "about": "MLB Stats API, gamePk 822778 (BOS at TOR, 2026-08-11), trimmed to what lineup-sims/game-load.js reads: schedule?gamePk= and game/{pk}/boxscore with fields=, box score players cut to everyone who batted and everyone who pitched, each with only his batting and pitching lines for the game. Saved for tools/lineup_sims/test_game.mjs; never fetched by the test.",
  "pk": 822778,
  "schedule": {
   "dates": [
@@ -43,8 +43,7 @@
   "teams": {
    "away": {
     "team": {
-     "id": 111,
-     "abbreviation": "BOS"
+     "id": 111
     },
     "pitchers": [
      663776,
@@ -57,220 +56,345 @@
        "id": 575929,
        "fullName": "Willson Contreras"
       },
-      "jerseyNumber": "40",
       "position": {
        "abbreviation": "1B"
       },
-      "status": {},
-      "parentTeamId": 111,
       "battingOrder": "400",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "1B"
+      "stats": {
+       "batting": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 1,
+        "baseOnBalls": 0,
+        "hits": 0,
+        "hitByPitch": 0,
+        "atBats": 4,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 0,
+        "rbi": 0
        }
-      ]
+      }
+     },
+     "ID594027": {
+      "person": {
+       "id": 594027,
+       "fullName": "Tyron Guerrero"
+      },
+      "position": {
+       "abbreviation": "P"
+      },
+      "stats": {
+       "pitching": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 1,
+        "baseOnBalls": 0,
+        "hits": 0,
+        "hitByPitch": 0,
+        "atBats": 3,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "numberOfPitches": 9,
+        "earnedRuns": 0,
+        "battersFaced": 3,
+        "outs": 3,
+        "rbi": 0
+       }
+      }
      },
      "ID663776": {
       "person": {
        "id": 663776,
        "fullName": "Patrick Sandoval"
       },
-      "jerseyNumber": "43",
       "position": {
        "abbreviation": "P"
       },
-      "status": {},
-      "parentTeamId": 111,
       "stats": {
        "pitching": {
-        "outs": 18
+        "runs": 4,
+        "doubles": 1,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 4,
+        "baseOnBalls": 3,
+        "hits": 8,
+        "hitByPitch": 0,
+        "atBats": 22,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "numberOfPitches": 84,
+        "earnedRuns": 2,
+        "battersFaced": 27,
+        "outs": 18,
+        "rbi": 4
        }
-      },
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "P"
-       }
-      ]
+      }
      },
      "ID668939": {
       "person": {
        "id": 668939,
        "fullName": "Adley Rutschman"
       },
-      "jerseyNumber": "31",
       "position": {
        "abbreviation": "C"
       },
-      "status": {},
-      "parentTeamId": 111,
       "battingOrder": "300",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "C"
+      "stats": {
+       "batting": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 1,
+        "baseOnBalls": 2,
+        "hits": 1,
+        "hitByPitch": 0,
+        "atBats": 3,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 5,
+        "totalBases": 1,
+        "rbi": 0
        }
-      ]
+      }
+     },
+     "ID661527": {
+      "person": {
+       "id": 661527,
+       "fullName": "Seth Martinez"
+      },
+      "position": {
+       "abbreviation": "P"
+      },
+      "stats": {
+       "pitching": {
+        "runs": 1,
+        "doubles": 1,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 1,
+        "baseOnBalls": 0,
+        "hits": 2,
+        "hitByPitch": 1,
+        "atBats": 5,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "numberOfPitches": 22,
+        "earnedRuns": 1,
+        "battersFaced": 6,
+        "outs": 3,
+        "rbi": 1
+       }
+      }
      },
      "ID677800": {
       "person": {
        "id": 677800,
        "fullName": "Wilyer Abreu"
       },
-      "jerseyNumber": "52",
       "position": {
        "abbreviation": "RF"
       },
-      "status": {},
-      "parentTeamId": 111,
       "battingOrder": "500",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "RF"
+      "stats": {
+       "batting": {
+        "runs": 1,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 1,
+        "strikeOuts": 2,
+        "baseOnBalls": 1,
+        "hits": 1,
+        "hitByPitch": 0,
+        "atBats": 3,
+        "caughtStealing": 0,
+        "stolenBases": 1,
+        "plateAppearances": 4,
+        "totalBases": 4,
+        "rbi": 1
        }
-      ]
+      }
      },
      "ID655316": {
       "person": {
        "id": 655316,
        "fullName": "Andruw Monasterio"
       },
-      "jerseyNumber": "32",
       "position": {
        "abbreviation": "SS"
       },
-      "status": {},
-      "parentTeamId": 111,
       "battingOrder": "800",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "SS"
+      "stats": {
+       "batting": {
+        "runs": 1,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 0,
+        "baseOnBalls": 1,
+        "hits": 1,
+        "hitByPitch": 0,
+        "atBats": 3,
+        "caughtStealing": 0,
+        "stolenBases": 1,
+        "plateAppearances": 4,
+        "totalBases": 1,
+        "rbi": 0
        }
-      ]
+      }
      },
      "ID702332": {
       "person": {
        "id": 702332,
        "fullName": "Caleb Durbin"
       },
-      "jerseyNumber": "5",
       "position": {
        "abbreviation": "3B"
       },
-      "status": {},
-      "parentTeamId": 111,
       "battingOrder": "600",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "3B"
+      "stats": {
+       "batting": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 2,
+        "baseOnBalls": 0,
+        "hits": 0,
+        "hitByPitch": 0,
+        "atBats": 4,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 0,
+        "rbi": 0
        }
-      ]
+      }
      },
      "ID680776": {
       "person": {
        "id": 680776,
        "fullName": "Jarren Duran"
       },
-      "jerseyNumber": "16",
       "position": {
        "abbreviation": "LF"
       },
-      "status": {},
-      "parentTeamId": 111,
       "battingOrder": "700",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "LF"
+      "stats": {
+       "batting": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 0,
+        "baseOnBalls": 1,
+        "hits": 1,
+        "hitByPitch": 0,
+        "atBats": 3,
+        "caughtStealing": 1,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 1,
+        "rbi": 0
        }
-      ]
+      }
      },
      "ID686765": {
       "person": {
        "id": 686765,
        "fullName": "Nick Sogard"
       },
-      "jerseyNumber": "20",
       "position": {
        "abbreviation": "2B"
       },
-      "status": {},
-      "parentTeamId": 111,
       "battingOrder": "900",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "2B"
+      "stats": {
+       "batting": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 0,
+        "baseOnBalls": 2,
+        "hits": 1,
+        "hitByPitch": 0,
+        "atBats": 2,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 1,
+        "rbi": 0
        }
-      ]
+      }
      },
      "ID678882": {
       "person": {
        "id": 678882,
        "fullName": "Ceddanne Rafaela"
       },
-      "jerseyNumber": "3",
       "position": {
        "abbreviation": "CF"
       },
-      "status": {},
-      "parentTeamId": 111,
       "battingOrder": "200",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "CF"
+      "stats": {
+       "batting": {
+        "runs": 1,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 1,
+        "strikeOuts": 0,
+        "baseOnBalls": 0,
+        "hits": 1,
+        "hitByPitch": 0,
+        "atBats": 4,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 5,
+        "totalBases": 4,
+        "rbi": 2
        }
-      ]
+      }
      },
      "ID807799": {
       "person": {
        "id": 807799,
        "fullName": "Masataka Yoshida"
       },
-      "jerseyNumber": "7",
       "position": {
        "abbreviation": "DH"
       },
-      "status": {},
-      "parentTeamId": 111,
       "battingOrder": "100",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "DH"
+      "stats": {
+       "batting": {
+        "runs": 0,
+        "doubles": 1,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 2,
+        "baseOnBalls": 0,
+        "hits": 1,
+        "hitByPitch": 0,
+        "atBats": 5,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 5,
+        "totalBases": 2,
+        "rbi": 0
        }
-      ]
+      }
      }
     }
    },
    "home": {
     "team": {
-     "id": 141,
-     "abbreviation": "TOR"
+     "id": 141
     },
     "pitchers": [
      656302,
@@ -280,260 +404,458 @@
      693686
     ],
     "players": {
+     "ID695445": {
+      "person": {
+       "id": 695445,
+       "fullName": "Chase Lee"
+      },
+      "position": {
+       "abbreviation": "P"
+      },
+      "stats": {
+       "pitching": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 0,
+        "baseOnBalls": 2,
+        "hits": 1,
+        "hitByPitch": 0,
+        "atBats": 5,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "numberOfPitches": 25,
+        "earnedRuns": 0,
+        "battersFaced": 7,
+        "outs": 5,
+        "rbi": 0
+       }
+      }
+     },
+     "ID693686": {
+      "person": {
+       "id": 693686,
+       "fullName": "Spencer Miles"
+      },
+      "position": {
+       "abbreviation": "P"
+      },
+      "stats": {
+       "pitching": {
+        "runs": 0,
+        "doubles": 1,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 0,
+        "baseOnBalls": 0,
+        "hits": 1,
+        "hitByPitch": 0,
+        "atBats": 4,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "numberOfPitches": 14,
+        "earnedRuns": 0,
+        "battersFaced": 4,
+        "outs": 3,
+        "rbi": 0
+       }
+      }
+     },
+     "ID663893": {
+      "person": {
+       "id": 663893,
+       "fullName": "Brendon Little"
+      },
+      "position": {
+       "abbreviation": "P"
+      },
+      "stats": {
+       "pitching": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 1,
+        "baseOnBalls": 0,
+        "hits": 0,
+        "hitByPitch": 0,
+        "atBats": 1,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "numberOfPitches": 6,
+        "earnedRuns": 0,
+        "battersFaced": 1,
+        "outs": 1,
+        "rbi": 0
+       }
+      }
+     },
      "ID676391": {
       "person": {
        "id": 676391,
        "fullName": "Ernie Clement"
       },
-      "jerseyNumber": "22",
       "position": {
        "abbreviation": "2B"
       },
-      "status": {},
-      "parentTeamId": 141,
       "battingOrder": "600",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "2B"
+      "stats": {
+       "batting": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 0,
+        "baseOnBalls": 0,
+        "hits": 0,
+        "hitByPitch": 0,
+        "atBats": 4,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 0,
+        "rbi": 1
        }
-      ]
+      }
      },
      "ID807727": {
       "person": {
        "id": 807727,
        "fullName": "Charles McAdoo"
       },
-      "jerseyNumber": "26",
       "position": {
        "abbreviation": "3B"
       },
-      "status": {},
-      "parentTeamId": 141,
       "battingOrder": "100",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "3B"
+      "stats": {
+       "batting": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 1,
+        "baseOnBalls": 1,
+        "hits": 0,
+        "hitByPitch": 0,
+        "atBats": 2,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 0,
+        "rbi": 1
        }
-      ]
+      }
      },
      "ID665926": {
       "person": {
        "id": 665926,
        "fullName": "Andrés Giménez"
       },
-      "jerseyNumber": "0",
       "position": {
        "abbreviation": "SS"
       },
-      "status": {},
-      "parentTeamId": 141,
       "battingOrder": "700",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "SS"
+      "stats": {
+       "batting": {
+        "runs": 1,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 1,
+        "baseOnBalls": 0,
+        "hits": 1,
+        "hitByPitch": 1,
+        "atBats": 3,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 1,
+        "rbi": 0
        }
-      ]
+      }
      },
      "ID678218": {
       "person": {
        "id": 678218,
        "fullName": "Brandon Valenzuela"
       },
-      "jerseyNumber": "59",
       "position": {
        "abbreviation": "C"
       },
-      "status": {},
-      "parentTeamId": 141,
       "battingOrder": "502",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "C"
+      "stats": {
+       "batting": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 0,
+        "baseOnBalls": 0,
+        "hits": 0,
+        "hitByPitch": 0,
+        "atBats": 0,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 0,
+        "totalBases": 0,
+        "rbi": 0
        }
-      ]
+      }
      },
      "ID656302": {
       "person": {
        "id": 656302,
        "fullName": "Dylan Cease"
       },
-      "jerseyNumber": "84",
       "position": {
        "abbreviation": "P"
       },
-      "status": {},
-      "parentTeamId": 141,
       "stats": {
        "pitching": {
-        "outs": 15
+        "runs": 3,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 2,
+        "strikeOuts": 7,
+        "baseOnBalls": 4,
+        "hits": 5,
+        "hitByPitch": 0,
+        "atBats": 19,
+        "caughtStealing": 0,
+        "stolenBases": 2,
+        "numberOfPitches": 104,
+        "earnedRuns": 3,
+        "battersFaced": 24,
+        "outs": 15,
+        "rbi": 3
        }
-      },
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "P"
-       }
-      ]
+      }
      },
      "ID703520": {
       "person": {
        "id": 703520,
        "fullName": "Brett Bateman"
       },
-      "jerseyNumber": "21",
       "position": {
        "abbreviation": "CF"
       },
-      "status": {},
-      "parentTeamId": 141,
       "battingOrder": "200",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "CF"
+      "stats": {
+       "batting": {
+        "runs": 0,
+        "doubles": 1,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 1,
+        "baseOnBalls": 0,
+        "hits": 2,
+        "hitByPitch": 0,
+        "atBats": 4,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 3,
+        "rbi": 2
        }
-      ]
+      }
      },
      "ID664770": {
       "person": {
        "id": 664770,
        "fullName": "Nathan Lukes"
       },
-      "jerseyNumber": "38",
       "position": {
        "abbreviation": "RF"
       },
-      "status": {},
-      "parentTeamId": 141,
       "battingOrder": "900",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "RF"
+      "stats": {
+       "batting": {
+        "runs": 1,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 1,
+        "baseOnBalls": 0,
+        "hits": 1,
+        "hitByPitch": 0,
+        "atBats": 3,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 1,
+        "rbi": 0
        }
-      ]
+      }
      },
      "ID543807": {
       "person": {
        "id": 543807,
        "fullName": "George Springer"
       },
-      "jerseyNumber": "4",
       "position": {
        "abbreviation": "DH"
       },
-      "status": {},
-      "parentTeamId": 141,
       "battingOrder": "400",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "DH"
+      "stats": {
+       "batting": {
+        "runs": 1,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 1,
+        "baseOnBalls": 1,
+        "hits": 1,
+        "hitByPitch": 0,
+        "atBats": 3,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 1,
+        "rbi": 0
        }
-      ]
+      }
+     },
+     "ID680755": {
+      "person": {
+       "id": 680755,
+       "fullName": "Braydon Fisher"
+      },
+      "position": {
+       "abbreviation": "P"
+      },
+      "stats": {
+       "pitching": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 0,
+        "baseOnBalls": 1,
+        "hits": 0,
+        "hitByPitch": 0,
+        "atBats": 2,
+        "caughtStealing": 1,
+        "stolenBases": 0,
+        "numberOfPitches": 22,
+        "earnedRuns": 0,
+        "battersFaced": 3,
+        "outs": 3,
+        "rbi": 0
+       }
+      }
      },
      "ID669701": {
       "person": {
        "id": 669701,
        "fullName": "Josh Smith"
       },
-      "jerseyNumber": "9",
       "position": {
        "abbreviation": "PR"
       },
-      "status": {},
-      "parentTeamId": 141,
       "battingOrder": "501",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "PR"
+      "stats": {
+       "batting": {
+        "runs": 1,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 0,
+        "baseOnBalls": 0,
+        "hits": 0,
+        "hitByPitch": 0,
+        "atBats": 0,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 0,
+        "totalBases": 0,
+        "rbi": 0
        }
-      ]
+      }
      },
      "ID665489": {
       "person": {
        "id": 665489,
        "fullName": "Vladimir Guerrero Jr."
       },
-      "jerseyNumber": "27",
       "position": {
        "abbreviation": "1B"
       },
-      "status": {},
-      "parentTeamId": 141,
       "battingOrder": "300",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "1B"
+      "stats": {
+       "batting": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 1,
+        "baseOnBalls": 0,
+        "hits": 1,
+        "hitByPitch": 0,
+        "atBats": 4,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 1,
+        "rbi": 0
        }
-      ]
+      }
      },
      "ID664702": {
       "person": {
        "id": 664702,
        "fullName": "Myles Straw"
       },
-      "jerseyNumber": "3",
       "position": {
        "abbreviation": "LF"
       },
-      "status": {},
-      "parentTeamId": 141,
       "battingOrder": "800",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "LF"
+      "stats": {
+       "batting": {
+        "runs": 1,
+        "doubles": 1,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 0,
+        "baseOnBalls": 0,
+        "hits": 2,
+        "hitByPitch": 0,
+        "atBats": 4,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 3,
+        "rbi": 1
        }
-      ]
+      }
      },
      "ID672386": {
       "person": {
        "id": 672386,
        "fullName": "Alejandro Kirk"
       },
-      "jerseyNumber": "30",
       "position": {
        "abbreviation": "C"
       },
-      "status": {},
-      "parentTeamId": 141,
       "battingOrder": "500",
-      "stats": {},
-      "seasonStats": {},
-      "gameStatus": {},
-      "allPositions": [
-       {
-        "abbreviation": "C"
+      "stats": {
+       "batting": {
+        "runs": 0,
+        "doubles": 0,
+        "triples": 0,
+        "homeRuns": 0,
+        "strikeOuts": 0,
+        "baseOnBalls": 1,
+        "hits": 2,
+        "hitByPitch": 0,
+        "atBats": 3,
+        "caughtStealing": 0,
+        "stolenBases": 0,
+        "plateAppearances": 4,
+        "totalBases": 2,
+        "rbi": 0
        }
-      ]
+      }
      }
     }
    }

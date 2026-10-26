@@ -1,4 +1,4 @@
-pandas>=2.2
+pandas>=2.2,<3.1   # 3.1 averages a single group of a float32 column in float64; the Worker's port matches 3.0's float32
 numpy>=1.26
 scipy>=1.12
 contourpy>=1.2

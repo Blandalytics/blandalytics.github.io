@@ -190,24 +190,131 @@ def comparisons(p: pd.DataFrame, table: pd.DataFrame, seasons: dict[int, pd.Data
 
 
 # ---- the plots ----------------------------------------------------------------------
-def plot_points(p: pd.DataFrame) -> list[dict]:
+IN_PLAY = ("X", "D", "E")  # the feed's pitch codes for a ball put in play
+
+
+def _round(v, d: int) -> float | None:
+    """A number as DataFrame.round leaves it (rint(x * 10^d) / 10^d), None for NaN."""
+    v = _num(v)
+    return None if v is None else float(np.round(v, d))
+
+
+def _code(v) -> str | None:
+    return None if v is None or (isinstance(v, float) and math.isnan(v)) else str(v)
+
+
+_BASES = {"1B": 1, "2B": 2, "3B": 4}  # a base's bit in a pitch's ``on``
+_POST = (("postOnFirst", "1B"), ("postOnSecond", "2B"), ("postOnThird", "3B"))
+
+
+def _runner(move: dict):
+    return move.get("details", {}).get("runner", {}).get("id")
+
+
+def situations(feed: dict) -> dict[tuple[int, int], dict]:
+    """Each pitch's situation from the feed, keyed (at-bat index, pitch number): the
+    batter, the half inning, the outs and the runners on base as it was thrown, and the
+    plate appearance's event. The feed has the bases only as each plate appearance left
+    them, so one starts from where the previous one in the half inning left them,
+    corrected by where each runner it moves started (which places an automatic runner)
+    and by the runners its end leaves where they stood. A runner who moves during it (a
+    steal, a wild pitch) has moved for every later pitch; a pitch's ``count.outs`` is
+    already the outs before it."""
+    out = {}
+    half, left = None, {}  # base -> runner id, as the last plate appearance left them
+    for play in feed["liveData"]["plays"]["allPlays"]:
+        ab, mu = play.get("about", {}), play.get("matchup", {})
+        top = ab.get("isTopInning", ab.get("halfInning") == "top")
+        if (ab.get("inning"), top) != half:
+            half, left = (ab.get("inning"), top), {}
+        events = play.get("playEvents", [])
+        moves = sorted(
+            ((m.get("details", {}).get("playIndex", len(events)), i, m)
+             for i, m in enumerate(play.get("runners", []))),
+            key=lambda x: x[:2],
+        )  # fmt: skip
+        bases, moved = dict(left), set()
+        for _, _, m in moves:  # each runner's first move says where he started
+            rid = _runner(m)
+            if rid in moved:
+                continue
+            moved.add(rid)
+            bases = {b: r for b, r in bases.items() if r != rid}
+            if m.get("movement", {}).get("start") in _BASES:
+                bases[m["movement"]["start"]] = rid
+        batter = mu.get("batter", {}).get("id")
+        post = {b: (mu.get(k) or {}).get("id") for k, b in _POST if (mu.get(k) or {}).get("id")}
+        for b, rid in post.items():
+            if rid != batter and rid not in moved and rid not in bases.values():
+                bases[b] = rid
+        done = 0
+        for e in events:
+            if e.get("pitchNumber") is None:
+                continue
+            while done < len(moves) and moves[done][0] < e.get("index", 0):
+                m = moves[done][2]
+                bases = {b: r for b, r in bases.items() if r != _runner(m)}
+                mv = m.get("movement", {})
+                if not mv.get("isOut") and mv.get("end") in _BASES:
+                    bases[mv["end"]] = _runner(m)
+                done += 1
+            out[(ab.get("atBatIndex"), e["pitchNumber"])] = {
+                "bat": mu.get("batter", {}).get("fullName"),
+                "inn": ab.get("inning"),
+                "top": bool(top),
+                "outs": e.get("count", {}).get("outs"),
+                "on": sum(_BASES[b] for b in bases),
+                "event": play.get("result", {}).get("event"),
+            }
+        left = post
+    return out
+
+
+def plot_points(p: pd.DataFrame, situ: dict[tuple[int, int], dict]) -> list[dict]:
     """Each pitch's movement (in its true direction) and its location on the standard
-    zone, from the batter's side of the plate."""
+    zone, from the batter's side of the plate, and what the card's hover shows of it: the
+    feed's code for it (``d``) and, put in play, the plate appearance's event (``e``), its
+    Stuff+ and PLV+ rounded as the table rounds them, its velo, the count before it (``c``), its
+    situation (``bat``, ``inn``, ``top``, ``outs``, ``on``, from ``situations``) and a
+    batted ball's exit velocity, launch angle and xSLGcon (``ev``, ``la``, ``xSLGcon``)."""
     sign = np.where(p["hand"] == "R", 1, -1)
-    return [
-        {"t": t, "hb": _num(hb), "ivb": _num(ivb), "x": _num(x), "z": _num(z), "stand": stand}
-        for t, hb, ivb, x, z, stand in zip(
-            *(
-                p["pitchType"],
-                p["HB"] * sign,
-                p["IVB"],
-                (-p["pX"]).clip(-2, 2),
-                p["sz_plot_z"].clip(-0.25, 5.25),
-                p["stand"],
-            ),
-            strict=True,
-        )
-    ]
+    blank = pd.Series([None] * len(p), index=p.index, dtype=object)
+    codes = p["det_code"] if "det_code" in p else blank
+    points = []
+    for t, hb, ivb, x, z, stand, velo, d, stuff, plv, abi, no, b, s, ev, la, xs in zip(
+        *(
+            p["pitchType"],
+            p["HB"] * sign,
+            p["IVB"],
+            (-p["pX"]).clip(-2, 2),
+            p["sz_plot_z"].clip(-0.25, 5.25),
+            p["stand"],
+            p["velo"],
+            codes,
+            p["plvStuff+"],
+            p["PLV+"],
+            p["abi"],
+            p["pitch_no"],
+            p["balls"],
+            p["strikes"],
+            p["launch_speed"],
+            p["launch_angle"],
+            p["xSLGcon"],
+        ),
+        strict=True,
+    ):
+        sit = situ.get((int(abi), int(no)), {})
+        points.append(
+            {
+                "t": t, "hb": _num(hb), "ivb": _num(ivb), "x": _num(x), "z": _num(z),
+                "stand": stand, "velo": _num(velo), "d": _code(d),
+                "e": sit.get("event") if _code(d) in IN_PLAY else None,
+                "plvStuff+": _round(stuff, 0), "PLV+": _round(plv, 0), "c": f"{b}-{s}",
+                **{k: sit.get(k) for k in ("bat", "inn", "top", "outs", "on")},
+                "ev": _round(ev, 1), "la": _round(la, 0), "xSLGcon": _round(xs, 3),
+            }
+        )  # fmt: skip
+    return points
 
 
 def chart_limit(p: pd.DataFrame) -> int:
@@ -259,7 +366,7 @@ def build(
         "chart_lim": chart_limit(p),
         "fastball": fastball_panel(table),
         "types": type_rows(table),
-        "pitches": plot_points(p),
+        "pitches": plot_points(p, situations(feed)),
         "missing_data": bool(p[list(prep.TRACKING)].isna().any(axis=1).any()),
         "comparisons": comparisons(p, table, seasons),
         "level": {"code": level[0], "id": level[1], "name": level[2], "league": info["league"]},

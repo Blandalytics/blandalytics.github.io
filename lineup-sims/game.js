@@ -8,9 +8,9 @@
 // sim.js is the Lineup Sim's engine: when its ?v= changes there (app.js), change it here too, or the
 // two pages load two copies of it
 import { CATS, bullpenOf, cumulative, facing, hitterOf, pitcherOf, prepare } from "./sim.js?v=8";
-import { BAT, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=3";
+import { BAT, HIST_BINS, HIST_NP_WIDTH, PIT, prepareSteal, simulateGames } from "./game-sim.js?v=5";
 import { BULLPEN_LEAD, PARK_N, homeField, parkAdjust as adjustForPark } from "./park.js?v=3";
-import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, latestGame, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=6";
+import { boxscoreUrl, bullpenDay, checkSchedule, completedGames, latestGame, lineupKind, parseGame, pkOf, scheduleUrl, seasonUrl } from "./game-load.js?v=8";
 import { teamColors } from "./team-colors.js?v=2";
 
 const SEASON = 2026;
@@ -27,8 +27,8 @@ const pitchers = new Map(); // "P<id>", and "PRHP" / "PLHP" for an MLB-average a
 
 // the two teams; SIDES[0] bats first (away)
 const SIDES = [
-  { k: "a", where: "Away", team: "CLE", kind: "spots", lineup: [], edited: false, sp: null, plan: "hook", c: 8 },
-  { k: "h", where: "Home", team: "DET", kind: "spots", lineup: [], edited: false, sp: null, plan: "hook", c: 8 },
+  { k: "a", where: "Away", team: "CLE", kind: "recent", lineup: [], edited: false, sp: null, plan: "hook", c: 8 },
+  { k: "h", where: "Home", team: "DET", kind: "recent", lineup: [], edited: false, sp: null, plan: "hook", c: 8 },
 ];
 
 // ---------- formatting ----------
@@ -134,6 +134,19 @@ async function loadStealData() {
   stealData = await r.json();
 }
 const stealOn = () => !!stealData && $("steals").value === "model";
+
+// data/<season>-lineups.json (tools/lineup_sims/recent_lineups.py): each team's starting nine in its latest 2026
+// game against a right-handed and against a left-handed starter. A team's default lineup ("recent") is
+// the one against the hand of the other team's starter, and follows it when that starter changes.
+let lineupData = null;
+async function loadLineupData() {
+  const r = await fetch(new URL(`data/${SEASON}-lineups.json?v=1`, import.meta.url));
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  lineupData = await r.json();
+}
+const otherSide = (s) => SIDES[s === SIDES[0] ? 1 : 0];
+const handFaced = (s) => otherSide(s).sp?.throws === "L" ? "L" : "R";
+const recentOf = (s) => lineupData?.teams[s.team]?.[handFaced(s)] ?? null;
 const CATCH_SHARE = 0.05; // a spot catches if 5% of its team's catching was done from it
 // What slot i does behind the plate: [attempt, success, how much] (a catcher's: his opportunities
 // caught; a spot's: its share of the team's), or null if it didn't catch in 2026.
@@ -286,6 +299,8 @@ async function loadGame(pk) {
 let realGame = null;
 const gameKey = () => JSON.stringify(SIDES.map((s) => [s.team, s.lineup, s.sp?.id]));
 const realFinal = () => (realGame && realGame.key === gameKey() ? realGame.final : null);
+// and what each side actually did in it ([away, home], game-load.js observed), for the box score's hover charts
+const realLines = () => (realGame && realGame.key === gameKey() ? realGame.observed : null);
 function applyGame(G) {
   [["away", SIDES[0]], ["home", SIDES[1]]].forEach(([where, s]) => {
     const x = G.sides[where];
@@ -301,7 +316,7 @@ function applyGame(G) {
     if (park.auto) park.at = homePark();
     park.week = G.week;
   }
-  realGame = G.final ? { final: G.final, key: gameKey() } : null;
+  realGame = G.final ? { final: G.final, observed: [G.sides.away.observed, G.sides.home.observed], key: gameKey() } : null;
   SIDES.forEach(renderSide);
   fillPark();
   run();
@@ -404,10 +419,21 @@ function defaultStarter(abbr) {
   return arms[0] ?? pitchers.get("PRHP");
 }
 function loadPreset(s) {
-  if (s.team === "MLB" && s.kind === "most_used") s.kind = "spots";
-  if (s.kind === "most_used") s.lineup = teamOf(s.team).most_used.orders[0].ids.map((id) => `p${id}`);
-  else s.lineup = Array.from({ length: 9 }, (_, i) => `s${s.team}-${i + 1}`);
+  const r = s.kind === "recent" ? recentOf(s) : null;
+  if (s.kind === "recent" && !r) s.kind = "spots"; // MLB, or no lineup data
+  s.lineup = Array.from({ length: 9 }, (_, i) => (r && entries.has(`p${r.ids[i]}`) ? `p${r.ids[i]}` : `s${s.team}-${i + 1}`));
   s.edited = false;
+}
+// After the starter a side faces changes (that starter, or the other team): a side whose lineup is its
+// most recent, untouched, takes the one against the new starter's hand; either way its panel is redrawn
+// (the Lineup menu names the hand)
+function followHand(s) {
+  if (s.kind === "recent" && !s.edited) {
+    const was = s.lineup.join();
+    loadPreset(s);
+    if (stealData && s.lineup.join() !== was) s.c = defaultCatcher(s);
+  }
+  renderSide(s);
 }
 // When the starter gives way to the bullpen: "hook" (the hook model), or outs into the game. Nine
 // innings goes to the bullpen in extra innings. Starts and the hook need 2026 starts.
@@ -459,8 +485,8 @@ function sideHTML(s) {
     <div class="loader">
       <label><b>Team</b><select id="${k}_team"></select></label>
       <label><b>Lineup</b><select id="${k}_kind">
+        <option value="recent">Most recent vs RHP</option>
         <option value="spots">Lineup spots</option>
-        <option value="most_used">Most-used batting order</option>
       </select></label>
       <div class="field">
         <label for="${k}_sp"><b>Starting pitcher</b></label>
@@ -473,7 +499,7 @@ function sideHTML(s) {
       <label><b>He pitches</b><select id="${k}_plan">
         <option value="hook">Modeled hook</option>
         <option value="start">Average start</option>
-        <option value="bullpen">Bullpen day (opener)</option>
+        <option value="bullpen">Bullpen day</option>
         <option value="game">Nine innings</option>
       </select></label>
       <label class="catcher"><b>Catcher</b><select id="${k}_c"></select></label>
@@ -508,7 +534,12 @@ function renderSide(s) {
   const k = s.k;
   paintTeams(document.documentElement, SIDES);
   $(`${k}_team`).value = s.team;
-  $(`${k}_kind`).querySelector("[value=most_used]").disabled = s.team === "MLB";
+  const rec = $(`${k}_kind`).querySelector("[value=recent]"), r = recentOf(s);
+  rec.disabled = !r;
+  rec.textContent = `Most recent vs ${handFaced(s)}HP`;
+  $(`${k}_kind`).title = s.kind === "recent" && r
+    ? `${teamName(s.team)}' starting nine on ${new Date(`${r.date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })} against ${teamName(r.opp)}' ${pitchers.get(`P${r.sp}`)?.name ?? "starter"}, their latest ${SEASON} game against a ${handFaced(s) === "L" ? "left" : "right"}-hander`
+    : "";
   $(`${k}_kind`).value = s.kind;
   $(`${k}_title`).textContent = teamName(s.team);
   $(`${k}_sp`).value = s.sp.name;
@@ -516,7 +547,7 @@ function renderSide(s) {
   opt("start").disabled = !s.sp.gs;
   opt("hook").disabled = !s.sp.gs || !hookData;
   opt("start").textContent = s.sp.gs ? `Average start (${fmtIP(startOutsOf(s.sp))} IP)` : "Average start";
-  opt("bullpen").textContent = `Bullpen day (opener, ${fmtIP(data.pitching.opener.outs)} IP)`;
+  opt("bullpen").textContent = `Bullpen day (${fmtIP(data.pitching.opener.outs)} IP)`;
   if (opt(s.plan).disabled) s.plan = opt("start").disabled ? "bullpen" : "start";
   sel.value = s.plan;
   // his 2026 line, then who follows him
@@ -559,7 +590,7 @@ function renderLineup(s) {
     w.textContent = fmtRate(wobaOf(e.counts));
     if (e.kind === "player" && e.pa < 100) {
       w.classList.add("small");
-      w.title = "Small sample: Sim settings can add MLB-average PA";
+      w.title = "Small sample: Sim Settings can add MLB-average PA";
     }
     const [upB, downB] = tr.querySelectorAll(".move button");
     upB.disabled = i === 0;
@@ -706,7 +737,7 @@ let job = null, jobs = 0, worker = null, last = null;
 let useWorker = typeof Worker !== "undefined";
 
 function startWorker() {
-  const w = new Worker(new URL("./game-worker.js?v=3", import.meta.url), { type: "module" });
+  const w = new Worker(new URL("./game-worker.js?v=5", import.meta.url), { type: "module" });
   w.postMessage({ type: "init", tables: { running: data.running, advance: data.advance }, steal: stealData });
   w.onmessage = ({ data: msg }) => {
     if (job && msg.id === job.id) finish(job, msg.res, msg.ms);
@@ -730,7 +761,7 @@ function go() {
   const teams = [pitchingOf(SIDES[0], SIDES[1]), pitchingOf(SIDES[1], SIDES[0])];
   const games = Number($("games").value);
   const busy = job != null;
-  job = { id: ++jobs, teams, games, steal: stealOn(), park: parkName(), home: homeEdge(), final: realFinal(), week: park.week >= 0 ? parkData.weeks[park.week][2] : null, sides: SIDES.map((s) => ({ ...s, lineup: [...s.lineup], from: fromOf(s) })) };
+  job = { id: ++jobs, teams, games, steal: stealOn(), park: parkName(), home: homeEdge(), final: realFinal(), observed: realLines(), week: park.week >= 0 ? parkData.weeks[park.week][2] : null, sides: SIDES.map((s) => ({ ...s, lineup: [...s.lineup], from: fromOf(s) })) };
   $("status").textContent = "simulating…";
   $("status").classList.remove("err");
   $("out").style.opacity = $("box").style.opacity = last ? ".55" : "";
@@ -760,10 +791,10 @@ function runHere(j) {
 }
 function finish(j, res, ms) {
   job = null;
-  last = { res, sides: j.sides, games: j.games, ms, steal: j.steal, park: j.park, week: j.week, home: j.home, final: j.final };
+  last = { res, sides: j.sides, games: j.games, ms, steal: j.steal, park: j.park, week: j.week, home: j.home, final: j.final, observed: j.observed };
   $("out").hidden = $("box").hidden = false;
   $("out").style.opacity = $("box").style.opacity = "";
-  $("status").textContent = res.capped ? `${res.capped.toLocaleString()} innings were called off at 60 plate appearances; adding MLB-average PA under Sim settings fixes that.` : "";
+  $("status").textContent = res.capped ? `${res.capped.toLocaleString()} innings were called off at 60 plate appearances; adding MLB-average PA under Sim Settings fixes that.` : "";
   $("status").classList.toggle("err", res.capped > 0);
   renderResults();
   renderBox();
@@ -772,6 +803,7 @@ function finish(j, res, ms) {
 // ---------- results ----------
 const per = (x) => x / last.games;
 const f2 = (x) => x.toFixed(2);
+const f1 = (x) => x.toFixed(1); // the box score's counts: one decimal (its rates keep their own)
 
 function renderResults() {
   const { res, sides, games } = last;
@@ -795,8 +827,6 @@ function renderResults() {
   const same = sides[0].team === sides[1].team;
   kpi(`${same ? "Away" : name(0)} win`, pct(res.wins[0] / games), `${f2(per(runs[0]))} runs a game`, "var(--t-away)");
   kpi(`${same ? "Home" : name(1)} win`, pct(res.wins[1] / games), `${f2(per(runs[1]))} runs a game`, "var(--t-home)");
-  kpi("Extra innings", pct(res.extras / games), `Walk-offs ${pct(res.walkoffs / games)} · ${f2(per(res.innings))} innings a game`
-    + (res.ties ? ` · ${res.ties} called at 40 innings` : ""));
   const bar = $("winbar");
   bar.children[0].style.width = `${(100 * res.wins[0]) / games}%`;
   bar.children[1].style.width = `${(100 * res.wins[1]) / games}%`;
@@ -1019,7 +1049,7 @@ function fitFont(g, text, weight, size, family, width) {
 }
 async function scoreGridBlob() {
   const k = sgView, { res, sides, games } = last;
-  await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 17px "DM Sans"',
+  await Promise.all(['700 36px "DM Sans"', '400 21px "DM Sans"', '700 21px "DM Sans"', '400 18px "DM Sans"', '400 16px "DM Sans"', '600 17px "DM Sans"',
     '400 17px "Work Sans"'].map((f) => document.fonts.load(f)));
   const logo = await loadLogo();
   const { W } = TILE;
@@ -1035,13 +1065,24 @@ async function scoreGridBlob() {
   g.drawImage(logo, W - 32 - 236, 27, 236, (236 * logo.naturalHeight) / logo.naturalWidth);
   // the starters by surname; the first line stops short of the wordmark beside it
   const who = (t) => `${k.nm(t)} (${surname(sides[t].sp.name)})`;
-  const lines = [`${who(0)} at ${who(1)}`, `${k.nm(0)} win ${pct(res.wins[0] / games)} · ${k.nm(1)} win ${pct(res.wins[1] / games)}`
-    + (last.final ? ` · Final: ${k.ab(0)} ${last.final[0]}, ${k.ab(1)} ${last.final[1]}` : "")];
+  const lines = [`${who(0)} at ${who(1)}`, `${k.ab(0)} ${pct(res.wins[0] / games)} - ${pct(res.wins[1] / games)} ${k.ab(1)}`];
   g.fillStyle = TILE.sub;
   lines.forEach((line, i) => {
     fitFont(g, line, 400, 21, '"DM Sans"', i ? W - 96 : W - 32 - 236 - 24 - 48);
     g.fillText(line, 48, 100 + 28 * i);
   });
+  // a real game's final score, laid out as the win shares are, the winner's side in bold amber (the
+  // outline's color); a game called tied has none
+  if (last.final) {
+    const [fa, fh] = last.final, won = fa > fh ? 0 : fh > fa ? 1 : -1;
+    let x = 48;
+    for (const [text, bold] of [[`${k.ab(0)} ${fa}`, won === 0], [" - ", false], [`${fh} ${k.ab(1)}`, won === 1]]) {
+      g.font = `${bold ? 700 : 400} 21px "DM Sans"`;
+      g.fillStyle = bold ? TILE.amber : TILE.sub;
+      g.fillText(text, x, 156);
+      x += g.measureText(text).width;
+    }
+  }
   // the grid, square, centered under the subtitle
   const P = 540, l = 200, t = 182, c = P / k.n1;
   paintScoreGrid(g, { l, t, P }, {
@@ -1087,9 +1128,99 @@ function sgHover(ev) {
   drawScoreGrid([a, h]);
 }
 
+// ---------- a box-score count's spread, on hover ----------
+// Each count in the box score (not the rates, nor W, L, SV and QS, already shares of games) has its games
+// by value (game-sim.js res.hist): a bar for each value's share of games, labeled, the values whose share
+// is under HIST_MIN left out (and those beyond them at either end).
+const HIST_MIN = 0.02;
+const STAT_NAME = { PA: "Plate appearances", AB: "At bats", R: "Runs", H: "Hits", "2B": "Doubles", "3B": "Triples", HR: "Home runs",
+  TB: "Total bases", RBI: "RBI", BB: "Walks", HBP: "Hit by pitch", K: "Strikeouts", SB: "Stolen bases", CS: "Caught stealing",
+  OUTS: "Innings pitched", BF: "Batters faced", ER: "Earned runs", NP: "Pitches" };
+const histCells = new WeakMap(); // a box-score cell -> { who, stat, mean, counts, width }
+const regHist = (td, cell) => { histCells.set(td, cell); td.classList.add("hist"); };
+// the bars to draw: [{ label, p }] from the first value with HIST_MIN of the games to the last (null: under it)
+// A loaded real game's value (`seen`) gets its bar whatever its share, marked `seen`.
+function histBars({ stat, counts, width, seen }) {
+  const n = counts.reduce((a, x) => a + x, 0), keep = (i) => counts[i] / n >= HIST_MIN;
+  const top = counts.length - 1, at = Number.isInteger(seen) ? Math.min(top, Math.floor(seen / width)) : -1;
+  let lo = 0, hi = top;
+  while (lo < hi && !keep(lo)) lo++;
+  while (hi > lo && !keep(hi)) hi--;
+  if (at >= 0) { lo = Math.min(lo, at); hi = Math.max(hi, at); }
+  const bars = [];
+  for (let i = lo; i <= hi; i++) {
+    const label = width > 1 ? (i === top ? `${i * width}+` : `${i * width}–${i * width + width - 1}`)
+      : stat === "OUTS" ? fmtIP(i) + (i === top ? "+" : "") : `${i}${i === top ? "+" : ""}`;
+    bars.push({ label, p: keep(i) || i === at ? counts[i] / n : null, seen: i === at });
+  }
+  return bars;
+}
+// the chart, as an SVG in the page's colors: % of games up, the values across, each bar labeled
+function histSVG(cell, maxW) {
+  const bars = histBars(cell), n = bars.length, top = Math.max(...bars.map((b) => b.p ?? 0));
+  // a slot per value, narrower on a phone: under 24px, every other value is labeled and shares are whole percents
+  // (a few values get wider slots, so the chart and its axis title keep a usable width)
+  const slot = Math.max(15, Math.min(Math.max(40, 180 / n), (maxW - 52) / n)), W = Math.round(40 + n * slot + 12), H = 172, tight = slot < 24;
+  const L = 40, T = 14, B = H - 38, x0 = (i) => L + i * slot, y = (p) => B - (p / ymax) * (B - T);
+  const step = [0.02, 0.05, 0.1, 0.2, 0.25].find((st) => top / st <= 4) ?? 0.5, ymax = Math.ceil(top / step) * step;
+  // shares: one decimal under 10% where there's room (a share under 1%, the real game's, always gets one; none at all is 0%)
+  const wide = slot >= 30, lab = (p) => (!p ? "0%" : 100 * p >= 9.95 || (!wide && p >= 0.01) ? `${Math.round(100 * p)}%` : `${(100 * p).toFixed(1)}%`);
+  const xs = cell.width > 1 || tight ? 9.5 : 11, bs = tight ? 8.5 : 10;
+  let g = "";
+  for (let v = 0; v <= ymax + 1e-9; v += step) {
+    g += `<line x1="${L}" x2="${W - 8}" y1="${y(v)}" y2="${y(v)}" stroke="var(--rule)"/>`
+      + `<text x="${L - 6}" y="${y(v) + 3.5}" text-anchor="end" font-size="10.5" fill="var(--muted)">${Math.round(100 * v)}%</text>`;
+  }
+  bars.forEach((b, i) => {
+    const cx = x0(i) + slot / 2, bw = slot * 0.62;
+    if (b.p != null) {
+      // a bar at least 3px tall, so even the real game's rare value shows
+      const yt = Math.min(y(b.p), B - 3);
+      g += `<path d="M${cx - bw / 2},${B} V${yt + 3} q0,-3 3,-3 H${cx + bw / 2 - 3} q3,0 3,3 V${B} Z" fill="var(--brand-brand-cyan)"/>`;
+      // the real game's value: outlined in amber just outside the bar, on the card, where amber reads
+      if (b.seen) g += `<rect x="${cx - bw / 2 - 2.5}" y="${yt - 2.5}" width="${bw + 5}" height="${B - yt + 2.5}" rx="4" fill="none" stroke="var(--brand-brand-amber)" stroke-width="2"/>`;
+      g += `<text x="${cx}" y="${yt - (b.seen ? 7 : 4)}" text-anchor="middle" font-size="${bs}" fill="var(--ink)">${lab(b.p)}</text>`;
+    }
+    if (!tight || i % 2 === 0) g += `<text x="${cx}" y="${B + 14}" text-anchor="middle" font-size="${xs}" fill="var(--muted)">${b.label}</text>`;
+  });
+  const unit = cell.stat === "OUTS" ? "Innings" : cell.width > 1 ? "Pitches (by tens)" : STAT_NAME[cell.stat] ?? cell.stat;
+  g += `<text x="${L + (n * slot) / 2}" y="${H - 6}" text-anchor="middle" font-size="11" fill="var(--muted)">${unit} in a game</text>`;
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${unit} in a game, share of games">${g}</svg>`;
+}
+function showHist(td) {
+  const cell = histCells.get(td), tip = $("bx_tip");
+  if (!cell || !last?.res?.hist) return hideHist();
+  const box = $("box").getBoundingClientRect(), r = td.getBoundingClientRect();
+  const maxW = Math.min(520, box.width - 24);
+  // the subtitle: the simulated games' average, and a loaded game's real value (its bar's amber, in bold)
+  const val = (x) => (cell.stat === "OUTS" ? fmtIP(Math.round(x)) : f1(x));
+  tip.innerHTML = `<b></b><small></small>${histSVG(cell, maxW - 26)}<small>Share of games; under ${100 * HIST_MIN}% left out</small>`;
+  tip.querySelector("b").textContent = `${cell.who} · ${STAT_NAME[cell.stat] ?? cell.stat}`;
+  const sub = tip.querySelector("small");
+  sub.textContent = `Avg: ${val(cell.mean)}`;
+  if (Number.isInteger(cell.seen)) {
+    sub.append(", ", Object.assign(document.createElement("strong"), { className: "seen",
+      textContent: `Actual: ${cell.stat === "OUTS" ? fmtIP(cell.seen) : cell.seen}` }));
+  }
+  tip.hidden = false;
+  // above the cell, or below it if there's no room; kept inside the card
+  const w = tip.offsetWidth, h = tip.offsetHeight, cx = r.left + r.width / 2 - box.left;
+  tip.style.left = `${Math.max(12 + w / 2, Math.min(box.width - 12 - w / 2, cx))}px`;
+  const below = r.top - h - 10 < 0;
+  tip.classList.toggle("below", below);
+  tip.style.top = `${(below ? r.bottom : r.top) - box.top}px`;
+  histOn = td;
+}
+let histOn = null;
+function hideHist() {
+  $("bx_tip").hidden = true;
+  histOn = null;
+}
+
 // the box score: every hitter's and pitcher's line, per game
 function renderBox() {
   const { res, sides } = last;
+  hideHist();
   const box = $("box_teams");
   box.replaceChildren();
   paintTeams($("box"), sides);
@@ -1099,12 +1230,12 @@ function renderBox() {
     const h = document.createElement("h3");
     h.innerHTML = `<i class="dot" style="background:var(--t-${t ? "home" : "away"})"></i>`;
     h.append(`${teamName(s.team)} `, Object.assign(document.createElement("span"), { className: "where", textContent: s.where }));
-    sec.append(h, battingTable(res.bat[t], s), pitchingTable(res.pit[t], s, res.wins[t], res.wins[1 - t]));
+    sec.append(h, battingTable(res.bat[t], s, t), pitchingTable(res.pit[t], s, res.wins[t], res.wins[1 - t], t));
     if (last.steal) {
       // the catcher's running game: steals and runners caught against him, per game
       const [sb, cs] = res.caught[t], p = document.createElement("p");
       p.className = "note catch-line";
-      p.textContent = `Catcher: ${catcherName(s)} · ${f2(per(sb))} SB and ${f2(per(cs))} CS against a game`
+      p.textContent = `Catcher: ${catcherName(s)} · ${f1(per(sb))} SB and ${f1(per(cs))} CS against a game`
         + (sb + cs ? ` (${pct(cs / (sb + cs))} caught)` : "");
       sec.append(p);
     }
@@ -1118,9 +1249,9 @@ const RATE = (b) => {
   return { AVG: g("H") / g("AB"), OBP: (g("H") + g("BB") + g("HBP")) / (g("AB") + g("BB") + g("HBP") + g("SF")),
     SLG: (one + 2 * g("2B") + 3 * g("3B") + 4 * g("HR")) / g("AB") };
 };
-const BAT_COLS = () => ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "HBP", "K", ...(last.steal ? ["SB", "CS"] : [])];
+const BAT_COLS = () => ["PA", "AB", "R", "H", "2B", "3B", "HR", "TB", "RBI", "BB", "HBP", "K", ...(last.steal ? ["SB", "CS"] : [])];
 
-function battingTable(arr, s) {
+function battingTable(arr, s, t) {
   const wrap = document.createElement("div");
   wrap.className = "scroll";
   const table = document.createElement("table");
@@ -1130,13 +1261,17 @@ function battingTable(arr, s) {
     <th scope="col" class="rate">AVG</th><th scope="col">OBP</th><th scope="col">SLG</th></tr></thead><tbody></tbody>`;
   const body = table.querySelector("tbody");
   const total = new Float64Array(nB);
-  const row = (spot, name, sub, b, cls = "") => {
+  // spread(k): that count's games by value (res.hist), for its chart on hover, titled `who`; seen: a loaded
+  // game's real line for the row ({ stat: count }), marked on the chart
+  const seenB = last.observed?.[t];
+  const row = (spot, name, sub, b, cls = "", spread = null, who = name, seen = null) => {
     const tr = document.createElement("tr");
     if (cls) tr.className = cls;
     const r = RATE(b);
     tr.innerHTML = `<td class="who"><span class="nm"><b class="sp">${spot}</b></span><span class="who-sub"></span></td>`
-      + BAT_COLS().map((k) => `<td class="num">${f2(per(b[Bi[k]]))}</td>`).join("")
+      + BAT_COLS().map((k) => `<td class="num">${f1(per(b[Bi[k]]))}</td>`).join("")
       + `<td class="num rate">${fmtRate(r.AVG)}</td><td class="num">${fmtRate(r.OBP)}</td><td class="num">${fmtRate(r.SLG)}</td>`;
+    if (spread) BAT_COLS().forEach((k, j) => regHist(tr.cells[1 + j], { who, stat: k, mean: per(b[Bi[k]]), counts: spread(k), width: 1, seen: seen?.[k] }));
     tr.querySelector(".nm").append(name);
     tr.querySelector(".who-sub").textContent = sub;
     tr.querySelector(".who-sub").hidden = !sub;
@@ -1148,14 +1283,15 @@ function battingTable(arr, s) {
     // a spot goes by its main hitters, with the spot and its hitters' shares under them
     const other = e.team !== s.team && e.team !== "MLB" ? `${teamName(e.team)} ` : "";
     const name = e.kind === "spot" ? `${other ? `${teamName(e.team)}: ` : ""}${e.lead}` : e.name;
-    row(i + 1, name, e.kind === "spot" && e.team !== "MLB" ? `${other}${e.spot}: ${e.sub}` : "", b);
+    row(i + 1, name, e.kind === "spot" && e.team !== "MLB" ? `${other}${e.spot}: ${e.sub}` : "", b, "",
+      (k) => last.res.hist.bat[t].subarray((i * nB + Bi[k]) * HIST_BINS, (i * nB + Bi[k] + 1) * HIST_BINS), name, seenB?.bat[i]);
   });
-  row("", "Totals", "", total, "total");
+  row("", "Totals", "", total, "total", (k) => last.res.hist.batTot[t].subarray(Bi[k] * HIST_BINS, (Bi[k] + 1) * HIST_BINS), teamName(s.team), seenB?.batTot);
   wrap.append(table);
   return wrap;
 }
 
-function pitchingTable(arr, s, won, lost) {
+function pitchingTable(arr, s, won, lost, t) {
   const wrap = document.createElement("div");
   wrap.className = "scroll";
   const table = document.createElement("table");
@@ -1170,29 +1306,35 @@ function pitchingTable(arr, s, won, lost) {
   const body = table.querySelector("tbody");
   const G = last.games;
   // qs: the starter's quality-start share, shown on his row and the totals (a bullpen has none)
-  const row = (name, sub, p, cls = "", decisions = null, qs = true) => {
+  // spread(k): that count's games by value (res.hist), for its chart on hover; the rates and W, L, SV and
+  // QS (already shares of games) have none
+  const row = (name, sub, p, cls = "", decisions = null, qs = true, spread = null, who = name, seen = null) => {
     const g = (k) => p[Pi[k]];
     const tr = document.createElement("tr");
     if (cls) tr.className = cls;
     const ip = g("OUTS") / 3;
     const [w, l, sv] = decisions ?? [g("W"), g("L"), g("SV")];
     tr.innerHTML = `<td class="who"><span class="nm"></span><span class="who-sub"></span></td><td class="num">${fmtIP(Math.round(per(g("OUTS"))))}</td>`
-      + ["H", "R", "ER", "BB", "K", "HR", "BF"].map((k) => `<td class="num">${f2(per(g(k)))}</td>`).join("")
+      + ["H", "R", "ER", "BB", "K", "HR", "BF"].map((k) => `<td class="num">${f1(per(g(k)))}</td>`).join("")
       + (np ? `<td class="num">${per(g("NP")).toFixed(1)}</td>` : "")
       + `<td class="num rate">${ip ? ((9 * g("ER")) / ip).toFixed(2) : "—"}</td><td class="num">${ip ? ((g("BB") + g("H")) / ip).toFixed(2) : "—"}</td>`
       + `<td class="num">${pct(w / G)}</td><td class="num">${pct(l / G)}</td><td class="num">${pct(sv / G)}</td>`
       + `<td class="num">${qs ? pct(g("QS") / G) : "—"}</td>`;
+    if (spread) ["OUTS", "H", "R", "ER", "BB", "K", "HR", "BF", ...(np ? ["NP"] : [])].forEach((k, j) =>
+      regHist(tr.cells[1 + j], { who, stat: k, mean: per(g(k)), counts: spread(k), width: k === "NP" ? HIST_NP_WIDTH : 1, seen: seen?.[k] }));
     tr.querySelector(".nm").textContent = name;
     tr.querySelector(".who-sub").textContent = sub;
     tr.querySelector(".who-sub").hidden = !sub;
     body.append(tr);
   };
+  const H = last.res.hist, cut = (a, i) => a.subarray(i * HIST_BINS, (i + 1) * HIST_BINS);
   const sp = arr.slice(0, nP), pen = arr.slice(nP, 2 * nP);
   const how = { hook: "until the modeled hook", game: "nine innings", bullpen: "opener" }[s.plan] ?? `average start, ${fmtIP(s.from)} IP`;
-  row(s.sp.name, `Starter · ${how}`, sp);
-  row(penName(s), `In ${pct(pen[Pi.G] / G)} of games`, pen, "", null, false);
+  const seen = last.observed?.[t];
+  row(s.sp.name, `Starter · ${how}`, sp, "", null, true, (k) => cut(H.pit[t], Pi[k]), s.sp.name, seen?.sp);
+  row(penName(s), `In ${pct(pen[Pi.G] / G)} of games`, pen, "", null, false, (k) => cut(H.pit[t], nP + Pi[k]), penName(s), seen?.pen);
   const total = sp.map((x, i) => x + pen[i]);
-  row("Totals", "", total, "total", [won, lost, total[Pi.SV]]);
+  row("Totals", "", total, "total", [won, lost, total[Pi.SV]], true, (k) => cut(H.pitTot[t], Pi[k]), `${teamName(s.team)} pitchers`, seen?.pitTot);
   wrap.append(table);
   return wrap;
 }
@@ -1226,7 +1368,7 @@ function readHash() {
   for (const s of SIDES) {
     const [team, kind, sp, plan, c] = (p.get(s.k) ?? "").split(".");
     if (team && (team === "MLB" || teamOf(team))) s.team = team;
-    if (kind === "spots" || kind === "most_used") s.kind = kind;
+    s.kind = lineupKind(kind) ?? s.kind;
     loadPreset(s);
     s.sp = pitchers.get(`P${sp}`) ?? defaultStarter(s.team);
     if (["hook", "start", "bullpen", "game"].includes(plan)) s.plan = plan;
@@ -1236,6 +1378,12 @@ function readHash() {
       s.edited = true;
     }
     s.c = /^[0-8]$/.test(c ?? "") ? Number(c) : -1;
+    if (stealData) checkCatcher(s);
+  }
+  // a default lineup faces the other team's starter, now that both are read
+  for (const s of SIDES) {
+    if (s.kind !== "recent" || s.edited) continue;
+    loadPreset(s);
     if (stealData) checkCatcher(s);
   }
   if (parkData) {
@@ -1250,6 +1398,7 @@ function readHash() {
 async function boot() {
   const hookFile = loadHookData().catch(() => null);
   const stealFile = loadStealData().catch(() => null);
+  const lineupFile = loadLineupData().catch(() => null);
   const parkFile = loadParkData().catch(() => null);
   try {
     const r = await fetch(new URL(`data/${SEASON}.json?v=5`, import.meta.url));
@@ -1262,6 +1411,7 @@ async function boot() {
   }
   await hookFile;
   await stealFile;
+  await lineupFile;
   await parkFile;
   $("park_row").hidden = !parkData;
   if (!stealData) {
@@ -1285,6 +1435,7 @@ async function boot() {
       loadPreset(s);
       if (stealData) s.c = defaultCatcher(s);
       renderSide(s);
+      followHand(otherSide(s)); // a new starter for the other team to face
       run();
     });
     $(`${k}_kind`).addEventListener("change", () => {
@@ -1308,17 +1459,35 @@ async function boot() {
       choose: (e) => {
         s.sp = e;
         renderSide(s);
+        followHand(otherSide(s));
         run();
       } });
     renderSide(s);
   }
   $("gpk_go").addEventListener("click", onLoadGame);
+  // the Matchup card folds from its heading; Swap goes with what it folds away
+  $("matchup_fold").addEventListener("click", () => {
+    const open = $("matchup_fold").getAttribute("aria-expanded") !== "true";
+    $("matchup_fold").setAttribute("aria-expanded", String(open));
+    $("matchup_body").hidden = !open;
+    $("swap").hidden = !open;
+  });
   // the score grid's readout: hover, or a tap on touch (a tap elsewhere puts it away)
   const sgOff = () => { if (!$("sg_tip").hidden) { $("sg_tip").hidden = true; if (sgView) drawScoreGrid(null); } };
   $("sg").addEventListener("pointermove", sgHover);
   $("sg").addEventListener("pointerdown", sgHover);
   $("sg").addEventListener("pointerleave", (ev) => { if (ev.pointerType === "mouse") sgOff(); });
   $("sg").addEventListener("pointercancel", sgOff); // a swipe that scrolls the page instead
+  // a box-score count's chart: hover, or a tap on touch (a tap elsewhere, or scrolling a table, puts it away)
+  $("box_teams").addEventListener("pointerover", (ev) => {
+    const td = ev.target.closest("td.hist");
+    if (td && td !== histOn) showHist(td);
+  });
+  $("box_teams").addEventListener("pointerout", (ev) => {
+    if (ev.pointerType === "mouse" && histOn && !ev.relatedTarget?.closest?.("td.hist")) hideHist();
+  });
+  document.addEventListener("pointerdown", (ev) => { if (histOn && !ev.target.closest?.("td.hist")) hideHist(); });
+  $("box_teams").addEventListener("scroll", () => { if (histOn) hideHist(); }, true);
   document.addEventListener("pointerdown", (ev) => { if (ev.target !== $("sg")) sgOff(); });
   let sgTimer = 0;
   window.addEventListener("resize", () => { clearTimeout(sgTimer); sgTimer = setTimeout(() => last && renderScoreGrid(), 120); });
@@ -1335,6 +1504,7 @@ async function boot() {
       SIDES[1][x] = a[x];
     }
     SIDES.forEach(renderSide);
+    SIDES.forEach(followHand); // each now faces the other starter
     fillPark();
     run();
   });

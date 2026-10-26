@@ -36,10 +36,15 @@ import { leadBucket } from "./park.js?v=3";
 const C = Object.fromEntries(CATS.map((c, i) => [c, i]));
 
 // box-score columns, as the result's flat arrays hold them
-export const BAT = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "HBP", "K", "SF", "SB", "CS"];
+export const BAT = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "HBP", "K", "SF", "SB", "CS", "TB"];
 export const PIT = ["G", "OUTS", "BF", "H", "R", "ER", "BB", "HBP", "K", "HR", "NP", "W", "L", "SV", "QS", "SB", "CS"];
 const nB = BAT.length, nP = PIT.length;
 const B = Object.fromEntries(BAT.map((k, i) => [k, i])), P = Object.fromEntries(PIT.map((k, i) => [k, i]));
+// Each box-score count's spread over the games (res.hist): how many games it was 0, 1, 2, ... in one game,
+// HIST_BINS buckets, the last holding that many and more; pitches (NP) in buckets of HIST_NP_WIDTH.
+// bat[t]: slot x BAT x bucket; batTot[t]: the team's nine together, BAT x bucket; pit[t]: stage x PIT x
+// bucket; pitTot[t]: the team's pitchers together, PIT x bucket.
+export const HIST_BINS = 41, HIST_NP_WIDTH = 10;
 
 // as sim.js: an inning this long is called off; and a game this long is called a tie
 const MAX_INNING_PA = 60;
@@ -125,6 +130,32 @@ export function simulateGames(model, teams, games, seed = 1, pitches = null, ste
   const starterOuts = [new Float64Array(28), new Float64Array(28)];
   const caught = [[0, 0], [0, 0]]; // each team's catcher: SB and CS allowed
   let extras = 0, walkoffs = 0, ties = 0, innings = 0, bottom9 = 0, capped = 0;
+  const NB = HIST_BINS, hist = { bat: [0, 1].map(() => new Uint32Array(9 * nB * NB)), batTot: [0, 1].map(() => new Uint32Array(nB * NB)),
+    pit: nS.map((n) => new Uint32Array(n * nP * NB)), pitTot: [0, 1].map(() => new Uint32Array(nP * NB)) };
+  // the counts as the game began (the arrays above run over all games), and one game's team totals
+  const was = { bat: bat.map((x) => Float64Array.from(x)), pit: pit.map((x) => Float64Array.from(x)) };
+  const gameB = new Float64Array(nB), gameP = new Float64Array(nP);
+  const bucket = (n, w) => Math.min(NB - 1, Math.floor(n / w));
+  const tally = () => {
+    for (let t = 0; t < 2; t++) {
+      gameB.fill(0);
+      for (let i = 0; i < 9 * nB; i++) {
+        const n = bat[t][i] - was.bat[t][i];
+        was.bat[t][i] = bat[t][i];
+        gameB[i % nB] += n;
+        hist.bat[t][i * NB + bucket(n, 1)]++;
+      }
+      for (let k = 0; k < nB; k++) hist.batTot[t][k * NB + bucket(gameB[k], 1)]++;
+      gameP.fill(0);
+      for (let i = 0; i < nS[t] * nP; i++) {
+        const n = pit[t][i] - was.pit[t][i], k = i % nP;
+        was.pit[t][i] = pit[t][i];
+        gameP[k] += n;
+        hist.pit[t][i * NB + bucket(n, k === P.NP ? HIST_NP_WIDTH : 1)]++;
+      }
+      for (let k = 0; k < nP; k++) hist.pitTot[t][k * NB + bucket(gameP[k], k === P.NP ? HIST_NP_WIDTH : 1)]++;
+    }
+  };
 
   // the bases: who's on (lineup slot, -1 empty), the pitcher (stage) charged if he scores, and
   // whether he's the extra-innings runner
@@ -284,10 +315,10 @@ export function simulateGames(model, teams, games, seed = 1, pitches = null, ste
         case C.BB: mine[H + B.BB]++; arms[A + P.BB]++; break;
         case C.HBP: mine[H + B.HBP]++; arms[A + P.HBP]++; break;
         case C.K: mine[H + B.K]++; mine[H + B.AB]++; arms[A + P.K]++; reached = false; break;
-        case C["1B"]: mine[H + B.H]++; mine[H + B.AB]++; arms[A + P.H]++; break;
-        case C["2B"]: mine[H + B.H]++; mine[H + B["2B"]]++; mine[H + B.AB]++; arms[A + P.H]++; break;
-        case C["3B"]: mine[H + B.H]++; mine[H + B["3B"]]++; mine[H + B.AB]++; arms[A + P.H]++; break;
-        case C.HR: mine[H + B.H]++; mine[H + B.HR]++; mine[H + B.AB]++; arms[A + P.H]++; arms[A + P.HR]++; break;
+        case C["1B"]: mine[H + B.H]++; mine[H + B.TB]++; mine[H + B.AB]++; arms[A + P.H]++; break;
+        case C["2B"]: mine[H + B.H]++; mine[H + B["2B"]]++; mine[H + B.TB] += 2; mine[H + B.AB]++; arms[A + P.H]++; break;
+        case C["3B"]: mine[H + B.H]++; mine[H + B["3B"]]++; mine[H + B.TB] += 3; mine[H + B.AB]++; arms[A + P.H]++; break;
+        case C.HR: mine[H + B.H]++; mine[H + B.HR]++; mine[H + B.TB] += 4; mine[H + B.AB]++; arms[A + P.H]++; arms[A + P.HR]++; break;
         default: if (o.sf) mine[H + B.SF]++; else mine[H + B.AB]++; reached = false;
       }
       up[b] = (i + 1) % 9;
@@ -342,7 +373,7 @@ export function simulateGames(model, teams, games, seed = 1, pitches = null, ste
       if (gOuts[t][0] >= 18 && gER[t][0] <= 3) pit[t][P.QS]++;
     }
     scoreDist[Math.min(score[0], SCORES - 1) * SCORES + Math.min(score[1], SCORES - 1)]++;
-    if (tie) { ties++; continue; }
+    if (tie) { ties++; tally(); continue; }
     // decisions: the winner's pitcher of record when it took the lead for good (a starter needs
     // five innings; short of that, the next pitcher), the loser's pitcher charged with that run,
     // and a save for the winner's last pitcher if he pitched all of its last inning with a lead of 1 to 3
@@ -354,8 +385,9 @@ export function simulateGames(model, teams, games, seed = 1, pitches = null, ste
     pit[l][goAhead.l * nP + P.L]++;
     const f = record[w];
     if (halfStage[w] === f && halfLead[w] >= 1 && halfLead[w] <= 3 && (f !== ws || teams[w].stages[f].pen)) pit[w][f * nP + P.SV]++;
+    tally();
   }
   return { games, bat: bat.map((x) => Array.from(x)), pit: pit.map((x) => Array.from(x)), line: line.map((x) => Array.from(x)),
     wins, lob, caught, scoreDist: Array.from(scoreDist), starterOuts: starterOuts.map((x) => Array.from(x)),
-    extras, walkoffs, ties, innings, bottom9, capped };
+    extras, walkoffs, ties, innings, bottom9, capped, hist };
 }
