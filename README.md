@@ -181,7 +181,9 @@ means on `card.js`'s `SEASON_GRADE_CUTS` (`season.py --cuts` fits them as `grade
 the game cuts, to every pitcher's season); and Movement and the locations show each pitch type
 as three KDE tiers around its densest pitches, ranked by the KDE at each pitch: 75%, 50% and
 25% of them in Movement, the densest 100, 67 and 33 in a location plot (75%, 50% and 25% of a
-type thrown fewer than 134 times to that side).
+type thrown fewer than 134 times to that side). Every type in a plot is smoothed with one
+shared kernel (Scott's rule on all the plot's pitches, their spread pooled within types), so a
+rarely thrown pitch isn't spread wider than the rest.
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones
