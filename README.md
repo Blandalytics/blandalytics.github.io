@@ -177,7 +177,8 @@ regular seasons (`pitcher-cards/season-demo/`, written by `tools/pitcher_card/se
 the bucket's day files). It is the game card for a whole season, with no comparison season:
 the summary line is in segments sized to their text, the same room either side of each, ruled
 between: IP, ERA, WHIP, strikeouts, K% and BB% (MLB's season line) and CSW% (from the
-pitches); one Skills tile takes the room of Skills and Results, its letters the season means
+pitches); one Skills tile takes the room of Skills and Results, ruled between its three
+letters as the summary line is, its letters the season means
 on `card.js`'s `SEASON_GRADE_CUTS` (`season.py --cuts` fits them as `grade_cuts.py` fits the
 game cuts, to every pitcher's season); and Movement shows each pitch type as three KDE tiers
 around its densest pitches, ranked by the KDE at each pitch (95%, 63% and 32% of them, shaded

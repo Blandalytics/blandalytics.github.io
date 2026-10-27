@@ -959,10 +959,14 @@
   }
 
   // a season's Skills: its three letters across the room of the game card's Skills and
-  // Results tiles
+  // Results tiles, ruled between as the summary line is, the rules running as far past the
+  // labels and letters as the summary's run past its stats
   function seasonSkills(card) {
     const ax = new Axes([0.01, 0.705, 0.425, 0.1], [0, 1], [0, 1]);
     const out = [text(fx(0.2225), fy(0.815), "Skills", 30)];
+    for (const x of [1 / 3, 2 / 3]) {
+      out.push(line(ax.x(x), ax.y(0.93), ax.x(x), ax.y(0.22), { color: TEXT, width: 2, alpha: LINE_ALPHA }));
+    }
     for (const [x, label, key, size] of [[1 / 6, "Stuff", "stuff", 22], [0.5, "Locations", "loc", 20], [5 / 6, "PLV", "plv", 22]]) {
       const grade = skill(card, key);
       out.push(text(ax.x(x), ax.y(0.8), label, size, { color: LINE }));
