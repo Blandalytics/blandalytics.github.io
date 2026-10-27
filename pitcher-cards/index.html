@@ -61,6 +61,7 @@ a.plpd-btn{text-decoration:none; color:var(--base-white)}
 #gradesTable td.g{font-family:var(--font-display); font-weight:700}
 #gradesTable td.n{font-variant-numeric:tabular-nums}
 #gradesTable .first{border-left:1px solid var(--data-table-pl-data-table-header-border)}
+#gradesTable tbody tr[data-key]{cursor:pointer} /* the whole row opens its card */
 #gradesTable tbody tr:hover td{background:var(--data-table-pl-data-table-row-hover-bg)}
 #gradesTable tbody tr.on td{background:var(--data-table-pl-data-table-row-open-bg)}
 #gradesTable tbody tr:last-child td{border-bottom:0}
@@ -577,11 +578,13 @@ p,li,.note,.prov{text-wrap:pretty}
       drawGrades(gradesDrawn.rows, gradesDrawn.data);
       return;
     }
-    var a = e.target.closest('a[data-key]');
-    // a plain click opens the card here; with a modifier the link opens a new tab as usual
-    if (!a || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    // a plain click anywhere in a row opens its card here; with a modifier the name's link opens
+    // a new tab as usual, and a drag that selects text in the row isn't a click
+    var tr = e.target.closest('tbody tr[data-key]');
+    if (!tr || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (!e.target.closest('a[data-key]') && String(window.getSelection && window.getSelection()).trim()) return;
     e.preventDefault();
-    pitcherSel.value = a.getAttribute('data-key');
+    pitcherSel.value = tr.getAttribute('data-key');
     onPitcher();
     // on a phone the card is below the table, out of view: bring it up (in a desktop split it shows)
     var r = $('stage').getBoundingClientRect();

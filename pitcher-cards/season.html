@@ -63,6 +63,7 @@ body.plpd{display:flex; flex-direction:column}
 #gradesTable td.g{font-family:var(--font-display); font-weight:700}
 #gradesTable td.n{font-variant-numeric:tabular-nums}
 #gradesTable .first{border-left:1px solid var(--data-table-pl-data-table-header-border)}
+#gradesTable tbody tr[data-key]{cursor:pointer} /* the whole row opens its card */
 #gradesTable tbody tr:hover td{background:var(--data-table-pl-data-table-row-hover-bg)}
 #gradesTable tbody tr.on td{background:var(--data-table-pl-data-table-row-open-bg)}
 #gradesTable tbody tr:last-child td{border-bottom:0}
@@ -418,11 +419,13 @@ p,li,.note{text-wrap:pretty}
       drawGrades(gradesDrawn);
       return;
     }
-    var a = ev.target.closest('a[data-key]');
-    // a plain click opens the card here; with a modifier the link opens a new tab as usual
-    if (!a || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    // a plain click anywhere in a row opens its card here; with a modifier the name's link opens
+    // a new tab as usual, and a drag that selects text in the row isn't a click
+    var tr = ev.target.closest('tbody tr[data-key]');
+    if (!tr || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    if (!ev.target.closest('a[data-key]') && String(window.getSelection && window.getSelection()).trim()) return;
     ev.preventDefault();
-    pitcherSel.value = a.getAttribute('data-key');
+    pitcherSel.value = tr.getAttribute('data-key');
     onPitcher();
     var r = $('stage').getBoundingClientRect();
     if (Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0) < r.height / 2) $('stage').scrollIntoView({behavior: 'smooth'});
