@@ -915,7 +915,8 @@
   // ---- the season card --------------------------------------------------------------
   // A season plot's layers, one per pitch type, the most thrown first so the rarer ones lie
   // on top: a type's KDE tiers (the regions holding its densest pitches, outermost first:
-  // season.py says how many), or its pitches, drawn as the game card draws them. Every
+  // season.py says how many), or its pitches, drawn as the game card draws them but each at
+  // half opacity, so where they pile up shows. Every
   // tier is the same light wash of the type's colour, so the cores darken where the tiers
   // stack, and the outermost carries the type's outline. Tiers and points are in the
   // plot's data units. A type's n tiers show at 1/(n+1), 2/(n+1) ... of full, outermost to
@@ -932,7 +933,7 @@
     return layers.map((l) => {
       const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
       if (!l.tiers) {
-        const uses = l.points.map(([x, y]) => `<use href="#m" x="${fmt(ax.x(x * unit))}" y="${fmt(ax.y(y * unit))}"/>`).join("");
+        const uses = l.points.map(([x, y]) => `<use href="#m" x="${fmt(ax.x(x * unit))}" y="${fmt(ax.y(y * unit))}" opacity="0.5"/>`).join("");
         return `<g fill="${color}">${uses}</g>`;
       }
       const alpha = alphas || tierAlphas(l.tiers.length);
