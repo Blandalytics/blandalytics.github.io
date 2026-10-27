@@ -16,8 +16,9 @@ A pitcher's cards are pooled into:
 - the usage and the pitch type table, from the pitches as prep.game_table makes a game's;
   the primary fastball's extension and HAVAA, which the pitches don't carry, are its
   games' values weighted by its pitches in them;
-- the movement and location plots as three KDE tiers per pitch type (Scott's bandwidth,
-  the grid cut 3 bandwidths past the data, each type on its own). The outermost tier is
+- the movement and location plots as three KDE tiers per pitch type, every type in a plot
+  smoothed alike (one kernel per plot, see `kernel`; the grid cut 3 bandwidths past the
+  data). The outermost tier is
   the region around the type's densest pitches (ranked by the KDE at each pitch): 75% of
   them in Movement, its densest 100 in a location plot (75% of a type with fewer than
   134 there, so a few strays can't stretch it). The inner tiers hold two thirds and one
@@ -38,7 +39,6 @@ from collections import defaultdict
 
 import numpy as np
 import requests
-from scipy.stats import gaussian_kde
 
 from grades import DESC_MAP
 from shapes import _paths
@@ -200,21 +200,47 @@ def fastball(rows: list[dict], games: list[dict]) -> dict | None:
 
 
 # ---- the KDE tiers ------------------------------------------------------------------
-def tiers(xy: np.ndarray, inside: int) -> list[list[str]] | None:
-    """One type's KDE regions, outermost first, as path data in tenths (shapes._paths), or
-    None when a KDE cannot be fit to them. The outermost holds the ``inside`` pitches the
-    KDE puts densest: its edge is the density at the last of them, so exactly they lie
-    within it; the inner tiers' edges are the densities at two thirds and a third of the way."""
-    try:
-        kde = gaussian_kde(xy.T)
-    except (np.linalg.LinAlgError, ValueError):
+def kernel(groups: list[np.ndarray]) -> np.ndarray | None:
+    """One plot's smoothing kernel, a covariance shared by all its pitch types: Scott's rule
+    (factor n^-1/6 in two dimensions) on all the plot's pitches, their spread measured
+    within their own types (the pooled covariance). A type's own Scott kernel widens as its
+    sample shrinks, so a pitch thrown 20 times would be smoothed several times wider than
+    the fastball beside it; this smooths every type alike. None if it is degenerate."""
+    usable = [g for g in groups if len(g) >= 2]
+    dof = sum(len(g) - 1 for g in usable)
+    if not dof:
         return None
-    bw = np.sqrt(np.diag(kde.covariance))
+    pooled = sum((len(g) - 1) * np.cov(g.T) for g in usable) / dof
+    cov = pooled * sum(len(g) for g in groups) ** (-1 / 3)
+    return cov if np.linalg.det(cov) > 0 else None
+
+
+def density(points: np.ndarray, at: np.ndarray, cov: np.ndarray) -> np.ndarray:
+    """The KDE of ``points`` with kernel covariance ``cov``, at each of ``at`` (unnormalised:
+    only its levels against itself matter). The points are whitened by ``cov``, so the
+    kernel is a unit Gaussian there, and the sums go a block of ``at`` at a time."""
+    w = np.linalg.inv(np.linalg.cholesky(cov))
+    p, q = points @ w.T, at @ w.T
+    pp = (p**2).sum(axis=1)
+    out = np.empty(len(q))
+    for i in range(0, len(q), 2048):
+        b = q[i : i + 2048]
+        d2 = (b**2).sum(axis=1)[:, None] + pp[None, :] - 2 * b @ p.T
+        out[i : i + 2048] = np.exp(-0.5 * np.maximum(d2, 0)).sum(axis=1)
+    return out
+
+
+def tiers(xy: np.ndarray, inside: int, cov: np.ndarray) -> list[list[str]]:
+    """One type's KDE regions, outermost first, as path data in tenths (shapes._paths). The
+    outermost holds the ``inside`` pitches the KDE puts densest: its edge is the density at
+    the last of them, so exactly they lie within it; the inner tiers' edges are the
+    densities at two thirds and a third of the way."""
+    bw = np.sqrt(np.diag(cov))
     lo, hi = xy.min(axis=0) - bw * CUT, xy.max(axis=0) + bw * CUT
     gx, gy = np.linspace(lo[0], hi[0], GRIDSIZE), np.linspace(lo[1], hi[1], GRIDSIZE)
     xx, yy = np.meshgrid(gx, gy)
-    z = kde(np.vstack([xx.ravel(), yy.ravel()])).reshape(xx.shape)
-    at = np.sort(kde(xy.T))[::-1]  # the density at each pitch, densest first
+    z = density(xy, np.column_stack([xx.ravel(), yy.ravel()]), cov).reshape(xx.shape)
+    at = np.sort(density(xy, xy, cov))[::-1]  # the density at each pitch, densest first
     return [_paths(gx, gy, z, float(at[max(1, round(inside * f)) - 1])) for f in TIER_SHARES]
 
 
@@ -227,22 +253,26 @@ def location_floor(n: int) -> int:
 
 
 def layers(pitches, xkey: str, ykey: str, scale: float, order: list[str], floor) -> list[dict]:
-    """Each pitch type's tiers in one plot, most thrown first, its points (in the plot's own
-    units) instead when it has too few for a KDE. ``floor(n)`` is how many of a type's n
-    pitches its outer tier holds. The tiers are in plot units x ``scale`` (locations go in
-    inches, so the paths keep their tenths)."""
-    out = []
+    """Each pitch type's tiers in one plot, most thrown first, all on the plot's one kernel;
+    its points (in the plot's own units) instead when it has too few for a KDE. ``floor(n)``
+    is how many of a type's n pitches its outer tier holds. The tiers are in plot units x
+    ``scale`` (locations go in inches, so the paths keep their tenths)."""
+    by = {}
     for code in order:
-        ps = [p for p in pitches if p["t"] == code]
         pts = [
-            (p[xkey], p[ykey]) for p in ps if p.get(xkey) is not None and p.get(ykey) is not None
+            (p[xkey], p[ykey])
+            for p in pitches
+            if p["t"] == code and None not in (p.get(xkey), p.get(ykey))
         ]
-        if not pts:
-            continue
-        xy = np.array(pts, dtype=float) * scale
-        t = tiers(xy, floor(len(pts))) if len(pts) >= KDE_MIN else None
-        dots = [[round(x, 2), round(y, 2)] for x, y in pts]
-        out.append({"code": code, "tiers": t} if t else {"code": code, "points": dots})
+        if pts:
+            by[code] = np.array(pts, dtype=float)
+    cov = kernel([xy * scale for xy in by.values()])
+    out = []
+    for code, xy in by.items():
+        if cov is not None and len(xy) >= KDE_MIN:
+            out.append({"code": code, "tiers": tiers(xy * scale, floor(len(xy)), cov)})
+        else:
+            out.append({"code": code, "points": np.round(xy, 2).tolist()})
     return out
 
 

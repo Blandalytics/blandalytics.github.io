@@ -72,7 +72,8 @@ body.plpd{display:flex; flex-direction:column}
   Stuff, Locations and PLV letters are his season means on season cuts, fitted to the same distribution as the
   game letters. Movement and locations show each pitch type's KDE in three tiers: in Movement, the regions holding
   its densest 75%, 50% and 25% of pitches; in the locations, its densest 100, 67 and 33 pitches (75%, 50% and 25%
-  of a pitch type thrown fewer than 134 times to that side).
+  of a pitch type thrown fewer than 134 times to that side). Every pitch type in a plot is smoothed alike, with one
+  kernel from all its pitches, so a rarely thrown pitch isn't spread wider than the rest.
 </footer>
 
 <script src="card.js?v=14"></script>
