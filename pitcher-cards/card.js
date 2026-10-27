@@ -31,8 +31,9 @@
 //
 // A season card (tools/pitcher_card/season.py: a dict with `season`, the year) draws the
 // same card for a pitcher's whole season: its letters on SEASON_GRADE_CUTS, one Skills tile
-// where the game card has Skills and Results, KDE tiers per pitch type in Movement and a
-// sample of the season's pitches in the locations, and no comparison season or hover.
+// where the game card has Skills and Results, KDE tiers per pitch type in Movement and 100
+// pitches at their most common locations in the location plots, and no comparison season
+// or hover.
 //
 // A classic <script> defines window.PitcherCard; require() returns the same object.
 
@@ -798,7 +799,7 @@
     const name = `loc${stand}`;
     const out = [ax.clip(name), `<g clip-path="url(#${name})">`, ...zone(ax)];
     if (card.season) {
-      out.push(...seasonMarks(ax, card.plots[stand]), "</g>"); // a sample of its pitches
+      out.push(...seasonMarks(ax, card.plots[stand]), "</g>"); // 100 of its pitches
     } else {
       const shown = indexed(card).filter((p) => p.stand === stand && p.x != null);
       out.push(...markers(ax, shown, "x", "z"), "</g>");

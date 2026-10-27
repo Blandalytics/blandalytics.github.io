@@ -18,11 +18,13 @@ A pitcher's cards are pooled into:
   games' values weighted by its pitches in them;
 - Movement as three KDE tiers per pitch type, every type smoothed alike (one kernel for
   the plot, see `kernel`; the grid cut 3 bandwidths past the data): the outermost around
-  the type's densest 75% of pitches (ranked by the KDE at each pitch), the inner tiers
+  the type's densest 90% of pitches (ranked by the KDE at each pitch), the inner tiers
   around two thirds and a third as many. A type with fewer than KDE_MIN pitches is drawn
   as its pitches.
-- the locations against each side as a scatter of LOCATION_SAMPLE of its pitches, shared
-  among the types by how often each was thrown to that side, at least one of every type.
+- the locations against each side as LOCATION_SAMPLE of its pitches, shared among the
+  types by the pitch mix to that side (30% four-seamers, 30 of them), at least one of every
+  type thrown there, each type's at its most common locations: its pitches where its KDE
+  (on the plot's shared kernel) is densest.
 
 There are no comparison seasons on a season card."""
 
@@ -47,7 +49,7 @@ BUCKET = "https://data.blandalytics.com/cards"
 STATSAPI = "https://statsapi.mlb.com/api/v1"
 FASTBALLS = ("FF", "SI", "FC")
 TYPE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
-MOVEMENT_SHARE = 0.75  # Movement's outer tier: the type's densest 75% of pitches
+MOVEMENT_SHARE = 0.9  # Movement's outer tier: the type's densest 90% of pitches
 LOCATION_SAMPLE = 100  # the pitches drawn in each location plot
 TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
 GRIDSIZE = 150
@@ -290,16 +292,21 @@ def allocate(counts: dict[str, int], total: int) -> dict[str, int]:
     return take
 
 
-def location_sample(pitches: list[dict], order: list[str], seed: list[int]) -> list[dict]:
+def location_points(pitches: list[dict], order: list[str]) -> list[dict]:
     """One location plot's points (feet), most thrown type first: LOCATION_SAMPLE pitches
-    shared among the types as ``allocate`` shares them, each type's drawn at random. The draw
-    is seeded by the pitcher and side, so a rebuild draws the same pitches."""
+    shared among the types as ``allocate`` shares them, each type's those of its pitches its
+    KDE puts densest, all on the plot's one kernel (nearest its median, should that kernel
+    be degenerate). Ties keep the season's order, so a rebuild picks the same pitches."""
     by = _by_type(pitches, "x", "z", order)
     take = allocate({c: len(xy) for c, xy in by.items()}, LOCATION_SAMPLE)
-    rng = np.random.default_rng(seed)
+    cov = kernel(list(by.values()))
     out = []
     for code, xy in by.items():
-        pick = np.sort(rng.choice(len(xy), take[code], replace=False))
+        if cov is not None:
+            common = density(xy, xy, cov)
+        else:
+            common = -np.hypot(*(xy - np.median(xy, axis=0)).T)
+        pick = np.sort(np.argsort(-common, kind="stable")[: take[code]])
         out.append({"code": code, "points": np.round(xy[pick], 2).tolist()})
     return out
 
@@ -373,11 +380,7 @@ def build(s: requests.Session, games: list[dict], year: int) -> dict:
         "plots": {
             "movement": movement_layers(pitches, order),
             **{
-                side: location_sample(
-                    [p for p in pitches if p["stand"] == side],
-                    order,
-                    [last["pitcher_id"], ord(side)],
-                )
+                side: location_points([p for p in pitches if p["stand"] == side], order)
                 for side in "LR"
             },
         },

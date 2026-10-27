@@ -179,12 +179,12 @@ the summary line gives IP, ERA, WHIP, K% and BB% (MLB's season line) and SLGcon 
 the pitches); one Skills tile takes the room of Skills and Results, its letters the season
 means on `card.js`'s `SEASON_GRADE_CUTS` (`season.py --cuts` fits them as `grade_cuts.py` fits
 the game cuts, to every pitcher's season); and Movement shows each pitch type as three KDE
-tiers around its densest pitches, ranked by the KDE at each pitch (75%, 50% and 25% of them),
+tiers around its densest pitches, ranked by the KDE at each pitch (90%, 60% and 30% of them),
 every type smoothed with one shared kernel (Scott's rule on all the plot's pitches, their
 spread pooled within types) so a rarely thrown pitch isn't spread wider than the rest. Each
-location plot is a scatter of 100 of the season's pitches to that side, shared among the types
-by how often each was thrown there, at least one of each, drawn at random (seeded by the
-pitcher and side).
+location plot shows 100 of the season's pitches to that side in the pitch mix thrown there
+(30% four-seamers, 30 of them; at least one of every type), each type's at its most common
+locations: the pitches its KDE, on the plot's shared kernel, puts densest.
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones
