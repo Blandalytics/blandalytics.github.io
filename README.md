@@ -182,15 +182,10 @@ on `card.js`'s `SEASON_GRADE_CUTS` (`season.py --cuts` fits them as `grade_cuts.
 game cuts, to every pitcher's season); and Movement shows each pitch type as three KDE tiers
 around its densest pitches, ranked by the KDE at each pitch (95%, 63% and 32% of them, shaded
 at 25%, 50% and 75%), each type on its own Scott kernel widened twice over (seaborn's
-`bw_adjust=2`) so the edges come out smooth. The two location plots show 100 of the season's
-pitches between them, each side's pitch types by their share of all the pitcher's pitches (30%
-of them four-seamers to righties, 30 four-seamers in the vs RHB plot; at least one of every
-type thrown to a side), each side-and-type's drawn at random from its pitches on one seed for
-every card, so the sample never changes between builds. Over the dots, each side-and-type's
-1-SD ellipse (the covariance of all its pitches to that side) is centred on its most common
-location, the peak of its KDE, with the centre unmarked. A note in each location plot's outer
-bottom corner reads "Random sample of 100 pitches" (or, for a pitcher with 100 or fewer
-pitches, says all of them are shown).
+`bw_adjust=2`) so the edges come out smooth. Each location plot shows every pitch type's 1-SD
+ellipse against that side (the covariance of all its pitches there), shaded and outlined in
+its colour and centred on its most common location, the peak of its KDE, with the centre
+unmarked; a type thrown fewer than 10 times to a side is left out.
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones

@@ -31,9 +31,8 @@
 //
 // A season card (tools/pitcher_card/season.py: a dict with `season`, the year) draws the
 // same card for a pitcher's whole season: its letters on SEASON_GRADE_CUTS, one Skills tile
-// where the game card has Skills and Results, KDE tiers per pitch type in Movement, a fixed
-// random sample of 100 pitches across the location plots with each type's 1-SD ellipse,
-// and no comparison season or hover.
+// where the game card has Skills and Results, KDE tiers per pitch type in Movement and its
+// 1-SD ellipse against each side in the location plots, and no comparison season or hover.
 //
 // A classic <script> defines window.PitcherCard; require() returns the same object.
 
@@ -824,7 +823,7 @@
     const name = `loc${stand}`;
     const out = [ax.clip(name), `<g clip-path="url(#${name})">`, ...zone(ax)];
     if (card.season) {
-      out.push(...seasonMarks(ax, card.plots[stand]), ...ellipses(ax, card.plots[stand]), "</g>", locationNote(card, stand));
+      out.push(...ellipses(ax, card.plots[stand]), "</g>");
     } else {
       const shown = indexed(card).filter((p) => p.stand === stand && p.x != null);
       out.push(...markers(ax, shown, "x", "z"), "</g>");
@@ -938,32 +937,21 @@
     });
   }
 
-  // Each side-and-type's 1-SD ellipse, over its pitches: its spread, centred on its most
-  // common location, the centre unmarked. Drawn in feet, so the rotation is the plate's;
-  // a background-coloured halo keeps the ring clear of the dots under it.
+  // Each side-and-type's 1-SD ellipse: its spread, centred on its most common location,
+  // the centre unmarked, shaded and outlined in the type's colour as a Movement tier is
+  // (the most thrown first, so the rarer lie on top). Drawn in feet, so the rotation is
+  // the plate's.
+  const ELLIPSE_ALPHA = 0.25;
   function ellipses(ax, layers) {
-    return layers.filter((l) => l.ellipse).map((l) => {
+    return layers.map((l) => {
       const e = l.ellipse;
       const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
-      const shape = `cx="${e.x}" cy="${e.z}" rx="${e.a}" ry="${e.b}" transform="rotate(${e.angle} ${e.x} ${e.z})" ` +
-        'fill="none" vector-effect="non-scaling-stroke"';
-      return `<g transform="${ax.transform()}"><ellipse ${shape} stroke="${BACKGROUND}" stroke-width="4" stroke-opacity="0.6"/>` +
-        `<ellipse ${shape} stroke="${color}" stroke-width="2"/></g>`;
+      return (
+        `<ellipse transform="${ax.transform()} rotate(${e.angle} ${e.x} ${e.z})" cx="${e.x}" cy="${e.z}" ` +
+        `rx="${e.a}" ry="${e.b}" fill="${color}" fill-opacity="${ELLIPSE_ALPHA}" stroke="${color}" ` +
+        'stroke-width="1" vector-effect="non-scaling-stroke"/>'
+      );
     });
-  }
-
-  // What a season's location plot shows, in its bottom corner away from the other plot
-  // (left against lefties, right against righties), set as the Movement plot's comparison
-  // note is: a random sample, or every pitch when the pitcher threw no more than the
-  // sample the two plots share.
-  function locationNote(card, stand) {
-    const count = (s) => card.plots[s].reduce((n, l) => n + l.points.length, 0);
-    const shown = count(stand);
-    const note = count("L") + count("R") < card.plots.sample
-      ? `All ${thousands(shown)} pitches\nto ${stand}HB`
-      : `Random\nsample of\n${card.plots.sample} pitches`; // three lines, clear of the plate
-    const [x, ha] = stand === "L" ? [0.44, "left"] : [0.985, "right"];
-    return text(fx(x), fy(0.285), note, 12, { ha, va: "baseline", alpha: 0.5 });
   }
 
   // a season's Skills: its three letters across the room of the game card's Skills and

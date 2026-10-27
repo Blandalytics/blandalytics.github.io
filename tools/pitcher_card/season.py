@@ -22,12 +22,9 @@ A pitcher's cards are pooled into:
   bandwidths past the data. The outermost tier is around the type's densest 95% of pitches
   (ranked by the KDE at each pitch), the inner ones two thirds and a third as many (63%,
   32%). A type with fewer than KDE_MIN pitches is drawn as its pitches.
-- the locations as LOCATION_SAMPLE pitches across both plots, shared among each side's
-  pitch types by their share of all the pitcher's pitches (30% of them four-seamers to
-  righties, 30 four-seamers in the vs RHB plot), at least one of every type thrown to each
-  side, each drawn at random from that side's pitches of that type, on one seed (SEED)
-  for every card; and over them each side-and-type's 1-SD ellipse (the spread of all its
-  pitches there), centred on its most common location.
+- the locations as each side-and-type's 1-SD ellipse (the spread of all its pitches
+  there), centred on its most common location; a type with fewer than KDE_MIN pitches to
+  a side is left out of that plot.
 
 There are no comparison seasons on a season card."""
 
@@ -53,8 +50,6 @@ STATSAPI = "https://statsapi.mlb.com/api/v1"
 FASTBALLS = ("FF", "SI", "FC")
 TYPE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
 MOVEMENT_SHARE = 0.95  # Movement's outer tier: the type's densest 95% of pitches
-LOCATION_SAMPLE = 100  # the pitches drawn in the two location plots together
-SEED = 2026  # every card's location sample is drawn from this, so it never changes
 TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
 MOVEMENT_BW = 2  # Movement's kernels: each type's Scott kernel, twice as wide
 GRIDSIZE = 150
@@ -271,24 +266,6 @@ def movement_layers(pitches: list[dict], order: list[str]) -> list[dict]:
     return out
 
 
-def allocate(counts: dict[str, int], total: int) -> dict[str, int]:
-    """How many of each type's pitches a sample of ``total`` takes: its share of them by
-    largest remainders, but at least one of every type (taken back from those furthest over
-    their share) and never more than it has. All of them when there are no more than that."""
-    n = sum(counts.values())
-    if n <= total:
-        return dict(counts)
-    quota = {c: total * k / n for c, k in counts.items()}
-    take = {c: max(1, int(q)) for c, q in quota.items()}
-    while sum(take.values()) < total:
-        c = max((c for c in take if take[c] < counts[c]), key=lambda c: quota[c] - take[c])
-        take[c] += 1
-    while sum(take.values()) > total:
-        c = max((c for c in take if take[c] > 1), key=lambda c: take[c] - quota[c])
-        take[c] -= 1
-    return take
-
-
 def ellipse(xy: np.ndarray) -> dict | None:
     """A side-and-type's 1-SD ellipse (feet): its pitches' covariance, as semi-axes ``a`` >=
     ``b`` with ``a`` at ``angle`` degrees from the plate's x axis, centred on its most common
@@ -309,25 +286,12 @@ def ellipse(xy: np.ndarray) -> dict | None:
 
 
 def location_plots(pitches: list[dict], order: list[str]) -> dict[str, list[dict]]:
-    """Both location plots' points (feet), most thrown type first in each: LOCATION_SAMPLE
-    pitches across the two, shared among every side and type the pitcher threw as
-    ``allocate`` shares them (by that side's pitches of that type against all of his), each
-    side-and-type's drawn at random from its pitches, with its 1-SD ellipse (``ellipse``,
-    from all of them). Every card draws from SEED, so a rebuild, or anyone viewing it, gets
-    the same pitches."""
-    by = {s: _by_type([p for p in pitches if p["stand"] == s], "x", "z", order) for s in "LR"}
-    take = allocate(
-        {(s, c): len(xy) for s, b in by.items() for c, xy in b.items()}, LOCATION_SAMPLE
-    )
-    rng = np.random.default_rng(SEED)
+    """Both location plots, most thrown type first in each: every side-and-type's 1-SD
+    ellipse (``ellipse``); a type with too few pitches to a side for one is left out."""
     out = {}
-    for side, b in by.items():
-        out[side] = []
-        for code, xy in b.items():
-            pick = np.sort(rng.choice(len(xy), take[(side, code)], replace=False))
-            out[side].append(
-                {"code": code, "points": np.round(xy[pick], 2).tolist(), "ellipse": ellipse(xy)}
-            )
+    for side in "LR":
+        by = _by_type([p for p in pitches if p["stand"] == side], "x", "z", order)
+        out[side] = [{"code": c, "ellipse": e} for c, xy in by.items() if (e := ellipse(xy))]
     return out
 
 
@@ -398,7 +362,6 @@ def build(s: requests.Session, games: list[dict], year: int) -> dict:
         "fastball": fastball(rows, games),
         "types": rows,
         "plots": {
-            "sample": LOCATION_SAMPLE,  # the location plots' pitches between them, if more
             "movement": movement_layers(pitches, order),
             **location_plots(pitches, order),
         },
