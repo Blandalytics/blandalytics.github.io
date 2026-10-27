@@ -22,10 +22,11 @@ A pitcher's cards are pooled into:
   bandwidths past the data. The outermost tier is around the type's densest 95% of pitches
   (ranked by the KDE at each pitch), the inner ones two thirds and a third as many (63%,
   32%). A type with fewer than KDE_MIN pitches is drawn as its pitches.
-- the locations against each side as LOCATION_SAMPLE of its pitches, shared among the
-  types by the pitch mix to that side (30% four-seamers, 30 of them), at least one of every
-  type thrown there, each type's at its most common locations: its pitches where its KDE
-  (on the plot's shared kernel) is densest.
+- the locations as LOCATION_SAMPLE pitches across both plots, shared among each side's
+  pitch types by their share of all the pitcher's pitches (30% of them four-seamers to
+  righties, 30 four-seamers in the vs RHB plot), at least one of every type thrown to each
+  side, each type's at its most common locations: its pitches to that side where its KDE
+  (on that plot's shared kernel) is densest.
 
 There are no comparison seasons on a season card."""
 
@@ -51,7 +52,7 @@ STATSAPI = "https://statsapi.mlb.com/api/v1"
 FASTBALLS = ("FF", "SI", "FC")
 TYPE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
 MOVEMENT_SHARE = 0.95  # Movement's outer tier: the type's densest 95% of pitches
-LOCATION_SAMPLE = 100  # the pitches drawn in each location plot
+LOCATION_SAMPLE = 100  # the pitches drawn in the two location plots together
 TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
 MOVEMENT_BW = 2  # Movement's kernels: each type's Scott kernel, twice as wide
 GRIDSIZE = 150
@@ -288,22 +289,28 @@ def allocate(counts: dict[str, int], total: int) -> dict[str, int]:
     return take
 
 
-def location_points(pitches: list[dict], order: list[str]) -> list[dict]:
-    """One location plot's points (feet), most thrown type first: LOCATION_SAMPLE pitches
-    shared among the types as ``allocate`` shares them, each type's those of its pitches its
-    KDE puts densest, all on the plot's one kernel (nearest its median, should that kernel
-    be degenerate). Ties keep the season's order, so a rebuild picks the same pitches."""
-    by = _by_type(pitches, "x", "z", order)
-    take = allocate({c: len(xy) for c, xy in by.items()}, LOCATION_SAMPLE)
-    cov = kernel(list(by.values()))
-    out = []
-    for code, xy in by.items():
-        if cov is not None:
-            common = density(xy, xy, cov)
-        else:
-            common = -np.hypot(*(xy - np.median(xy, axis=0)).T)
-        pick = np.sort(np.argsort(-common, kind="stable")[: take[code]])
-        out.append({"code": code, "points": np.round(xy[pick], 2).tolist()})
+def location_plots(pitches: list[dict], order: list[str]) -> dict[str, list[dict]]:
+    """Both location plots' points (feet), most thrown type first in each: LOCATION_SAMPLE
+    pitches across the two, shared among every side and type the pitcher threw as
+    ``allocate`` shares them (by that side's pitches of that type against all of his), each
+    type's those of its pitches to that side its KDE puts densest, on the side's one kernel
+    (nearest its median, should that kernel be degenerate). Ties keep the season's order, so
+    a rebuild picks the same pitches."""
+    by = {s: _by_type([p for p in pitches if p["stand"] == s], "x", "z", order) for s in "LR"}
+    take = allocate(
+        {(s, c): len(xy) for s, b in by.items() for c, xy in b.items()}, LOCATION_SAMPLE
+    )
+    out = {}
+    for side, b in by.items():
+        cov = kernel(list(b.values()))
+        out[side] = []
+        for code, xy in b.items():
+            if cov is not None:
+                common = density(xy, xy, cov)
+            else:
+                common = -np.hypot(*(xy - np.median(xy, axis=0)).T)
+            pick = np.sort(np.argsort(-common, kind="stable")[: take[(side, code)]])
+            out[side].append({"code": code, "points": np.round(xy[pick], 2).tolist()})
     return out
 
 
@@ -374,12 +381,9 @@ def build(s: requests.Session, games: list[dict], year: int) -> dict:
         "fastball": fastball(rows, games),
         "types": rows,
         "plots": {
-            "sample": LOCATION_SAMPLE,  # the location plots' pitches, when there are more
+            "sample": LOCATION_SAMPLE,  # the location plots' pitches between them, if more
             "movement": movement_layers(pitches, order),
-            **{
-                side: location_points([p for p in pitches if p["stand"] == side], order)
-                for side in "LR"
-            },
+            **location_plots(pitches, order),
         },
         "missing_data": any(p.get("plvStuff+") is None for p in pitches),
         "comparisons": [],

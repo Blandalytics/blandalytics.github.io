@@ -937,11 +937,12 @@
 
   // What a season's location plot shows, in its bottom corner away from the other plot
   // (left against lefties, right against righties), set as the Movement plot's comparison
-  // note is: each type's most common locations, or every pitch when there were no more
-  // than the sample takes.
+  // note is: each type's most common locations, or every pitch when the pitcher threw no
+  // more than the sample the two plots share.
   function locationNote(card, stand) {
-    const shown = card.plots[stand].reduce((n, l) => n + l.points.length, 0);
-    const note = shown < card.plots.sample
+    const count = (s) => card.plots[s].reduce((n, l) => n + l.points.length, 0);
+    const shown = count(stand);
+    const note = count("L") + count("R") < card.plots.sample
       ? `All ${thousands(shown)} pitches\nto ${stand}HB`
       : "Most common\nlocations";
     const [x, ha] = stand === "L" ? [0.44, "left"] : [0.985, "right"];
