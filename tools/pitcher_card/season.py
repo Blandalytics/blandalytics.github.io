@@ -27,7 +27,7 @@ A pitcher's cards are pooled into:
   of its KDE mass, on its own Scott kernel (seaborn's bw_adjust=1). 0.64 is the threshold
   whose regions best match a 1-SD ellipse of the same pitches. A type with fewer than
   LOCATION_MIN pitches to a side is drawn as its pitches in that plot, which then says so
-  ("Min 20 pitches").
+  ("20+ pitches shown as densities").
 
 There are no comparison seasons on a season card."""
 

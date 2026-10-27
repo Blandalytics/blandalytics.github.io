@@ -946,13 +946,14 @@
   }
 
   // A season location plot that draws a type thrown to its side too seldom for regions as
-  // its pitches says so, in its bottom corner away from the other plot (left against
-  // lefties, right against righties), set as the Movement plot's comparison note is. A
-  // copy in the background colour, outlined, goes under it to clear any pitch there.
+  // its pitches says which are densities, in its bottom corner away from the other plot
+  // (left against lefties, right against righties), set as the Movement plot's comparison
+  // note is, in three lines so each clears the plate. A copy in the background colour,
+  // outlined, goes under it to clear any pitch there.
   function minNote(card, stand) {
     if (!card.plots.scattered[stand].length) return [];
     const [x, ha] = stand === "L" ? [0.44, "left"] : [0.985, "right"];
-    const note = (opts) => text(fx(x), fy(0.285), `Min ${card.plots.min} pitches`, 12, { ha, va: "baseline", ...opts });
+    const note = (opts) => text(fx(x), fy(0.285), `${card.plots.min}+ pitches\nshown as\ndensities`, 12, { ha, va: "baseline", ...opts });
     const knockout = ` stroke="${BACKGROUND}" stroke-width="${fixed(3 * PT, 1)}" stroke-linejoin="round"`;
     return [note({ color: BACKGROUND, attrs: knockout }), note({ alpha: 0.5 })];
   }
