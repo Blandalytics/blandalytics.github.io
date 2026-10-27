@@ -5,7 +5,7 @@
 // A chart is linkable as #<season>/<player id>/<game id | season>.
 
 import { prepare, defaultPick, summary, seasonBoard, gameBoard, valueAdded, teamMinutes, PTS_PER_FT } from "./model.js?v=2";
-import { draw, shotAt, W as FIG_W } from "./figure.js?v=10";
+import { draw, shotAt, W as FIG_W } from "./figure.js?v=11";
 import { drawScatter, SW } from "./scatter.js?v=4";
 
 const params = new URLSearchParams(location.search);

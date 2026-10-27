@@ -225,6 +225,10 @@ export function shotAt(sum, x, y) {
   return best;
 }
 
+// the markers' half-widths: a made shot's dot and a miss's X are both 20px across
+const DOT_R = 10;
+const X_R = 10;
+
 function shots(ctx, marked) {
   const xPath = (x, y, r) => {
     const t = r * 0.32;   // matplotlib's "X": a filled cross, drawn here by its outline
@@ -236,14 +240,14 @@ function shots(ctx, marked) {
   ctx.lineJoin = "miter";
   for (const s of marked) {
     if (s.made) continue;
-    xPath(cx(s.x), cy(s.y), 8.5);
+    xPath(cx(s.x), cy(s.y), X_R);
     ctx.strokeStyle = C.outline; ctx.lineWidth = 4.5; ctx.stroke();
     ctx.strokeStyle = C.cyan; ctx.lineWidth = 2; ctx.stroke();
   }
   for (const s of marked) {
     if (!s.made) continue;
     ctx.beginPath();
-    ctx.arc(cx(s.x), cy(s.y), 7.5, 0, Math.PI * 2);
+    ctx.arc(cx(s.x), cy(s.y), DOT_R, 0, Math.PI * 2);
     ctx.fillStyle = C.amber; ctx.fill();
     ctx.strokeStyle = C.outline; ctx.lineWidth = 1.4; ctx.stroke();
   }
