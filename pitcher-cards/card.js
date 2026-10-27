@@ -913,13 +913,13 @@
   }
 
   // ---- the season card --------------------------------------------------------------
-  // A season plot's layers, one per pitch type, the most thrown first so the rarer ones lie
-  // on top: a type's KDE tiers (the regions holding its densest pitches, outermost first:
-  // season.py says how many), or its pitches, drawn as the game card draws them but each at
-  // half opacity, so where they pile up shows. Every
-  // tier is the same light wash of the type's colour, so the cores darken where the tiers
-  // stack, and the outermost carries the type's outline. Tiers and points are in the
-  // plot's data units. A type's n tiers show at 1/(n+1), 2/(n+1) ... of full, outermost to
+  // A season plot's layers, one per pitch type, in the order they're drawn (season.py's:
+  // Movement's rarer types on top, a location plot's most thrown to its side): a type's KDE
+  // tiers (the regions holding its densest pitches, outermost first: season.py says how
+  // many), or its pitches, drawn as the game card draws them but each at half opacity, so
+  // where they pile up shows. Every tier is the same light wash of the type's colour, so
+  // the cores darken where the tiers stack, and the outermost carries the type's outline.
+  // Tiers and points are in the plot's data units. A type's n tiers show at 1/(n+1), 2/(n+1) ... of full, outermost to
   // innermost (one tier at 50%; three at 25%, 50% and 75%): they nest, so each is washed at
   // the opacity that takes the one under it to its level.
   function tierAlphas(n) {

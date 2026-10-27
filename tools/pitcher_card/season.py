@@ -40,7 +40,7 @@ import gzip
 import json
 import os
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 import numpy as np
 import requests
@@ -290,17 +290,18 @@ def mass_tiers(xy: np.ndarray, cov: np.ndarray, isoprops: tuple[float, ...]) -> 
 
 
 def location_plots(pitches: list[dict], order: list[str]) -> dict:
-    """Both location plots, most thrown type first in each: every side-and-type's KDE regions
-    at LOCATION_LEVELS, on its own Scott kernel, in inches (so the paths keep their
+    """Both location plots, each type in the order it's drawn: least thrown to that side
+    first, so the most thrown lies on top (ties as ``order``). Every side-and-type's KDE
+    regions at LOCATION_LEVELS, on its own Scott kernel, in inches (so the paths keep their
     tenths). A type thrown to a side fewer than LOCATION_MIN times (or too evenly for a
     kernel) is its pitches instead, and is listed in ``scattered`` for that side, which
     says so."""
     out = {"min": LOCATION_MIN, "scattered": {}}
     for side in "LR":
         out[side], out["scattered"][side] = [], []
-        for code, xy in _by_type(
-            [p for p in pitches if p["stand"] == side], "x", "z", order
-        ).items():
+        faced = [p for p in pitches if p["stand"] == side]
+        usage = Counter(p["t"] for p in faced)
+        for code, xy in _by_type(faced, "x", "z", sorted(order, key=usage.__getitem__)).items():
             cov = kernel([xy * 12]) if len(xy) >= LOCATION_MIN else None
             if cov is None:
                 out["scattered"][side].append(code)
