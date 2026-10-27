@@ -824,7 +824,8 @@
     const name = `loc${stand}`;
     const out = [ax.clip(name), `<g clip-path="url(#${name})">`, ...zone(ax)];
     if (card.season) {
-      out.push(...seasonMarks(ax, card.plots[stand], { unit: 1 / 12 }), "</g>", ...minNote(card, stand)); // inches
+      // inches; each type's one region (season.py's LOCATION_LEVELS) as a 25% wash
+      out.push(...seasonMarks(ax, card.plots[stand], { unit: 1 / 12, alphas: [0.25] }), "</g>", ...minNote(card, stand));
     } else {
       const shown = indexed(card).filter((p) => p.stand === stand && p.x != null);
       out.push(...markers(ax, shown, "x", "z"), "</g>");
@@ -953,8 +954,9 @@
         const uses = l.points.map(([x, y]) => `<use href="#m" x="${fmt(ax.x(x * unit))}" y="${fmt(ax.y(y * unit))}" opacity="0.5"/>`).join("");
         return `<g fill="${color}">${uses}</g>`;
       }
+      // given washes, only as many tiers as there are washes (the outermost first)
       const alpha = alphas || tierAlphas(l.tiers.length);
-      const paths = l.tiers.flatMap((ds, k) => ds.map((d) => {
+      const paths = l.tiers.slice(0, alpha.length).flatMap((ds, k) => ds.map((d) => {
         const edge = k === 0 ? ` stroke="${color}" stroke-width="1" vector-effect="non-scaling-stroke"` : "";
         return `<path d="${d}" fill-opacity="${fixed(alpha[k], 3)}"${edge}/>`;
       }));

@@ -10,7 +10,8 @@ name: Build pitcher cards
 # cards/mlb/seasons/) are pooled from this season's game cards, when they have moved. A past
 # season's season cards (past_seasons) are pooled from game cards built for them alone: its
 # months are built as parallel jobs into a folder, without comparison seasons, and kept in the
-# bucket's archive (cards/mlb/archive/), which the Game Cards page doesn't list.
+# bucket's archive (cards/mlb/archive/), which the Game Cards page doesn't list. pool_seasons
+# pools seasons' cards again from game cards already built (after a change to season.py).
 on:
   schedule:
     # 10:30 UTC is 6:30am Eastern: every game from the night before is final
@@ -38,6 +39,9 @@ on:
       past_seasons:
         description: "Season cards for past seasons, e.g. 2023 or 2020-2025: builds their game cards first (instead of the dates above)"
         required: false
+      pool_seasons:
+        description: "Season cards to pool again from the game cards already built, e.g. 2026 or 2020-2026 (no game cards are built)"
+        required: false
       prune_pages:
         description: "Old per-card pages (from before the cards were data): report what becomes of them, or apply it"
         type: choice
@@ -60,6 +64,7 @@ jobs:
     outputs:
       chunks: ${{ steps.split.outputs.chunks }}
       past: ${{ steps.split.outputs.past }}
+      pool: ${{ steps.split.outputs.pool }}
     steps:
       - id: split
         shell: python
@@ -74,16 +79,20 @@ jobs:
                   d = last + dt.timedelta(days=1)
               return chunks
 
+          def seasons(span):
+              lo, _, hi = span.strip().partition("-")
+              return list(range(int(lo), int(hi or lo) + 1)) if lo else []
+
           # past seasons: each one's regular season, as MLB dates it
-          lo, _, hi = "${{ inputs.past_seasons }}".strip().partition("-")
-          years = list(range(int(lo), int(hi or lo) + 1)) if lo else []
+          years = seasons("${{ inputs.past_seasons }}")
+          pool = seasons("${{ inputs.pool_seasons }}")
           chunks = []
           for year in years:
               url = f"https://statsapi.mlb.com/api/v1/seasons/{year}?sportId=1"
               se = json.load(urllib.request.urlopen(url, timeout=30))["seasons"][0]
               chunks += months(dt.date.fromisoformat(se["regularSeasonStartDate"]),
                                dt.date.fromisoformat(se["regularSeasonEndDate"]), str(year))
-          if not years:
+          if not years and not pool:
               today = dt.date.today()
               start = dt.date.fromisoformat("${{ inputs.start }}" or (today - dt.timedelta(days=1)).isoformat())
               end = dt.date.fromisoformat("${{ inputs.end }}" or today.isoformat())
@@ -92,9 +101,11 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
               fh.write("chunks=" + json.dumps(chunks) + "\n")
               fh.write("past=" + " ".join(map(str, years)) + "\n")
+              fh.write("pool=" + " ".join(map(str, pool)) + "\n")
 
   build:
     needs: plan
+    if: ${{ needs.plan.outputs.chunks != '[]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 240
     strategy:
@@ -160,7 +171,7 @@ jobs:
   # the index is rebuilt from every day manifest, so it is right however the jobs ended
   reindex:
     needs: build
-    if: ${{ !cancelled() && !inputs.past_seasons }}
+    if: ${{ !cancelled() && !inputs.past_seasons && !inputs.pool_seasons }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -194,7 +205,7 @@ jobs:
   # here, with the Worker still on the last good bundle.
   live-inputs:
     needs: build
-    if: ${{ !cancelled() && !inputs.past_seasons }}
+    if: ${{ !cancelled() && !inputs.past_seasons && !inputs.pool_seasons }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -239,8 +250,9 @@ jobs:
       - name: Publish the scorer bundle
         run: python tools/pitcher_card/export_scorer.py
 
-  # the season cards: each past season's asked for, from its archived game cards; and this
-  # season's, pooled again when its game cards have moved (or with force)
+  # the season cards: each past season's asked for (past_seasons, from the game cards just
+  # archived) and each one to pool again (pool_seasons); and this season's, pooled again when
+  # its game cards have moved (or with force)
   season-cards:
     needs: [plan, build, reindex]
     if: ${{ !cancelled() }}
@@ -263,7 +275,7 @@ jobs:
 
       - name: Season cards
         run: |
-          for YEAR in ${{ needs.plan.outputs.past }}; do
+          for YEAR in ${{ needs.plan.outputs.past }} ${{ needs.plan.outputs.pool }}; do
             python tools/pitcher_card/season.py --year "$YEAR" --publish --force
           done
           python tools/pitcher_card/season.py --publish ${{ inputs.force && '--force' || '' }}
