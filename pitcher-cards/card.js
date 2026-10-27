@@ -31,8 +31,8 @@
 //
 // A season card (tools/pitcher_card/season.py: a dict with `season`, the year) draws the
 // same card for a pitcher's whole season: its letters on SEASON_GRADE_CUTS, one Skills tile
-// where the game card has Skills and Results, KDE tiers per pitch type in Movement and 100
-// pitches at their most common locations in the location plots, and no comparison season
+// where the game card has Skills and Results, KDE tiers per pitch type in Movement and a
+// fixed random sample of 100 pitches across the location plots, and no comparison season
 // or hover.
 //
 // A classic <script> defines window.PitcherCard; require() returns the same object.
@@ -918,8 +918,10 @@
   // season.py says how many), or its pitches, drawn as the game card draws them. Every
   // tier is the same light wash of the type's colour, so the cores darken where the tiers
   // stack, and the outermost carries the type's outline. Tiers and points are in the
-  // plot's data units.
-  const TIER_ALPHA = 0.22;
+  // plot's data units. The pitch colours are at full saturation already, so the plot's
+  // colour is in how strongly the washes show over the card: 0.275, a quarter more than
+  // the 0.22 it had.
+  const TIER_ALPHA = 0.275;
   function seasonMarks(ax, layers) {
     return layers.map((l) => {
       const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
@@ -937,14 +939,14 @@
 
   // What a season's location plot shows, in its bottom corner away from the other plot
   // (left against lefties, right against righties), set as the Movement plot's comparison
-  // note is: each type's most common locations, or every pitch when the pitcher threw no
-  // more than the sample the two plots share.
+  // note is: a random sample, or every pitch when the pitcher threw no more than the
+  // sample the two plots share.
   function locationNote(card, stand) {
     const count = (s) => card.plots[s].reduce((n, l) => n + l.points.length, 0);
     const shown = count(stand);
     const note = count("L") + count("R") < card.plots.sample
       ? `All ${thousands(shown)} pitches\nto ${stand}HB`
-      : "Most common\nlocations";
+      : `Random\nsample of\n${card.plots.sample} pitches`; // three lines, clear of the plate
     const [x, ha] = stand === "L" ? [0.44, "left"] : [0.985, "right"];
     return text(fx(x), fy(0.285), note, 12, { ha, va: "baseline", alpha: 0.5 });
   }

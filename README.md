@@ -184,12 +184,11 @@ around its densest pitches, ranked by the KDE at each pitch (95%, 63% and 32% of
 type on its own Scott kernel widened twice over (seaborn's `bw_adjust=2`) so the edges come
 out smooth. The two location plots show 100 of the season's pitches between them, each side's
 pitch types by their share of all the pitcher's pitches (30% of them four-seamers to righties,
-30 four-seamers in the vs RHB plot; at least one of every type thrown to a side), each type's
-at its most common locations: the pitches its KDE puts densest, on one kernel shared by that
-plot's types (Scott's rule on all its pitches, their spread pooled within types) so that a
-rarely thrown pitch is ranked on the same scale as the rest. A note in each location plot's
-outer bottom corner reads "Most common locations" (or, for a pitcher with 100 or fewer
-pitches, says all of them are shown).
+30 four-seamers in the vs RHB plot; at least one of every type thrown to a side), each
+side-and-type's drawn at random from its pitches on one seed for every card, so the sample
+never changes between builds. A note in each location plot's outer bottom corner reads "Random
+sample of 100 pitches" (or, for a pitcher with 100 or fewer pitches, says all of them are
+shown).
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones

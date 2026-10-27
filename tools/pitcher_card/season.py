@@ -25,8 +25,8 @@ A pitcher's cards are pooled into:
 - the locations as LOCATION_SAMPLE pitches across both plots, shared among each side's
   pitch types by their share of all the pitcher's pitches (30% of them four-seamers to
   righties, 30 four-seamers in the vs RHB plot), at least one of every type thrown to each
-  side, each type's at its most common locations: its pitches to that side where its KDE
-  (on that plot's shared kernel) is densest.
+  side, each drawn at random from that side's pitches of that type, on one seed (SEED)
+  for every card.
 
 There are no comparison seasons on a season card."""
 
@@ -53,6 +53,7 @@ FASTBALLS = ("FF", "SI", "FC")
 TYPE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
 MOVEMENT_SHARE = 0.95  # Movement's outer tier: the type's densest 95% of pitches
 LOCATION_SAMPLE = 100  # the pitches drawn in the two location plots together
+SEED = 2026  # every card's location sample is drawn from this, so it never changes
 TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
 MOVEMENT_BW = 2  # Movement's kernels: each type's Scott kernel, twice as wide
 GRIDSIZE = 150
@@ -200,10 +201,8 @@ def fastball(rows: list[dict], games: list[dict]) -> dict | None:
 def kernel(groups: list[np.ndarray]) -> np.ndarray | None:
     """A smoothing kernel (a covariance) for the pitch types given: Scott's rule (factor
     n^-1/6 in two dimensions) on all their pitches, their spread measured within their own
-    types (the pooled covariance). Given one type, it is that type's own Scott kernel, as
-    scipy's gaussian_kde sets it. A location plot shares one among its types: a type's own
-    widens as its sample shrinks, so a pitch thrown 20 times would otherwise be ranked on a
-    kernel several times wider than the fastball beside it. None if it is degenerate."""
+    types (the pooled covariance). Given one type, as Movement gives it, it is that type's
+    own Scott kernel, as scipy's gaussian_kde sets it. None if it is degenerate."""
     usable = [g for g in groups if len(g) >= 2]
     dof = sum(len(g) - 1 for g in usable)
     if not dof:
@@ -293,23 +292,18 @@ def location_plots(pitches: list[dict], order: list[str]) -> dict[str, list[dict
     """Both location plots' points (feet), most thrown type first in each: LOCATION_SAMPLE
     pitches across the two, shared among every side and type the pitcher threw as
     ``allocate`` shares them (by that side's pitches of that type against all of his), each
-    type's those of its pitches to that side its KDE puts densest, on the side's one kernel
-    (nearest its median, should that kernel be degenerate). Ties keep the season's order, so
-    a rebuild picks the same pitches."""
+    side-and-type's drawn at random from its pitches. Every card draws from SEED, so a
+    rebuild, or anyone viewing it, gets the same pitches."""
     by = {s: _by_type([p for p in pitches if p["stand"] == s], "x", "z", order) for s in "LR"}
     take = allocate(
         {(s, c): len(xy) for s, b in by.items() for c, xy in b.items()}, LOCATION_SAMPLE
     )
+    rng = np.random.default_rng(SEED)
     out = {}
     for side, b in by.items():
-        cov = kernel(list(b.values()))
         out[side] = []
         for code, xy in b.items():
-            if cov is not None:
-                common = density(xy, xy, cov)
-            else:
-                common = -np.hypot(*(xy - np.median(xy, axis=0)).T)
-            pick = np.sort(np.argsort(-common, kind="stable")[: take[(side, code)]])
+            pick = np.sort(rng.choice(len(xy), take[(side, code)], replace=False))
             out[side].append({"code": code, "points": np.round(xy[pick], 2).tolist()})
     return out
 
