@@ -22,11 +22,12 @@ A pitcher's cards are pooled into:
   bandwidths past the data. The outermost tier is around the type's densest 95% of pitches
   (ranked by the KDE at each pitch), the inner ones two thirds and a third as many (63%,
   32%). A type with fewer than KDE_MIN pitches is drawn as its pitches.
-- the locations as each side-and-type's KDE region at seaborn's kdeplot(levels=[0.64, 1],
-  fill=True): the densest 36% of its KDE mass, on its own Scott kernel (seaborn's
-  bw_adjust=1). 0.64 is the threshold whose regions best match a 1-SD ellipse of the same
-  pitches. A type with fewer than LOCATION_MIN pitches to a side is left out of that plot,
-  which then says so ("Min 30 pitches").
+- the locations as each side-and-type's KDE regions at seaborn's kdeplot(levels=4,
+  thresh=0.64, fill=True), its levels [0.64, 0.76, 0.88, 1]: the densest 36%, 24% and 12%
+  of its KDE mass, on its own Scott kernel (seaborn's bw_adjust=1). 0.64 is the threshold
+  whose regions best match a 1-SD ellipse of the same pitches. A type with fewer than
+  LOCATION_MIN pitches to a side is drawn as its pitches in that plot, which then says so
+  ("Min 20 pitches").
 
 There are no comparison seasons on a season card."""
 
@@ -54,8 +55,8 @@ TYPE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuf
 MOVEMENT_SHARE = 0.95  # Movement's outer tier: the type's densest 95% of pitches
 TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
 MOVEMENT_BW = 2  # Movement's kernels: each type's Scott kernel, twice as wide
-LOCATION_LEVELS = (0.64,)  # the location plots' iso-proportions, as seaborn's kdeplot levels
-LOCATION_MIN = 30  # the pitches to a side a type needs for a location region
+LOCATION_LEVELS = (0.64, 0.76, 0.88)  # the location plots' iso-proportions (kdeplot levels)
+LOCATION_MIN = 20  # the pitches to a side a type needs for location regions
 GRIDSIZE = 150
 CUT = 3
 KDE_MIN = 10
@@ -289,19 +290,21 @@ def mass_tiers(xy: np.ndarray, cov: np.ndarray, isoprops: tuple[float, ...]) -> 
 
 
 def location_plots(pitches: list[dict], order: list[str]) -> dict:
-    """Both location plots, most thrown type first in each: every side-and-type's KDE region
+    """Both location plots, most thrown type first in each: every side-and-type's KDE regions
     at LOCATION_LEVELS, on its own Scott kernel, in inches (so the paths keep their
     tenths). A type thrown to a side fewer than LOCATION_MIN times (or too evenly for a
-    kernel) has none, and is listed in ``omitted`` for that side, which says so."""
-    out = {"min": LOCATION_MIN, "omitted": {}}
+    kernel) is its pitches instead, and is listed in ``scattered`` for that side, which
+    says so."""
+    out = {"min": LOCATION_MIN, "scattered": {}}
     for side in "LR":
-        out[side], out["omitted"][side] = [], []
+        out[side], out["scattered"][side] = [], []
         for code, xy in _by_type(
             [p for p in pitches if p["stand"] == side], "x", "z", order
         ).items():
             cov = kernel([xy * 12]) if len(xy) >= LOCATION_MIN else None
             if cov is None:
-                out["omitted"][side].append(code)
+                out["scattered"][side].append(code)
+                out[side].append({"code": code, "points": np.round(xy * 12, 1).tolist()})
             else:
                 out[side].append({"code": code, "tiers": mass_tiers(xy * 12, cov, LOCATION_LEVELS)})
     return out

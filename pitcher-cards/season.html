@@ -70,12 +70,12 @@ body.plpd{display:flex; flex-direction:column}
   <b>A demo.</b> Each card pools a pitcher's regular-season game cards: IP, ERA, WHIP, strikeouts, K% and BB% are
   MLB's season line; CSW% comes from his pitches. The Stuff, Locations and PLV letters are his season means on season
   cuts, fitted to the same distribution as the game letters. Movement shows each pitch type's KDE in three tiers, the
-  regions holding its densest 95%, 63% and 32% of pitches, shaded at 25%, 50% and 75%. Each location plot shows every pitch type's KDE region
-  against that side holding the densest 36% of its mass (seaborn's kdeplot at levels=[0.64, 1]), shaded in its colour
-  (a type thrown fewer than 30 times to a side is left out, and the plot says "Min 30 pitches").
+  regions holding its densest 95%, 63% and 32% of pitches, shaded at 25%, 50% and 75%. Each location plot shows every pitch type's KDE regions
+  against that side holding the densest 36%, 24% and 12% of its mass (seaborn's kdeplot at levels=4, thresh=0.64), shaded the
+  same way (a type thrown fewer than 20 times to a side is drawn as its pitches, and the plot says "Min 20 pitches").
 </footer>
 
-<script src="card.js?v=14"></script>
+<script src="card.js?v=15"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };

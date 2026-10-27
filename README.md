@@ -183,11 +183,11 @@ game cuts, to every pitcher's season); and Movement shows each pitch type as thr
 around its densest pitches, ranked by the KDE at each pitch (95%, 63% and 32% of them, shaded
 at 25%, 50% and 75%), each type on its own Scott kernel widened twice over (seaborn's
 `bw_adjust=2`) so the edges come out smooth. Each location plot shows every pitch type's KDE
-region against that side at seaborn's `kdeplot(levels=[0.64, 1], fill=True)`, the densest 36%
-of its KDE mass on its own Scott kernel, shaded at 25% and outlined in its colour; 0.64 is the
-threshold whose regions best match a 1-SD ellipse of the same pitches. A type thrown fewer
-than 30 times to a side is left out, and that plot says so ("Min 30 pitches") in its outer
-bottom corner.
+regions against that side at seaborn's `kdeplot(levels=4, thresh=0.64, fill=True)`, the
+densest 36%, 24% and 12% of its KDE mass on its own Scott kernel, shaded at 25%, 50% and 75%
+and outlined in its colour; 0.64 is the threshold whose regions best match a 1-SD ellipse of
+the same pitches. A type thrown fewer than 20 times to a side is drawn as its pitches, and
+that plot says so ("Min 20 pitches") in its outer bottom corner.
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones

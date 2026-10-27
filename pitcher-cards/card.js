@@ -824,7 +824,7 @@
     const name = `loc${stand}`;
     const out = [ax.clip(name), `<g clip-path="url(#${name})">`, ...zone(ax)];
     if (card.season) {
-      out.push(...seasonMarks(ax, card.plots[stand], { unit: 1 / 12, alphas: [0.25] }), "</g>", ...minNote(card, stand)); // inches
+      out.push(...seasonMarks(ax, card.plots[stand], { unit: 1 / 12 }), "</g>", ...minNote(card, stand)); // inches
     } else {
       const shown = indexed(card).filter((p) => p.stand === stand && p.x != null);
       out.push(...markers(ax, shown, "x", "z"), "</g>");
@@ -925,13 +925,14 @@
     const level = (k) => (k < 0 ? 0 : (k + 1) / (n + 1));
     return Array.from({ length: n }, (_, k) => 1 - (1 - level(k)) / (1 - level(k - 1)));
   }
-  // `unit` is a path unit in the plot's data units; `alphas` overrides the tiers' washes.
+  // `unit` is a path or point unit in the plot's data units; `alphas` overrides the tiers'
+  // washes.
   function seasonMarks(ax, layers, { unit = 1, alphas = null } = {}) {
     const scale = unit === 1 ? "" : ` scale(${fixed(unit, 6)})`;
     return layers.map((l) => {
       const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
       if (!l.tiers) {
-        const uses = l.points.map(([x, y]) => `<use href="#m" x="${fmt(ax.x(x))}" y="${fmt(ax.y(y))}"/>`).join("");
+        const uses = l.points.map(([x, y]) => `<use href="#m" x="${fmt(ax.x(x * unit))}" y="${fmt(ax.y(y * unit))}"/>`).join("");
         return `<g fill="${color}">${uses}</g>`;
       }
       const alpha = alphas || tierAlphas(l.tiers.length);
@@ -943,13 +944,16 @@
     });
   }
 
-  // A season location plot that leaves out a type thrown to its side too seldom for a
-  // region says so, in its bottom corner away from the other plot (left against lefties,
-  // right against righties), set as the Movement plot's comparison note is.
+  // A season location plot that draws a type thrown to its side too seldom for regions as
+  // its pitches says so, in its bottom corner away from the other plot (left against
+  // lefties, right against righties), set as the Movement plot's comparison note is. A
+  // copy in the background colour, outlined, goes under it to clear any pitch there.
   function minNote(card, stand) {
-    if (!card.plots.omitted[stand].length) return [];
+    if (!card.plots.scattered[stand].length) return [];
     const [x, ha] = stand === "L" ? [0.44, "left"] : [0.985, "right"];
-    return [text(fx(x), fy(0.285), `Min ${card.plots.min} pitches`, 12, { ha, va: "baseline", alpha: 0.5 })];
+    const note = (opts) => text(fx(x), fy(0.285), `Min ${card.plots.min} pitches`, 12, { ha, va: "baseline", ...opts });
+    const knockout = ` stroke="${BACKGROUND}" stroke-width="${fixed(3 * PT, 1)}" stroke-linejoin="round"`;
+    return [note({ color: BACKGROUND, attrs: knockout }), note({ alpha: 0.5 })];
   }
 
   // a season's Skills: its three letters across the room of the game card's Skills and
