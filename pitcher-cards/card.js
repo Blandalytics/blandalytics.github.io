@@ -32,7 +32,8 @@
 // A season card (tools/pitcher_card/season.py: a dict with `season`, the year) draws the
 // same card for a pitcher's whole season: its letters on SEASON_GRADE_CUTS, one Skills tile
 // where the game card has Skills and Results, KDE tiers per pitch type in Movement and its
-// 1-SD ellipse against each side in the location plots, and no comparison season or hover.
+// 0.64-threshold KDE region against each side in the location plots, and no comparison
+// season or hover.
 //
 // A classic <script> defines window.PitcherCard; require() returns the same object.
 
@@ -823,7 +824,7 @@
     const name = `loc${stand}`;
     const out = [ax.clip(name), `<g clip-path="url(#${name})">`, ...zone(ax)];
     if (card.season) {
-      out.push(...ellipses(ax, card.plots[stand]), "</g>");
+      out.push(...seasonMarks(ax, card.plots[stand], { unit: 1 / 12, alphas: [0.25] }), "</g>"); // inches
     } else {
       const shown = indexed(card).filter((p) => p.stand === stand && p.x != null);
       out.push(...markers(ax, shown, "x", "z"), "</g>");
@@ -924,36 +925,21 @@
     const level = (k) => (k < 0 ? 0 : (k + 1) / (n + 1));
     return Array.from({ length: n }, (_, k) => 1 - (1 - level(k)) / (1 - level(k - 1)));
   }
-  function seasonMarks(ax, layers) {
+  // `unit` is a path unit in the plot's data units; `alphas` overrides the tiers' washes.
+  function seasonMarks(ax, layers, { unit = 1, alphas = null } = {}) {
+    const scale = unit === 1 ? "" : ` scale(${fixed(unit, 6)})`;
     return layers.map((l) => {
       const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
       if (!l.tiers) {
         const uses = l.points.map(([x, y]) => `<use href="#m" x="${fmt(ax.x(x))}" y="${fmt(ax.y(y))}"/>`).join("");
         return `<g fill="${color}">${uses}</g>`;
       }
-      const alpha = tierAlphas(l.tiers.length);
+      const alpha = alphas || tierAlphas(l.tiers.length);
       const paths = l.tiers.flatMap((ds, k) => ds.map((d) => {
         const edge = k === 0 ? ` stroke="${color}" stroke-width="1" vector-effect="non-scaling-stroke"` : "";
         return `<path d="${d}" fill-opacity="${fixed(alpha[k], 3)}"${edge}/>`;
       }));
-      return `<g fill="${color}" transform="${ax.transform()}">${paths.join("")}</g>`;
-    });
-  }
-
-  // Each side-and-type's 1-SD ellipse: its spread, centred on its most common location,
-  // the centre unmarked, shaded and outlined in the type's colour as a Movement tier is
-  // (the most thrown first, so the rarer lie on top). Drawn in feet, so the rotation is
-  // the plate's.
-  const ELLIPSE_ALPHA = 0.25;
-  function ellipses(ax, layers) {
-    return layers.map((l) => {
-      const e = l.ellipse;
-      const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
-      return (
-        `<ellipse transform="${ax.transform()} rotate(${e.angle} ${e.x} ${e.z})" cx="${e.x}" cy="${e.z}" ` +
-        `rx="${e.a}" ry="${e.b}" fill="${color}" fill-opacity="${ELLIPSE_ALPHA}" stroke="${color}" ` +
-        'stroke-width="1" vector-effect="non-scaling-stroke"/>'
-      );
+      return `<g fill="${color}" transform="${ax.transform()}${scale}">${paths.join("")}</g>`;
     });
   }
 
