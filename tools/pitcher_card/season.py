@@ -37,7 +37,7 @@ pooled into:
   of its KDE mass, on its own Scott kernel (seaborn's bw_adjust=1). 0.64 is the threshold
   whose regions best match a 1-SD ellipse of the same pitches. A type with fewer than
   LOCATION_MIN pitches to a side is drawn as its pitches in that plot, which then says so
-  ("20+ pitches shown as densities").
+  ("<20 pitches shown as scatter").
 
 A pitcher who pitched for more than one team also gets a card for each team's part of his
 season (keyed <pitcherId>-<team>), its line MLB's for that team. There are no comparison

@@ -226,7 +226,7 @@ side at seaborn's `kdeplot(levels=4, thresh=0.64, fill=True)`, the densest 36%, 
 its KDE mass on its own Scott kernel, shaded at 25%, 50% and 75% and outlined in its colour;
 0.64 is the threshold whose regions best match a 1-SD ellipse of the same pitches. A type
 thrown fewer than 20 times to a side is drawn as its pitches, each at 50% opacity (as are
-Movement's), and that plot says so ("20+ pitches shown as densities", in three lines that
+Movement's), and that plot says so ("<20 pitches shown as scatter", in three lines that
 clear the plate) in its outer bottom corner. Each plot stacks its types by how often they were
 thrown to that side, the most thrown on top.
 
