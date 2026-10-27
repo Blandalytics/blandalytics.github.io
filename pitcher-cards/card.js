@@ -499,9 +499,24 @@
       text(57, fy(0.91), card.bio, 20, { color: LINE, ha: "left" }),
       text(fx(0.5), fy(0.896), card.title, 24),
       rect(fx(0.01), fy(0.883), fx(0.98), 86, { fill: BACKGROUND, stroke: TEXT, width: 3, alpha: LINE_ALPHA, rx: 15 }),
-      text(fx(0.5), fy(0.8425 + 0.037 / 2), card.line, 30, { color: LINE_TEXT }),
+      ...(card.summary ? segments(card.summary) : [text(fx(0.5), fy(0.8425 + 0.037 / 2), card.line, 30, { color: LINE_TEXT })]),
       logo(logoHref),
     ];
+  }
+
+  // a season's summary line: its stats in equal segments across the box, each centred in
+  // its own, ruled between in the box's colour; 25pt fits the widest ("30.3% CSW") with
+  // room in a seventh of the box
+  const SEGMENT_SIZE = 25;
+  function segments(stats) {
+    const x0 = fx(0.01);
+    const w = fx(0.98) / stats.length;
+    const top = fy(0.883);
+    const out = stats.map((s, i) => text(x0 + w * (i + 0.5), fy(0.8425 + 0.037 / 2), s, SEGMENT_SIZE, { color: LINE_TEXT }));
+    for (let i = 1; i < stats.length; i++) {
+      out.push(line(x0 + w * i, top + 16, x0 + w * i, top + 86 - 16, { color: TEXT, width: 2, alpha: LINE_ALPHA }));
+    }
+    return out;
   }
 
   // the Skills (model) and Results (box score) grades

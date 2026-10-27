@@ -8,16 +8,16 @@ Every MLB day of the regular season (cards/mlb/data/<date>.json: each card with 
 pitch's movement, location, call, event and model values) is fetched once into --cache.
 A pitcher's cards are pooled into:
 
-- the summary line: IP, ERA, WHIP, K% and BB% from MLB's season line, SLGcon (total bases
-  per at-bat ending in a ball in play) and CSW% from the pitches;
+- the summary line, in segments: IP, ERA, WHIP, strikeouts, K% and BB% from MLB's season
+  line, and CSW% from the pitches;
 - the Stuff, Location and PLV means, each game's mean weighted by the pitches it graded;
   card.js letters them on its SEASON_GRADE_CUTS, which --cuts fits as grade_cuts.py fits
   the game cuts (every pitcher's season, weighted by his pitches, to grade_cuts.TARGET);
 - the usage and the pitch type table, from the pitches as prep.game_table makes a game's;
   the primary fastball's extension and HAVAA, which the pitches don't carry, are its
   games' values weighted by its pitches in them;
-- Movement as three KDE tiers per pitch type, every type smoothed alike (one kernel for
-  the plot, see `kernel`; the grid cut 3 bandwidths past the data): the outermost around
+- Movement as three KDE tiers per pitch type, each type on its own Scott kernel (as
+  scipy's gaussian_kde sets it; the grid cut 3 bandwidths past the data): the outermost around
   the type's densest 90% of pitches (ranked by the KDE at each pitch), the inner tiers
   around two thirds and a third as many. A type with fewer than KDE_MIN pitches is drawn
   as its pitches.
@@ -55,8 +55,6 @@ TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
 GRIDSIZE = 150
 CUT = 3
 KDE_MIN = 10
-TOTAL_BASES = {"single": 1, "double": 2, "triple": 3, "home_run": 4}
-SACRIFICES = {"sac_fly", "sac_bunt", "sac_fly_double_play", "sac_bunt_double_play"}
 DEFAULT_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", "season")
 
 
@@ -141,12 +139,6 @@ def _desc(p: dict) -> str | None:
     return DESC_MAP.get(p.get("d"))
 
 
-def _event(e: str | None) -> str | None:
-    """A pitch's event as the feed codes it: older cards carry the code ("home_run"), newer
-    ones the name ("Home Run")."""
-    return e.lower().replace(" ", "_") if e else None
-
-
 def type_rows(pitches: list[dict], hand: str) -> list[dict]:
     """The usage panel's and metrics table's rows, most thrown first (alphabetical on a
     tie), as prep.game_table makes them from a game's pitches."""
@@ -203,11 +195,12 @@ def fastball(rows: list[dict], games: list[dict]) -> dict | None:
 
 # ---- the KDE tiers ------------------------------------------------------------------
 def kernel(groups: list[np.ndarray]) -> np.ndarray | None:
-    """One plot's smoothing kernel, a covariance shared by all its pitch types: Scott's rule
-    (factor n^-1/6 in two dimensions) on all the plot's pitches, their spread measured
-    within their own types (the pooled covariance). A type's own Scott kernel widens as its
-    sample shrinks, so a pitch thrown 20 times would be smoothed several times wider than
-    the fastball beside it; this smooths every type alike. None if it is degenerate."""
+    """A smoothing kernel (a covariance) for the pitch types given: Scott's rule (factor
+    n^-1/6 in two dimensions) on all their pitches, their spread measured within their own
+    types (the pooled covariance). Given one type, it is that type's own Scott kernel, as
+    scipy's gaussian_kde sets it. A location plot shares one among its types: a type's own
+    widens as its sample shrinks, so a pitch thrown 20 times would otherwise be ranked on a
+    kernel several times wider than the fastball beside it. None if it is degenerate."""
     usable = [g for g in groups if len(g) >= 2]
     dof = sum(len(g) - 1 for g in usable)
     if not dof:
@@ -261,13 +254,13 @@ def _by_type(pitches: list[dict], xkey: str, ykey: str, order: list[str]) -> dic
 
 
 def movement_layers(pitches: list[dict], order: list[str]) -> list[dict]:
-    """Each pitch type's movement tiers (inches), most thrown first, all on the plot's one
-    kernel; its points instead when it has too few for a KDE."""
-    by = _by_type(pitches, "hb", "ivb", order)
-    cov = kernel(list(by.values()))
+    """Each pitch type's movement tiers (inches), most thrown first, each on its own Scott
+    kernel (``kernel`` of the type alone); its points instead when it has too few for a KDE
+    or they make a degenerate one."""
     out = []
-    for code, xy in by.items():
-        if cov is not None and len(xy) >= KDE_MIN:
+    for code, xy in _by_type(pitches, "hb", "ivb", order).items():
+        cov = kernel([xy]) if len(xy) >= KDE_MIN else None
+        if cov is not None:
             out.append({"code": code, "tiers": tiers(xy, round(MOVEMENT_SHARE * len(xy)), cov)})
         else:
             out.append({"code": code, "points": np.round(xy, 2).tolist()})
@@ -322,24 +315,23 @@ def season_line(s: requests.Session, pid: int, year: int) -> dict:
     return total[0]["stat"]
 
 
-def summary(stat: dict, pitches: list[dict]) -> tuple[str, dict]:
-    """'174.2 IP, 1.80 ERA, 0.80 WHIP, 37.9% K, 6.6% BB, .419 SLGcon, 35.4% CSW' and its numbers."""
+def summary(stat: dict, pitches: list[dict]) -> tuple[list[str], dict]:
+    """The summary line's segments, ['174.2 IP', '1.80 ERA', '0.80 WHIP', '252 Ks',
+    '37.9% K', '6.6% BB', '35.4% CSW'], and their numbers."""
     bf = stat["battersFaced"]
-    events = [_event(p.get("e")) for p in pitches if _desc(p) == "in_play"]
-    at_bats = [e for e in events if e not in SACRIFICES]  # the balls in play that end an at-bat
-    slg = sum(TOTAL_BASES.get(e, 0) for e in at_bats) / len(at_bats) if at_bats else None
     csw = (
         100 * sum(_desc(p) in ("called_strike", "swinging_strike") for p in pitches) / len(pitches)
     )
     nums = {
         "IP": stat["inningsPitched"], "ERA": stat["era"], "WHIP": stat["whip"],
-        "K%": 100 * stat["strikeOuts"] / bf, "BB%": 100 * stat["baseOnBalls"] / bf,
-        "SLGcon": slg, "CSW%": csw,
+        "K": stat["strikeOuts"], "K%": 100 * stat["strikeOuts"] / bf,
+        "BB%": 100 * stat["baseOnBalls"] / bf, "CSW%": csw,
     }  # fmt: skip
-    slg_text = f"{slg:.3f}".lstrip("0") if slg is not None else "-"
-    line = (f"{nums['IP']} IP, {nums['ERA']} ERA, {nums['WHIP']} WHIP, {nums['K%']:.1f}% K, "
-            f"{nums['BB%']:.1f}% BB, {slg_text} SLGcon, {csw:.1f}% CSW")  # fmt: skip
-    return line, {k: _num(v, 3) if isinstance(v, float) else v for k, v in nums.items()}
+    segments = [
+        f"{nums['IP']} IP", f"{nums['ERA']} ERA", f"{nums['WHIP']} WHIP", f"{nums['K']} Ks",
+        f"{nums['K%']:.1f}% K", f"{nums['BB%']:.1f}% BB", f"{csw:.1f}% CSW",
+    ]  # fmt: skip
+    return segments, {k: _num(v, 3) if isinstance(v, float) else v for k, v in nums.items()}
 
 
 def chart_limit(pitches: list[dict]) -> int:
@@ -355,7 +347,7 @@ def build(s: requests.Session, games: list[dict], year: int) -> dict:
     pitches = [p for g in games for p in g["pitches"]]
     rows = type_rows(pitches, last["hand"])
     order = [r["code"] for r in rows]
-    line, nums = summary(season_line(s, last["pitcher_id"], year), pitches)
+    segments, nums = summary(season_line(s, last["pitcher_id"], year), pitches)
     arm = _weighted([(g.get("arm_angle"), len(g["pitches"])) for g in games])
     return {
         "version": 4,
@@ -366,7 +358,8 @@ def build(s: requests.Session, games: list[dict], year: int) -> dict:
         "team": last["team"],
         "title": f"Pitcher Performance: {year} Regular Season",
         "bio": last["bio"],
-        "line": line,
+        "line": ", ".join(segments),
+        "summary": segments,
         "stats": nums,
         "games": len(games),
         "starts": sum(bool(g.get("starter")) for g in games),
