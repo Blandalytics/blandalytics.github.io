@@ -172,20 +172,20 @@ portrait one the table on top, at most half the height, and the card below in th
 phone the page scrolls, the card after the table. The table collapses, which gives the card
 the window again, and remembers it.
 
-A demo of a **season-long card** is at `pitcher-cards/season.html`, for six pitchers' 2026
+A demo of a **season-long card** is at `pitcher-cards/season.html`, for seven pitchers' 2026
 regular seasons (`pitcher-cards/season-demo/`, written by `tools/pitcher_card/season.py` from
 the bucket's day files). It is the game card for a whole season, with no comparison season:
-the summary line is in equal segments, ruled between: IP, ERA, WHIP, strikeouts, K% and BB%
-(MLB's season line) and CSW% (from the pitches); one Skills tile takes the room of Skills and
-Results, its letters the season means on `card.js`'s `SEASON_GRADE_CUTS` (`season.py --cuts`
-fits them as `grade_cuts.py` fits the game cuts, to every pitcher's season); and Movement
-shows each pitch type as three KDE tiers around its densest pitches, ranked by the KDE at each
-pitch (90%, 60% and 30% of them), each type on its own Scott kernel. Each location plot shows
-100 of the season's pitches to that side in the pitch mix thrown there (30% four-seamers, 30
-of them; at least one of every type), each type's at its most common locations: the pitches
-its KDE puts densest, on one kernel shared by the plot's types (Scott's rule on all its
-pitches, their spread pooled within types) so that a rarely thrown pitch is ranked on the same
-scale as the rest.
+the summary line is in segments sized to their text, the same room either side of each, ruled
+between: IP, ERA, WHIP, strikeouts, K% and BB% (MLB's season line) and CSW% (from the
+pitches); one Skills tile takes the room of Skills and Results, its letters the season means
+on `card.js`'s `SEASON_GRADE_CUTS` (`season.py --cuts` fits them as `grade_cuts.py` fits the
+game cuts, to every pitcher's season); and Movement shows each pitch type as three KDE tiers
+around its densest pitches, ranked by the KDE at each pitch (90%, 60% and 30% of them), each
+type on its own Scott kernel. Each location plot shows 100 of the season's pitches to that
+side in the pitch mix thrown there (30% four-seamers, 30 of them; at least one of every type),
+each type's at its most common locations: the pitches its KDE puts densest, on one kernel
+shared by the plot's types (Scott's rule on all its pitches, their spread pooled within types)
+so that a rarely thrown pitch is ranked on the same scale as the rest.
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones

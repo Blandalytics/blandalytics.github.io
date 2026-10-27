@@ -504,18 +504,28 @@
     ];
   }
 
-  // a season's summary line: its stats in equal segments across the box, each centred in
-  // its own, ruled between in the box's colour; 25pt fits the widest ("30.3% CSW") with
-  // room in a seventh of the box
-  const SEGMENT_SIZE = 25;
+  // A season's summary line: its stats across the box in segments sized to their text, the
+  // same room either side of every one, ruled between in the box's colour. A text's width
+  // is the sum of DM Sans Bold's advances at this size, in em, as Chromium sets the variable
+  // font the page loads (its optical size follows the font size); kerning moves a segment's
+  // by a pixel or so. A character not listed counts as 0.6.
+  const SEGMENT_SIZE = 28;
+  const ADVANCE = {
+    0: 0.694, 1: 0.318, 2: 0.539, 3: 0.567, 4: 0.621, 5: 0.563, 6: 0.593, 7: 0.528, 8: 0.59, 9: 0.593,
+    ".": 0.236, "%": 0.887, "-": 0.579, " ": 0.202, I: 0.228, P: 0.581, E: 0.539, R: 0.581, A: 0.676,
+    W: 0.995, H: 0.669, K: 0.615, s: 0.482, B: 0.605, C: 0.722, S: 0.565,
+  };
   function segments(stats) {
-    const x0 = fx(0.01);
-    const w = fx(0.98) / stats.length;
+    const widths = stats.map((st) => [...st].reduce((w, c) => w + get(ADVANCE, c, 0.6), 0) * SEGMENT_SIZE * PT);
+    const room = (fx(0.98) - widths.reduce((a, w) => a + w, 0)) / stats.length;
     const top = fy(0.883);
-    const out = stats.map((s, i) => text(x0 + w * (i + 0.5), fy(0.8425 + 0.037 / 2), s, SEGMENT_SIZE, { color: LINE_TEXT }));
-    for (let i = 1; i < stats.length; i++) {
-      out.push(line(x0 + w * i, top + 16, x0 + w * i, top + 86 - 16, { color: TEXT, width: 2, alpha: LINE_ALPHA }));
-    }
+    const out = [];
+    let x = fx(0.01);
+    stats.forEach((st, i) => {
+      if (i) out.push(line(x, top + 16, x, top + 86 - 16, { color: TEXT, width: 2, alpha: LINE_ALPHA }));
+      out.push(text(x + (widths[i] + room) / 2, fy(0.8425 + 0.037 / 2), st, SEGMENT_SIZE, { color: LINE_TEXT }));
+      x += widths[i] + room;
+    });
     return out;
   }
 
