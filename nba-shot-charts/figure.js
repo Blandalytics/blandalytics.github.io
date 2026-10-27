@@ -215,7 +215,7 @@ function rim(ctx) {
 /** The charted shot nearest a point in the figure's own pixels (W x H), within a marker's reach
  *  (or null), with its centre: for the court's hover. */
 export function shotAt(sum, x, y) {
-  let best = null, dist = 12 * 12;
+  let best = null, dist = 14 * 14;   // a 10px marker plus 4px
   for (const s of sum.marked) {
     const sx = cx(s.x), sy = cy(s.y);
     if (sy < COURT.top || sy > COURT.bottom) continue;   // clipped off the court
