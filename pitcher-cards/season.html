@@ -179,7 +179,7 @@ p,li,.note{text-wrap:pretty}
 </footer>
 
 <script src="/shared/share-image.js?v=2"></script>
-<script src="card.js?v=21"></script>
+<script src="card.js?v=22"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -321,6 +321,16 @@ p,li,.note{text-wrap:pretty}
   var gradesDrawn = null, rowShown = null;
   var OPEN_KEY = 'pitcherCards.seasonGradesOpen';
 
+  // his Stuff+ by pitch type, for the types he threw at least 1% as often as the threshold asks
+  // of a season (10 pitches at 1,000); every type, from an index without the counts
+  var TYPE_SHARE = 0.01;
+  function stuffShown(e) {
+    var floor = TYPE_SHARE * minPitches(), out = {};
+    Object.keys(e.stuff).forEach(function (c) {
+      if (!e.thrown || (e.thrown[c] || 0) >= floor) out[c] = e.stuff[c];
+    });
+    return out;
+  }
   function innings(ip) {                  // '174.2' -> 174 2/3
     if (ip == null) return null;
     var p = String(ip).split('.');
@@ -330,7 +340,7 @@ p,li,.note{text-wrap:pretty}
     if (col === 'who') return lastName(e.name) + ' ' + e.name;
     if (col === 'n') return e.n;
     if (col === 'ip') return innings(e.ip);
-    if (col.indexOf('pt:') === 0) { var v = e.stuff[col.slice(3)]; return v == null ? null : v; }
+    if (col.indexOf('pt:') === 0) { var v = stuffShown(e)[col.slice(3)]; return v == null ? null : v; }
     return e.skills[col] == null ? null : e.skills[col];
   }
   function sorted(list) {
@@ -351,7 +361,7 @@ p,li,.note{text-wrap:pretty}
   function drawGrades(list) {
     gradesDrawn = list;
     if (!list.length) { gradesEl.hidden = true; return; }
-    var codes = PITCH_ORDER.filter(function (c) { return list.some(function (e) { return c in e.stuff; }); });
+    var codes = PITCH_ORDER.filter(function (c) { return list.some(function (e) { return c in stuffShown(e); }); });
     var head = '<thead><tr class="group"><th class="who"></th><th></th><th></th><th colspan="3" class="first">Grades</th>'
       + (codes.length ? '<th colspan="' + codes.length + '" class="first">Stuff+ by pitch type</th>' : '') + '</tr>'
       + '<tr class="cols">' + headCell('who', 'Pitcher', 'who') + headCell('n', '#', 'n', 'Pitches') + headCell('ip', 'IP', 'n', 'Innings pitched')
@@ -361,6 +371,7 @@ p,li,.note{text-wrap:pretty}
           i ? '' : 'first', PitcherCard.PITCH_NAMES[c] + ' Stuff+');
       }).join('') + '</tr></thead>';
     var body = sorted(list).map(function (e) {
+      var shown = stuffShown(e);
       return '<tr data-key="' + esc(e.key) + '"' + (e.key === pitcherSel.value ? ' class="on"' : '') + '>'
         + '<td class="who"><a href="#' + season.season + '/' + esc(e.key) + '" data-key="' + esc(e.key) + '">' + esc(e.name) + '</a>'
         + '<span class="meta">' + esc(e.team) + (e.gs && e.gs * 2 >= e.g ? ' · SP' : '') + '</span></td>'
@@ -369,8 +380,8 @@ p,li,.note{text-wrap:pretty}
         + SKILLS.map(function (s, i) { return letterCell(letterOf(e, s[0]), i ? '' : 'first'); }).join('')
         + codes.map(function (c, i) {
           var cls = i ? '' : ' class="first"';
-          if (!(c in e.stuff)) return '<td' + cls + '></td>';
-          var cell = PitcherCard.statCell(c, 'plvStuff+', e.stuff[c]);
+          if (!(c in shown)) return '<td' + cls + '></td>';
+          var cell = PitcherCard.statCell(c, 'plvStuff+', shown[c]);
           return '<td' + cls + ' style="color:' + cell.color + '">' + esc(cell.text) + '</td>';
         }).join('') + '</tr>';
     }).join('');

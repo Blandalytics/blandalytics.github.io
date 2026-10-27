@@ -207,7 +207,8 @@ at 1,000 for a full season, prorated by the games each team had played (about 37
 60-game season, and less early in a season under way). **Split traded pitchers by team** swaps
 a traded pitcher's whole season for a card for each team he pitched for, its line MLB's for
 that team. The table is the Game Cards page's: pitches, innings, the season letters and Stuff+
-by pitch type, sorted by Stuff (by the means behind the letters, best first); a name opens its
+by pitch type (a type's only where he threw it at least 1% as often as Min pitches asks: 10
+times at 1,000), sorted by Stuff (by the means behind the letters, best first); a name opens its
 card, and the two split the window as there. `season.html#<season>/<key>` links a card (`<key>`
 the pitcher's id, or `<id>-<team>` for a team's part of his season; `?min=` and `?split=1` set
 the filters, and a linked card is shown whatever its pitch count).
@@ -221,10 +222,10 @@ letters as the summary line is, its letters the season means on `card.js`'s
 every pitcher's season). Movement shows each pitch type as three KDE tiers around its densest
 pitches, ranked by the KDE at each pitch (95%, 63% and 32% of them, shaded at 25%, 50% and
 75%), each type on its own Scott kernel widened twice over (seaborn's `bw_adjust=2`) so the
-edges come out smooth. Each location plot shows every pitch type's KDE regions against that
-side at seaborn's `kdeplot(levels=4, thresh=0.64, fill=True)`, the densest 36%, 24% and 12% of
-its KDE mass on its own Scott kernel, shaded at 25%, 50% and 75% and outlined in its colour;
-0.64 is the threshold whose regions best match a 1-SD ellipse of the same pitches. A type
+edges come out smooth. Each location plot shows every pitch type's KDE region against that
+side at seaborn's `kdeplot(levels=[0.64, 1], fill=True)`, the densest 36% of its KDE mass on
+its own Scott kernel, shaded at 25% and outlined in its colour; 0.64 is the threshold whose
+regions best match a 1-SD ellipse of the same pitches. A type
 thrown fewer than 20 times to a side is drawn as its pitches, each at 50% opacity (as are
 Movement's), and that plot says so ("<20 pitches shown as scatter", in three lines that
 clear the plate) in its outer bottom corner. Each plot stacks its types by how often they were
