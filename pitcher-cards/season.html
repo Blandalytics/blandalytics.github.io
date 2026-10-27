@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>PLV Pitcher Season Card</title>
+<meta name="description" content="A Pitcher List Stats card for every MLB pitcher's regular season since 2020: Stuff, Location and PLV grades, with movement, locations, and usage.">
+<link rel="icon" href="https://res.cloudinary.com/dduabusaf/image/upload/v1772839606/teal_letter_logo_owufaj.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/shared/plpd.css?v=3">
+<style>
+/* the Game Cards picker (index.html) for whole seasons: a surface-2 bar of PLPD fields over the
+   season's grades table and the card, which keeps its own card-bg (#292C42) */
+*{box-sizing:border-box}
+html,body{height:100%}
+body.plpd{display:flex; flex-direction:column}
+
+/* ---------- picker bar ---------- */
+.bar{
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-300) var(--space-400);
+  padding:16px var(--layout-page-content-gutter); border-bottom:1px solid var(--surface-border-card); background:var(--surfaces-surface-2);
+}
+.brand{margin-right:auto; display:flex; align-items:center; gap:var(--space-300); align-self:center}
+.brand img{height:34px; width:auto}
+.brand div{display:flex; flex-direction:column; gap:2px}
+.brand h1{margin:0; font-family:var(--font-display); font-size:24px; font-weight:900; line-height:1.2; color:var(--brand-brand-cyan)}
+.brand .sub{font-family:var(--font-display); font-size:12px; line-height:1.25; letter-spacing:.36px; color:var(--text-text-zero); font-variant-numeric:tabular-nums}
+.field select.plpd-filter-dropdown{width:auto; min-width:110px; font-variant-numeric:tabular-nums}
+#pitcher{min-width:300px}
+/* the pitch threshold, set as the dropdowns are (the system has no number field) */
+.field input.num{box-sizing:border-box; height:40px; width:110px; padding:0 12px; border:1px solid var(--borders-border-tab);
+  border-radius:var(--radius-lg); background:var(--surfaces-surface-3); box-shadow:var(--shadow-pl-filter-search-input-inset);
+  font-family:var(--font-text); font-size:14px; font-weight:500; line-height:1.2; color:var(--text-text-cell); font-variant-numeric:tabular-nums}
+.field input.num:hover{background-color:#262940}
+.field input.num:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:2px}
+.btn[hidden]{display:none}
+
+/* ---------- the season's grades: every card the Pitcher list offers ---------- */
+.grades{flex:none; padding:var(--space-300) var(--layout-page-content-gutter) 0}
+.grades[hidden]{display:none}
+.grades summary{cursor:pointer; width:max-content; padding:2px 0 8px; font-family:var(--font-display); font-size:14px;
+  font-weight:600; line-height:20px; color:var(--text-text-cell)}
+.grades summary .n{color:var(--text-text-nav); font-weight:500}
+.grades .plpd-table-wrap{max-height:min(34vh, 380px)}
+#gradesTable{width:100%}
+#gradesTable th,#gradesTable td{padding:6px 10px; text-align:center}
+#gradesTable thead th{position:sticky; top:0; z-index:2; font-size:13px}
+#gradesTable thead tr.group th{height:26px; padding-block:4px; color:var(--text-text-nav); font-weight:500}
+#gradesTable thead tr.cols th{top:26px}
+#gradesTable th button{all:unset; cursor:pointer}
+#gradesTable th button:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:2px}
+#gradesTable thead th:hover{color:var(--data-table-pl-data-table-cell-text)}
+#gradesTable td{font-size:14px; background:var(--data-table-pl-data-table-scroll-base-bg)}
+#gradesTable .who{position:sticky; left:0; z-index:1; text-align:left}
+#gradesTable thead .who{z-index:3}
+#gradesTable td.who{max-width:300px; overflow:hidden; text-overflow:ellipsis}
+#gradesTable td.who a{color:var(--brand-brand-cyan); text-decoration:none; font-family:var(--font-display); font-weight:600}
+#gradesTable td.who a:hover,#gradesTable td.who a:focus-visible{text-decoration:underline}
+#gradesTable td.who .meta{margin-left:8px; color:var(--text-text-nav); font-size:13px}
+#gradesTable td.g{font-family:var(--font-display); font-weight:700}
+#gradesTable td.n{font-variant-numeric:tabular-nums}
+#gradesTable .first{border-left:1px solid var(--data-table-pl-data-table-header-border)}
+#gradesTable tbody tr:hover td{background:var(--data-table-pl-data-table-row-hover-bg)}
+#gradesTable tbody tr.on td{background:var(--data-table-pl-data-table-row-open-bg)}
+#gradesTable tbody tr:last-child td{border-bottom:0}
+
+/* ---------- the table and the card: laid out as on the Game Cards page ---------- */
+.split{flex:1; min-height:0; display:flex; flex-direction:column}
+@media (min-width:761px){
+  .split:has(.grades:not([hidden]) #gradesBox[open]){container-type:size; min-height:520px}
+}
+@media (min-width:761px) and (orientation:landscape){
+  .split:has(.grades:not([hidden]) #gradesBox[open]){flex-direction:row}
+  .split:has(.grades:not([hidden]) #gradesBox[open]) .grades{flex:1 1 0; min-width:0;
+    padding:var(--space-300) var(--space-300) var(--space-300) var(--layout-page-content-gutter)}
+  .split:has(.grades:not([hidden]) #gradesBox[open]) .plpd-table-wrap{max-height:calc(100cqh - 54px)}
+  .split:has(.grades:not([hidden]) #gradesBox[open]) .stage{flex:none; width:min(75cqh + 18px, 60cqw);
+    padding-right:var(--layout-page-content-gutter)}
+}
+@media (min-width:761px) and (orientation:portrait){
+  .split:has(.grades:not([hidden]) #gradesBox[open]) .plpd-table-wrap{max-height:calc(50cqh - 42px)}
+}
+
+/* ---------- the card ---------- */
+.stage{flex:1; min-height:0; position:relative; display:flex; justify-content:center; overflow:auto; padding:var(--space-300)}
+.card{border:0; background:var(--card-card-bg); height:100%; aspect-ratio:3/4; max-width:100%; border-radius:var(--radius-xl); display:block; overflow:hidden;
+  box-shadow:var(--shadow-pl-data-table-wrap-shadow)}
+.card svg{display:block; width:100%; height:100%}
+.card[hidden]{display:none}
+.empty{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  color:var(--text-text-nav); font-size:15px; text-align:center; padding:0 20px;
+}
+.empty[hidden]{display:none}
+.note{padding:8px var(--layout-page-content-gutter) 12px; color:var(--text-text-nav); font-size:13px; line-height:1.45;
+  border-top:1px solid var(--surface-border-card); background:var(--surfaces-surface-2)}
+.note b{font-family:var(--font-display); color:var(--text-text-cell); font-weight:600}
+.note a{color:var(--brand-brand-cyan)}
+
+@media (max-width:760px){
+  .bar{padding:12px; gap:10px 12px}
+  .brand{flex-basis:100%; margin:0}
+  .brand h1{font-size:20px}
+  .brand img{height:26px}
+  /* the season and the threshold share a row, the checkbox the next, the pitcher his own */
+  .field{flex:1 1 40%; min-width:0}
+  .field.wide{flex-basis:100%}
+  .field select.plpd-filter-dropdown,.field input.num{width:100%; min-width:0}
+  #pitcher{min-width:0}
+  /* the page scrolls as a whole, the card at full width with the note after it */
+  html,body{height:auto}
+  .stage{flex:none; overflow:visible; display:block; padding:8px; min-height:160px}
+  .card{width:100%; height:auto}
+  .note{padding-inline:12px}
+  .grades{padding:8px 8px 0}
+  .grades .plpd-table-wrap{max-height:55vh}
+  #gradesTable th,#gradesTable td{padding:6px 8px}
+  #gradesTable td.who{max-width:190px}
+}
+h1,h2,h3{text-wrap:balance}
+p,li,.note{text-wrap:pretty}
+@media (pointer:coarse){.note a{display:inline-block; padding:12px 0; margin:-12px 0}}
+</style>
+</head>
+<body class="plpd">
+
+<header class="bar">
+  <div class="brand">
+    <img src="PitcherList_Stats_watermark_with_logo.webp" alt="Pitcher List Stats">
+    <div>
+      <h1>PLV Pitcher Season Card</h1>
+      <span class="sub" id="status">Loading cards…</span>
+    </div>
+  </div>
+  <div class="field plpd-filter-field">
+    <label class="plpd-filter-field__label" for="season">Season</label>
+    <select id="season" class="plpd-filter-dropdown" disabled></select>
+  </div>
+  <div class="field plpd-filter-field">
+    <label class="plpd-filter-field__label" for="minPitches">Min pitches</label>
+    <input id="minPitches" class="num" type="number" min="0" step="50" inputmode="numeric" disabled>
+  </div>
+  <label class="check plpd-check"><input type="checkbox" id="split" disabled>Split traded pitchers by team</label>
+  <div class="field wide plpd-filter-field">
+    <label class="plpd-filter-field__label" for="pitcher">Pitcher</label>
+    <select id="pitcher" class="plpd-filter-dropdown" disabled></select>
+  </div>
+  <button class="btn plpd-btn" id="png" type="button" hidden>Share image ▾</button>
+</header>
+
+<div class="split" id="splitView">
+<section class="grades" id="grades" hidden>
+  <details id="gradesBox" open>
+    <summary id="gradesSum">Grades</summary>
+    <div class="plpd-table-wrap"><table class="plpd-table" id="gradesTable"></table></div>
+  </details>
+</section>
+
+<main class="stage" id="stage">
+  <div class="card" id="cardBox" hidden></div>
+  <div class="empty" id="empty">Pick a season and a pitcher.</div>
+</main>
+</div>
+
+<footer class="note">
+  Data (especially pitch types) are subject to change. A season card pools a pitcher's regular-season
+  game cards, back to 2020: IP, ERA, WHIP, strikeouts, K% and BB% are MLB's line, and the Stuff, Locations
+  and PLV letters are his season means, graded against every pitcher's season. Movement and locations show
+  each pitch type as KDE regions around its densest pitches; a type thrown fewer than 20 times to a side is
+  drawn as its pitches. <b>Min pitches</b> starts at 1,000 for a full season, prorated by the games each
+  team had played (about 370 in 2020's 60-game season). <b>Split traded pitchers by team</b> gives a card for
+  each team a traded pitcher pitched for, with MLB's line for that team. Cards are rebuilt each morning
+  during the season. Please send any feedback to Kyle Bland, on
+  <a href="https://bsky.app/profile/blandalytics.pitcherlist.com" target="_blank" rel="noopener">Bluesky</a> or
+  <a href="https://x.com/blandalytics" target="_blank" rel="noopener">Twitter</a>.
+</footer>
+
+<script src="/shared/share-image.js?v=2"></script>
+<script src="card.js?v=21"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var seasonSel = $('season'), minIn = $('minPitches'), split = $('split'), pitcherSel = $('pitcher');
+  var cardEl = $('cardBox'), empty = $('empty'), png = $('png'), status = $('status');
+  // the season cards live in the bucket (tools/pitcher_card/season.py writes them): an index of
+  // the seasons, and beside it <season>/index.json (the season's cards) and <season>/<key>.json
+  // (each card: <key> the pitcher's id, or <id>-<team> for a team's part of a traded pitcher's
+  // season). ?seasons=<url> points at a local build while developing (season.py --out
+  // pitcher-cards, then ?seasons=cards/mlb/seasons/index.json)
+  var params = new URLSearchParams(location.search);
+  var SEASONS = new URL(params.get('seasons') || 'https://data.blandalytics.com/cards/mlb/seasons/index.json', location.href).href;
+  var LOGO = 'PitcherList_Stats_watermark_with_logo.webp';
+  var FULL_MIN = 1000;                // the pitch threshold over a full season, prorated by the games played
+  var seasons = {};                   // the seasons index's seasons
+  var season = null;                  // the chosen season's index
+  var seasonCache = {}, cardCache = {};
+  var shown = null, wanted = null;    // the card on the stage ({key, card, svg}), and the one loading
+
+  function getJson(url) {
+    return fetch(url, {cache: 'no-cache'})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  }
+  function fill(sel, items) {         // items: [[value, label], ...]
+    sel.innerHTML = '';
+    items.forEach(function (it) {
+      var o = document.createElement('option');
+      o.value = it[0]; o.textContent = it[1];
+      sel.appendChild(o);
+    });
+    sel.disabled = items.length === 0;
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; });
+  }
+  function lastName(name) { return name.split(' ').slice(-1)[0].toLowerCase(); }
+  function thousands(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function niceDate(iso) { var d = new Date(iso + 'T12:00:00'); return MONTHS[d.getMonth()] + ' ' + d.getDate(); }
+
+  // ---- the season's cards, and the ones the threshold and the split let through ----
+  // the threshold a season starts at: FULL_MIN over a full season, prorated by the games each
+  // team had played by its last day
+  function defaultMin(ix) { return Math.round(FULL_MIN * Math.min(1, ix.team_games / ix.full_games)); }
+  function minPitches() {
+    var v = parseInt(minIn.value, 10);
+    return isFinite(v) && v >= 0 ? v : defaultMin(season);
+  }
+  // a traded pitcher's whole season, or with the split each team's part of it, by last name
+  function rows() {
+    if (!season) return [];
+    var min = minPitches();
+    return season.pitchers.filter(function (e) {
+      return (split.checked ? !e.traded : !e.stint) && e.n >= min;
+    }).sort(function (a, b) {
+      return lastName(a.name).localeCompare(lastName(b.name)) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key);
+    });
+  }
+  function byKey(key) { return season ? season.pitchers.filter(function (e) { return e.key === key; })[0] : null; }
+  function letterOf(e, k) { return PitcherCard.letter(e.skills[k], k, PitcherCard.SEASON_GRADE_CUTS); }
+
+  // the state in the URL: #<season>/<key>, and the threshold and the split when not the defaults
+  function saveState() {
+    var q = new URLSearchParams(location.search);
+    if (season && minPitches() !== defaultMin(season)) q.set('min', minPitches()); else q.delete('min');
+    if (split.checked) q.set('split', '1'); else q.delete('split');
+    var s = q.toString();
+    var hash = season && pitcherSel.value ? '#' + season.season + '/' + pitcherSel.value : '';
+    history.replaceState(null, '', location.pathname + (s ? '?' + s : '') + hash);
+  }
+
+  // the Pitcher list and the table, keeping the pitcher on stage when he is still listed (or, as
+  // the split turns, his whole season or his biggest part of it); else the top of the Stuff column
+  function refresh(prefer) {
+    var list = rows(), keys = list.map(function (e) { return e.key; });
+    fill(pitcherSel, list.map(function (e) { return [e.key, e.name + '  ·  ' + e.team]; }));
+    var cur = prefer || pitcherSel.dataset.key, pick = null;
+    if (cur && keys.indexOf(cur) >= 0) pick = cur;
+    else if (cur) pick = sameSeason(cur, list);
+    pitcherSel.value = pick || topByStuff(list) || '';
+    drawGrades(list);
+    onPitcher();
+  }
+  function sameSeason(key, list) {
+    var id = key.split('-')[0];
+    var his = list.filter(function (e) { return String(e.id) === id; })
+      .sort(function (a, b) { return b.n - a.n; });
+    return his.length ? his[0].key : null;
+  }
+  function topByStuff(list) {
+    var best = null;
+    list.forEach(function (e) { if (e.skills.stuff != null && (!best || e.skills.stuff > best.skills.stuff)) best = e; });
+    return best ? best.key : list[0] ? list[0].key : null;
+  }
+
+  // ---- the card ----
+  function loadCard(key) {
+    var url = new URL(season.season + '/' + key + '.json', SEASONS).href;
+    if (!(url in cardCache)) cardCache[url] = getJson(url).catch(function () { delete cardCache[url]; return null; });
+    return cardCache[url];
+  }
+  function clearStage(text) {
+    shown = null; wanted = null;
+    cardEl.hidden = true; cardEl.innerHTML = '';
+    empty.hidden = false; png.hidden = true;
+    empty.textContent = text;
+  }
+  function onPitcher() {
+    var key = pitcherSel.value, e = byKey(key);
+    pitcherSel.dataset.key = key;
+    markGradeRow();
+    saveState();
+    if (!e) {
+      clearStage(season ? 'No pitchers with ' + thousands(minPitches()) + '+ pitches in ' + season.season + '.' : 'No season cards yet.');
+      document.title = 'PLV Pitcher Season Card';
+      return;
+    }
+    document.title = e.name + ' — ' + season.season + (e.stint ? ' ' + e.team : '') + ' — PLV Pitcher Season Card';
+    var id = season.season + '/' + key;
+    if ((shown && shown.key === id) || wanted === id) return;
+    wanted = id;
+    loadCard(key).then(function (card) {
+      if (wanted !== id) return;       // a later pick has superseded this one
+      wanted = null;
+      if (!card) { clearStage('Could not load this card.'); return; }
+      var svg = PitcherCard.draw(cardEl, card, {logo: LOGO});
+      shown = {key: id, card: card, svg: svg};
+      cardEl.hidden = false; empty.hidden = true; png.hidden = false;
+    });
+  }
+
+  // ---- the grades table: every card the Pitcher list offers, with its pitches, innings, season
+  // letters and Stuff+ by pitch type. A name opens that card; a column header sorts by it (the
+  // letters by the means behind them).
+  var gradesEl = $('grades'), gradesBox = $('gradesBox'), gradesSum = $('gradesSum'), gradesTable = $('gradesTable');
+  var SKILLS = [['stuff', 'Stuff'], ['loc', 'Locations'], ['plv', 'PLV']];
+  var PITCH_ORDER = ['FF', 'SI', 'FC', 'SL', 'ST', 'CU', 'CH', 'FS', 'KN', 'UN'];
+  var sortBy = 'stuff', sortAsc = false;  // Stuff, best first, until a header is picked
+  var gradesDrawn = null, rowShown = null;
+  var OPEN_KEY = 'pitcherCards.seasonGradesOpen';
+
+  function innings(ip) {                  // '174.2' -> 174 2/3
+    if (ip == null) return null;
+    var p = String(ip).split('.');
+    return +p[0] + (+(p[1] || 0)) / 3;
+  }
+  function sortKey(e, col) {               // null sorts last either way
+    if (col === 'who') return lastName(e.name) + ' ' + e.name;
+    if (col === 'n') return e.n;
+    if (col === 'ip') return innings(e.ip);
+    if (col.indexOf('pt:') === 0) { var v = e.stuff[col.slice(3)]; return v == null ? null : v; }
+    return e.skills[col] == null ? null : e.skills[col];
+  }
+  function sorted(list) {
+    return list.map(function (x, i) { return {x: x, i: i, k: sortKey(x, sortBy)}; }).sort(function (a, b) {
+      if (a.k === null || b.k === null) return (a.k === null) - (b.k === null) || a.i - b.i;
+      var c = typeof a.k === 'string' ? a.k.localeCompare(b.k) : a.k - b.k;
+      return (sortAsc ? c : -c) || a.i - b.i;
+    }).map(function (y) { return y.x; });
+  }
+  function headCell(col, label, cls, title) {
+    var sort = sortBy === col ? (sortAsc ? 'ascending' : 'descending') : 'none';
+    return '<th scope="col" class="' + (cls || '') + '" aria-sort="' + sort + '"' + (title ? ' title="' + esc(title) + '"' : '')
+      + '><button type="button" data-sort="' + col + '">' + label + '</button></th>';
+  }
+  function letterCell(l, cls) {
+    return '<td class="g' + (cls ? ' ' + cls : '') + '" style="color:' + (PitcherCard.GRADE_COLORS[l] || '') + '">' + esc(l) + '</td>';
+  }
+  function drawGrades(list) {
+    gradesDrawn = list;
+    if (!list.length) { gradesEl.hidden = true; return; }
+    var codes = PITCH_ORDER.filter(function (c) { return list.some(function (e) { return c in e.stuff; }); });
+    var head = '<thead><tr class="group"><th class="who"></th><th></th><th></th><th colspan="3" class="first">Grades</th>'
+      + (codes.length ? '<th colspan="' + codes.length + '" class="first">Stuff+ by pitch type</th>' : '') + '</tr>'
+      + '<tr class="cols">' + headCell('who', 'Pitcher', 'who') + headCell('n', '#', 'n', 'Pitches') + headCell('ip', 'IP', 'n', 'Innings pitched')
+      + SKILLS.map(function (s, i) { return headCell(s[0], s[1], i ? '' : 'first'); }).join('')
+      + codes.map(function (c, i) {
+        return headCell('pt:' + c, '<span style="color:' + PitcherCard.MARKER_COLORS[c] + '">' + c + '</span>',
+          i ? '' : 'first', PitcherCard.PITCH_NAMES[c] + ' Stuff+');
+      }).join('') + '</tr></thead>';
+    var body = sorted(list).map(function (e) {
+      return '<tr data-key="' + esc(e.key) + '"' + (e.key === pitcherSel.value ? ' class="on"' : '') + '>'
+        + '<td class="who"><a href="#' + season.season + '/' + esc(e.key) + '" data-key="' + esc(e.key) + '">' + esc(e.name) + '</a>'
+        + '<span class="meta">' + esc(e.team) + (e.gs && e.gs * 2 >= e.g ? ' · SP' : '') + '</span></td>'
+        + '<td class="n">' + thousands(e.n) + '</td>'
+        + '<td class="n">' + (e.ip == null ? '' : esc(e.ip)) + '</td>'
+        + SKILLS.map(function (s, i) { return letterCell(letterOf(e, s[0]), i ? '' : 'first'); }).join('')
+        + codes.map(function (c, i) {
+          var cls = i ? '' : ' class="first"';
+          if (!(c in e.stuff)) return '<td' + cls + '></td>';
+          var cell = PitcherCard.statCell(c, 'plvStuff+', e.stuff[c]);
+          return '<td' + cls + ' style="color:' + cell.color + '">' + esc(cell.text) + '</td>';
+        }).join('') + '</tr>';
+    }).join('');
+    var wrap = gradesTable.parentNode, top = wrap.scrollTop, left = wrap.scrollLeft;
+    gradesTable.innerHTML = head + '<tbody>' + body + '</tbody>';
+    wrap.scrollTop = top; wrap.scrollLeft = left;
+    gradesSum.innerHTML = 'Grades and Stuff+ <span class="n">· ' + list.length + ' pitcher' + (list.length === 1 ? '' : 's')
+      + ' with ' + thousands(minPitches()) + '+ pitches</span>';
+    gradesEl.hidden = false;
+    rowShown = null;
+    showGradeRow();
+  }
+  function markGradeRow() {
+    [].forEach.call(gradesTable.querySelectorAll('tbody tr'), function (tr) {
+      tr.classList.toggle('on', tr.getAttribute('data-key') === pitcherSel.value);
+    });
+    showGradeRow();
+  }
+  // a newly picked pitcher's row, scrolled into the table's own box (never the page) clear of its sticky head
+  function showGradeRow() {
+    var tr = gradesTable.querySelector('tbody tr.on'), wrap = gradesTable.parentNode;
+    if (!tr || !gradesBox.open || rowShown === pitcherSel.value) return;
+    rowShown = pitcherSel.value;
+    var head = gradesTable.tHead.offsetHeight, top = tr.offsetTop, bottom = top + tr.offsetHeight;
+    if (top - head < wrap.scrollTop) wrap.scrollTop = top - head;
+    else if (bottom > wrap.scrollTop + wrap.clientHeight) wrap.scrollTop = bottom - wrap.clientHeight;
+  }
+  gradesTable.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button[data-sort]');
+    if (b && gradesDrawn) {
+      var col = b.getAttribute('data-sort');
+      if (sortBy === col) sortAsc = !sortAsc;
+      else { sortBy = col; sortAsc = col === 'who'; }  // names A-Z, the rest best (or most) first
+      drawGrades(gradesDrawn);
+      return;
+    }
+    var a = ev.target.closest('a[data-key]');
+    // a plain click opens the card here; with a modifier the link opens a new tab as usual
+    if (!a || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    ev.preventDefault();
+    pitcherSel.value = a.getAttribute('data-key');
+    onPitcher();
+    var r = $('stage').getBoundingClientRect();
+    if (Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0) < r.height / 2) $('stage').scrollIntoView({behavior: 'smooth'});
+  });
+  try { if (localStorage.getItem(OPEN_KEY) === '0') gradesBox.open = false; } catch (e) {}
+  gradesBox.addEventListener('toggle', function () {
+    try { localStorage.setItem(OPEN_KEY, gradesBox.open ? '1' : '0'); } catch (e) {}
+    showGradeRow();
+  });
+
+  // ---- choosing a season ----
+  function loadSeason(year) {
+    if (!seasonCache[year]) {
+      seasonCache[year] = getJson(new URL(year + '/index.json', SEASONS).href)
+        .catch(function (err) { delete seasonCache[year]; throw err; });
+    }
+    return seasonCache[year];
+  }
+  // a season, at its own threshold unless one is given; ``key`` picks a card, which shows
+  // whatever its pitch count (the threshold comes down to it) and turns the split on for a stint
+  function openSeason(year, min, key) {
+    seasonSel.value = String(year);
+    return loadSeason(year).then(function (ix) {
+      if (seasonSel.value !== String(year)) return;
+      season = ix;
+      minIn.placeholder = String(defaultMin(ix));
+      minIn.value = min != null ? min : defaultMin(ix);
+      minIn.disabled = split.disabled = false;
+      var e = key ? byKey(key) : null;
+      if (e && e.stint) split.checked = true;
+      if (e && e.n < minPitches()) minIn.value = e.n;
+      status.textContent = ix.season + ' regular season, through ' + niceDate(ix.through) + ' · '
+        + thousands(ix.pitchers.length) + ' cards';
+      refresh(e ? e.key : null);
+    }).catch(function () {
+      season = null;
+      fill(pitcherSel, []);
+      gradesEl.hidden = true;
+      clearStage('Could not load the ' + year + ' season cards.');
+    });
+  }
+
+  seasonSel.addEventListener('change', function () { pitcherSel.dataset.key = ''; openSeason(+seasonSel.value, null, null); });
+  var minTimer = null;
+  minIn.addEventListener('input', function () {
+    clearTimeout(minTimer);
+    minTimer = setTimeout(function () { if (season) refresh(); }, 250);
+  });
+  split.addEventListener('change', function () { if (season) refresh(); });
+  pitcherSel.addEventListener('change', onPitcher);
+
+  // Share image (shared/share-image.js): the card at 3000 x 4000
+  var sharedCard = null;
+  ShareImage.image(png, function () {
+    if (!shown) throw new Error('no card');
+    sharedCard = shown;
+    return PitcherCard.png(shown.svg);
+  }, function () { return sharedCard ? PitcherCard.filename(sharedCard.card) : 'card.png'; });
+
+  // #<season>/<key> in the URL picks that card; ?min= and ?split=1 set the filters
+  function fromHash() {
+    var m = /^#(\d{4})\/([\w-]+)$/.exec(location.hash);
+    return m && seasons[m[1]] ? {year: +m[1], key: m[2]} : null;
+  }
+  window.addEventListener('hashchange', function () {
+    var h = fromHash();
+    if (!h || (season && h.year === season.season && h.key === pitcherSel.value)) return;
+    if (season && h.year === season.season) {
+      var e = byKey(h.key);
+      if (e && e.stint) split.checked = true;
+      if (e && e.n < minPitches()) minIn.value = e.n;
+      refresh(h.key);
+    } else openSeason(h.year, null, h.key);
+  });
+
+  getJson(SEASONS).then(function (ix) {
+    seasons = ix.seasons || {};
+    var years = Object.keys(seasons).sort().reverse();
+    if (!years.length) { status.textContent = 'No season cards yet'; clearStage('No season cards built yet.'); return; }
+    fill(seasonSel, years.map(function (y) { return [y, y]; }));
+    var h = fromHash(), q = parseInt(params.get('min'), 10);
+    split.checked = params.get('split') === '1';
+    openSeason(h ? h.year : +years[0], isFinite(q) && q >= 0 ? q : null, h ? h.key : null);
+  }).catch(function () {
+    status.textContent = 'Could not load the season cards';
+    clearStage('The season cards are missing from the bucket. Run tools/pitcher_card/season.py to build them.');
+  });
+})();
+</script>
+</body>
+</html>

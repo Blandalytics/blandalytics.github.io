@@ -34,6 +34,7 @@ WEBP = {"quality": 82, "method": 6}
 # None pads the figure out to the tile's shape with its own background colour instead.
 CROPS = {
     "pitcher-cards": (0.0, 0.0),     # name, grades, usage and movement plots
+    "season-cards": (0.0, 0.0),      # the same, for a season
     "sequencing-flow": (0.0, 0.5),   # the Sankey body
     "swing-profiles": None,          # padded: a square crop cuts the axis label and the wordmark
     "batted-balls": None,            # padded, not cropped: the wordmark and data credit sit at the edges

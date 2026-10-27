@@ -46,6 +46,9 @@ APPS = [
     # Jacob deGrom, 2026-09-10 (#gamePk-pitcherId)
     ("pitcher-cards", "https://blandalytics.com/pitcher-cards/#823088-594798",
      "!document.getElementById('png').hidden && document.title.includes('deGrom')", "png_download"),
+    # Jacob Misiorowski, 2026 (#season/pitcherId)
+    ("season-cards", "https://blandalytics.com/pitcher-cards/season.html#2026/694819",
+     "!document.getElementById('png').hidden && document.title.includes('Misiorowski')", "png_download"),
     # Gavin Williams, 2026-09-20 (#pitcherId-date)
     ("sequencing-flow", "https://blandalytics.com/sequencing-flow/#668909-2026-09-20",
      "!document.getElementById('png').hidden && document.querySelector('.main-svg, canvas') && document.title.includes('Gavin Williams')", "png_download"),

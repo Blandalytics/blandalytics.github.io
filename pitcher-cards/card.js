@@ -29,6 +29,12 @@
 //   PitcherCard.statCell(code, stat, v)  a table stat's text and colour, as the card shows it
 //   PitcherCard.GRADE_COLORS, PITCH_NAMES, MARKER_COLORS, LETTERS
 //
+// A season card (tools/pitcher_card/season.py: a dict with `season`, the year) draws the
+// same card for a pitcher's whole season: its letters on SEASON_GRADE_CUTS, one Skills tile
+// where the game card has Skills and Results, KDE tiers per pitch type in Movement and its
+// 0.64-threshold KDE region against each side in the location plots, and no comparison
+// season or hover.
+//
 // A classic <script> defines window.PitcherCard; require() returns the same object.
 
 (function (root, factory) {
@@ -162,11 +168,20 @@
     loc: [75.2, 82.5, 87.6, 91.2, 93.9, 97.1, 100, 103.1, 106.4, 110, 114.1, 122.4],
     plv: [77, 83, 87.5, 90.8, 93.3, 96.4, 99.3, 102.5, 106, 110.2, 115, 125.6],
   };
+  // The same for a season's means, which spread far less than an outing's: `season.py
+  // --cuts` fits them to the same distribution, every 2026 MLB pitcher's regular season
+  // weighted by his pitches.
+  const SEASON_GRADE_CUTS = {
+    stuff: [80.8, 84, 86, 88, 89.9, 92.4, 94.9, 97.7, 101.2, 105.2, 110, 118.9],
+    loc: [92.2, 94.1, 96.1, 97.4, 98.6, 99.9, 101.5, 102.9, 104.5, 106.5, 108.5, 111.3],
+    plv: [88.7, 91.1, 92, 93.3, 94.3, 95.6, 96.7, 98, 99.6, 102, 104.5, 108.1],
+  };
 
-  // the letter for an outing's mean (grade: "stuff", "loc" or "plv"); "-" when it has none
-  function letter(value, grade) {
+  // the letter for an outing's mean (grade: "stuff", "loc" or "plv"), or a season's on
+  // SEASON_GRADE_CUTS; "-" when it has none
+  function letter(value, grade, table = GRADE_CUTS) {
     if (value == null) return "-";
-    const cuts = GRADE_CUTS[grade];
+    const cuts = table[grade];
     let i = 0;
     while (i < cuts.length && cuts[i] < value) i++;
     return LETTERS[i];
@@ -175,7 +190,7 @@
   // one of a card's skill letters: stuff, loc, plv, loc_vl or loc_vr
   function skill(card, key) {
     if (card.version === 2) return card.grades[key];
-    return letter(card.skills[key], key.startsWith("loc") ? "loc" : key);
+    return letter(card.skills[key], key.startsWith("loc") ? "loc" : key, card.season ? SEASON_GRADE_CUTS : GRADE_CUTS);
   }
 
   const PITCH_NAMES = {
@@ -484,9 +499,34 @@
       text(57, fy(0.91), card.bio, 20, { color: LINE, ha: "left" }),
       text(fx(0.5), fy(0.896), card.title, 24),
       rect(fx(0.01), fy(0.883), fx(0.98), 86, { fill: BACKGROUND, stroke: TEXT, width: 3, alpha: LINE_ALPHA, rx: 15 }),
-      text(fx(0.5), fy(0.8425 + 0.037 / 2), card.line, 30, { color: LINE_TEXT }),
+      ...(card.summary ? segments(card.summary) : [text(fx(0.5), fy(0.8425 + 0.037 / 2), card.line, 30, { color: LINE_TEXT })]),
       logo(logoHref),
     ];
+  }
+
+  // A season's summary line: its stats across the box in segments sized to their text, the
+  // same room either side of every one, ruled between in the box's colour. A text's width
+  // is the sum of DM Sans Bold's advances at this size, in em, as Chromium sets the variable
+  // font the page loads (its optical size follows the font size); kerning moves a segment's
+  // by a pixel or so. A character not listed counts as 0.6.
+  const SEGMENT_SIZE = 28;
+  const ADVANCE = {
+    0: 0.694, 1: 0.318, 2: 0.539, 3: 0.567, 4: 0.621, 5: 0.563, 6: 0.593, 7: 0.528, 8: 0.59, 9: 0.593,
+    ".": 0.236, "%": 0.887, "-": 0.579, " ": 0.202, I: 0.228, P: 0.581, E: 0.539, R: 0.581, A: 0.676,
+    W: 0.995, H: 0.669, K: 0.615, s: 0.482, B: 0.605, C: 0.722, S: 0.565,
+  };
+  function segments(stats) {
+    const widths = stats.map((st) => [...st].reduce((w, c) => w + get(ADVANCE, c, 0.6), 0) * SEGMENT_SIZE * PT);
+    const room = (fx(0.98) - widths.reduce((a, w) => a + w, 0)) / stats.length;
+    const top = fy(0.883);
+    const out = [];
+    let x = fx(0.01);
+    stats.forEach((st, i) => {
+      if (i) out.push(line(x, top + 16, x, top + 86 - 16, { color: TEXT, width: 2, alpha: LINE_ALPHA }));
+      out.push(text(x + (widths[i] + room) / 2, fy(0.8425 + 0.037 / 2), st, SEGMENT_SIZE, { color: LINE_TEXT }));
+      x += widths[i] + room;
+    });
+    return out;
   }
 
   // the Skills (model) and Results (box score) grades
@@ -604,8 +644,8 @@
     const ax = new Axes([0.445, 0.598, 0.535, 0.19], [-xl, xl], [n - 0.5, -0.5]);
     const out = [
       text(fx(0.7125), fy(0.815), "Usage", 30),
-      text(fx(0.6525), fy(0.798), `vs LHB (${card.n_vl})`, 20, { color: LINE, ha: "right" }),
-      text(fx(0.7725), fy(0.798), `vs RHB (${card.n_vr})`, 20, { color: LINE, ha: "left" }),
+      text(fx(0.6525), fy(0.798), `vs LHB (${thousands(card.n_vl)})`, 20, { color: LINE, ha: "right" }),
+      text(fx(0.7725), fy(0.798), `vs RHB (${thousands(card.n_vr)})`, 20, { color: LINE, ha: "left" }),
     ];
     types.forEach((t, i) => {
       const color = get(MARKER_COLORS, t.code, MARKER_COLORS.UN);
@@ -724,8 +764,9 @@
       line(ax.x(0), ax.y(-(lim - 4)), ax.x(0), ax.y(lim - 4), { color: WHITE, width: 2, alpha: 0.5 }),
       line(ax.x(-(lim - 4)), ax.y(0), ax.x(lim - 4), ax.y(0), { color: WHITE, width: 2, alpha: 0.5 }),
       ...rings(ax, lim),
-      ...shapes(ax, card),
-      ...markers(ax, indexed(card).filter((p) => p.hb != null), "hb", "ivb"),
+      ...(card.season
+        ? seasonMarks(ax, card.plots.movement)
+        : [...shapes(ax, card), ...markers(ax, indexed(card).filter((p) => p.hb != null), "hb", "ivb")]),
       ...armLines(ax, card, lim),
     ];
     const labels = [
@@ -782,8 +823,12 @@
     const ax = new Axes([x0, 0.275, 0.2675, 0.287], [-2, 2], [-0.5, 5.5], true);
     const name = `loc${stand}`;
     const out = [ax.clip(name), `<g clip-path="url(#${name})">`, ...zone(ax)];
-    const shown = indexed(card).filter((p) => p.stand === stand && p.x != null);
-    out.push(...markers(ax, shown, "x", "z"), "</g>");
+    if (card.season) {
+      out.push(...seasonMarks(ax, card.plots[stand], { unit: 1 / 12 }), "</g>", ...minNote(card, stand)); // inches
+    } else {
+      const shown = indexed(card).filter((p) => p.stand === stand && p.x != null);
+      out.push(...markers(ax, shown, "x", "z"), "</g>");
+    }
     if (count) {
       const g = new Axes([gradeX0, 0.48, 0.1, 0.1], [0, 1], [0, 1]);
       out.push(text(g.x(0.5), g.y(0.7), "Locations", 15, { color: LINE }));
@@ -810,6 +855,10 @@
   const VELO_X = 0.15;
   const WIDTHS = [["Velo", 0], ["IVB", 0.9], ["HB", 0.65], ["Str%", 0.75], ["SwStr%", 0.75],
     ["CSW%", 0.75], ["xSLGcon", 0.75], ["plvStuff+", 0.75], ["PLV+", 0.7]];
+  // A season card spaces its numbers evenly instead: # to PLV+ at equal steps between the game
+  // card's first and last (figure fractions).
+  const EVEN_STATS = WIDTHS.map(([stat]) => stat);
+  const evenX = (i) => 0.235 + (i * (0.955 - 0.235)) / EVEN_STATS.length;
 
   // The velocity cell: coloured on its own, white with the coloured change beside it when
   // a comparison season is showing.
@@ -837,13 +886,18 @@
       out.push(text(fx(0.632), fy(0.2575), "*", 18, { alpha: 0.5 }));
       out.push(text(fx(0.97), fy(0.005), "*Some pitches missing data", 12, { ha: "right", alpha: 0.5 }));
     }
-    out.push(...HEADERS.map(([x, label]) => text(fx(x), fy(0.23), label, 16, { color: LINE })));
     const hdr = new Axes([0.01, 0.015, 0.25, 0.205], [0, 1], [n - 0.5, -0.5]);
     const tbl = new Axes([0.26, 0.015, 0.73, 0.205], [-0.5, 6.5], [n - 0.5, -0.5]);
-    const veloX = tbl.x(VELO_X); // the header sits over its own values, not beside them
-    out.push(text(veloX, fy(0.23), "Velo", 16, { color: LINE, attrs: ' data-cmp="0"' }));
-    for (const c of card.comparisons) {
-      out.push(text(veloX, fy(0.23), `Velo (vs '${String(c.year).slice(-2)})`, 16, { color: LINE, attrs: ` data-cmp="${c.year}"` }));
+    if (card.season) {
+      out.push(text(fx(HEADERS[0][0]), fy(0.23), HEADERS[0][1], 16, { color: LINE }));
+      out.push(...["#", ...EVEN_STATS].map((label, i) => text(fx(evenX(i)), fy(0.23), label, 16, { color: LINE })));
+    } else {
+      out.push(...HEADERS.map(([x, label]) => text(fx(x), fy(0.23), label, 16, { color: LINE })));
+      const veloX = tbl.x(VELO_X); // the header sits over its own values, not beside them
+      out.push(text(veloX, fy(0.23), "Velo", 16, { color: LINE, attrs: ' data-cmp="0"' }));
+      for (const c of card.comparisons) {
+        out.push(text(veloX, fy(0.23), `Velo (vs '${String(c.year).slice(-2)})`, 16, { color: LINE, attrs: ` data-cmp="${c.year}"` }));
+      }
     }
     const bw = Math.max(0.5, Math.min(0.8, 2 / n));
     out.push(...types.map((t, i) => band(`m:${t.code}`, fx(0.01), hdr.y(i - 0.5), fx(0.99), hdr.y(i + 0.5))));
@@ -852,6 +906,14 @@
       const y = hdr.y(i);
       out.push(rect(hdr.x(0.1), hdr.y(i - bw / 2), 0.075 * hdr.sx, bw * -hdr.sy, { fill: color, rx: 4 }));
       out.push(text(hdr.x(0.225), y, get(PITCH_NAMES, t.code, t.code), 20, { color, ha: "left" }));
+      if (card.season) {
+        out.push(text(fx(evenX(0)), y, thousands(t.n), 20));
+        EVEN_STATS.forEach((stat, j) => {
+          const c = cell(t.code, stat, t.values[stat]);
+          out.push(text(fx(evenX(j + 1)), y, c.text, 20, { color: c.color }));
+        });
+        return;
+      }
       out.push(text(hdr.x(0.9), y, thousands(t.n), 20));
       let x = VELO_X;
       for (const [stat, width] of WIDTHS) {
@@ -867,6 +929,76 @@
     return out;
   }
 
+  // ---- the season card --------------------------------------------------------------
+  // A season plot's layers, one per pitch type, in the order they're drawn (season.py's:
+  // Movement's rarer types on top, a location plot's most thrown to its side): a type's KDE
+  // tiers (the regions holding its densest pitches, outermost first: season.py says how
+  // many), or its pitches, drawn as the game card draws them but each at half opacity, so
+  // where they pile up shows. Every tier is the same light wash of the type's colour, so
+  // the cores darken where the tiers stack, and the outermost carries the type's outline.
+  // Tiers and points are in the plot's data units. A type's n tiers show at 1/(n+1), 2/(n+1) ... of full, outermost to
+  // innermost (one tier at 50%; three at 25%, 50% and 75%): they nest, so each is washed at
+  // the opacity that takes the one under it to its level.
+  function tierAlphas(n) {
+    const level = (k) => (k < 0 ? 0 : (k + 1) / (n + 1));
+    return Array.from({ length: n }, (_, k) => 1 - (1 - level(k)) / (1 - level(k - 1)));
+  }
+  // `unit` is a path or point unit in the plot's data units; `alphas` overrides the tiers'
+  // washes.
+  function seasonMarks(ax, layers, { unit = 1, alphas = null } = {}) {
+    const scale = unit === 1 ? "" : ` scale(${fixed(unit, 6)})`;
+    return layers.map((l) => {
+      const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
+      if (!l.tiers) {
+        const uses = l.points.map(([x, y]) => `<use href="#m" x="${fmt(ax.x(x * unit))}" y="${fmt(ax.y(y * unit))}" opacity="0.5"/>`).join("");
+        return `<g fill="${color}">${uses}</g>`;
+      }
+      const alpha = alphas || tierAlphas(l.tiers.length);
+      const paths = l.tiers.flatMap((ds, k) => ds.map((d) => {
+        const edge = k === 0 ? ` stroke="${color}" stroke-width="1" vector-effect="non-scaling-stroke"` : "";
+        return `<path d="${d}" fill-opacity="${fixed(alpha[k], 3)}"${edge}/>`;
+      }));
+      return `<g fill="${color}" transform="${ax.transform()}${scale}">${paths.join("")}</g>`;
+    });
+  }
+
+  // A season location plot that draws a type thrown to its side too seldom for regions as
+  // its pitches says which are scatter, in its bottom corner away from the other plot
+  // (left against lefties, right against righties), set as the Movement plot's comparison
+  // note is, in three lines so each clears the plate. A copy in the background colour,
+  // outlined, goes under it to clear any pitch there.
+  function minNote(card, stand) {
+    if (!card.plots.scattered[stand].length) return [];
+    const [x, ha] = stand === "L" ? [0.44, "left"] : [0.985, "right"];
+    const note = (opts) => text(fx(x), fy(0.285), `<${card.plots.min} pitches\nshown as\nscatter`, 12, { ha, va: "baseline", ...opts });
+    const knockout = ` stroke="${BACKGROUND}" stroke-width="${fixed(3 * PT, 1)}" stroke-linejoin="round"`;
+    return [note({ color: BACKGROUND, attrs: knockout }), note({ alpha: 0.5 })];
+  }
+
+  // a season's Skills: its three letters across the room of the game card's Skills and
+  // Results tiles, ruled between as the summary line is, the rules running as far past the
+  // labels and letters as the summary's run past its stats
+  function seasonSkills(card) {
+    const ax = new Axes([0.01, 0.705, 0.425, 0.1], [0, 1], [0, 1]);
+    const out = [text(fx(0.2225), fy(0.815), "Skills", 30)];
+    for (const x of [1 / 3, 2 / 3]) {
+      out.push(line(ax.x(x), ax.y(0.93), ax.x(x), ax.y(0.22), { color: TEXT, width: 2, alpha: LINE_ALPHA }));
+    }
+    for (const [x, label, key, size] of [[1 / 6, "Stuff", "stuff", 22], [0.5, "Locations", "loc", 20], [5 / 6, "PLV", "plv", 22]]) {
+      const grade = skill(card, key);
+      out.push(text(ax.x(x), ax.y(0.8), label, size, { color: LINE }));
+      out.push(text(ax.x(x), ax.y(0.4), grade, 60, { color: GRADE_COLORS[grade] }));
+    }
+    return out;
+  }
+
+  // the season card's rules: without the Results tile, the rule between it and Skills goes
+  // and the top edge's gap for a title moves to the middle of the one tile
+  const SEASON_BORDERS = [
+    [0.01, 0.175, 0.815, 0.815], [0.27, 0.6525, 0.815, 0.815],
+    ...BORDERS.filter((_, i) => ![0, 1, 3, 8].includes(i)), // Skills' and Results' top edges, the rule between
+  ];
+
   // ---- the card ---------------------------------------------------------------------
   // the whole card as one SVG; opts.logo is the Pitcher List mark's URL
   function svg(card, opts = {}) {
@@ -876,17 +1008,17 @@
     const body = [
       rect(0, 0, W, H, { fill: BACKGROUND }),
       ...header(card, opts.logo || LOGO),
-      ...skills(card),
+      ...(card.season ? seasonSkills(card) : skills(card)),
       ...fastball(card),
       ...usage(card),
       ...movement(card),
       ...locations(card),
       ...metrics(card),
-      ...BORDERS.map((b) => border(...b)),
+      ...(card.season ? SEASON_BORDERS : BORDERS).map((b) => border(...b)),
     ];
     return (
       `<svg id="card" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" ` +
-      'role="img" aria-label="PLV pitcher game card">' +
+      `role="img" aria-label="PLV pitcher ${card.season ? "season" : "game"} card">` +
       "<style>text{font-family:'DM Sans',system-ui,sans-serif;font-weight:700}</style>" +
       '<defs><linearGradient id="name" x1="0" y1="1" x2="0" y2="0">' +
       `<stop offset="0" stop-color="${NAME_GRADIENT[0]}"/>` +
@@ -898,11 +1030,11 @@
 
   // ---- on a page --------------------------------------------------------------------
   // the card drawn into `el` (replacing what was there), its pitches hoverable unless
-  // opts.interactive is false; returns its <svg>
+  // opts.interactive is false (a season card has none to hover); returns its <svg>
   function draw(el, card, opts = {}) {
     el.innerHTML = svg(card, opts);
     const svgEl = el.querySelector("svg");
-    if (opts.interactive !== false) interactive(el, svgEl, card);
+    if (opts.interactive !== false && !card.season) interactive(el, svgEl, card);
     return svgEl;
   }
 
@@ -1151,11 +1283,12 @@
 
   // what the PNG is saved as: Name_Surname_2026-09-27_LAA_SEA_PLV_card.png
   function filename(card) {
+    if (card.season) return `${card.name.replace(/ /g, "_")}_${card.season}${card.stint ? `_${card.team}` : ""}_season_PLV_card.png`;
     return `${card.name.replace(/ /g, "_")}_${card.date}_${card.team}_${card.opp}_PLV_card.png`;
   }
 
   return {
-    VERSION, LOGO, GRADE_CUTS, svg, draw, show, comparisonYear, png, download, copyPng, filename, letter,
+    VERSION, LOGO, GRADE_CUTS, SEASON_GRADE_CUTS, svg, draw, show, comparisonYear, png, download, copyPng, filename, letter,
     skill, statCell: cell, GRADE_COLORS, PITCH_NAMES, MARKER_COLORS, LETTERS, fixed, pyRound,
   };
 });
