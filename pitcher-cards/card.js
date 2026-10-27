@@ -918,8 +918,8 @@
   // season.py says how many), or its pitches, drawn as the game card draws them. Every
   // tier is the same light wash of the type's colour, so the cores darken where the tiers
   // stack, and the outermost carries the type's outline. Tiers and points are in the
-  // plot's data units. Five washes of 0.14 stack to about the 0.5 three of 0.22 did.
-  const TIER_ALPHA = 0.14;
+  // plot's data units.
+  const TIER_ALPHA = 0.22;
   function seasonMarks(ax, layers) {
     return layers.map((l) => {
       const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
@@ -928,7 +928,7 @@
         return `<g fill="${color}">${uses}</g>`;
       }
       const paths = l.tiers.flatMap((ds, k) => ds.map((d) => {
-        const edge = k === 0 ? ` stroke="${color}" stroke-width="2.5" vector-effect="non-scaling-stroke"` : "";
+        const edge = k === 0 ? ` stroke="${color}" stroke-width="1" vector-effect="non-scaling-stroke"` : "";
         return `<path d="${d}" fill-opacity="${TIER_ALPHA}"${edge}/>`;
       }));
       return `<g fill="${color}" transform="${ax.transform()}">${paths.join("")}</g>`;
@@ -937,12 +937,13 @@
 
   // What a season's location plot shows, in its bottom corner away from the other plot
   // (left against lefties, right against righties), set as the Movement plot's comparison
-  // note is: the sample, or every pitch when there were no more than it takes.
+  // note is: each type's most common locations, or every pitch when there were no more
+  // than the sample takes.
   function locationNote(card, stand) {
     const shown = card.plots[stand].reduce((n, l) => n + l.points.length, 0);
     const note = shown < card.plots.sample
       ? `All ${thousands(shown)} pitches\nto ${stand}HB`
-      : `${card.plots.sample} pitches,\nby pitch mix,\nat each type's\nmost common\nlocations`; // clear of the plate
+      : "Most common\nlocations";
     const [x, ha] = stand === "L" ? [0.44, "left"] : [0.985, "right"];
     return text(fx(x), fy(0.285), note, 12, { ha, va: "baseline", alpha: 0.5 });
   }

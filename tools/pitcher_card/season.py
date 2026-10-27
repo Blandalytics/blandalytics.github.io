@@ -16,11 +16,12 @@ A pitcher's cards are pooled into:
 - the usage and the pitch type table, from the pitches as prep.game_table makes a game's;
   the primary fastball's extension and HAVAA, which the pitches don't carry, are its
   games' values weighted by its pitches in them;
-- Movement as five KDE tiers per pitch type, each type on its own Scott kernel (as
-  scipy's gaussian_kde sets it; the grid cut 3 bandwidths past the data): the outermost
-  around the type's densest 95% of pitches (ranked by the KDE at each pitch), the inner
-  tiers around four fifths, three, two and one fifth as many (76%, 57%, 38%, 19%). A type
-  with fewer than KDE_MIN pitches is drawn as its pitches.
+- Movement as three KDE tiers per pitch type, each type on its own Scott kernel (as
+  scipy's gaussian_kde sets it) widened MOVEMENT_BW times, as shapes.py widens its (seaborn's
+  bw_adjust), so the tails a 95% edge runs through come out smooth; the grid is cut 3
+  bandwidths past the data. The outermost tier is around the type's densest 95% of pitches
+  (ranked by the KDE at each pitch), the inner ones two thirds and a third as many (63%,
+  32%). A type with fewer than KDE_MIN pitches is drawn as its pitches.
 - the locations against each side as LOCATION_SAMPLE of its pitches, shared among the
   types by the pitch mix to that side (30% four-seamers, 30 of them), at least one of every
   type thrown there, each type's at its most common locations: its pitches where its KDE
@@ -51,7 +52,8 @@ FASTBALLS = ("FF", "SI", "FC")
 TYPE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
 MOVEMENT_SHARE = 0.95  # Movement's outer tier: the type's densest 95% of pitches
 LOCATION_SAMPLE = 100  # the pitches drawn in each location plot
-TIER_SHARES = (1, 0.8, 0.6, 0.4, 0.2)  # each tier's pitches against the outer tier's
+TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
+MOVEMENT_BW = 2  # Movement's kernels: each type's Scott kernel, twice as wide
 GRIDSIZE = 150
 CUT = 3
 KDE_MIN = 10
@@ -260,6 +262,7 @@ def movement_layers(pitches: list[dict], order: list[str]) -> list[dict]:
     out = []
     for code, xy in _by_type(pitches, "hb", "ivb", order).items():
         cov = kernel([xy]) if len(xy) >= KDE_MIN else None
+        cov = None if cov is None else cov * MOVEMENT_BW**2
         if cov is not None:
             out.append({"code": code, "tiers": tiers(xy, round(MOVEMENT_SHARE * len(xy)), cov)})
         else:
