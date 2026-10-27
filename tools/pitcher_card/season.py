@@ -559,9 +559,10 @@ def build_all(s: requests.Session, by: dict[int, list[dict]], sched: dict[int, G
 
 
 def entry(key: str, card: dict) -> dict:
-    """A card's line in the season index: who, how much, and his grades and Stuff+ by type,
-    as the page's table and Pitcher list show them. A team's part of a traded pitcher's
-    season is a ``stint``; his whole season is ``traded``."""
+    """A card's line in the season index: who, how much, and his grades and Stuff+ by type
+    (with each type's pitches, which the page's table holds to a share of its threshold), as
+    the page's table and Pitcher list show them. A team's part of a traded pitcher's season
+    is a ``stint``; his whole season is ``traded``."""
     e = {
         "key": key, "id": card["pitcher_id"], "name": card["name"], "team": card["team"],
         "hand": card["hand"], "n": sum(r["n"] for r in card["types"]), "g": card["games"],
@@ -569,6 +570,7 @@ def entry(key: str, card: dict) -> dict:
         "skills": {k: _num(card["skills"][k], 2) for k in ("stuff", "loc", "plv")},
         "stuff": {r["code"]: r["values"]["plvStuff+"] for r in card["types"]
                   if r["values"]["plvStuff+"] is not None},
+        "thrown": {r["code"]: r["n"] for r in card["types"]},
     }  # fmt: skip
     if card["stint"]:
         e["stint"] = True

@@ -207,7 +207,8 @@ at 1,000 for a full season, prorated by the games each team had played (about 37
 60-game season, and less early in a season under way). **Split traded pitchers by team** swaps
 a traded pitcher's whole season for a card for each team he pitched for, its line MLB's for
 that team. The table is the Game Cards page's: pitches, innings, the season letters and Stuff+
-by pitch type, sorted by Stuff (by the means behind the letters, best first); a name opens its
+by pitch type (a type's only where he threw it at least 1% as often as Min pitches asks: 10
+times at 1,000), sorted by Stuff (by the means behind the letters, best first); a name opens its
 card, and the two split the window as there. `season.html#<season>/<key>` links a card (`<key>`
 the pitcher's id, or `<id>-<team>` for a team's part of his season; `?min=` and `?split=1` set
 the filters, and a linked card is shown whatever its pitch count).
