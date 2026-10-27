@@ -887,8 +887,8 @@
   }
 
   // ---- the season card --------------------------------------------------------------
-  // Each pitch type's KDE tiers (the regions holding the densest 50%, 33% and 17% of its
-  // pitches, outermost first), the most thrown type first so the rarer ones lie on top.
+  // Each pitch type's KDE tiers (the regions holding its densest pitches, outermost first:
+  // season.py says how many), the most thrown type first so the rarer ones lie on top.
   // Every tier is the same light wash of the type's colour, so the cores darken where the
   // tiers stack, and the outermost carries the type's outline. A type with too few pitches
   // for a KDE comes as its pitches, drawn as the game card draws them. `unit` is the size

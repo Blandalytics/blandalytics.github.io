@@ -173,14 +173,15 @@ phone the page scrolls, the card after the table. The table collapses, which giv
 the window again, and remembers it.
 
 A demo of a **season-long card** is at `pitcher-cards/season.html`, for six pitchers' 2026
-regular seasons (`pitcher-cards/season-demo/`, written by `tools/pitcher_card/season.py`
-from the bucket's day files). It is the game card for a whole season, with no comparison
-season: the summary line gives IP, ERA, WHIP, K% and BB% (MLB's season line) and SLGcon and
-CSW% (from the pitches); one Skills tile takes the room of Skills and Results, its letters
-the season means on `card.js`'s `SEASON_GRADE_CUTS` (`season.py --cuts` fits them as
-`grade_cuts.py` fits the game cuts, to every pitcher's season); and Movement and the
-locations show each pitch type as KDE tiers, the regions holding the densest 50%, 33% and
-17% of its pitches (seaborn's `kdeplot(levels=4, thresh=0.5)` per type).
+regular seasons (`pitcher-cards/season-demo/`, written by `tools/pitcher_card/season.py` from
+the bucket's day files). It is the game card for a whole season, with no comparison season:
+the summary line gives IP, ERA, WHIP, K% and BB% (MLB's season line) and SLGcon and CSW% (from
+the pitches); one Skills tile takes the room of Skills and Results, its letters the season
+means on `card.js`'s `SEASON_GRADE_CUTS` (`season.py --cuts` fits them as `grade_cuts.py` fits
+the game cuts, to every pitcher's season); and Movement and the locations show each pitch type
+as three KDE tiers around its densest pitches, ranked by the KDE at each pitch: 75%, 50% and
+25% of them in Movement, the densest 100, 67 and 33 in a location plot (75%, 50% and 25% of a
+type thrown fewer than 134 times to that side).
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones

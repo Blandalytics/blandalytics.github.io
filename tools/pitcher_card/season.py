@@ -16,11 +16,12 @@ A pitcher's cards are pooled into:
 - the usage and the pitch type table, from the pitches as prep.game_table makes a game's;
   the primary fastball's extension and HAVAA, which the pitches don't carry, are its
   games' values weighted by its pitches in them;
-- the movement and location plots as KDE tiers per pitch type: the regions holding the
-  densest 50%, 33% and 17% of the type's pitches, as seaborn's
-  kdeplot(levels=4, thresh=0.5, fill=True, common_norm=False) fills them (Scott's
-  bandwidth, the grid cut 3 bandwidths past the data). A type with fewer than KDE_MIN
-  pitches in a plot is drawn as its pitches instead.
+- the movement and location plots as three KDE tiers per pitch type (Scott's bandwidth,
+  the grid cut 3 bandwidths past the data, each type on its own). The outermost tier is
+  the region around the type's densest pitches (ranked by the KDE at each pitch): 75% of
+  them in Movement, its densest 100 in a location plot (75% of a type with fewer than
+  134 there, so a few strays can't stretch it). The inner tiers hold two thirds and one
+  third as many. A type with fewer than KDE_MIN pitches in a plot is drawn as its pitches.
 
 There are no comparison seasons on a season card."""
 
@@ -46,7 +47,9 @@ BUCKET = "https://data.blandalytics.com/cards"
 STATSAPI = "https://statsapi.mlb.com/api/v1"
 FASTBALLS = ("FF", "SI", "FC")
 TYPE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
-ISOPROPS = (0.5, 2 / 3, 5 / 6)  # each tier's share of the mass below it: the top 50%, 33%, 17%
+MOVEMENT_SHARE = 0.75  # Movement's outer tier: the type's densest 75% of pitches
+LOCATION_PITCHES = 100  # a location plot's: its densest 100 (or 75%, if that's fewer)
+TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
 GRIDSIZE = 150
 CUT = 3
 KDE_MIN = 10
@@ -197,16 +200,11 @@ def fastball(rows: list[dict], games: list[dict]) -> dict | None:
 
 
 # ---- the KDE tiers ------------------------------------------------------------------
-def _level(z: np.ndarray, isoprop: float) -> float:
-    """seaborn's _quantile_to_level: the density above which 1 - isoprop of the mass lies."""
-    values = np.sort(z.ravel())[::-1]
-    cumulative = np.cumsum(values) / values.sum()
-    return float(values[min(np.searchsorted(cumulative, 1 - isoprop), len(values) - 1)])
-
-
-def tiers(xy: np.ndarray) -> list[list[str]] | None:
+def tiers(xy: np.ndarray, inside: int) -> list[list[str]] | None:
     """One type's KDE regions, outermost first, as path data in tenths (shapes._paths), or
-    None when a KDE cannot be fit to them."""
+    None when a KDE cannot be fit to them. The outermost holds the ``inside`` pitches the
+    KDE puts densest: its edge is the density at the last of them, so exactly they lie
+    within it; the inner tiers' edges are the densities at two thirds and a third of the way."""
     try:
         kde = gaussian_kde(xy.T)
     except (np.linalg.LinAlgError, ValueError):
@@ -216,13 +214,23 @@ def tiers(xy: np.ndarray) -> list[list[str]] | None:
     gx, gy = np.linspace(lo[0], hi[0], GRIDSIZE), np.linspace(lo[1], hi[1], GRIDSIZE)
     xx, yy = np.meshgrid(gx, gy)
     z = kde(np.vstack([xx.ravel(), yy.ravel()])).reshape(xx.shape)
-    return [_paths(gx, gy, z, _level(z, q)) for q in ISOPROPS]
+    at = np.sort(kde(xy.T))[::-1]  # the density at each pitch, densest first
+    return [_paths(gx, gy, z, float(at[max(1, round(inside * f)) - 1])) for f in TIER_SHARES]
 
 
-def layers(pitches: list[dict], xkey: str, ykey: str, scale: float, order: list[str]) -> list[dict]:
+def movement_floor(n: int) -> int:
+    return round(MOVEMENT_SHARE * n)
+
+
+def location_floor(n: int) -> int:
+    return min(LOCATION_PITCHES, round(MOVEMENT_SHARE * n))
+
+
+def layers(pitches, xkey: str, ykey: str, scale: float, order: list[str], floor) -> list[dict]:
     """Each pitch type's tiers in one plot, most thrown first, its points (in the plot's own
-    units) instead when it has too few for a KDE. The tiers are in plot units x ``scale``
-    (locations go in inches, so the paths keep their tenths)."""
+    units) instead when it has too few for a KDE. ``floor(n)`` is how many of a type's n
+    pitches its outer tier holds. The tiers are in plot units x ``scale`` (locations go in
+    inches, so the paths keep their tenths)."""
     out = []
     for code in order:
         ps = [p for p in pitches if p["t"] == code]
@@ -231,7 +239,8 @@ def layers(pitches: list[dict], xkey: str, ykey: str, scale: float, order: list[
         ]
         if not pts:
             continue
-        t = tiers(np.array(pts, dtype=float) * scale) if len(pts) >= KDE_MIN else None
+        xy = np.array(pts, dtype=float) * scale
+        t = tiers(xy, floor(len(pts))) if len(pts) >= KDE_MIN else None
         dots = [[round(x, 2), round(y, 2)] for x, y in pts]
         out.append({"code": code, "tiers": t} if t else {"code": code, "points": dots})
     return out
@@ -304,9 +313,13 @@ def build(s: requests.Session, games: list[dict], year: int) -> dict:
         "fastball": fastball(rows, games),
         "types": rows,
         "kde": {
-            "movement": layers(pitches, "hb", "ivb", 1, order),
-            "L": layers([p for p in pitches if p["stand"] == "L"], "x", "z", 12, order),
-            "R": layers([p for p in pitches if p["stand"] == "R"], "x", "z", 12, order),
+            "movement": layers(pitches, "hb", "ivb", 1, order, movement_floor),
+            **{
+                side: layers(
+                    [p for p in pitches if p["stand"] == side], "x", "z", 12, order, location_floor
+                )
+                for side in "LR"
+            },
         },
         "missing_data": any(p.get("plvStuff+") is None for p in pitches),
         "comparisons": [],
