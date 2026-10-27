@@ -172,7 +172,7 @@ portrait one the table on top, at most half the height, and the card below in th
 phone the page scrolls, the card after the table. The table collapses, which gives the card
 the window again, and remembers it.
 
-A demo of a **season-long card** is at `pitcher-cards/season.html`, for eight pitchers' 2026
+A demo of a **season-long card** is at `pitcher-cards/season.html`, for nine pitchers' 2026
 regular seasons (`pitcher-cards/season-demo/`, written by `tools/pitcher_card/season.py` from
 the bucket's day files). It is the game card for a whole season, with no comparison season:
 the summary line is in segments sized to their text, the same room either side of each, ruled
