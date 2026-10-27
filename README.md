@@ -179,13 +179,15 @@ the summary line is in segments sized to their text, the same room either side o
 between: IP, ERA, WHIP, strikeouts, K% and BB% (MLB's season line) and CSW% (from the
 pitches); one Skills tile takes the room of Skills and Results, its letters the season means
 on `card.js`'s `SEASON_GRADE_CUTS` (`season.py --cuts` fits them as `grade_cuts.py` fits the
-game cuts, to every pitcher's season); and Movement shows each pitch type as three KDE tiers
-around its densest pitches, ranked by the KDE at each pitch (90%, 60% and 30% of them), each
-type on its own Scott kernel. Each location plot shows 100 of the season's pitches to that
-side in the pitch mix thrown there (30% four-seamers, 30 of them; at least one of every type),
-each type's at its most common locations: the pitches its KDE puts densest, on one kernel
-shared by the plot's types (Scott's rule on all its pitches, their spread pooled within types)
-so that a rarely thrown pitch is ranked on the same scale as the rest.
+game cuts, to every pitcher's season); and Movement shows each pitch type as five KDE tiers
+around its densest pitches, ranked by the KDE at each pitch (95%, 76%, 57%, 38% and 19% of
+them), each type on its own Scott kernel. Each location plot shows 100 of the season's pitches
+to that side in the pitch mix thrown there (30% four-seamers, 30 of them; at least one of
+every type), each type's at its most common locations: the pitches its KDE puts densest, on
+one kernel shared by the plot's types (Scott's rule on all its pitches, their spread pooled
+within types) so that a rarely thrown pitch is ranked on the same scale as the rest. A note in
+each location plot's outer bottom corner says what it shows (all of the pitches to that side,
+when there are 100 or fewer).
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones

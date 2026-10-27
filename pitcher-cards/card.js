@@ -824,7 +824,7 @@
     const name = `loc${stand}`;
     const out = [ax.clip(name), `<g clip-path="url(#${name})">`, ...zone(ax)];
     if (card.season) {
-      out.push(...seasonMarks(ax, card.plots[stand]), "</g>"); // 100 of its pitches
+      out.push(...seasonMarks(ax, card.plots[stand]), "</g>", locationNote(card, stand));
     } else {
       const shown = indexed(card).filter((p) => p.stand === stand && p.x != null);
       out.push(...markers(ax, shown, "x", "z"), "</g>");
@@ -918,8 +918,8 @@
   // season.py says how many), or its pitches, drawn as the game card draws them. Every
   // tier is the same light wash of the type's colour, so the cores darken where the tiers
   // stack, and the outermost carries the type's outline. Tiers and points are in the
-  // plot's data units.
-  const TIER_ALPHA = 0.22;
+  // plot's data units. Five washes of 0.14 stack to about the 0.5 three of 0.22 did.
+  const TIER_ALPHA = 0.14;
   function seasonMarks(ax, layers) {
     return layers.map((l) => {
       const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
@@ -933,6 +933,18 @@
       }));
       return `<g fill="${color}" transform="${ax.transform()}">${paths.join("")}</g>`;
     });
+  }
+
+  // What a season's location plot shows, in its bottom corner away from the other plot
+  // (left against lefties, right against righties), set as the Movement plot's comparison
+  // note is: the sample, or every pitch when there were no more than it takes.
+  function locationNote(card, stand) {
+    const shown = card.plots[stand].reduce((n, l) => n + l.points.length, 0);
+    const note = shown < card.plots.sample
+      ? `All ${thousands(shown)} pitches\nto ${stand}HB`
+      : `${card.plots.sample} pitches,\nby pitch mix,\nat each type's\nmost common\nlocations`; // clear of the plate
+    const [x, ha] = stand === "L" ? [0.44, "left"] : [0.985, "right"];
+    return text(fx(x), fy(0.285), note, 12, { ha, va: "baseline", alpha: 0.5 });
   }
 
   // a season's Skills: its three letters across the room of the game card's Skills and

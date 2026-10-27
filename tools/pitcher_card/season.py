@@ -16,11 +16,11 @@ A pitcher's cards are pooled into:
 - the usage and the pitch type table, from the pitches as prep.game_table makes a game's;
   the primary fastball's extension and HAVAA, which the pitches don't carry, are its
   games' values weighted by its pitches in them;
-- Movement as three KDE tiers per pitch type, each type on its own Scott kernel (as
-  scipy's gaussian_kde sets it; the grid cut 3 bandwidths past the data): the outermost around
-  the type's densest 90% of pitches (ranked by the KDE at each pitch), the inner tiers
-  around two thirds and a third as many. A type with fewer than KDE_MIN pitches is drawn
-  as its pitches.
+- Movement as five KDE tiers per pitch type, each type on its own Scott kernel (as
+  scipy's gaussian_kde sets it; the grid cut 3 bandwidths past the data): the outermost
+  around the type's densest 95% of pitches (ranked by the KDE at each pitch), the inner
+  tiers around four fifths, three, two and one fifth as many (76%, 57%, 38%, 19%). A type
+  with fewer than KDE_MIN pitches is drawn as its pitches.
 - the locations against each side as LOCATION_SAMPLE of its pitches, shared among the
   types by the pitch mix to that side (30% four-seamers, 30 of them), at least one of every
   type thrown there, each type's at its most common locations: its pitches where its KDE
@@ -49,9 +49,9 @@ BUCKET = "https://data.blandalytics.com/cards"
 STATSAPI = "https://statsapi.mlb.com/api/v1"
 FASTBALLS = ("FF", "SI", "FC")
 TYPE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
-MOVEMENT_SHARE = 0.9  # Movement's outer tier: the type's densest 90% of pitches
+MOVEMENT_SHARE = 0.95  # Movement's outer tier: the type's densest 95% of pitches
 LOCATION_SAMPLE = 100  # the pitches drawn in each location plot
-TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
+TIER_SHARES = (1, 0.8, 0.6, 0.4, 0.2)  # each tier's pitches against the outer tier's
 GRIDSIZE = 150
 CUT = 3
 KDE_MIN = 10
@@ -229,7 +229,7 @@ def tiers(xy: np.ndarray, inside: int, cov: np.ndarray) -> list[list[str]]:
     """One type's KDE regions, outermost first, as path data in tenths (shapes._paths). The
     outermost holds the ``inside`` pitches the KDE puts densest: its edge is the density at
     the last of them, so exactly they lie within it; the inner tiers' edges are the
-    densities at two thirds and a third of the way."""
+    densities at TIER_SHARES of the way."""
     bw = np.sqrt(np.diag(cov))
     lo, hi = xy.min(axis=0) - bw * CUT, xy.max(axis=0) + bw * CUT
     gx, gy = np.linspace(lo[0], hi[0], GRIDSIZE), np.linspace(lo[1], hi[1], GRIDSIZE)
@@ -371,6 +371,7 @@ def build(s: requests.Session, games: list[dict], year: int) -> dict:
         "fastball": fastball(rows, games),
         "types": rows,
         "plots": {
+            "sample": LOCATION_SAMPLE,  # the location plots' pitches, when there are more
             "movement": movement_layers(pitches, order),
             **{
                 side: location_points([p for p in pitches if p["stand"] == side], order)
