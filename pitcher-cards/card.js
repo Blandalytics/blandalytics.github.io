@@ -765,7 +765,7 @@
       line(ax.x(-(lim - 4)), ax.y(0), ax.x(lim - 4), ax.y(0), { color: WHITE, width: 2, alpha: 0.5 }),
       ...rings(ax, lim),
       ...(card.season
-        ? seasonMarks(ax, card.plots.movement, { edge: 1 })
+        ? seasonMarks(ax, card.plots.movement, { edge: 2.4 })
         : [...shapes(ax, card), ...markers(ax, indexed(card).filter((p) => p.hb != null), "hb", "ivb")]),
       ...armLines(ax, card, lim),
     ];
@@ -945,8 +945,9 @@
     return Array.from({ length: n }, (_, k) => 1 - (1 - level(k)) / (1 - level(k - 1)));
   }
   // `unit` is a path or point unit in the plot's data units; `alphas` overrides the tiers'
-  // washes; `edge` is the outermost tier's outline width.
-  function seasonMarks(ax, layers, { unit = 1, alphas = null, edge = 2 } = {}) {
+  // washes; `edge` is the outermost tier's outline width in the card's own units, so it scales
+  // with the card: the page at any width and the 3000 x 4000 Share image draw it alike.
+  function seasonMarks(ax, layers, { unit = 1, alphas = null, edge = 4.8 } = {}) {
     const scale = unit === 1 ? "" : ` scale(${fixed(unit, 6)})`;
     return layers.map((l) => {
       const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
@@ -956,8 +957,9 @@
       }
       // given washes, only as many tiers as there are washes (the outermost first)
       const alpha = alphas || tierAlphas(l.tiers.length);
+      const width = fixed(edge / (ax.sx * unit), 4); // in the paths' units: the group scales them by sx * unit
       const paths = l.tiers.slice(0, alpha.length).flatMap((ds, k) => ds.map((d) => {
-        const stroke = k === 0 ? ` stroke="${color}" stroke-width="${edge}" vector-effect="non-scaling-stroke"` : "";
+        const stroke = k === 0 ? ` stroke="${color}" stroke-width="${width}"` : "";
         return `<path d="${d}" fill-opacity="${fixed(alpha[k], 3)}"${stroke}/>`;
       }));
       return `<g fill="${color}" transform="${ax.transform()}${scale}">${paths.join("")}</g>`;
