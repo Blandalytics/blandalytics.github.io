@@ -149,9 +149,9 @@ of numbers into the same R2 bucket as the data files (a season is ~22,000 cards,
 GitHub Pages site may hold), and [`pitcher-cards/card.js`](pitcher-cards/card.js) draws it:
 one SVG in the original figure's 1500 × 2000 coordinate system, so every panel keeps the
 matplotlib layout, with every format and colour decided there. So a change to how the card
-looks is a commit to `card.js` and needs no rebuild; only a change to the data does. Both
+looks is a commit to `card.js` and needs no rebuild; only a change to the data does. The
 pages load it as `card.js?v=N` (Cloudflare holds scripts for hours under their exact URL):
-bump N in `index.html` and `card.html` with each change.
+bump N in `index.html`, `card.html` and `season.html` with each change.
 The picker in [`pitcher-cards/index.html`](pitcher-cards/index.html) draws the card in the
 page, and [`pitcher-cards/card.html`](pitcher-cards/card.html)`#<gamePk>-<pitcherId>` shows
 one full size (`&cmp=<year>` picks the comparison season, `&cmp=0` none). A card can be
@@ -171,26 +171,6 @@ landscape window the table on the left and the card on the right at the window's
 portrait one the table on top, at most half the height, and the card below in the rest. On a
 phone the page scrolls, the card after the table. The table collapses, which gives the card
 the window again, and remembers it.
-
-A demo of a **season-long card** is at `pitcher-cards/season.html`, for nine pitchers' 2026
-regular seasons (`pitcher-cards/season-demo/`, written by `tools/pitcher_card/season.py` from
-the bucket's day files). It is the game card for a whole season, with no comparison season:
-the summary line is in segments sized to their text, the same room either side of each, ruled
-between: IP, ERA, WHIP, strikeouts, K% and BB% (MLB's season line) and CSW% (from the
-pitches); one Skills tile takes the room of Skills and Results, ruled between its three
-letters as the summary line is, its letters the season means
-on `card.js`'s `SEASON_GRADE_CUTS` (`season.py --cuts` fits them as `grade_cuts.py` fits the
-game cuts, to every pitcher's season); and Movement shows each pitch type as three KDE tiers
-around its densest pitches, ranked by the KDE at each pitch (95%, 63% and 32% of them, shaded
-at 25%, 50% and 75%), each type on its own Scott kernel widened twice over (seaborn's
-`bw_adjust=2`) so the edges come out smooth. Each location plot shows every pitch type's KDE
-regions against that side at seaborn's `kdeplot(levels=4, thresh=0.64, fill=True)`, the
-densest 36%, 24% and 12% of its KDE mass on its own Scott kernel, shaded at 25%, 50% and 75%
-and outlined in its colour; 0.64 is the threshold whose regions best match a 1-SD ellipse of
-the same pitches. A type thrown fewer than 20 times to a side is drawn as its pitches, each
-at 50% opacity (as are Movement's), and that plot says so ("20+ pitches shown as densities",
-in three lines that clear the plate) in its outer bottom corner. Each plot stacks its types
-by how often they were thrown to that side, the most thrown on top.
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones
@@ -216,6 +196,57 @@ by how often they were thrown to that side, the most thrown on top.
   until a `force` run rebuilds the day. Once a day is rebuilt its old pages are retired (see
   *Backfilling or rebuilding*): each becomes a small redirect to the card's view,
   `pitcher-cards/card.html#<gamePk>-<pitcherId>`, so a link to one still lands on the card.
+
+### Season cards
+
+[blandalytics.com/pitcher-cards/season.html](https://blandalytics.com/pitcher-cards/season.html)
+— the same card for a pitcher's whole regular season, for every MLB pitcher since 2020 (the
+first season the models' plus scale covers). Pick a season and a pitcher; the Pitcher list and
+the grades table beside the card hold the pitchers with at least **Min pitches**, which starts
+at 1,000 for a full season, prorated by the games each team had played (about 370 in 2020's
+60-game season, and less early in a season under way). **Split traded pitchers by team** swaps
+a traded pitcher's whole season for a card for each team he pitched for, its line MLB's for
+that team. The table is the Game Cards page's: pitches, innings, the season letters and Stuff+
+by pitch type, sorted by Stuff (by the means behind the letters, best first); a name opens its
+card, and the two split the window as there. `season.html#<season>/<key>` links a card (`<key>`
+the pitcher's id, or `<id>-<team>` for a team's part of his season; `?min=` and `?split=1` set
+the filters, and a linked card is shown whatever its pitch count).
+
+A season card has no comparison season. The summary line is in segments sized to their text,
+the same room either side of each, ruled between: IP, ERA, WHIP, strikeouts, K% and BB%
+(MLB's season line) and CSW% (from the pitches); the bio's age is the pitcher's on June 30 of
+the season. One Skills tile takes the room of Skills and Results, ruled between its three
+letters as the summary line is, its letters the season means on `card.js`'s
+`SEASON_GRADE_CUTS` (`season.py --cuts` fits them as `grade_cuts.py` fits the game cuts, to
+every pitcher's season). Movement shows each pitch type as three KDE tiers around its densest
+pitches, ranked by the KDE at each pitch (95%, 63% and 32% of them, shaded at 25%, 50% and
+75%), each type on its own Scott kernel widened twice over (seaborn's `bw_adjust=2`) so the
+edges come out smooth. Each location plot shows every pitch type's KDE regions against that
+side at seaborn's `kdeplot(levels=4, thresh=0.64, fill=True)`, the densest 36%, 24% and 12% of
+its KDE mass on its own Scott kernel, shaded at 25%, 50% and 75% and outlined in its colour;
+0.64 is the threshold whose regions best match a 1-SD ellipse of the same pitches. A type
+thrown fewer than 20 times to a side is drawn as its pitches, each at 50% opacity (as are
+Movement's), and that plot says so ("20+ pitches shown as densities", in three lines that
+clear the plate) in its outer bottom corner. Each plot stacks its types by how often they were
+thrown to that side, the most thrown on top.
+
+The cards are pooled from the game cards by
+[`tools/pitcher_card/season.py`](tools/pitcher_card/season.py), the regular season being MLB's
+schedule's (`gameType` R), and written to the bucket:
+
+- `https://data.blandalytics.com/cards/mlb/seasons/index.json` — the seasons built;
+- `.../seasons/<season>/index.json` — the season's cards (name, team, pitches, innings, the
+  grade means and Stuff+ by type: what the list and the table show), its last day and the
+  games each team had played by then (`team_games`, which the threshold is prorated by);
+- `.../seasons/<season>/<key>.json` — a card (about 25 KB).
+
+This season's are pooled from the Game Cards page's day files by the workflow's last job, each
+morning that they have moved (about six minutes for the whole season). A past season's game
+cards are built for its season cards alone: the same pipeline, into a folder, without
+comparison seasons, and kept in `cards/mlb/archive/<date>.json`, which the Game Cards page
+doesn't list, so the season cards can be pooled again without building them again. Run the
+workflow with `past_seasons` (`2023`, or `2020-2025`) to build them; see *Backfilling or
+rebuilding*.
 
 ### Live cards
 
@@ -265,7 +296,7 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 | `shapes.py` | the comparison season's movement regions (seaborn's 90%-mass KDE contours) as SVG paths |
 | `grades.py` | pitch-type maps, letter grades and both game-score formulas |
 | `grade_cuts.py` | fits the Stuff / Locations / PLV letter cuts (`card.js`'s `GRADE_CUTS`) to a target grade distribution |
-| `season.py` | the season card demo's dicts, pooled from the bucket's day files, and its season letter cuts |
+| `season.py` | the season cards and their index, pooled from the game cards; a past season's game cards into the archive; the season letter cuts |
 | `build_data.py` | assembles all of that into one card dict (numbers; `card.js` formats them) |
 | `render.py` | a standalone page around one card dict, drawn by `card.js` |
 | `build_site.py` | builds a date range into the bucket (or a folder with `--out`) and maintains the manifests; `--reindex` rebuilds the index alone; `--prune-pages` retires the old per-card pages |
@@ -361,6 +392,14 @@ from the workflow's cache. Tick `all_packs` to rebuild every pitcher's pack rath
 recent ones (the first run builds every pack it doesn't find). Writing to the bucket needs
 the `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `CLOUDFLARE_ACCOUNT_ID` secrets the data
 files use.
+
+Set `past_seasons` (`2023`, or `2020-2025`) to build those seasons' season cards instead of
+the dates: each season's regular season is built as month jobs, eight at a time and without
+comparison seasons, into a folder rather than the Game Cards page, archived in the bucket, and
+pooled (about 40 minutes a season). The last job also pools this season's, as every run does
+when its game cards have moved (`force` pools it regardless). Locally, `season.py --out DIR`
+writes the season cards to a folder (`--out pitcher-cards`, then
+`season.html?seasons=cards/mlb/seasons/index.json`).
 
 After a `force` rebuild, set `prune_pages` to retire the old per-card pages: `report` lists
 what would happen, `apply` does it. A page whose card is still listed is rewritten as a

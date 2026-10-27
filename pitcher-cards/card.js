@@ -1266,7 +1266,7 @@
 
   // what the PNG is saved as: Name_Surname_2026-09-27_LAA_SEA_PLV_card.png
   function filename(card) {
-    if (card.season) return `${card.name.replace(/ /g, "_")}_${card.season}_season_PLV_card.png`;
+    if (card.season) return `${card.name.replace(/ /g, "_")}_${card.season}${card.stint ? `_${card.team}` : ""}_season_PLV_card.png`;
     return `${card.name.replace(/ /g, "_")}_${card.date}_${card.team}_${card.opp}_PLV_card.png`;
   }
 
