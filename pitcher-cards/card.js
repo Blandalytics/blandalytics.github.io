@@ -917,11 +917,13 @@
   // season.py says how many), or its pitches, drawn as the game card draws them. Every
   // tier is the same light wash of the type's colour, so the cores darken where the tiers
   // stack, and the outermost carries the type's outline. Tiers and points are in the
-  // plot's data units. The tiers show at 25%, 50% and 75%, outermost to innermost: they
-  // nest, so each is washed at the opacity that takes the one under it to its level
-  // (0.25, then 1/3 over 25%, then 1/2 over 50%).
-  const TIER_LEVELS = [0.25, 0.5, 0.75];
-  const TIER_ALPHA = TIER_LEVELS.map((v, k) => 1 - (1 - v) / (1 - (k ? TIER_LEVELS[k - 1] : 0)));
+  // plot's data units. A type's n tiers show at 1/(n+1), 2/(n+1) ... of full, outermost to
+  // innermost (one tier at 50%; three at 25%, 50% and 75%): they nest, so each is washed at
+  // the opacity that takes the one under it to its level.
+  function tierAlphas(n) {
+    const level = (k) => (k < 0 ? 0 : (k + 1) / (n + 1));
+    return Array.from({ length: n }, (_, k) => 1 - (1 - level(k)) / (1 - level(k - 1)));
+  }
   function seasonMarks(ax, layers) {
     return layers.map((l) => {
       const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
@@ -929,9 +931,10 @@
         const uses = l.points.map(([x, y]) => `<use href="#m" x="${fmt(ax.x(x))}" y="${fmt(ax.y(y))}"/>`).join("");
         return `<g fill="${color}">${uses}</g>`;
       }
+      const alpha = tierAlphas(l.tiers.length);
       const paths = l.tiers.flatMap((ds, k) => ds.map((d) => {
         const edge = k === 0 ? ` stroke="${color}" stroke-width="1" vector-effect="non-scaling-stroke"` : "";
-        return `<path d="${d}" fill-opacity="${fixed(TIER_ALPHA[k], 3)}"${edge}/>`;
+        return `<path d="${d}" fill-opacity="${fixed(alpha[k], 3)}"${edge}/>`;
       }));
       return `<g fill="${color}" transform="${ax.transform()}">${paths.join("")}</g>`;
     });

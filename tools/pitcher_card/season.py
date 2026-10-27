@@ -16,12 +16,11 @@ A pitcher's cards are pooled into:
 - the usage and the pitch type table, from the pitches as prep.game_table makes a game's;
   the primary fastball's extension and HAVAA, which the pitches don't carry, are its
   games' values weighted by its pitches in them;
-- Movement as three KDE tiers per pitch type, each type on its own Scott kernel (as
-  scipy's gaussian_kde sets it) widened MOVEMENT_BW times, as shapes.py widens its (seaborn's
-  bw_adjust), so the tails a 95% edge runs through come out smooth; the grid is cut 3
-  bandwidths past the data. The outermost tier is around the type's densest 95% of pitches
-  (ranked by the KDE at each pitch), the inner ones two thirds and a third as many (63%,
-  32%). A type with fewer than KDE_MIN pitches is drawn as its pitches.
+- Movement as each pitch type's KDE region at seaborn's kdeplot(levels=[0.64, 1],
+  fill=True): the densest 36% of the type's KDE mass, on its own Scott kernel (scipy's
+  gaussian_kde default, seaborn's bw_adjust=1), the grid cut 3 bandwidths past the data.
+  0.64 is the threshold whose regions best match the location plots' 1-SD ellipses. A
+  type with fewer than KDE_MIN pitches is drawn as its pitches.
 - the locations as each side-and-type's 1-SD ellipse (the spread of all its pitches
   there), centred on its most common location; a type with fewer than KDE_MIN pitches to
   a side is left out of that plot.
@@ -49,9 +48,7 @@ BUCKET = "https://data.blandalytics.com/cards"
 STATSAPI = "https://statsapi.mlb.com/api/v1"
 FASTBALLS = ("FF", "SI", "FC")
 TYPE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
-MOVEMENT_SHARE = 0.95  # Movement's outer tier: the type's densest 95% of pitches
-TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
-MOVEMENT_BW = 2  # Movement's kernels: each type's Scott kernel, twice as wide
+MOVEMENT_LEVELS = (0.64,)  # Movement's iso-proportions, as seaborn's kdeplot levels
 GRIDSIZE = 150
 CUT = 3
 KDE_MIN = 10
@@ -223,18 +220,22 @@ def density(points: np.ndarray, at: np.ndarray, cov: np.ndarray) -> np.ndarray:
     return out
 
 
-def tiers(xy: np.ndarray, inside: int, cov: np.ndarray) -> list[list[str]]:
-    """One type's KDE regions, outermost first, as path data in tenths (shapes._paths). The
-    outermost holds the ``inside`` pitches the KDE puts densest: its edge is the density at
-    the last of them, so exactly they lie within it; the inner tiers' edges are the
-    densities at TIER_SHARES of the way."""
+def _level(z: np.ndarray, isoprop: float) -> float:
+    """seaborn's _quantile_to_level: the density above which 1 - isoprop of the mass lies."""
+    values = np.sort(z.ravel())[::-1]
+    cumulative = np.cumsum(values) / values.sum()
+    return float(values[min(np.searchsorted(cumulative, 1 - isoprop), len(values) - 1)])
+
+
+def tiers(xy: np.ndarray, cov: np.ndarray) -> list[list[str]]:
+    """One type's KDE regions at MOVEMENT_LEVELS, outermost first, as path data in tenths
+    (shapes._paths): where its density is above the level seaborn's kdeplot gives each."""
     bw = np.sqrt(np.diag(cov))
     lo, hi = xy.min(axis=0) - bw * CUT, xy.max(axis=0) + bw * CUT
     gx, gy = np.linspace(lo[0], hi[0], GRIDSIZE), np.linspace(lo[1], hi[1], GRIDSIZE)
     xx, yy = np.meshgrid(gx, gy)
     z = density(xy, np.column_stack([xx.ravel(), yy.ravel()]), cov).reshape(xx.shape)
-    at = np.sort(density(xy, xy, cov))[::-1]  # the density at each pitch, densest first
-    return [_paths(gx, gy, z, float(at[max(1, round(inside * f)) - 1])) for f in TIER_SHARES]
+    return [_paths(gx, gy, z, _level(z, q)) for q in MOVEMENT_LEVELS]
 
 
 def _by_type(pitches: list[dict], xkey: str, ykey: str, order: list[str]) -> dict[str, np.ndarray]:
@@ -258,9 +259,8 @@ def movement_layers(pitches: list[dict], order: list[str]) -> list[dict]:
     out = []
     for code, xy in _by_type(pitches, "hb", "ivb", order).items():
         cov = kernel([xy]) if len(xy) >= KDE_MIN else None
-        cov = None if cov is None else cov * MOVEMENT_BW**2
         if cov is not None:
-            out.append({"code": code, "tiers": tiers(xy, round(MOVEMENT_SHARE * len(xy)), cov)})
+            out.append({"code": code, "tiers": tiers(xy, cov)})
         else:
             out.append({"code": code, "points": np.round(xy, 2).tolist()})
     return out
