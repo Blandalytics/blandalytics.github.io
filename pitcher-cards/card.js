@@ -957,7 +957,7 @@
       // given washes, only as many tiers as there are washes (the outermost first)
       const alpha = alphas || tierAlphas(l.tiers.length);
       const paths = l.tiers.slice(0, alpha.length).flatMap((ds, k) => ds.map((d) => {
-        const edge = k === 0 ? ` stroke="${color}" stroke-width="1" vector-effect="non-scaling-stroke"` : "";
+        const edge = k === 0 ? ` stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"` : "";
         return `<path d="${d}" fill-opacity="${fixed(alpha[k], 3)}"${edge}/>`;
       }));
       return `<g fill="${color}" transform="${ax.transform()}${scale}">${paths.join("")}</g>`;
