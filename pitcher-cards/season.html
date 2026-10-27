@@ -70,10 +70,9 @@ body.plpd{display:flex; flex-direction:column}
   <b>A demo.</b> Each card pools a pitcher's regular-season game cards: IP, ERA, WHIP, K% and BB% are MLB's
   season line; SLGcon (total bases per at-bat ending in a ball in play) and CSW% come from his pitches. The
   Stuff, Locations and PLV letters are his season means on season cuts, fitted to the same distribution as the
-  game letters. Movement and locations show each pitch type's KDE in three tiers: in Movement, the regions holding
-  its densest 75%, 50% and 25% of pitches; in the locations, its densest 100, 67 and 33 pitches (75%, 50% and 25%
-  of a pitch type thrown fewer than 134 times to that side). Every pitch type in a plot is smoothed alike, with one
-  kernel from all its pitches, so a rarely thrown pitch isn't spread wider than the rest.
+  game letters. Movement shows each pitch type's KDE in three tiers, the regions holding its densest 75%, 50% and
+  25% of pitches, every type smoothed alike. Each location plot shows 100 of the season's pitches to that side,
+  shared among the pitch types by how often each was thrown there, at least one of each.
 </footer>
 
 <script src="card.js?v=14"></script>

@@ -16,13 +16,13 @@ A pitcher's cards are pooled into:
 - the usage and the pitch type table, from the pitches as prep.game_table makes a game's;
   the primary fastball's extension and HAVAA, which the pitches don't carry, are its
   games' values weighted by its pitches in them;
-- the movement and location plots as three KDE tiers per pitch type, every type in a plot
-  smoothed alike (one kernel per plot, see `kernel`; the grid cut 3 bandwidths past the
-  data). The outermost tier is
-  the region around the type's densest pitches (ranked by the KDE at each pitch): 75% of
-  them in Movement, its densest 100 in a location plot (75% of a type with fewer than
-  134 there, so a few strays can't stretch it). The inner tiers hold two thirds and one
-  third as many. A type with fewer than KDE_MIN pitches in a plot is drawn as its pitches.
+- Movement as three KDE tiers per pitch type, every type smoothed alike (one kernel for
+  the plot, see `kernel`; the grid cut 3 bandwidths past the data): the outermost around
+  the type's densest 75% of pitches (ranked by the KDE at each pitch), the inner tiers
+  around two thirds and a third as many. A type with fewer than KDE_MIN pitches is drawn
+  as its pitches.
+- the locations against each side as a scatter of LOCATION_SAMPLE of its pitches, shared
+  among the types by how often each was thrown to that side, at least one of every type.
 
 There are no comparison seasons on a season card."""
 
@@ -48,7 +48,7 @@ STATSAPI = "https://statsapi.mlb.com/api/v1"
 FASTBALLS = ("FF", "SI", "FC")
 TYPE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
 MOVEMENT_SHARE = 0.75  # Movement's outer tier: the type's densest 75% of pitches
-LOCATION_PITCHES = 100  # a location plot's: its densest 100 (or 75%, if that's fewer)
+LOCATION_SAMPLE = 100  # the pitches drawn in each location plot
 TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
 GRIDSIZE = 150
 CUT = 3
@@ -244,19 +244,8 @@ def tiers(xy: np.ndarray, inside: int, cov: np.ndarray) -> list[list[str]]:
     return [_paths(gx, gy, z, float(at[max(1, round(inside * f)) - 1])) for f in TIER_SHARES]
 
 
-def movement_floor(n: int) -> int:
-    return round(MOVEMENT_SHARE * n)
-
-
-def location_floor(n: int) -> int:
-    return min(LOCATION_PITCHES, round(MOVEMENT_SHARE * n))
-
-
-def layers(pitches, xkey: str, ykey: str, scale: float, order: list[str], floor) -> list[dict]:
-    """Each pitch type's tiers in one plot, most thrown first, all on the plot's one kernel;
-    its points (in the plot's own units) instead when it has too few for a KDE. ``floor(n)``
-    is how many of a type's n pitches its outer tier holds. The tiers are in plot units x
-    ``scale`` (locations go in inches, so the paths keep their tenths)."""
+def _by_type(pitches: list[dict], xkey: str, ykey: str, order: list[str]) -> dict[str, np.ndarray]:
+    """Each type's points in one plot, in ``order``; a pitch missing either is left out."""
     by = {}
     for code in order:
         pts = [
@@ -266,13 +255,52 @@ def layers(pitches, xkey: str, ykey: str, scale: float, order: list[str], floor)
         ]
         if pts:
             by[code] = np.array(pts, dtype=float)
-    cov = kernel([xy * scale for xy in by.values()])
+    return by
+
+
+def movement_layers(pitches: list[dict], order: list[str]) -> list[dict]:
+    """Each pitch type's movement tiers (inches), most thrown first, all on the plot's one
+    kernel; its points instead when it has too few for a KDE."""
+    by = _by_type(pitches, "hb", "ivb", order)
+    cov = kernel(list(by.values()))
     out = []
     for code, xy in by.items():
         if cov is not None and len(xy) >= KDE_MIN:
-            out.append({"code": code, "tiers": tiers(xy * scale, floor(len(xy)), cov)})
+            out.append({"code": code, "tiers": tiers(xy, round(MOVEMENT_SHARE * len(xy)), cov)})
         else:
             out.append({"code": code, "points": np.round(xy, 2).tolist()})
+    return out
+
+
+def allocate(counts: dict[str, int], total: int) -> dict[str, int]:
+    """How many of each type's pitches a sample of ``total`` takes: its share of them by
+    largest remainders, but at least one of every type (taken back from those furthest over
+    their share) and never more than it has. All of them when there are no more than that."""
+    n = sum(counts.values())
+    if n <= total:
+        return dict(counts)
+    quota = {c: total * k / n for c, k in counts.items()}
+    take = {c: max(1, int(q)) for c, q in quota.items()}
+    while sum(take.values()) < total:
+        c = max((c for c in take if take[c] < counts[c]), key=lambda c: quota[c] - take[c])
+        take[c] += 1
+    while sum(take.values()) > total:
+        c = max((c for c in take if take[c] > 1), key=lambda c: take[c] - quota[c])
+        take[c] -= 1
+    return take
+
+
+def location_sample(pitches: list[dict], order: list[str], seed: list[int]) -> list[dict]:
+    """One location plot's points (feet), most thrown type first: LOCATION_SAMPLE pitches
+    shared among the types as ``allocate`` shares them, each type's drawn at random. The draw
+    is seeded by the pitcher and side, so a rebuild draws the same pitches."""
+    by = _by_type(pitches, "x", "z", order)
+    take = allocate({c: len(xy) for c, xy in by.items()}, LOCATION_SAMPLE)
+    rng = np.random.default_rng(seed)
+    out = []
+    for code, xy in by.items():
+        pick = np.sort(rng.choice(len(xy), take[code], replace=False))
+        out.append({"code": code, "points": np.round(xy[pick], 2).tolist()})
     return out
 
 
@@ -342,11 +370,13 @@ def build(s: requests.Session, games: list[dict], year: int) -> dict:
         "chart_lim": chart_limit(pitches),
         "fastball": fastball(rows, games),
         "types": rows,
-        "kde": {
-            "movement": layers(pitches, "hb", "ivb", 1, order, movement_floor),
+        "plots": {
+            "movement": movement_layers(pitches, order),
             **{
-                side: layers(
-                    [p for p in pitches if p["stand"] == side], "x", "z", 12, order, location_floor
+                side: location_sample(
+                    [p for p in pitches if p["stand"] == side],
+                    order,
+                    [last["pitcher_id"], ord(side)],
                 )
                 for side in "LR"
             },

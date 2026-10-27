@@ -31,8 +31,8 @@
 //
 // A season card (tools/pitcher_card/season.py: a dict with `season`, the year) draws the
 // same card for a pitcher's whole season: its letters on SEASON_GRADE_CUTS, one Skills tile
-// where the game card has Skills and Results, KDE tiers per pitch type where the game card
-// has its pitches, and no comparison season or hover.
+// where the game card has Skills and Results, KDE tiers per pitch type in Movement and a
+// sample of the season's pitches in the locations, and no comparison season or hover.
 //
 // A classic <script> defines window.PitcherCard; require() returns the same object.
 
@@ -739,7 +739,7 @@
       line(ax.x(-(lim - 4)), ax.y(0), ax.x(lim - 4), ax.y(0), { color: WHITE, width: 2, alpha: 0.5 }),
       ...rings(ax, lim),
       ...(card.season
-        ? tiers(ax, card.kde.movement, 1)
+        ? seasonMarks(ax, card.plots.movement)
         : [...shapes(ax, card), ...markers(ax, indexed(card).filter((p) => p.hb != null), "hb", "ivb")]),
       ...armLines(ax, card, lim),
     ];
@@ -798,7 +798,7 @@
     const name = `loc${stand}`;
     const out = [ax.clip(name), `<g clip-path="url(#${name})">`, ...zone(ax)];
     if (card.season) {
-      out.push(...tiers(ax, card.kde[stand], 1 / 12), "</g>"); // the tiers are in inches
+      out.push(...seasonMarks(ax, card.plots[stand]), "</g>"); // a sample of its pitches
     } else {
       const shown = indexed(card).filter((p) => p.stand === stand && p.x != null);
       out.push(...markers(ax, shown, "x", "z"), "</g>");
@@ -887,15 +887,14 @@
   }
 
   // ---- the season card --------------------------------------------------------------
-  // Each pitch type's KDE tiers (the regions holding its densest pitches, outermost first:
-  // season.py says how many), the most thrown type first so the rarer ones lie on top.
-  // Every tier is the same light wash of the type's colour, so the cores darken where the
-  // tiers stack, and the outermost carries the type's outline. A type with too few pitches
-  // for a KDE comes as its pitches, drawn as the game card draws them. `unit` is the size
-  // of a path unit in the plot's data units.
+  // A season plot's layers, one per pitch type, the most thrown first so the rarer ones lie
+  // on top: a type's KDE tiers (the regions holding its densest pitches, outermost first:
+  // season.py says how many), or its pitches, drawn as the game card draws them. Every
+  // tier is the same light wash of the type's colour, so the cores darken where the tiers
+  // stack, and the outermost carries the type's outline. Tiers and points are in the
+  // plot's data units.
   const TIER_ALPHA = 0.22;
-  function tiers(ax, layers, unit) {
-    const scale = unit === 1 ? "" : ` scale(${fixed(unit, 6)})`;
+  function seasonMarks(ax, layers) {
     return layers.map((l) => {
       const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
       if (!l.tiers) {
@@ -906,7 +905,7 @@
         const edge = k === 0 ? ` stroke="${color}" stroke-width="2.5" vector-effect="non-scaling-stroke"` : "";
         return `<path d="${d}" fill-opacity="${TIER_ALPHA}"${edge}/>`;
       }));
-      return `<g fill="${color}" transform="${ax.transform()}${scale}">${paths.join("")}</g>`;
+      return `<g fill="${color}" transform="${ax.transform()}">${paths.join("")}</g>`;
     });
   }
 
