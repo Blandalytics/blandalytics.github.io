@@ -1,15 +1,25 @@
-"""Season-long pitcher cards (a demo): a pitcher's regular season, pooled from the
-bucket's per-day card data into a card dict that card.js draws with its season layout.
+"""Season cards: each pitcher's regular season, pooled from the bucket's per-game card data
+into a card dict that card.js draws with its season layout, for the Season Cards page
+(pitcher-cards/season.html).
 
-    python season.py --out ../../pitcher-cards/season-demo 694819 808967   # these pitchers
-    python season.py --cuts                                                 # the season cuts
+    python season.py --publish                    # this season's cards, into the bucket
+    python season.py --year 2023 --publish        # a past season's, from the archive
+    python season.py --out ../../pitcher-cards    # into a folder instead (cards/mlb/seasons/)
+    python season.py --out DIR 694819 808967      # only these pitchers
+    python season.py --archive DIR                # build_site.py --out DIR's game cards, into
+                                                  # the archive a past season is pooled from
+    python season.py --cuts                       # the season cuts
 
-Every MLB day of the regular season (cards/mlb/data/<date>.json: each card with every
-pitch's movement, location, call, event and model values) is fetched once into --cache.
-A pitcher's cards are pooled into:
+A season is its regular-season games (MLB's schedule, gameType R). This season's game cards
+are the Game Cards page's (cards/mlb/data/<date>.json); a past season's, built the same way
+but without comparison seasons, are kept apart in cards/mlb/archive/<date>.json so the Game
+Cards page doesn't list them. Each day is fetched once into --cache. A pitcher's games are
+pooled into:
 
 - the summary line, in segments: IP, ERA, WHIP, strikeouts, K% and BB% from MLB's season
   line, and CSW% from the pitches;
+- the bio's age, his age on June 30 of the season (as FanGraphs and Baseball-Reference give
+  it: a game card's is his age today);
 - the Stuff, Location and PLV means, each game's mean weighted by the pitches it graded;
   card.js letters them on its SEASON_GRADE_CUTS, which --cuts fits as grade_cuts.py fits
   the game cuts (every pitcher's season, weighted by his pitches, to grade_cuts.TARGET);
@@ -29,7 +39,15 @@ A pitcher's cards are pooled into:
   LOCATION_MIN pitches to a side is drawn as its pitches in that plot, which then says so
   ("20+ pitches shown as densities").
 
-There are no comparison seasons on a season card."""
+A pitcher who pitched for more than one team also gets a card for each team's part of his
+season (keyed <pitcherId>-<team>), its line MLB's for that team. There are no comparison
+seasons on a season card. Writes, under the bucket's cards/mlb/seasons/:
+
+    <year>/<key>.json   a season card; <key> is the pitcher's id, or <id>-<team> for a stint
+    <year>/index.json   the season's cards (name, team, pitches, grades, Stuff+ by type), its
+                        last day and the games each team had played by then (the page
+                        prorates its pitch threshold by them)
+    index.json          the seasons built"""
 
 from __future__ import annotations
 
@@ -40,7 +58,9 @@ import gzip
 import json
 import os
 import sys
+import time
 from collections import Counter, defaultdict
+from typing import NamedTuple
 
 import numpy as np
 import requests
@@ -48,8 +68,14 @@ import requests
 from grades import DESC_MAP
 from shapes import _paths
 
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BUCKET = "https://data.blandalytics.com/cards"
 STATSAPI = "https://statsapi.mlb.com/api/v1"
+SEASONS = "cards/mlb/seasons"  # the season cards' keys in the bucket
+ARCHIVE = "cards/mlb/archive"  # past seasons' game cards, which only the season cards read
+CARD_CACHE = "public, max-age=300"
+INDEX_CACHE = "public, max-age=120"
+FULL_SEASON = 162  # a team's games in a full regular season
 FASTBALLS = ("FF", "SI", "FC")
 TYPE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
 MOVEMENT_SHARE = 0.95  # Movement's outer tier: the type's densest 95% of pitches
@@ -60,26 +86,82 @@ LOCATION_MIN = 20  # the pitches to a side a type needs for location regions
 GRIDSIZE = 150
 CUT = 3
 KDE_MIN = 10
+RUN = str(int(time.time()))  # past the CDN's copy of a day, which may be from before it was built
 DEFAULT_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", "season")
+# what a season card reads of a game card and its pitches (the rest is dropped on loading)
+GAME_KEYS = ("pitcher_id", "name", "hand", "team", "home", "game_pk", "date", "bio", "starter",
+             "skills", "fastball", "arm_angle", "level")  # fmt: skip
+PITCH_KEYS = ("t", "hb", "ivb", "x", "z", "stand", "velo", "d", "plvStuff+", "PLV+", "xSLGcon")
 
 
-# ---- the bucket ---------------------------------------------------------------------
-def regular_season(s: requests.Session, year: int) -> tuple[str, str]:
-    se = s.get(f"{STATSAPI}/seasons/{year}", params={"sportId": 1}, timeout=30).json()["seasons"][0]
-    return se["regularSeasonStartDate"], se["regularSeasonEndDate"]
+# ---- the season's games and their cards ---------------------------------------------
+class Game(NamedTuple):
+    date: str
+    home: int
+    away: int
+    final: bool
 
 
-def day_files(s: requests.Session, year: int, cache: str) -> list[str]:
-    """The cached path of each MLB day's card data in the regular season, fetched as needed."""
-    first, last = regular_season(s, year)
+def schedule(s: requests.Session, year: int) -> dict[int, Game]:
+    """The regular season's games by gamePk. A game listed on two dates (postponed, or
+    suspended and resumed) is kept on the one it was finished on."""
+    fields = "dates,date,games,gamePk,status,codedGameState,teams,home,away,team,id"
+    q = {"sportId": 1, "season": year, "gameType": "R", "fields": fields}
+    r = s.get(f"{STATSAPI}/schedule", params=q, timeout=60)
+    r.raise_for_status()
+    games: dict[int, Game] = {}
+    for day in r.json().get("dates", []):
+        for g in day["games"]:
+            final = g["status"]["codedGameState"] in ("F", "O")
+            if g["gamePk"] not in games or final:
+                home, away = (g["teams"][side]["team"]["id"] for side in ("home", "away"))
+                games[g["gamePk"]] = Game(day["date"], home, away, final)
+    return games
+
+
+def team_games(games: dict[int, Game], through: str) -> float:
+    """The games each team had played by ``through``, on average: what the page prorates
+    its pitch threshold by (a full season's FULL_SEASON)."""
+    teams = {t for g in games.values() for t in (g.home, g.away)}
+    played = sum(g.final and g.date <= through for g in games.values())
+    return round(2 * played / len(teams), 2) if teams else 0.0
+
+
+def current_season(s: requests.Session) -> int:
+    """This year's season once its regular season has begun, else last year's."""
+    today = dt.date.today()
+    se = s.get(f"{STATSAPI}/seasons/{today.year}", params={"sportId": 1}, timeout=30).json()
+    start = (se.get("seasons") or [{}])[0].get("regularSeasonStartDate")
+    return today.year if start and start <= today.isoformat() else today.year - 1
+
+
+def sources(s: requests.Session, games: dict[int, Game]) -> list[tuple[str, str, str]]:
+    """(date, url, cache name) of each day of the season's game cards: the Game Cards
+    page's for the days it has (named by their card count, so a day that gains cards is
+    fetched again), else the archive's."""
     days = s.get(f"{BUCKET}/index.json", params={"v": dt.datetime.now().timestamp()}, timeout=60)
-    dates = sorted(d for d in days.json()["levels"]["mlb"]["days"] if first <= d <= last)
+    carded = days.json().get("levels", {}).get("mlb", {}).get("days", {})
+    dates = sorted({g.date for g in games.values() if g.final})
+    if any(d in carded for d in dates):
+        lo, hi = dates[0], dates[-1]
+        return [(d, f"{BUCKET}/mlb/data/{d}.json", f"{d}-{n}") for d, n in sorted(carded.items())
+                if lo <= d <= hi]  # fmt: skip
+    return [(d, f"{BUCKET}/mlb/archive/{d}.json", d) for d in dates]
+
+
+def day_files(s: requests.Session, games: dict[int, Game], cache: str) -> list[str]:
+    """The cached path of each day's game cards in the regular season, fetched as needed;
+    a day the archive is missing is reported and skipped."""
     os.makedirs(cache, exist_ok=True)
 
-    def get(d: str) -> str:
-        path = os.path.join(cache, f"{d}.json.gz")
+    def get(src: tuple[str, str, str]) -> str | None:
+        date, url, name = src
+        path = os.path.join(cache, f"{name}.json.gz")
         if not os.path.exists(path):
-            r = s.get(f"{BUCKET}/mlb/data/{d}.json", timeout=120)
+            r = s.get(url, params={"v": RUN}, timeout=120)
+            if r.status_code == 404:
+                print(f"  {date}: no game cards at {url}", file=sys.stderr)
+                return None
             r.raise_for_status()
             with gzip.open(path + ".part", "wb") as fh:
                 fh.write(r.content)
@@ -87,14 +169,31 @@ def day_files(s: requests.Session, year: int, cache: str) -> list[str]:
         return path
 
     with concurrent.futures.ThreadPoolExecutor(8) as pool:
-        return list(pool.map(get, dates))
+        return [p for p in pool.map(get, sources(s, games)) if p]
 
 
-def cards(paths: list[str]):
-    """Every card in the day files, oldest day first."""
+def _slim(card: dict) -> dict:
+    out = {k: card.get(k) for k in GAME_KEYS}
+    out["types"] = [{"code": t["code"], "n": t["n"]} for t in card["types"]]
+    out["pitches"] = [{k: p.get(k) for k in PITCH_KEYS} for p in card["pitches"]]
+    return out
+
+
+def cards(paths: list[str], games: dict[int, Game] | None = None):
+    """Every card in the day files, oldest day first, with only what a season card reads;
+    only the regular season's, given its ``games``."""
     for path in paths:
         with gzip.open(path, "rt", encoding="utf-8") as fh:
-            yield from json.load(fh).values()
+            for card in json.load(fh).values():
+                if games is None or card["game_pk"] in games:
+                    yield _slim(card)
+
+
+def by_pitcher(paths: list[str], games: dict[int, Game]) -> dict[int, list[dict]]:
+    by = defaultdict(list)
+    for c in cards(paths, games):
+        by[c["pitcher_id"]].append(c)
+    return by
 
 
 # ---- pooling ------------------------------------------------------------------------
@@ -312,31 +411,62 @@ def location_plots(pitches: list[dict], order: list[str]) -> dict:
 
 
 # ---- the season card ----------------------------------------------------------------
-def season_line(s: requests.Session, pid: int, year: int) -> dict:
-    """MLB's regular-season pitching line; the all-teams total for a traded pitcher."""
-    q = {"stats": "season", "group": "pitching", "season": year, "sportId": 1, "gameType": "R"}
-    splits = s.get(f"{STATSAPI}/people/{pid}/stats", params=q, timeout=30).json()["stats"][0][
-        "splits"
-    ]
-    total = [x for x in splits if "team" not in x] or splits
-    return total[0]["stat"]
+class Person(NamedTuple):
+    birth: str | None
+    lines: dict  # MLB's regular-season pitching line: by team id, and the season's at None
 
 
-def summary(stat: dict, pitches: list[dict]) -> tuple[list[str], dict]:
+def person(s: requests.Session, pid: int, year: int) -> Person:
+    """A pitcher's birth date and MLB's regular-season pitching lines: one per team he
+    pitched for, and the season's (for a traded pitcher MLB's total, else his one line)."""
+    q = {"hydrate": f"stats(group=[pitching],type=[season],season={year},gameType=[R],sportId=1)"}
+    r = s.get(f"{STATSAPI}/people/{pid}", params=q, timeout=30)
+    r.raise_for_status()
+    p = r.json()["people"][0]
+    splits = [x for st in p.get("stats", []) for x in st.get("splits", [])]
+    lines = {(x.get("team") or {}).get("id"): x["stat"] for x in splits}
+    if None not in lines and len(lines) == 1:
+        lines[None] = next(iter(lines.values()))
+    return Person(p.get("birthDate"), lines)
+
+
+def people(s: requests.Session, pids: list[int], year: int) -> dict[int, Person]:
+    with concurrent.futures.ThreadPoolExecutor(8) as pool:
+        return dict(zip(pids, pool.map(lambda pid: person(s, pid, year), pids), strict=True))
+
+
+def season_age(birth: str | None, year: int) -> int | None:
+    """His age on June 30 of the season."""
+    if not birth:
+        return None
+    b = dt.date.fromisoformat(birth)
+    return year - b.year - ((b.month, b.day) > (6, 30))
+
+
+def _share(part, whole) -> float | None:
+    return 100 * part / whole if part is not None and whole else None
+
+
+def _segment(value, unit: str, spec: str = "") -> str:
+    return f"{'-' if value is None else format(value, spec)}{unit}"
+
+
+def summary(stat: dict | None, pitches: list[dict]) -> tuple[list[str], dict]:
     """The summary line's segments, ['174.2 IP', '1.80 ERA', '0.80 WHIP', '252 Ks',
-    '37.9% K', '6.6% BB', '35.4% CSW'], and their numbers."""
-    bf = stat["battersFaced"]
-    csw = (
-        100 * sum(_desc(p) in ("called_strike", "swinging_strike") for p in pitches) / len(pitches)
-    )
+    '37.9% K', '6.6% BB', '35.4% CSW'], and their numbers; MLB's are dashes without a line."""
+    stat = stat or {}
+    bf = stat.get("battersFaced")
+    called = sum(_desc(p) in ("called_strike", "swinging_strike") for p in pitches)
+    csw = 100 * called / len(pitches)
     nums = {
-        "IP": stat["inningsPitched"], "ERA": stat["era"], "WHIP": stat["whip"],
-        "K": stat["strikeOuts"], "K%": 100 * stat["strikeOuts"] / bf,
-        "BB%": 100 * stat["baseOnBalls"] / bf, "CSW%": csw,
+        "IP": stat.get("inningsPitched"), "ERA": stat.get("era"), "WHIP": stat.get("whip"),
+        "K": stat.get("strikeOuts"), "K%": _share(stat.get("strikeOuts"), bf),
+        "BB%": _share(stat.get("baseOnBalls"), bf), "CSW%": csw,
     }  # fmt: skip
     segments = [
-        f"{nums['IP']} IP", f"{nums['ERA']} ERA", f"{nums['WHIP']} WHIP", f"{nums['K']} Ks",
-        f"{nums['K%']:.1f}% K", f"{nums['BB%']:.1f}% BB", f"{csw:.1f}% CSW",
+        _segment(nums["IP"], " IP"), _segment(nums["ERA"], " ERA"), _segment(nums["WHIP"], " WHIP"),
+        _segment(nums["K"], " Ks"), _segment(nums["K%"], "% K", ".1f"),
+        _segment(nums["BB%"], "% BB", ".1f"), _segment(csw, "% CSW", ".1f"),
     ]  # fmt: skip
     return segments, {k: _num(v, 3) if isinstance(v, float) else v for k, v in nums.items()}
 
@@ -348,23 +478,28 @@ def chart_limit(pitches: list[dict]) -> int:
     return 29 if biggest is None else max(29, int(biggest / 6 + 2) * 6 - 1)
 
 
-def build(s: requests.Session, games: list[dict], year: int) -> dict:
-    """The season card dict for one pitcher's regular-season game cards."""
+def build(games: list[dict], year: int, line: dict | None, age: int | None, teams: list[str],
+          stint: bool = False) -> dict:  # fmt: skip
+    """The season card dict for some of a pitcher's regular-season game cards: all of them,
+    with ``teams`` every team he pitched for, or one team's (a ``stint``)."""
     last = games[-1]
     pitches = [p for g in games for p in g["pitches"]]
     rows = type_rows(pitches, last["hand"])
     order = [r["code"] for r in rows]
-    segments, nums = summary(season_line(s, last["pitcher_id"], year), pitches)
+    segments, nums = summary(line, pitches)
     arm = _weighted([(g.get("arm_angle"), len(g["pitches"])) for g in games])
+    team = "/".join(teams)
     return {
         "version": 4,
         "season": year,
         "pitcher_id": last["pitcher_id"],
         "name": last["name"],
         "hand": last["hand"],
-        "team": last["team"],
+        "team": team,
+        "teams": teams,
+        "stint": stint,
         "title": f"Pitcher Performance: {year} Regular Season",
-        "bio": last["bio"],
+        "bio": f"{last['hand']}HP | {team}" + ("" if age is None else f" | Age: {age}"),
         "line": ", ".join(segments),
         "summary": segments,
         "stats": nums,
@@ -387,6 +522,126 @@ def build(s: requests.Session, games: list[dict], year: int) -> dict:
         "graded_vs": "mlb",
         "provisional": [],
     }
+
+
+def stints(games: list[dict], sched: dict[int, Game]) -> list[tuple[int, str, list[dict]]]:
+    """(team id, team, games) for each team a pitcher pitched for, in the order he did."""
+    by: dict[int, list[dict]] = {}
+    for g in games:
+        game = sched[g["game_pk"]]
+        by.setdefault(game.home if g["home"] else game.away, []).append(g)
+    return [(tid, gs[-1]["team"], gs) for tid, gs in by.items()]
+
+
+Job = tuple[int, list[dict], Person, dict[int, Game], int]  # a pitcher's: see pitcher_cards
+
+
+def pitcher_cards(job: Job) -> list[tuple[str, dict]]:
+    """(key, card) for a pitcher's season and, if he pitched for more than one team, for
+    each team's part of it."""
+    pid, games, info, sched, year = job
+    parts = stints(games, sched)
+    age = season_age(info.birth, year)
+    out = [(str(pid), build(games, year, info.lines.get(None), age, [t for _, t, _ in parts]))]
+    if len(parts) > 1:
+        out += [(f"{pid}-{team}", build(gs, year, info.lines.get(tid), age, [team], stint=True))
+                for tid, team, gs in parts]  # fmt: skip
+    return out
+
+
+def build_all(s: requests.Session, by: dict[int, list[dict]], sched: dict[int, Game], year: int):
+    """Every pitcher's cards, built across the machine's cores."""
+    info = people(s, list(by), year)
+    jobs = [(pid, games, info[pid], {g["game_pk"]: sched[g["game_pk"]] for g in games}, year)
+            for pid, games in by.items()]  # fmt: skip
+    with concurrent.futures.ProcessPoolExecutor() as pool:
+        return [c for cs in pool.map(pitcher_cards, jobs, chunksize=4) for c in cs]
+
+
+def entry(key: str, card: dict) -> dict:
+    """A card's line in the season index: who, how much, and his grades and Stuff+ by type,
+    as the page's table and Pitcher list show them. A team's part of a traded pitcher's
+    season is a ``stint``; his whole season is ``traded``."""
+    e = {
+        "key": key, "id": card["pitcher_id"], "name": card["name"], "team": card["team"],
+        "hand": card["hand"], "n": sum(r["n"] for r in card["types"]), "g": card["games"],
+        "gs": card["starts"], "ip": card["stats"]["IP"],
+        "skills": {k: _num(card["skills"][k], 2) for k in ("stuff", "loc", "plv")},
+        "stuff": {r["code"]: r["values"]["plvStuff+"] for r in card["types"]
+                  if r["values"]["plvStuff+"] is not None},
+    }  # fmt: skip
+    if card["stint"]:
+        e["stint"] = True
+    elif len(card["teams"]) > 1:
+        e["traded"] = True
+    return e
+
+
+# ---- writing ------------------------------------------------------------------------
+def _json(data) -> bytes:
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
+
+
+def store(out: str | None):
+    """A folder (--out), else the bucket (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID and
+    R2_SECRET_ACCESS_KEY in the environment)."""
+    sys.path.insert(0, os.path.join(ROOT, "tools", "data"))
+    from backfill import LocalStore, R2Store  # the scraper comes with it: only writing needs it
+
+    return LocalStore(out) if out else R2Store()
+
+
+def _index(st, key: str) -> dict:
+    raw = st.get(key)
+    return json.loads(raw) if raw else {}
+
+
+def write(st, year: int, built: list[tuple[str, dict]], meta: dict, merge: bool) -> None:
+    """The cards, the season's index (merged into the one there when only some pitchers
+    were built) and the seasons index."""
+    with concurrent.futures.ThreadPoolExecutor(16) as pool:
+        list(pool.map(lambda kc: st.put(f"{SEASONS}/{year}/{kc[0]}.json", _json(kc[1]),
+                                        "application/json", CARD_CACHE), built))  # fmt: skip
+    entries = {e["key"]: e for e in (_index(st, f"{SEASONS}/{year}/index.json") if merge else {})
+               .get("pitchers", [])}  # fmt: skip
+    entries.update((k, entry(k, c)) for k, c in built)
+    index = {**meta, "pitchers": sorted(entries.values(), key=lambda e: e["key"])}
+    st.put(f"{SEASONS}/{year}/index.json", _json(index), "application/json", INDEX_CACHE)
+    seasons = _index(st, f"{SEASONS}/index.json")
+    seasons.setdefault("seasons", {})[str(year)] = {**meta, "cards": len(index["pitchers"])}
+    seasons["built"] = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    st.put(f"{SEASONS}/index.json", _json(seasons), "application/json", INDEX_CACHE)
+
+
+def publish(st, s: requests.Session, year: int, sched: dict[int, Game], paths: list[str],
+            wanted: list[int], force: bool) -> None:  # fmt: skip
+    """Builds and writes the season's cards (``wanted``'s alone, if any); every pitcher's
+    only when the game cards have moved since the last build, or ``force``."""
+    by = by_pitcher(paths, sched)
+    through = max(g["date"] for games in by.values() for g in games)
+    meta = {"season": year, "through": through, "days": len(paths),
+            "games": sum(map(len, by.values())), "team_games": team_games(sched, through),
+            "full_games": FULL_SEASON}  # fmt: skip
+    old = _index(st, f"{SEASONS}/{year}/index.json")
+    if not (wanted or force) and all(old.get(k) == meta[k] for k in ("through", "days", "games")):
+        print(f"{year}: up to date (through {through})", file=sys.stderr)
+        return
+    if wanted:
+        by = {pid: by[pid] for pid in wanted if pid in by}
+    built = build_all(s, by, sched, year)
+    write(st, year, built, meta, merge=bool(wanted))
+    print(f"{year}: {len(built)} cards for {len(by)} pitchers through {through}", file=sys.stderr)
+
+
+def archive(st, folder: str) -> None:
+    """A past season's game cards, built by build_site.py --out ``folder``, into the
+    archive the season cards are pooled from."""
+    src = os.path.join(folder, "cards", "mlb", "data")
+    names = sorted(n for n in os.listdir(src) if n.endswith(".json"))
+    for name in names:
+        with open(os.path.join(src, name), "rb") as fh:
+            st.put(f"{ARCHIVE}/{name}", fh.read(), "application/json", CARD_CACHE)
+    print(f"{len(names)} days of game cards archived", file=sys.stderr)
 
 
 # ---- the season cuts ----------------------------------------------------------------
@@ -412,39 +667,31 @@ def fit_cuts(paths: list[str]) -> None:
         print(f"    {key}: [{', '.join(f'{c:g}' for c in cuts)}],")
 
 
-def write_cards(s: requests.Session, paths: list[str], pitchers: list[int], year: int, out: str):
-    """<id>.json for each pitcher with cards, and index.json listing them, in ``out``."""
-    games = defaultdict(list)
-    for c in cards(paths):
-        if c["pitcher_id"] in pitchers:
-            games[c["pitcher_id"]].append(c)
-    os.makedirs(out, exist_ok=True)
-    index = []
-    for pid in (p for p in pitchers if games[p]):
-        card = build(s, games[pid], year)
-        with open(os.path.join(out, f"{pid}.json"), "w", encoding="utf-8") as fh:
-            json.dump(card, fh, separators=(",", ":"))
-        index.append({"id": pid, "name": card["name"], "team": card["team"], "line": card["line"]})
-        print(f"{card['name']}: {card['games']} games - {card['line']}", file=sys.stderr)
-    with open(os.path.join(out, "index.json"), "w", encoding="utf-8") as fh:
-        json.dump({"season": year, "pitchers": index}, fh, indent=1)
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("pitchers", nargs="*", type=int, help="MLBAM ids")
-    ap.add_argument("--year", type=int, default=2026)
-    ap.add_argument("--out", help="where to write <id>.json and index.json")
+    ap.add_argument("pitchers", nargs="*", type=int, help="MLBAM ids (default: every pitcher)")
+    ap.add_argument("--year", type=int, help="the season (default: this one, or last until then)")
+    ap.add_argument("--publish", action="store_true", help="write the cards to the bucket")
+    ap.add_argument("--out", help="write the cards to this folder instead")
+    ap.add_argument("--force", action="store_true", help="rebuild even if nothing has moved")
+    ap.add_argument("--archive", metavar="DIR", help="archive build_site.py --out DIR's game cards")
     ap.add_argument("--cuts", action="store_true", help="print the season grade cuts")
     ap.add_argument("--cache", default=DEFAULT_CACHE, help="the day files' cache")
     a = ap.parse_args(argv)
     s = requests.Session()
-    paths = day_files(s, a.year, os.path.join(a.cache, str(a.year)))
-    print(f"{len(paths)} days of {a.year} regular-season cards", file=sys.stderr)
+    if a.archive:
+        archive(store(None), a.archive)
+        return 0
+    if not (a.cuts or a.out or a.publish):
+        ap.error("give --publish, --out DIR, --cuts or --archive DIR")
+    year = a.year or current_season(s)
+    sched = schedule(s, year)
+    paths = day_files(s, sched, os.path.join(a.cache, str(year)))
+    print(f"{len(paths)} days of {year} regular-season game cards", file=sys.stderr)
     if a.cuts:
         fit_cuts(paths)
-    if a.pitchers:
-        write_cards(s, paths, a.pitchers, a.year, a.out)
+    else:
+        publish(store(a.out), s, year, sched, paths, a.pitchers, a.force)
     return 0
 
 
