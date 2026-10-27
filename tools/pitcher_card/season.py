@@ -25,7 +25,8 @@ A pitcher's cards are pooled into:
 - the locations as each side-and-type's KDE region at seaborn's kdeplot(levels=[0.64, 1],
   fill=True): the densest 36% of its KDE mass, on its own Scott kernel (seaborn's
   bw_adjust=1). 0.64 is the threshold whose regions best match a 1-SD ellipse of the same
-  pitches. A type with fewer than KDE_MIN pitches to a side is left out of that plot.
+  pitches. A type with fewer than LOCATION_MIN pitches to a side is left out of that plot,
+  which then says so ("Min 30 pitches").
 
 There are no comparison seasons on a season card."""
 
@@ -54,6 +55,7 @@ MOVEMENT_SHARE = 0.95  # Movement's outer tier: the type's densest 95% of pitche
 TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
 MOVEMENT_BW = 2  # Movement's kernels: each type's Scott kernel, twice as wide
 LOCATION_LEVELS = (0.64,)  # the location plots' iso-proportions, as seaborn's kdeplot levels
+LOCATION_MIN = 30  # the pitches to a side a type needs for a location region
 GRIDSIZE = 150
 CUT = 3
 KDE_MIN = 10
@@ -286,19 +288,21 @@ def mass_tiers(xy: np.ndarray, cov: np.ndarray, isoprops: tuple[float, ...]) -> 
     return [_paths(gx, gy, z, _level(z, q)) for q in isoprops]
 
 
-def location_plots(pitches: list[dict], order: list[str]) -> dict[str, list[dict]]:
+def location_plots(pitches: list[dict], order: list[str]) -> dict:
     """Both location plots, most thrown type first in each: every side-and-type's KDE region
     at LOCATION_LEVELS, on its own Scott kernel, in inches (so the paths keep their
-    tenths); a type with fewer than KDE_MIN pitches to a side, or a degenerate spread, is
-    left out."""
-    out = {}
+    tenths). A type thrown to a side fewer than LOCATION_MIN times (or too evenly for a
+    kernel) has none, and is listed in ``omitted`` for that side, which says so."""
+    out = {"min": LOCATION_MIN, "omitted": {}}
     for side in "LR":
-        out[side] = []
+        out[side], out["omitted"][side] = [], []
         for code, xy in _by_type(
             [p for p in pitches if p["stand"] == side], "x", "z", order
         ).items():
-            cov = kernel([xy * 12]) if len(xy) >= KDE_MIN else None
-            if cov is not None:
+            cov = kernel([xy * 12]) if len(xy) >= LOCATION_MIN else None
+            if cov is None:
+                out["omitted"][side].append(code)
+            else:
                 out[side].append({"code": code, "tiers": mass_tiers(xy * 12, cov, LOCATION_LEVELS)})
     return out
 

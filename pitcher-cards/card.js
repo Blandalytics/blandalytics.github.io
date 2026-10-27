@@ -824,7 +824,7 @@
     const name = `loc${stand}`;
     const out = [ax.clip(name), `<g clip-path="url(#${name})">`, ...zone(ax)];
     if (card.season) {
-      out.push(...seasonMarks(ax, card.plots[stand], { unit: 1 / 12, alphas: [0.25] }), "</g>"); // inches
+      out.push(...seasonMarks(ax, card.plots[stand], { unit: 1 / 12, alphas: [0.25] }), "</g>", ...minNote(card, stand)); // inches
     } else {
       const shown = indexed(card).filter((p) => p.stand === stand && p.x != null);
       out.push(...markers(ax, shown, "x", "z"), "</g>");
@@ -941,6 +941,15 @@
       }));
       return `<g fill="${color}" transform="${ax.transform()}${scale}">${paths.join("")}</g>`;
     });
+  }
+
+  // A season location plot that leaves out a type thrown to its side too seldom for a
+  // region says so, in its bottom corner away from the other plot (left against lefties,
+  // right against righties), set as the Movement plot's comparison note is.
+  function minNote(card, stand) {
+    if (!card.plots.omitted[stand].length) return [];
+    const [x, ha] = stand === "L" ? [0.44, "left"] : [0.985, "right"];
+    return [text(fx(x), fy(0.285), `Min ${card.plots.min} pitches`, 12, { ha, va: "baseline", alpha: 0.5 })];
   }
 
   // a season's Skills: its three letters across the room of the game card's Skills and

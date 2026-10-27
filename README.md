@@ -186,7 +186,8 @@ at 25%, 50% and 75%), each type on its own Scott kernel widened twice over (seab
 region against that side at seaborn's `kdeplot(levels=[0.64, 1], fill=True)`, the densest 36%
 of its KDE mass on its own Scott kernel, shaded at 25% and outlined in its colour; 0.64 is the
 threshold whose regions best match a 1-SD ellipse of the same pitches. A type thrown fewer
-than 10 times to a side is left out.
+than 30 times to a side is left out, and that plot says so ("Min 30 pitches") in its outer
+bottom corner.
 
 - [`.github/workflows/pitcher-cards.yml`](.github/workflows/pitcher-cards.yml) runs every
   morning at 10:30 UTC. It clones
