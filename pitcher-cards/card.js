@@ -31,9 +31,9 @@
 //
 // A season card (tools/pitcher_card/season.py: a dict with `season`, the year) draws the
 // same card for a pitcher's whole season: its letters on SEASON_GRADE_CUTS, one Skills tile
-// where the game card has Skills and Results, KDE tiers per pitch type in Movement and a
-// fixed random sample of 100 pitches across the location plots, and no comparison season
-// or hover.
+// where the game card has Skills and Results, KDE tiers per pitch type in Movement, a fixed
+// random sample of 100 pitches across the location plots with each type's 1-SD ellipse,
+// and no comparison season or hover.
 //
 // A classic <script> defines window.PitcherCard; require() returns the same object.
 
@@ -824,7 +824,7 @@
     const name = `loc${stand}`;
     const out = [ax.clip(name), `<g clip-path="url(#${name})">`, ...zone(ax)];
     if (card.season) {
-      out.push(...seasonMarks(ax, card.plots[stand]), "</g>", locationNote(card, stand));
+      out.push(...seasonMarks(ax, card.plots[stand]), ...ellipses(ax, card.plots[stand]), "</g>", locationNote(card, stand));
     } else {
       const shown = indexed(card).filter((p) => p.stand === stand && p.x != null);
       out.push(...markers(ax, shown, "x", "z"), "</g>");
@@ -918,10 +918,11 @@
   // season.py says how many), or its pitches, drawn as the game card draws them. Every
   // tier is the same light wash of the type's colour, so the cores darken where the tiers
   // stack, and the outermost carries the type's outline. Tiers and points are in the
-  // plot's data units. The pitch colours are at full saturation already, so the plot's
-  // colour is in how strongly the washes show over the card: 0.275, a quarter more than
-  // the 0.22 it had.
-  const TIER_ALPHA = 0.275;
+  // plot's data units. The tiers show at 25%, 50% and 75%, outermost to innermost: they
+  // nest, so each is washed at the opacity that takes the one under it to its level
+  // (0.25, then 1/3 over 25%, then 1/2 over 50%).
+  const TIER_LEVELS = [0.25, 0.5, 0.75];
+  const TIER_ALPHA = TIER_LEVELS.map((v, k) => 1 - (1 - v) / (1 - (k ? TIER_LEVELS[k - 1] : 0)));
   function seasonMarks(ax, layers) {
     return layers.map((l) => {
       const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
@@ -931,9 +932,23 @@
       }
       const paths = l.tiers.flatMap((ds, k) => ds.map((d) => {
         const edge = k === 0 ? ` stroke="${color}" stroke-width="1" vector-effect="non-scaling-stroke"` : "";
-        return `<path d="${d}" fill-opacity="${TIER_ALPHA}"${edge}/>`;
+        return `<path d="${d}" fill-opacity="${fixed(TIER_ALPHA[k], 3)}"${edge}/>`;
       }));
       return `<g fill="${color}" transform="${ax.transform()}">${paths.join("")}</g>`;
+    });
+  }
+
+  // Each side-and-type's 1-SD ellipse, over its pitches: its spread, centred on its most
+  // common location, the centre unmarked. Drawn in feet, so the rotation is the plate's;
+  // a background-coloured halo keeps the ring clear of the dots under it.
+  function ellipses(ax, layers) {
+    return layers.filter((l) => l.ellipse).map((l) => {
+      const e = l.ellipse;
+      const color = get(MARKER_COLORS, l.code, MARKER_COLORS.UN);
+      const shape = `cx="${e.x}" cy="${e.z}" rx="${e.a}" ry="${e.b}" transform="rotate(${e.angle} ${e.x} ${e.z})" ` +
+        'fill="none" vector-effect="non-scaling-stroke"';
+      return `<g transform="${ax.transform()}"><ellipse ${shape} stroke="${BACKGROUND}" stroke-width="4" stroke-opacity="0.6"/>` +
+        `<ellipse ${shape} stroke="${color}" stroke-width="2"/></g>`;
     });
   }
 

@@ -26,7 +26,8 @@ A pitcher's cards are pooled into:
   pitch types by their share of all the pitcher's pitches (30% of them four-seamers to
   righties, 30 four-seamers in the vs RHB plot), at least one of every type thrown to each
   side, each drawn at random from that side's pitches of that type, on one seed (SEED)
-  for every card.
+  for every card; and over them each side-and-type's 1-SD ellipse (the spread of all its
+  pitches there), centred on its most common location.
 
 There are no comparison seasons on a season card."""
 
@@ -288,12 +289,32 @@ def allocate(counts: dict[str, int], total: int) -> dict[str, int]:
     return take
 
 
+def ellipse(xy: np.ndarray) -> dict | None:
+    """A side-and-type's 1-SD ellipse (feet): its pitches' covariance, as semi-axes ``a`` >=
+    ``b`` with ``a`` at ``angle`` degrees from the plate's x axis, centred on its most common
+    location, the peak of its KDE (its own Scott kernel) on a grid over its pitches. None
+    with fewer than KDE_MIN pitches or a degenerate spread."""
+    cov = np.cov(xy.T) if len(xy) >= KDE_MIN else None
+    if cov is None or np.linalg.det(cov) <= 0:
+        return None
+    lo, hi = xy.min(axis=0), xy.max(axis=0)
+    gx, gy = np.linspace(lo[0], hi[0], GRIDSIZE), np.linspace(lo[1], hi[1], GRIDSIZE)
+    grid = np.column_stack([a.ravel() for a in np.meshgrid(gx, gy)])
+    peak = grid[np.argmax(density(xy, grid, kernel([xy])))]
+    vals, vecs = np.linalg.eigh(cov)  # ascending: the major axis is the last
+    angle = np.degrees(np.arctan2(vecs[1, 1], vecs[0, 1]))
+    a, b = np.sqrt(vals[::-1])
+    return {"x": _num(peak[0], 3), "z": _num(peak[1], 3), "a": _num(a, 3), "b": _num(b, 3),
+            "angle": _num(angle, 1)}  # fmt: skip
+
+
 def location_plots(pitches: list[dict], order: list[str]) -> dict[str, list[dict]]:
     """Both location plots' points (feet), most thrown type first in each: LOCATION_SAMPLE
     pitches across the two, shared among every side and type the pitcher threw as
     ``allocate`` shares them (by that side's pitches of that type against all of his), each
-    side-and-type's drawn at random from its pitches. Every card draws from SEED, so a
-    rebuild, or anyone viewing it, gets the same pitches."""
+    side-and-type's drawn at random from its pitches, with its 1-SD ellipse (``ellipse``,
+    from all of them). Every card draws from SEED, so a rebuild, or anyone viewing it, gets
+    the same pitches."""
     by = {s: _by_type([p for p in pitches if p["stand"] == s], "x", "z", order) for s in "LR"}
     take = allocate(
         {(s, c): len(xy) for s, b in by.items() for c, xy in b.items()}, LOCATION_SAMPLE
@@ -304,7 +325,9 @@ def location_plots(pitches: list[dict], order: list[str]) -> dict[str, list[dict
         out[side] = []
         for code, xy in b.items():
             pick = np.sort(rng.choice(len(xy), take[(side, code)], replace=False))
-            out[side].append({"code": code, "points": np.round(xy[pick], 2).tolist()})
+            out[side].append(
+                {"code": code, "points": np.round(xy[pick], 2).tolist(), "ellipse": ellipse(xy)}
+            )
     return out
 
 
