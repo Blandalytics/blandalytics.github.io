@@ -855,6 +855,10 @@
   const VELO_X = 0.15;
   const WIDTHS = [["Velo", 0], ["IVB", 0.9], ["HB", 0.65], ["Str%", 0.75], ["SwStr%", 0.75],
     ["CSW%", 0.75], ["xSLGcon", 0.75], ["plvStuff+", 0.75], ["PLV+", 0.7]];
+  // A season card spaces its numbers evenly instead: # to PLV+ at equal steps between the game
+  // card's first and last (figure fractions).
+  const EVEN_STATS = WIDTHS.map(([stat]) => stat);
+  const evenX = (i) => 0.235 + (i * (0.955 - 0.235)) / EVEN_STATS.length;
 
   // The velocity cell: coloured on its own, white with the coloured change beside it when
   // a comparison season is showing.
@@ -882,13 +886,18 @@
       out.push(text(fx(0.632), fy(0.2575), "*", 18, { alpha: 0.5 }));
       out.push(text(fx(0.97), fy(0.005), "*Some pitches missing data", 12, { ha: "right", alpha: 0.5 }));
     }
-    out.push(...HEADERS.map(([x, label]) => text(fx(x), fy(0.23), label, 16, { color: LINE })));
     const hdr = new Axes([0.01, 0.015, 0.25, 0.205], [0, 1], [n - 0.5, -0.5]);
     const tbl = new Axes([0.26, 0.015, 0.73, 0.205], [-0.5, 6.5], [n - 0.5, -0.5]);
-    const veloX = tbl.x(VELO_X); // the header sits over its own values, not beside them
-    out.push(text(veloX, fy(0.23), "Velo", 16, { color: LINE, attrs: ' data-cmp="0"' }));
-    for (const c of card.comparisons) {
-      out.push(text(veloX, fy(0.23), `Velo (vs '${String(c.year).slice(-2)})`, 16, { color: LINE, attrs: ` data-cmp="${c.year}"` }));
+    if (card.season) {
+      out.push(text(fx(HEADERS[0][0]), fy(0.23), HEADERS[0][1], 16, { color: LINE }));
+      out.push(...["#", ...EVEN_STATS].map((label, i) => text(fx(evenX(i)), fy(0.23), label, 16, { color: LINE })));
+    } else {
+      out.push(...HEADERS.map(([x, label]) => text(fx(x), fy(0.23), label, 16, { color: LINE })));
+      const veloX = tbl.x(VELO_X); // the header sits over its own values, not beside them
+      out.push(text(veloX, fy(0.23), "Velo", 16, { color: LINE, attrs: ' data-cmp="0"' }));
+      for (const c of card.comparisons) {
+        out.push(text(veloX, fy(0.23), `Velo (vs '${String(c.year).slice(-2)})`, 16, { color: LINE, attrs: ` data-cmp="${c.year}"` }));
+      }
     }
     const bw = Math.max(0.5, Math.min(0.8, 2 / n));
     out.push(...types.map((t, i) => band(`m:${t.code}`, fx(0.01), hdr.y(i - 0.5), fx(0.99), hdr.y(i + 0.5))));
@@ -897,6 +906,14 @@
       const y = hdr.y(i);
       out.push(rect(hdr.x(0.1), hdr.y(i - bw / 2), 0.075 * hdr.sx, bw * -hdr.sy, { fill: color, rx: 4 }));
       out.push(text(hdr.x(0.225), y, get(PITCH_NAMES, t.code, t.code), 20, { color, ha: "left" }));
+      if (card.season) {
+        out.push(text(fx(evenX(0)), y, thousands(t.n), 20));
+        EVEN_STATS.forEach((stat, j) => {
+          const c = cell(t.code, stat, t.values[stat]);
+          out.push(text(fx(evenX(j + 1)), y, c.text, 20, { color: c.color }));
+        });
+        return;
+      }
       out.push(text(hdr.x(0.9), y, thousands(t.n), 20));
       let x = VELO_X;
       for (const [stat, width] of WIDTHS) {
