@@ -119,7 +119,28 @@ def pull_once(season):
              .drop_duplicates(["GAME_ID", "GAME_EVENT_ID", "PLAYER_ID"])
              .sort_values(["GAME_DATE", "GAME_ID", "GAME_EVENT_ID"])
              .reset_index(drop=True))
-    return logs, shots
+    return one_row_per_player_game(logs, shots), shots
+
+
+def one_row_per_player_game(logs, shots):
+    """stats.nba.com sometimes logs a player twice in one game, once for the other team: on
+    2026-10-26 Devin Booker had his real PHX line and an OKC line of 0:00 and 1-1 free throws
+    (most likely an OKC technical free throw filed under his id). Keep the row for the team the
+    player's shots came from, else the one with the most minutes, and say what was dropped."""
+    key = ["PLAYER_ID", "GAME_ID"]
+    dup = logs[logs.duplicated(key, keep=False)].copy()
+    if dup.empty:
+        return logs
+    shot_team = shots.groupby(key)["TEAM_ID"].agg(lambda t: t.mode().iloc[0])
+    dup["_shot_team"] = [shot_team.get((p, g)) for p, g in zip(dup["PLAYER_ID"], dup["GAME_ID"])]
+    dup["_match"] = dup["TEAM_ID"] == dup["_shot_team"]
+    keep = dup.sort_values(["_match", "MIN"], ascending=False).drop_duplicates(key).index
+    dropped = dup.index.difference(keep)
+    for i in dropped:
+        r = logs.loc[i]
+        print(f"dropped a duplicate log row: {r['PLAYER_NAME']} {r['GAME_DATE'][:10]} {r['MATCHUP']} "
+              f"({r['MIN']:g} min, {r['FGA']} FGA, {r['FTM']}-{r['FTA']} FT, {r['PTS']} pts)")
+    return logs.drop(dropped)
 
 
 def roster(logs, shots):
