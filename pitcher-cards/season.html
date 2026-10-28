@@ -33,7 +33,7 @@ body.plpd{display:flex; flex-direction:column}
 /* the Pitcher box's suggestions: Model Drilldown's list, ten rows tall before it scrolls */
 .suggest-list{--rows:10; max-height:calc(var(--rows) * 34px + 14px); overflow-y:auto; overscroll-behavior:contain;
   scrollbar-width:thin; scrollbar-color:var(--navy-500) transparent}
-.suggest-list li span{white-space:nowrap} /* the name on one line; the hand, team and types give way */
+.suggest-list li span{white-space:nowrap} /* the name on one line; the hand and team give way */
 .suggest-list li small{min-width:0; overflow:hidden; text-overflow:ellipsis}
 /* the pitch threshold, set as the dropdowns are (the system has no number field) */
 .field input.num{box-sizing:border-box; height:40px; width:110px; padding:0 12px; border:1px solid var(--borders-border-tab);
@@ -516,17 +516,13 @@ p,li,.note{text-wrap:pretty}
     scored.sort(function (a, b) { return a[0] - b[0] || b[1].n - a[1].n; });
     return scored.map(function (x) { return x[1]; });
   }
-  function types(e) {                  // his pitch types, most thrown first
-    var counts = e.thrown || e.stuff || {};
-    return Object.keys(counts).sort(function (a, b) { return (counts[b] || 0) - (counts[a] || 0); });
-  }
   function showSuggestions() {
     suggested = suggestions(pitcherQ.value).slice(0, 400);
     active = -1;
     pitcherList.innerHTML = suggested.map(function (e, i) {
       var on = e.key === pitcherSel.value ? ' aria-selected="true"' : '';
       return '<li role="option" data-index="' + i + '"' + on + '><span>' + esc(label(e)) + '</span><small>'
-        + esc((e.hand ? e.hand + 'HP · ' : '') + e.team + ' · ' + types(e).join(' ')) + '</small></li>';
+        + esc((e.hand ? e.hand + 'HP · ' : '') + e.team) + '</small></li>';
     }).join('');
     pitcherList.hidden = !suggested.length;
     pitcherQ.setAttribute('aria-expanded', suggested.length ? 'true' : 'false');
