@@ -231,14 +231,28 @@ Movement's), and that plot says so ("<20 pitches shown as scatter", in three lin
 clear the plate) in its outer bottom corner. Each plot stacks its types by how often they were
 thrown to that side, the most thrown on top.
 
+The Pitch Type Metrics table's Stuff+ and PLV+, and the page table's Stuff+, are on the
+**season scale**: the models' plus scale for a pitcher's pitch type over a season
+(`pitcher_season_pitch_type` in pitch-modeling's `plus_scale_constants.json`), as Model
+Drilldown's are. A game card's are against single games (`pitcher_game_pitch_type`), and a
+season's average bunches far tighter than single games do, so on its own scale the same run
+value sits further from 100: PLV+ about 2.4 times as far, Stuff+ about 1.1 (a 105 PLV+
+cutter on the game scale is 112 on the season scale). `season.py` averages a type's pitches
+on the game scale and moves the mean onto the season scale, and the card names the scale it is
+on (`plus_scale`). They are coloured on `card.js`'s `SEASON_TYPE_BINS`: each type's 10th, 30th,
+70th and 90th percentiles over 2026's pitcher-seasons, weighted by pitches (`season.py
+--cuts` fits them with the letter cuts); the table's other stats keep the game cards'
+`TYPE_BINS`. The Skills letters are already graded against seasons.
+
 The cards are pooled from the game cards by
 [`tools/pitcher_card/season.py`](tools/pitcher_card/season.py), the regular season being MLB's
 schedule's (`gameType` R), and written to the bucket:
 
 - `https://data.blandalytics.com/cards/mlb/seasons/index.json` — the seasons built;
 - `.../seasons/<season>/index.json` — the season's cards (name, team, pitches, innings, the
-  grade means and Stuff+ by type: what the list and the table show), its last day and the
-  games each team had played by then (`team_games`, which the threshold is prorated by);
+  grade means and Stuff+ by type: what the list and the table show), its last day, the
+  games each team had played by then (`team_games`, which the threshold is prorated by) and
+  the scale its Stuff+ is on (`plus_scale`);
 - `.../seasons/<season>/<key>.json` — a card (about 25 KB).
 
 This season's are pooled from the Game Cards page's day files by the workflow's last job, each
