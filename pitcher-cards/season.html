@@ -29,7 +29,12 @@ body.plpd{display:flex; flex-direction:column}
 .brand h1{margin:0; font-family:var(--font-display); font-size:24px; font-weight:900; line-height:1.2; color:var(--brand-brand-cyan)}
 .brand .sub{font-family:var(--font-display); font-size:12px; line-height:1.25; letter-spacing:.36px; color:var(--text-text-zero); font-variant-numeric:tabular-nums}
 .field select.plpd-filter-dropdown{width:auto; min-width:110px; font-variant-numeric:tabular-nums}
-#pitcher{min-width:300px}
+#pitcherQ{min-width:300px}
+/* the Pitcher box's suggestions: Model Drilldown's list, ten rows tall before it scrolls */
+.suggest-list{--rows:10; max-height:calc(var(--rows) * 34px + 14px); overflow-y:auto; overscroll-behavior:contain;
+  scrollbar-width:thin; scrollbar-color:var(--navy-500) transparent}
+.suggest-list li span{white-space:nowrap} /* the name on one line; the hand, team and types give way */
+.suggest-list li small{min-width:0; overflow:hidden; text-overflow:ellipsis}
 /* the pitch threshold, set as the dropdowns are (the system has no number field) */
 .field input.num{box-sizing:border-box; height:40px; width:110px; padding:0 12px; border:1px solid var(--borders-border-tab);
   border-radius:var(--radius-lg); background:var(--surfaces-surface-3); box-shadow:var(--shadow-pl-filter-search-input-inset);
@@ -110,7 +115,7 @@ body.plpd{display:flex; flex-direction:column}
   .field{flex:1 1 40%; min-width:0}
   .field.wide{flex-basis:100%}
   .field select.plpd-filter-dropdown,.field input.num{width:100%; min-width:0}
-  #pitcher{min-width:0}
+  #pitcherQ{min-width:0}
   /* the page scrolls as a whole, the card at full width with the note after it */
   html,body{height:auto}
   .stage{flex:none; overflow:visible; display:block; padding:8px; min-height:160px}
@@ -146,8 +151,14 @@ p,li,.note{text-wrap:pretty}
   </div>
   <label class="check plpd-check"><input type="checkbox" id="split" disabled>Split traded pitchers by team</label>
   <div class="field wide plpd-filter-field">
-    <label class="plpd-filter-field__label" for="pitcher">Pitcher</label>
-    <select id="pitcher" class="plpd-filter-dropdown" disabled></select>
+    <label class="plpd-filter-field__label" for="pitcherQ">Pitcher</label>
+    <div class="plpd-autocomplete">
+      <input id="pitcherQ" class="plpd-autocomplete__input" type="text" placeholder="Name or MLBAM ID"
+        autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false"
+        aria-controls="pitcherList" disabled>
+      <ul id="pitcherList" class="plpd-autocomplete__menu suggest-list" role="listbox" hidden></ul>
+    </div>
+    <select id="pitcher" hidden disabled></select>
   </div>
   <button class="btn plpd-btn" id="png" type="button" hidden>Share image ▾</button>
 </header>
@@ -174,6 +185,7 @@ p,li,.note{text-wrap:pretty}
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var seasonSel = $('season'), minIn = $('minPitches'), split = $('split'), pitcherSel = $('pitcher');
+  var pitcherQ = $('pitcherQ'), pitcherList = $('pitcherList');
   var cardEl = $('cardBox'), empty = $('empty'), png = $('png'), status = $('status');
   // the season cards live in the bucket (tools/pitcher_card/season.py writes them): an index of
   // the seasons, and beside it <season>/index.json (the season's cards) and <season>/<key>.json
@@ -245,6 +257,7 @@ p,li,.note{text-wrap:pretty}
   // the split turns, his whole season or his biggest part of it); else the top of the Stuff column
   function refresh(prefer) {
     var list = rows(), keys = list.map(function (e) { return e.key; });
+    listed = list;
     fill(pitcherSel, list.map(function (e) { return [e.key, e.name + '  ·  ' + e.team]; }));
     var cur = prefer || pitcherSel.dataset.key, pick = null;
     if (cur && keys.indexOf(cur) >= 0) pick = cur;
@@ -280,6 +293,7 @@ p,li,.note{text-wrap:pretty}
   function onPitcher() {
     var key = pitcherSel.value, e = byKey(key);
     pitcherSel.dataset.key = key;
+    showPicked(e);
     markGradeRow();
     saveState();
     if (!e) {
@@ -454,6 +468,8 @@ p,li,.note{text-wrap:pretty}
     }).catch(function () {
       season = null;
       fill(pitcherSel, []);
+      listed = [];
+      showPicked(null);
       gradesEl.hidden = true;
       clearStage('Could not load the ' + year + ' season cards.');
     });
@@ -467,6 +483,108 @@ p,li,.note{text-wrap:pretty}
   });
   split.addEventListener('change', function () { if (season) refresh(); });
   pitcherSel.addEventListener('change', onPitcher);
+
+  // ---- the Pitcher box: Model Drilldown's name entry over the pitchers listed (the threshold and
+  // the split applied), picking into the hidden select. Typing ranks full-name starts, then
+  // last-name starts, then anything containing it or an MLBAM id starting with it, most
+  // pitches first within each; arrows and Enter pick, Escape closes, and leaving it empty
+  // puts the pitcher on stage back.
+  var listed = [], suggested = [], active = -1, committed = false;
+  function normalize(t) {
+    return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      .replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  }
+  function label(e) { return e.name + (e.stint ? '  ·  ' + e.team : ''); }
+  function showPicked(e) {             // the box shows the pitcher on stage, unless being typed in
+    pitcherQ.disabled = pitcherSel.disabled;
+    if (document.activeElement === pitcherQ && !committed) return;
+    pitcherQ.value = e ? label(e) : '';
+    committed = true;
+  }
+  function suggestions(query) {
+    var q = normalize(query);
+    if (!q) return listed.slice();
+    var scored = [];
+    listed.forEach(function (e) {
+      var full = normalize(e.name), last = full.slice(full.lastIndexOf(' ') + 1), score;
+      if (full.indexOf(q) === 0) score = 0;
+      else if (last.indexOf(q) === 0) score = 1;
+      else if (full.indexOf(q) >= 0 || String(e.id).indexOf(q) === 0) score = 2;
+      else return;
+      scored.push([score, e]);
+    });
+    scored.sort(function (a, b) { return a[0] - b[0] || b[1].n - a[1].n; });
+    return scored.map(function (x) { return x[1]; });
+  }
+  function types(e) {                  // his pitch types, most thrown first
+    var counts = e.thrown || e.stuff || {};
+    return Object.keys(counts).sort(function (a, b) { return (counts[b] || 0) - (counts[a] || 0); });
+  }
+  function showSuggestions() {
+    suggested = suggestions(pitcherQ.value).slice(0, 400);
+    active = -1;
+    pitcherList.innerHTML = suggested.map(function (e, i) {
+      var on = e.key === pitcherSel.value ? ' aria-selected="true"' : '';
+      return '<li role="option" data-index="' + i + '"' + on + '><span>' + esc(label(e)) + '</span><small>'
+        + esc((e.hand ? e.hand + 'HP · ' : '') + e.team + ' · ' + types(e).join(' ')) + '</small></li>';
+    }).join('');
+    pitcherList.hidden = !suggested.length;
+    pitcherQ.setAttribute('aria-expanded', suggested.length ? 'true' : 'false');
+  }
+  function hideSuggestions() {
+    pitcherList.hidden = true;
+    pitcherQ.setAttribute('aria-expanded', 'false');
+    suggested = []; active = -1;
+  }
+  function setActive(i) {
+    active = i;
+    [].forEach.call(pitcherList.children, function (li, k) { li.classList.toggle('active', k === i); });
+    if (i >= 0) pitcherList.children[i].scrollIntoView({block: 'nearest'});
+  }
+  function startSearch() {
+    if (committed) { pitcherQ.value = ''; committed = false; }
+    showSuggestions();
+  }
+  function pickSuggested(e) {
+    hideSuggestions();
+    committed = true;
+    pitcherSel.value = e.key;
+    onPitcher();
+    pitcherQ.blur();
+  }
+  pitcherQ.addEventListener('input', function () { committed = false; showSuggestions(); });
+  pitcherQ.addEventListener('focus', startSearch);
+  pitcherQ.addEventListener('click', function () { if (pitcherList.hidden) startSearch(); });
+  pitcherQ.addEventListener('blur', function () {
+    setTimeout(function () {
+      hideSuggestions();
+      if (!committed || !pitcherQ.value.trim()) { committed = false; showPicked(byKey(pitcherSel.value)); }
+    }, 150);
+  });
+  pitcherQ.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { hideSuggestions(); pitcherQ.blur(); return; }  // even with nothing listed
+    if (pitcherList.hidden) {
+      if (ev.key === 'ArrowDown') { ev.preventDefault(); showSuggestions(); if (suggested.length) setActive(0); }
+      return;
+    }
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); setActive((active + 1) % suggested.length); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); setActive((active - 1 + suggested.length) % suggested.length); }
+    else if (ev.key === 'Enter') {
+      ev.preventDefault();
+      if (active >= 0) pickSuggested(suggested[active]);
+      else if (suggested.length === 1) pickSuggested(suggested[0]);
+    }
+  });
+  pitcherList.addEventListener('pointerdown', function (ev) {
+    var li = ev.target.closest('li');
+    if (!li) return;
+    ev.preventDefault();
+    pickSuggested(suggested[+li.getAttribute('data-index')]);
+  });
+  pitcherList.addEventListener('pointermove', function (ev) {
+    var li = ev.target.closest('li');
+    if (li) setActive(+li.getAttribute('data-index'));
+  });
 
   // Share image (shared/share-image.js): the card at 3000 x 4000
   var sharedCard = null;
