@@ -27,13 +27,15 @@
 //   PitcherCard.letter(value, grade)     the letter for a mean Stuff, Location or PLV
 //   PitcherCard.skill(card, key)         a card's stuff, loc, plv, loc_vl or loc_vr letter
 //   PitcherCard.statCell(code, stat, v)  a table stat's text and colour, as the card shows it
-//   PitcherCard.GRADE_COLORS, PITCH_NAMES, MARKER_COLORS, LETTERS
+//                                        (a 4th argument, SEASON_TYPE_BINS, for the season scale)
+//   PitcherCard.SEASON_SCALE, SEASON_TYPE_BINS, GRADE_COLORS, PITCH_NAMES, MARKER_COLORS, LETTERS
 //
 // A season card (tools/pitcher_card/season.py: a dict with `season`, the year) draws the
 // same card for a pitcher's whole season: its letters on SEASON_GRADE_CUTS, one Skills tile
 // where the game card has Skills and Results, KDE tiers per pitch type in Movement and its
-// 0.64-threshold KDE region against each side in the location plots, and no comparison
-// season or hover.
+// 0.64-threshold KDE region against each side in the location plots, its table's Stuff+
+// and PLV+ on the season scale (coloured on SEASON_TYPE_BINS), and no comparison season or
+// hover.
 //
 // A classic <script> defines window.PitcherCard; require() returns the same object.
 
@@ -260,6 +262,24 @@
     },
   };
   Object.values(TYPE_BINS).forEach((bins) => (bins.Ext = [5.75, 6.25, 6.66, 7.13]));
+  // A season card's Stuff+ and PLV+ are on the pitcher_season_pitch_type scale instead
+  // (season.py's SEASON_SCALE, which the card names as plus_scale), so its table colours
+  // them on these: the same percentiles of that pitch type's 2026 pitcher-seasons, weighted
+  // by their pitches (season.py --cuts). Its other stats keep TYPE_BINS.
+  const SEASON_SCALE = "pitcher_season_pitch_type";
+  const SEASON_PLUS_BINS = {
+    FF: { "plvStuff+": [74, 86, 99, 107], "PLV+": [79, 89, 105, 116] },
+    SI: { "plvStuff+": [76, 83, 92, 101], "PLV+": [82, 93, 105, 113] },
+    FC: { "plvStuff+": [96, 103, 113, 118], "PLV+": [88, 97, 107, 114] },
+    SL: { "plvStuff+": [102, 108, 117, 123], "PLV+": [86, 95, 107, 115] },
+    ST: { "plvStuff+": [97, 104, 114, 122], "PLV+": [80, 89, 101, 110] },
+    CU: { "plvStuff+": [88, 93, 103, 110], "PLV+": [71, 82, 94, 101] },
+    CH: { "plvStuff+": [78, 88, 101, 110], "PLV+": [76, 88, 102, 111] },
+    FS: { "plvStuff+": [86, 98, 110, 125], "PLV+": [81, 92, 106, 114] },
+  };
+  const SEASON_TYPE_BINS = Object.fromEntries(
+    Object.entries(TYPE_BINS).map(([code, bins]) => [code, { ...bins, ...SEASON_PLUS_BINS[code] }]),
+  );
   // lower is better for expected slugging, so its colour scale runs the other way
   const INVERTED = new Set(["xSLGcon"]);
 
@@ -279,9 +299,10 @@
   // which numpy does in float32: the cut is rounded to float32 first. So a 1.2 that is
   // float32's 1.2000000476837158 sits at the cut of 1.2, not above it. A value that is a
   // float32 is compared that way here; anything else (a float64 column, or a dict built
-  // from doubles) compares as doubles, as the table's cells always did.
-  function statColor(pitchType, stat, value, key, asFloat32 = false) {
-    let cuts = get(get(TYPE_BINS, pitchType, {}), key || stat);
+  // from doubles) compares as doubles, as the table's cells always did. `bins` is
+  // TYPE_BINS, or SEASON_TYPE_BINS for a season-scale card's table.
+  function statColor(pitchType, stat, value, key, asFloat32 = false, bins = TYPE_BINS) {
+    let cuts = get(get(bins, pitchType, {}), key || stat);
     if (cuts === undefined || !isNum(value)) return WHITE;
     if (asFloat32 && Math.fround(value) === value) cuts = cuts.map(Math.fround);
     const idx = binIndex(value, cuts);
@@ -295,10 +316,10 @@
   const FASTBALL_PANEL = ["Velo", "Ext", "IVB", "HB", "HAVAA"];
   const VELO_DIFF_CUTS = [-2, -1, -0.5, 0.5, 1, 2];
 
-  // display text and colour for one stat of one pitch type
-  function cell(code, stat, value) {
+  // display text and colour for one stat of one pitch type, on `bins` (see statColor)
+  function cell(code, stat, value, bins = TYPE_BINS) {
     if (!isNum(value)) return { text: "-", color: WHITE };
-    const color = COLOURED.has(stat) ? statColor(code, stat, value) : WHITE;
+    const color = COLOURED.has(stat) ? statColor(code, stat, value, undefined, false, bins) : WHITE;
     if (stat === "xSLGcon") return { text: fixed(value, 3).replace(/^0+/, ""), color };
     const suffix = get(SUFFIX, stat, "");
     if (WHOLE.has(stat)) return { text: pyRound(value) + suffix, color };
@@ -908,9 +929,10 @@
       out.push(rect(hdr.x(0.1), hdr.y(i - bw / 2), 0.075 * hdr.sx, bw * -hdr.sy, { fill: color, rx: 4 }));
       out.push(text(hdr.x(0.225), y, get(PITCH_NAMES, t.code, t.code), 20, { color, ha: "left" }));
       if (card.season) {
+        const bins = card.plus_scale === SEASON_SCALE ? SEASON_TYPE_BINS : TYPE_BINS;
         out.push(text(fx(evenX(0)), y, thousands(t.n), 20));
         EVEN_STATS.forEach((stat, j) => {
-          const c = cell(t.code, stat, t.values[stat]);
+          const c = cell(t.code, stat, t.values[stat], bins);
           out.push(text(fx(evenX(j + 1)), y, c.text, 20, { color: c.color }));
         });
         return;
@@ -1293,6 +1315,6 @@
 
   return {
     VERSION, LOGO, GRADE_CUTS, SEASON_GRADE_CUTS, svg, draw, show, comparisonYear, png, download, copyPng, filename, letter,
-    skill, statCell: cell, GRADE_COLORS, PITCH_NAMES, MARKER_COLORS, LETTERS, fixed, pyRound,
+    skill, statCell: cell, SEASON_SCALE, SEASON_TYPE_BINS, GRADE_COLORS, PITCH_NAMES, MARKER_COLORS, LETTERS, fixed, pyRound,
   };
 });

@@ -169,7 +169,7 @@ p,li,.note{text-wrap:pretty}
 <footer class="note">Data (especially pitch types) are subject to change.</footer>
 
 <script src="/shared/share-image.js?v=2"></script>
-<script src="card.js?v=25"></script>
+<script src="card.js?v=26"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -360,6 +360,8 @@ p,li,.note{text-wrap:pretty}
         return headCell('pt:' + c, '<span style="color:' + PitcherCard.MARKER_COLORS[c] + '">' + c + '</span>',
           i ? '' : 'first', PitcherCard.PITCH_NAMES[c] + ' Stuff+');
       }).join('') + '</tr></thead>';
+    // an index on the season scale (season.py's plus_scale) colours on its season bins
+    var bins = season.plus_scale === PitcherCard.SEASON_SCALE ? PitcherCard.SEASON_TYPE_BINS : undefined;
     var body = sorted(list).map(function (e) {
       var shown = stuffShown(e);
       return '<tr data-key="' + esc(e.key) + '"' + (e.key === pitcherSel.value ? ' class="on"' : '') + '>'
@@ -371,7 +373,7 @@ p,li,.note{text-wrap:pretty}
         + codes.map(function (c, i) {
           var cls = i ? '' : ' class="first"';
           if (!(c in shown)) return '<td' + cls + '></td>';
-          var cell = PitcherCard.statCell(c, 'plvStuff+', shown[c]);
+          var cell = PitcherCard.statCell(c, 'plvStuff+', shown[c], bins);
           return '<td' + cls + ' style="color:' + cell.color + '">' + esc(cell.text) + '</td>';
         }).join('') + '</tr>';
     }).join('');

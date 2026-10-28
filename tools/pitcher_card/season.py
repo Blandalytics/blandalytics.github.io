@@ -8,7 +8,7 @@ into a card dict that card.js draws with its season layout, for the Season Cards
     python season.py --out DIR 694819 808967      # only these pitchers
     python season.py --archive DIR                # build_site.py --out DIR's game cards, into
                                                   # the archive a past season is pooled from
-    python season.py --cuts                       # the season cuts
+    python season.py --cuts                       # the season cuts and colour bins
 
 A season is its regular-season games (MLB's schedule, gameType R). This season's game cards
 are the Game Cards page's (cards/mlb/data/<date>.json); a past season's, built the same way
@@ -23,9 +23,16 @@ pooled into:
 - the Stuff, Location and PLV means, each game's mean weighted by the pitches it graded;
   card.js letters them on its SEASON_GRADE_CUTS, which --cuts fits as grade_cuts.py fits
   the game cuts (every pitcher's season, weighted by his pitches, to grade_cuts.TARGET);
-- the usage and the pitch type table, from the pitches as prep.game_table makes a game's;
-  the primary fastball's extension and HAVAA, which the pitches don't carry, are its
-  games' values weighted by its pitches in them;
+- the usage and the pitch type table, from the pitches as prep.game_table makes a game's,
+  but with Stuff+ and PLV+ on the season scale: a pitch's are on the game cards' scale
+  (pitch_model's pitcher_game_pitch_type, every pitcher's pitch type in one game), and
+  a type's season mean of them goes onto the pitcher_season_pitch_type scale of the
+  same plus_scale_constants (every pitcher's pitch type over a season), as Model
+  Drilldown's are. Season means bunch far tighter than single games', so the same run
+  value is further from 100 there (PLV+ about 2.4 times as far, Stuff+ 1.1). card.js
+  colours them on its SEASON_TYPE_BINS, which --cuts fits too. The primary fastball's
+  extension and HAVAA, which the pitches don't carry, are its games' values weighted by
+  its pitches in them;
 - Movement as three KDE tiers per pitch type, each type on its own Scott kernel (as
   scipy's gaussian_kde sets it) widened MOVEMENT_BW times, as shapes.py widens its (seaborn's
   bw_adjust), so the tails a 95% edge runs through come out smooth; the grid is cut 3
@@ -46,7 +53,7 @@ seasons on a season card. Writes, under the bucket's cards/mlb/seasons/:
     <year>/<key>.json   a season card; <key> is the pitcher's id, or <id>-<team> for a stint
     <year>/index.json   the season's cards (name, team, pitches, grades, Stuff+ by type), its
                         last day and the games each team had played by then (the page
-                        prorates its pitch threshold by them)
+                        prorates its pitch threshold by them), and the scale its Stuff+ is on
     index.json          the seasons built"""
 
 from __future__ import annotations
@@ -78,6 +85,13 @@ INDEX_CACHE = "public, max-age=120"
 FULL_SEASON = 162  # a team's games in a full regular season
 FASTBALLS = ("FF", "SI", "FC")
 TYPE_STATS = ("Velo", "IVB", "HB", "Str%", "SwStr%", "CSW%", "xSLGcon", "plvStuff+", "PLV+")
+# the table's model columns and their run values in the plus scale, which pitch_model fetches
+# from the same place
+PLUS_COLUMNS = {"plvStuff+": "stuff_rv", "PLV+": "pitching_rv"}
+SCALE_URL = "https://data.blandalytics.com/pitch-modeling/constants/plus_scale_constants.json"
+GAME_SCALE, SEASON_SCALE = "pitcher_game_pitch_type", "pitcher_season_pitch_type"
+BIN_SHARES = (0.1, 0.3, 0.7, 0.9)  # SEASON_TYPE_BINS: card.js's TYPE_BINS percentiles
+BIN_TYPES = ("FF", "SI", "FC", "SL", "ST", "CU", "CH", "FS")  # the types TYPE_BINS has
 MOVEMENT_SHARE = 0.95  # Movement's outer tier: the type's densest 95% of pitches
 TIER_SHARES = (1, 2 / 3, 1 / 3)  # each tier's pitches against the outer tier's
 MOVEMENT_BW = 2  # Movement's kernels: each type's Scott kernel, twice as wide
@@ -243,9 +257,30 @@ def _desc(p: dict) -> str | None:
     return DESC_MAP.get(p.get("d"))
 
 
-def type_rows(pitches: list[dict], hand: str) -> list[dict]:
+Scale = dict[str, tuple[float, float]]  # a model column's (a, b): season value = a + b x game's
+
+
+def season_scale(s: requests.Session) -> Scale:
+    """For each of the table's model columns, the line from a mean of its pitches' values
+    (on the game cards' scale) to the season scale. Each scale is plus mean + plus SD x
+    (a unit's run value per 100 pitches - its mean) / its SD, so one is a line of the other."""
+    r = s.get(SCALE_URL, params={"v": RUN}, timeout=60)
+    r.raise_for_status()
+    scale = r.json()
+    plus, aggs = scale["plus"], scale["aggregations"]
+    out = {}
+    for stat, column in PLUS_COLUMNS.items():
+        game, season = (aggs[k]["columns"][column] for k in (GAME_SCALE, SEASON_SCALE))
+        b = game["sd"] / season["sd"]
+        shift = plus["sd"] * (game["mean"] - season["mean"]) / season["sd"]
+        out[stat] = (plus["mean"] * (1 - b) + shift, b)
+    return out
+
+
+def type_rows(pitches: list[dict], hand: str, scale: Scale) -> list[dict]:
     """The usage panel's and metrics table's rows, most thrown first (alphabetical on a
-    tie), as prep.game_table makes them from a game's pitches."""
+    tie), as prep.game_table makes them from a game's pitches, with Stuff+ and PLV+ on the
+    season ``scale``."""
     sign = 1 if hand == "R" else -1
     by = defaultdict(list)
     for p in pitches:
@@ -266,6 +301,8 @@ def type_rows(pitches: list[dict], hand: str) -> list[dict]:
             "plvStuff+": _mean(p.get("plvStuff+") for p in ps),
             "PLV+": _mean(p.get("PLV+") for p in ps),
         }
+        for stat, (a, b) in scale.items():
+            values[stat] = None if values[stat] is None else a + b * values[stat]
         digits = {"xSLGcon": 3, "plvStuff+": 0, "PLV+": 0}
         rows.append(
             {
@@ -479,12 +516,12 @@ def chart_limit(pitches: list[dict]) -> int:
 
 
 def build(games: list[dict], year: int, line: dict | None, age: int | None, teams: list[str],
-          stint: bool = False) -> dict:  # fmt: skip
+          scale: Scale, stint: bool = False) -> dict:  # fmt: skip
     """The season card dict for some of a pitcher's regular-season game cards: all of them,
     with ``teams`` every team he pitched for, or one team's (a ``stint``)."""
     last = games[-1]
     pitches = [p for g in games for p in g["pitches"]]
-    rows = type_rows(pitches, last["hand"])
+    rows = type_rows(pitches, last["hand"], scale)
     order = [r["code"] for r in rows]
     segments, nums = summary(line, pitches)
     arm = _weighted([(g.get("arm_angle"), len(g["pitches"])) for g in games])
@@ -512,6 +549,7 @@ def build(games: list[dict], year: int, line: dict | None, age: int | None, team
         "chart_lim": chart_limit(pitches),
         "fastball": fastball(rows, games),
         "types": rows,
+        "plus_scale": SEASON_SCALE,  # the table's Stuff+ and PLV+ (card.js picks its colours by it)
         "plots": {
             "movement": movement_layers(pitches, order),
             **location_plots(pitches, order),
@@ -533,26 +571,28 @@ def stints(games: list[dict], sched: dict[int, Game]) -> list[tuple[int, str, li
     return [(tid, gs[-1]["team"], gs) for tid, gs in by.items()]
 
 
-Job = tuple[int, list[dict], Person, dict[int, Game], int]  # a pitcher's: see pitcher_cards
+Job = tuple[int, list[dict], Person, dict[int, Game], int, Scale]  # a pitcher's: see pitcher_cards
 
 
 def pitcher_cards(job: Job) -> list[tuple[str, dict]]:
     """(key, card) for a pitcher's season and, if he pitched for more than one team, for
     each team's part of it."""
-    pid, games, info, sched, year = job
+    pid, games, info, sched, year, scale = job
     parts = stints(games, sched)
     age = season_age(info.birth, year)
-    out = [(str(pid), build(games, year, info.lines.get(None), age, [t for _, t, _ in parts]))]
+    teams = [t for _, t, _ in parts]
+    out = [(str(pid), build(games, year, info.lines.get(None), age, teams, scale))]
     if len(parts) > 1:
-        out += [(f"{pid}-{team}", build(gs, year, info.lines.get(tid), age, [team], stint=True))
+        out += [(f"{pid}-{team}",
+                 build(gs, year, info.lines.get(tid), age, [team], scale, stint=True))
                 for tid, team, gs in parts]  # fmt: skip
     return out
 
 
 def build_all(s: requests.Session, by: dict[int, list[dict]], sched: dict[int, Game], year: int):
     """Every pitcher's cards, built across the machine's cores."""
-    info = people(s, list(by), year)
-    jobs = [(pid, games, info[pid], {g["game_pk"]: sched[g["game_pk"]] for g in games}, year)
+    info, scale = people(s, list(by), year), season_scale(s)
+    jobs = [(pid, games, info[pid], {g["game_pk"]: sched[g["game_pk"]] for g in games}, year, scale)
             for pid, games in by.items()]  # fmt: skip
     with concurrent.futures.ProcessPoolExecutor() as pool:
         return [c for cs in pool.map(pitcher_cards, jobs, chunksize=4) for c in cs]
@@ -623,7 +663,7 @@ def publish(st, s: requests.Session, year: int, sched: dict[int, Game], paths: l
     through = max(g["date"] for games in by.values() for g in games)
     meta = {"season": year, "through": through, "days": len(paths),
             "games": sum(map(len, by.values())), "team_games": team_games(sched, through),
-            "full_games": FULL_SEASON}  # fmt: skip
+            "full_games": FULL_SEASON, "plus_scale": SEASON_SCALE}  # fmt: skip
     old = _index(st, f"{SEASONS}/{year}/index.json")
     if not (wanted or force) and all(old.get(k) == meta[k] for k in ("through", "days", "games")):
         print(f"{year}: up to date (through {through})", file=sys.stderr)
@@ -647,9 +687,10 @@ def archive(st, folder: str) -> None:
 
 
 # ---- the season cuts ----------------------------------------------------------------
-def fit_cuts(paths: list[str]) -> None:
+def fit_cuts(paths: list[str], scale: Scale) -> None:
     """Prints SEASON_GRADE_CUTS for card.js: every pitcher's season means, weighted by the
-    pitches they average, fitted to grade_cuts.TARGET as grade_cuts.py fits the game cuts."""
+    pitches they average, fitted to grade_cuts.TARGET as grade_cuts.py fits the game cuts;
+    then its SEASON_TYPE_BINS."""
     import grade_cuts  # the scraper's modules come with it: only this needs them
 
     by = defaultdict(list)
@@ -657,6 +698,7 @@ def fit_cuts(paths: list[str]) -> None:
         by[c["pitcher_id"]].append(c)
     shares = np.cumsum(grade_cuts.TARGET)[:-1] / 100
     print(f"{len(by)} pitchers")
+    print("  SEASON_GRADE_CUTS")
     for key in ("stuff", "loc", "plv"):
         vals, w = [], []
         for games in by.values():
@@ -667,6 +709,33 @@ def fit_cuts(paths: list[str]) -> None:
                 w.append(n)
         cuts = np.round(grade_cuts.fit(np.array(vals), np.array(w, dtype=float), shares), 1)
         print(f"    {key}: [{', '.join(f'{c:g}' for c in cuts)}],")
+    fit_type_bins(by, scale, grade_cuts.fit)
+
+
+def fit_type_bins(by: dict[int, list[dict]], scale: Scale, fit) -> None:
+    """Prints SEASON_TYPE_BINS for card.js: the table's Stuff+ and PLV+ cut points per pitch
+    type, the 10th, 30th, 70th and 90th percentiles of that type's pitcher-seasons on the
+    season scale, weighted by their pitches (the game cards' TYPE_BINS are of single games)."""
+    vals = type_values(by, scale)
+    print("  SEASON_TYPE_BINS")
+    for code in BIN_TYPES:
+        bins = []
+        for stat in PLUS_COLUMNS:
+            v, w = np.array(vals[code, stat], dtype=float).T
+            cuts = np.round(fit(v, w, np.array(BIN_SHARES)), 1)
+            bins.append(f'"{stat}": [{", ".join(f"{c:g}" for c in cuts)}]')
+        print(f"    {code}: {{ {', '.join(bins)} }},")
+
+
+def type_values(by: dict[int, list[dict]], scale: Scale) -> dict[tuple[str, str], list]:
+    """(value, pitches) of every pitcher's season of each pitch type, by (type, model column)."""
+    vals = defaultdict(list)
+    for games in by.values():
+        rows = type_rows([p for g in games for p in g["pitches"]], games[-1]["hand"], scale)
+        for r, stat in ((r, stat) for r in rows for stat in PLUS_COLUMNS):
+            if r["values"][stat] is not None:
+                vals[r["code"], stat].append((r["values"][stat], r["n"]))
+    return vals
 
 
 def main(argv=None) -> int:
@@ -691,7 +760,7 @@ def main(argv=None) -> int:
     paths = day_files(s, sched, os.path.join(a.cache, str(year)))
     print(f"{len(paths)} days of {year} regular-season game cards", file=sys.stderr)
     if a.cuts:
-        fit_cuts(paths)
+        fit_cuts(paths, season_scale(s))
     else:
         publish(store(a.out), s, year, sched, paths, a.pitchers, a.force)
     return 0
