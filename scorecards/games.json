@@ -1,5 +1,5 @@
 {
- "built": "2026-10-28T16:28:50Z",
+ "built": "2026-10-29T16:43:11Z",
  "games": {
   "822678": {
    "away": "New York Mets",
@@ -34006,6 +34006,20 @@
    "home_r": 9,
    "title": "D-backs 9, Tigers 6",
    "venue": "Chase Field"
+  },
+  "849799": {
+   "away": "Milwaukee Brewers",
+   "away_abbr": "MIL",
+   "away_nick": "Brewers",
+   "away_r": 4,
+   "date": "2026-10-28",
+   "file": "games/849799.html",
+   "home": "Tampa Bay Rays",
+   "home_abbr": "TB",
+   "home_nick": "Rays",
+   "home_r": 1,
+   "title": "Brewers 4, Rays 1",
+   "venue": "Tropicana Field"
   },
   "849802": {
    "away": "Tampa Bay Rays",
