@@ -204,9 +204,11 @@ the window again, and remembers it.
 first season the models' plus scale covers), and for every Triple-A and Single-A pitcher from
 2026 (Single-A's Statcast is the Florida State League's alone, so its cards are FSL pitchers').
 Pick a level, a season and a pitcher; the Pitcher list and the grades table beside the card
-hold the pitchers with at least **Min pitches**, which starts at 1,000 for a full season at
-that level (162 games in MLB, 150 in Triple-A, 132 in Single-A), prorated by the games each team
-had played (about 370 in 2020's 60-game MLB season, and less early in a season under way).
+hold the pitchers with at least **Min pitches**, which starts at 1,000 for a full MLB season
+and 500 for a full one below it (where pitchers throw far fewer pitches), a full season being
+that level's (162 games in MLB, 150 in Triple-A, 132 in Single-A), prorated by the games each
+team had played (about 370 in 2020's 60-game MLB season, 494 in Triple-A's 2026, and less early
+in a season under way).
 **Split traded pitchers by team** swaps a traded pitcher's whole season at the level for a
 card for each team he pitched for, its line the one for that team. Below MLB the grades are on
 the MLB scale, as the game cards' are, and the page says PLV and Location are provisional

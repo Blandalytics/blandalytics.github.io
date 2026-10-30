@@ -210,7 +210,9 @@ p,li,.note,.prov{text-wrap:pretty}
   function levelName(code) { return LEVELS.filter(function (l) { return l[0] === code; })[0][1]; }
   function atLevel() { return level === MLB ? '' : levelName(level) + ' '; }  // 'Triple-A ', or nothing for MLB
   var LOGO = 'PitcherList_Stats_watermark_with_logo.webp';
-  var FULL_MIN = 1000;                // the pitch threshold over a full season, prorated by the games played
+  // the pitch threshold over a full season at each level, prorated by the games played: half
+  // MLB's below it, where pitchers throw far fewer pitches
+  var FULL_MIN = {mlb: 1000, aaa: 500, afx: 500};
   var seasons = {};                   // the seasons index's seasons
   var season = null;                  // the chosen season's index
   var seasonCache = {}, cardCache = {};
@@ -238,9 +240,12 @@ p,li,.note,.prov{text-wrap:pretty}
   function niceDate(iso) { var d = new Date(iso + 'T12:00:00'); return MONTHS[d.getMonth()] + ' ' + d.getDate(); }
 
   // ---- the season's cards, and the ones the threshold and the split let through ----
-  // the threshold a season starts at: FULL_MIN over a full season, prorated by the games each
-  // team had played by its last day
-  function defaultMin(ix) { return Math.round(FULL_MIN * Math.min(1, ix.team_games / ix.full_games)); }
+  // the threshold a season starts at: its level's FULL_MIN over a full season, prorated by the
+  // games each team had played by its last day
+  function defaultMin(ix) {
+    var full = FULL_MIN[ix.level || level] || FULL_MIN[MLB];
+    return Math.round(full * Math.min(1, ix.team_games / ix.full_games));
+  }
   function minPitches() {
     var v = parseInt(minIn.value, 10);
     return isFinite(v) && v >= 0 ? v : defaultMin(season);
