@@ -29,7 +29,7 @@ body.plpd{display:flex; flex-direction:column}
 .brand h1{margin:0; font-family:var(--font-display); font-size:24px; font-weight:900; line-height:1.2; color:var(--brand-brand-cyan)}
 .brand .sub{font-family:var(--font-display); font-size:12px; line-height:1.25; letter-spacing:.36px; color:var(--text-text-zero); font-variant-numeric:tabular-nums}
 .field select.plpd-filter-dropdown{width:auto; min-width:110px; font-variant-numeric:tabular-nums}
-#pitcherQ{min-width:300px}
+#pitcherQ{width:224px}  /* the Level, Season, threshold, split and Share image beside it on one row at 1600px */
 /* the Pitcher box's suggestions: Model Drilldown's list, ten rows tall before it scrolls */
 .suggest-list{--rows:10; max-height:calc(var(--rows) * 34px + 14px); overflow-y:auto; overscroll-behavior:contain;
   scrollbar-width:thin; scrollbar-color:var(--navy-500) transparent}
@@ -101,9 +101,11 @@ body.plpd{display:flex; flex-direction:column}
   color:var(--text-text-nav); font-size:15px; text-align:center; padding:0 20px;
 }
 .empty[hidden]{display:none}
-.note{padding:8px var(--layout-page-content-gutter) 12px; color:var(--text-text-nav); font-size:13px; line-height:1.45;
+.note,.prov{padding:8px var(--layout-page-content-gutter); color:var(--text-text-nav); font-size:13px; line-height:1.45;
   border-top:1px solid var(--surface-border-card); background:var(--surfaces-surface-2)}
-.note b{font-family:var(--font-display); color:var(--text-text-cell); font-weight:600}
+.note{padding-bottom:12px}
+.note b,.prov b{font-family:var(--font-display); color:var(--text-text-cell); font-weight:600}
+.prov[hidden]{display:none}
 .note a{color:var(--brand-brand-cyan)}
 
 @media (max-width:760px){
@@ -111,23 +113,23 @@ body.plpd{display:flex; flex-direction:column}
   .brand{flex-basis:100%; margin:0}
   .brand h1{font-size:20px}
   .brand img{height:26px}
-  /* the season and the threshold share a row, the checkbox the next, the pitcher his own */
+  /* the level and the season share a row, the threshold and the checkbox the next, the pitcher his own */
   .field{flex:1 1 40%; min-width:0}
   .field.wide{flex-basis:100%}
   .field select.plpd-filter-dropdown,.field input.num{width:100%; min-width:0}
-  #pitcherQ{min-width:0}
+  #pitcherQ{width:100%; min-width:0}
   /* the page scrolls as a whole, the card at full width with the note after it */
   html,body{height:auto}
   .stage{flex:none; overflow:visible; display:block; padding:8px; min-height:160px}
   .card{width:100%; height:auto}
-  .note{padding-inline:12px}
+  .note,.prov{padding-inline:12px}
   .grades{padding:8px 8px 0}
   .grades .plpd-table-wrap{max-height:55vh}
   #gradesTable th,#gradesTable td{padding:6px 8px}
   #gradesTable td.who{max-width:190px}
 }
 h1,h2,h3{text-wrap:balance}
-p,li,.note{text-wrap:pretty}
+p,li,.note,.prov{text-wrap:pretty}
 @media (pointer:coarse){.note a{display:inline-block; padding:12px 0; margin:-12px 0}}
 </style>
 </head>
@@ -140,6 +142,10 @@ p,li,.note{text-wrap:pretty}
       <h1>PLV Pitcher Season Card</h1>
       <span class="sub" id="status">Loading cards…</span>
     </div>
+  </div>
+  <div class="field plpd-filter-field">
+    <label class="plpd-filter-field__label" for="level">Level</label>
+    <select id="level" class="plpd-filter-dropdown" disabled></select>
   </div>
   <div class="field plpd-filter-field">
     <label class="plpd-filter-field__label" for="season">Season</label>
@@ -177,23 +183,32 @@ p,li,.note{text-wrap:pretty}
 </main>
 </div>
 
+<div class="prov" id="prov" hidden><b>PLV and Location are provisional below MLB</b> (the models aren't yet calibrated to minor-league strike zones and parks).</div>
 <footer class="note">Data (especially pitch types) are subject to change.</footer>
 
 <script src="/shared/share-image.js?v=2"></script>
-<script src="card.js?v=26"></script>
+<script src="card.js?v=27"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var seasonSel = $('season'), minIn = $('minPitches'), split = $('split'), pitcherSel = $('pitcher');
+  var levelSel = $('level'), seasonSel = $('season'), minIn = $('minPitches'), split = $('split'), pitcherSel = $('pitcher');
   var pitcherQ = $('pitcherQ'), pitcherList = $('pitcherList');
-  var cardEl = $('cardBox'), empty = $('empty'), png = $('png'), status = $('status');
-  // the season cards live in the bucket (tools/pitcher_card/season.py writes them): an index of
-  // the seasons, and beside it <season>/index.json (the season's cards) and <season>/<key>.json
-  // (each card: <key> the pitcher's id, or <id>-<team> for a team's part of a traded pitcher's
-  // season). ?seasons=<url> points at a local build while developing (season.py --out
-  // pitcher-cards, then ?seasons=cards/mlb/seasons/index.json)
+  var cardEl = $('cardBox'), empty = $('empty'), png = $('png'), status = $('status'), prov = $('prov');
+  // the season cards live in the bucket (tools/pitcher_card/season.py writes them), a level's
+  // under cards/<level>/seasons/: an index of its seasons, and beside it <season>/index.json
+  // (the season's cards) and <season>/<key>.json (each card: <key> the pitcher's id, or
+  // <id>-<team> for a team's part of a traded pitcher's season). A level is a Stats API sport
+  // code, as on the Game Cards page; ?level=<code> opens on one, MLB otherwise. ?cards=<url>
+  // points at a local build while developing (season.py --out pitcher-cards, then ?cards=cards/)
   var params = new URLSearchParams(location.search);
-  var SEASONS = new URL(params.get('seasons') || 'https://data.blandalytics.com/cards/mlb/seasons/index.json', location.href).href;
+  var CARDS = new URL(params.get('cards') || 'https://data.blandalytics.com/cards/', location.href).href;
+  var MLB = 'mlb';
+  var LEVELS = [['mlb', 'MLB'], ['aaa', 'Triple-A'], ['afx', 'Single-A']];
+  var level = MLB;
+  var levelIx = {};                   // each level's seasons index, for the levels with season cards
+  function seasonsUrl(code) { return new URL(code + '/seasons/index.json', CARDS).href; }
+  function levelName(code) { return LEVELS.filter(function (l) { return l[0] === code; })[0][1]; }
+  function atLevel() { return level === MLB ? '' : levelName(level) + ' '; }  // 'Triple-A ', or nothing for MLB
   var LOGO = 'PitcherList_Stats_watermark_with_logo.webp';
   var FULL_MIN = 1000;                // the pitch threshold over a full season, prorated by the games played
   var seasons = {};                   // the seasons index's seasons
@@ -248,6 +263,7 @@ p,li,.note{text-wrap:pretty}
     var q = new URLSearchParams(location.search);
     if (season && minPitches() !== defaultMin(season)) q.set('min', minPitches()); else q.delete('min');
     if (split.checked) q.set('split', '1'); else q.delete('split');
+    if (level !== MLB) q.set('level', level); else q.delete('level');
     var s = q.toString();
     var hash = season && pitcherSel.value ? '#' + season.season + '/' + pitcherSel.value : '';
     history.replaceState(null, '', location.pathname + (s ? '?' + s : '') + hash);
@@ -280,7 +296,7 @@ p,li,.note{text-wrap:pretty}
 
   // ---- the card ----
   function loadCard(key) {
-    var url = new URL(season.season + '/' + key + '.json', SEASONS).href;
+    var url = new URL(season.season + '/' + key + '.json', seasonsUrl(level)).href;
     if (!(url in cardCache)) cardCache[url] = getJson(url).catch(function () { delete cardCache[url]; return null; });
     return cardCache[url];
   }
@@ -297,12 +313,12 @@ p,li,.note{text-wrap:pretty}
     markGradeRow();
     saveState();
     if (!e) {
-      clearStage(season ? 'No pitchers with ' + thousands(minPitches()) + '+ pitches in ' + season.season + '.' : 'No season cards yet.');
+      clearStage(season ? 'No ' + atLevel() + 'pitchers with ' + thousands(minPitches()) + '+ pitches in ' + season.season + '.' : 'No season cards yet.');
       document.title = 'PLV Pitcher Season Card';
       return;
     }
-    document.title = e.name + ' — ' + season.season + (e.stint ? ' ' + e.team : '') + ' — PLV Pitcher Season Card';
-    var id = season.season + '/' + key;
+    document.title = e.name + ' — ' + season.season + ' ' + atLevel() + (e.stint ? e.team + ' ' : '') + '— PLV Pitcher Season Card';
+    var id = level + ':' + season.season + '/' + key;
     if ((shown && shown.key === id) || wanted === id) return;
     wanted = id;
     loadCard(key).then(function (card) {
@@ -443,18 +459,20 @@ p,li,.note{text-wrap:pretty}
 
   // ---- choosing a season ----
   function loadSeason(year) {
-    if (!seasonCache[year]) {
-      seasonCache[year] = getJson(new URL(year + '/index.json', SEASONS).href)
-        .catch(function (err) { delete seasonCache[year]; throw err; });
+    var key = level + ':' + year;
+    if (!seasonCache[key]) {
+      seasonCache[key] = getJson(new URL(year + '/index.json', seasonsUrl(level)).href)
+        .catch(function (err) { delete seasonCache[key]; throw err; });
     }
-    return seasonCache[year];
+    return seasonCache[key];
   }
   // a season, at its own threshold unless one is given; ``key`` picks a card, which shows
   // whatever its pitch count (the threshold comes down to it) and turns the split on for a stint
   function openSeason(year, min, key) {
     seasonSel.value = String(year);
+    var lvl = level;
     return loadSeason(year).then(function (ix) {
-      if (seasonSel.value !== String(year)) return;
+      if (seasonSel.value !== String(year) || level !== lvl) return;
       season = ix;
       minIn.placeholder = String(defaultMin(ix));
       minIn.value = min != null ? min : defaultMin(ix);
@@ -462,20 +480,24 @@ p,li,.note{text-wrap:pretty}
       var e = key ? byKey(key) : null;
       if (e && e.stint) split.checked = true;
       if (e && e.n < minPitches()) minIn.value = e.n;
-      status.textContent = ix.season + ' regular season, through ' + niceDate(ix.through) + ' · '
+      status.textContent = ix.season + ' ' + atLevel() + 'regular season, through ' + niceDate(ix.through) + ' · '
         + thousands(ix.pitchers.length) + ' cards';
       refresh(e ? e.key : null);
     }).catch(function () {
+      if (level !== lvl) return;
       season = null;
       fill(pitcherSel, []);
       listed = [];
       showPicked(null);
       gradesEl.hidden = true;
-      clearStage('Could not load the ' + year + ' season cards.');
+      clearStage('Could not load the ' + year + ' ' + atLevel() + 'season cards.');
     });
   }
 
   seasonSel.addEventListener('change', function () { pitcherSel.dataset.key = ''; openSeason(+seasonSel.value, null, null); });
+  // another level opens on the same season if it has one (else its latest), at its own
+  // threshold, and keeps the pitcher on stage if he is listed there too
+  levelSel.addEventListener('change', function () { openLevel(levelSel.value, false); });
   var minTimer = null;
   minIn.addEventListener('input', function () {
     clearTimeout(minTimer);
@@ -606,17 +628,38 @@ p,li,.note{text-wrap:pretty}
     } else openSeason(h.year, null, h.key);
   });
 
-  getJson(SEASONS).then(function (ix) {
-    seasons = ix.seasons || {};
+  // a level's seasons, opening the URL's season and card the first time (with its threshold and
+  // split), else the season on show if it has one
+  function openLevel(code, first) {
+    level = code;
+    levelSel.value = code;
+    prov.hidden = code === MLB;
+    seasons = levelIx[code].seasons;
     var years = Object.keys(seasons).sort().reverse();
-    if (!years.length) { status.textContent = 'No season cards yet'; clearStage('No season cards built yet.'); return; }
     fill(seasonSel, years.map(function (y) { return [y, y]; }));
+    if (!first) {
+      openSeason(season && seasons[season.season] ? season.season : +years[0], null, null);
+      return;
+    }
     var h = fromHash(), q = parseInt(params.get('min'), 10);
     split.checked = params.get('split') === '1';
     openSeason(h ? h.year : +years[0], isFinite(q) && q >= 0 ? q : null, h ? h.key : null);
-  }).catch(function () {
-    status.textContent = 'Could not load the season cards';
-    clearStage('The season cards are missing from the bucket. Run tools/pitcher_card/season.py to build them.');
+  }
+
+  // every level's seasons index; a level without season cards is left out of the Level list
+  Promise.all(LEVELS.map(function (l) {
+    return getJson(seasonsUrl(l[0])).then(function (ix) { return [l[0], ix]; }, function () { return null; });
+  })).then(function (got) {
+    got.forEach(function (x) { if (x && Object.keys(x[1].seasons || {}).length) levelIx[x[0]] = x[1]; });
+    var have = LEVELS.filter(function (l) { return levelIx[l[0]]; });
+    if (!have.length) {
+      status.textContent = 'Could not load the season cards';
+      clearStage('The season cards are missing from the bucket. Run tools/pitcher_card/season.py to build them.');
+      return;
+    }
+    fill(levelSel, have);
+    var want = params.get('level'), codes = have.map(function (l) { return l[0]; });
+    openLevel(codes.indexOf(want) >= 0 ? want : codes.indexOf(MLB) >= 0 ? MLB : codes[0], true);
   });
 })();
 </script>

@@ -1309,7 +1309,11 @@
 
   // what the PNG is saved as: Name_Surname_2026-09-27_LAA_SEA_PLV_card.png
   function filename(card) {
-    if (card.season) return `${card.name.replace(/ /g, "_")}_${card.season}${card.stint ? `_${card.team}` : ""}_season_PLV_card.png`;
+    if (card.season) {
+      // below MLB the level's name (Triple-A), so a pitcher's season at each level saves apart
+      const level = card.level && card.level.code !== "mlb" ? `_${card.level.name.replace(/ /g, "-")}` : "";
+      return `${card.name.replace(/ /g, "_")}_${card.season}${level}${card.stint ? `_${card.team}` : ""}_season_PLV_card.png`;
+    }
     return `${card.name.replace(/ /g, "_")}_${card.date}_${card.team}_${card.opp}_PLV_card.png`;
   }
 

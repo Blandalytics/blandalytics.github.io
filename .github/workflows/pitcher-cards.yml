@@ -7,11 +7,13 @@ name: Build pitcher cards
 # and today. A backfill splits its range into months and builds them in parallel, each
 # job checkpointing its day manifests in the bucket, and the index is rebuilt from the
 # manifests once every job has finished. Then the season cards (tools/pitcher_card/season.py,
-# cards/mlb/seasons/) are pooled from this season's game cards, when they have moved. A past
-# season's season cards (past_seasons) are pooled from game cards built for them alone: its
-# months are built as parallel jobs into a folder, without comparison seasons, and kept in the
-# bucket's archive (cards/mlb/archive/), which the Game Cards page doesn't list. pool_seasons
-# pools seasons' cards again from game cards already built (after a change to season.py).
+# cards/<level>/seasons/ for MLB, Triple-A and Single-A) are pooled from this season's game
+# cards, each level's when they have moved. A past season's MLB season cards (past_seasons) are
+# pooled from game cards built for them alone: its months are built as parallel jobs into a
+# folder, without comparison seasons, and kept in the bucket's archive (cards/mlb/archive/),
+# which the Game Cards page doesn't list. pool_seasons pools seasons' cards again, at every
+# level with game cards that season, from game cards already built (after a change to
+# season.py).
 on:
   schedule:
     # 10:30 UTC is 6:30am Eastern: every game from the night before is final
@@ -251,8 +253,8 @@ jobs:
         run: python tools/pitcher_card/export_scorer.py
 
   # the season cards: each past season's asked for (past_seasons, from the game cards just
-  # archived) and each one to pool again (pool_seasons); and this season's, pooled again when
-  # its game cards have moved (or with force)
+  # archived) and each one to pool again (pool_seasons); and this season's at each level,
+  # pooled again when its game cards have moved (or with force)
   season-cards:
     needs: [plan, build, reindex]
     if: ${{ !cancelled() }}
@@ -273,9 +275,21 @@ jobs:
       - name: Install
         run: pip install -r tools/pitcher_card/requirements.txt
 
+      # past_seasons' are MLB's (the only level archived); pool_seasons' every level's (a level
+      # with no game cards that season is passed over); this season's every level's, each
+      # tried even when one before it fails
       - name: Season cards
         run: |
-          for YEAR in ${{ needs.plan.outputs.past }} ${{ needs.plan.outputs.pool }}; do
+          for YEAR in ${{ needs.plan.outputs.past }}; do
             python tools/pitcher_card/season.py --year "$YEAR" --publish --force
           done
-          python tools/pitcher_card/season.py --publish ${{ inputs.force && '--force' || '' }}
+          for YEAR in ${{ needs.plan.outputs.pool }}; do
+            for LEVEL in mlb aaa afx; do
+              python tools/pitcher_card/season.py --level "$LEVEL" --year "$YEAR" --publish --force
+            done
+          done
+          status=0
+          for LEVEL in mlb aaa afx; do
+            python tools/pitcher_card/season.py --level "$LEVEL" --publish ${{ inputs.force && '--force' || '' }} || status=1
+          done
+          exit $status
