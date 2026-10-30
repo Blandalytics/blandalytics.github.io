@@ -201,22 +201,31 @@ the window again, and remembers it.
 
 [blandalytics.com/pitcher-cards/season.html](https://blandalytics.com/pitcher-cards/season.html)
 — the same card for a pitcher's whole regular season, for every MLB pitcher since 2020 (the
-first season the models' plus scale covers). Pick a season and a pitcher; the Pitcher list and
-the grades table beside the card hold the pitchers with at least **Min pitches**, which starts
-at 1,000 for a full season, prorated by the games each team had played (about 370 in 2020's
-60-game season, and less early in a season under way). **Split traded pitchers by team** swaps
-a traded pitcher's whole season for a card for each team he pitched for, its line MLB's for
-that team. The table is the Game Cards page's: pitches, innings, the season letters and Stuff+
+first season the models' plus scale covers), and for every Triple-A and Single-A pitcher from
+2026 (Single-A's Statcast is the Florida State League's alone, so its cards are FSL pitchers').
+Pick a level, a season and a pitcher; the Pitcher list and the grades table beside the card
+hold the pitchers with at least **Min pitches**, which starts at 1,000 for a full MLB season
+and 500 for a full one below it (where pitchers throw far fewer pitches), a full season being
+that level's (162 games in MLB, 150 in Triple-A, 132 in Single-A), prorated by the games each
+team had played (about 370 in 2020's 60-game MLB season, 494 in Triple-A's 2026, and less early
+in a season under way).
+**Split traded pitchers by team** swaps a traded pitcher's whole season at the level for a
+card for each team he pitched for, its line the one for that team. Below MLB the grades are on
+the MLB scale, as the game cards' are, and the page says PLV and Location are provisional
+there, as Game Cards does. Switching level keeps the season, and the pitcher if he is listed at
+the new level too. The table is the Game Cards page's: pitches, innings, the season letters and Stuff+
 by pitch type (a type's only where he threw it at least 1% as often as Min pitches asks: 10
 times at 1,000), sorted by Stuff (by the means behind the letters, best first); a name opens its
 card, and the two split the window as there. `season.html#<season>/<key>` links a card (`<key>`
-the pitcher's id, or `<id>-<team>` for a team's part of his season; `?min=` and `?split=1` set
-the filters, and a linked card is shown whatever its pitch count).
+the pitcher's id, or `<id>-<team>` for a team's part of his season; `?level=aaa` or `afx` for
+a minor-league one, `?min=` and `?split=1` set the filters, and a linked card is shown whatever
+its pitch count).
 
 A season card has no comparison season. The summary line is in segments sized to their text,
 the same room either side of each, ruled between: IP, ERA, WHIP, strikeouts, K% and BB%
-(MLB's season line) and CSW% (from the pitches); the bio's age is the pitcher's on June 30 of
-the season. One Skills tile takes the room of Skills and Results, ruled between its three
+(the level's season line in MLB's Stats API) and CSW% (from the pitches); the bio's age is the
+pitcher's on June 30 of the season. Below MLB the title names the level ("2026 Triple-A
+Season"). One Skills tile takes the room of Skills and Results, ruled between its three
 letters as the summary line is, its letters the season means on `card.js`'s
 `SEASON_GRADE_CUTS` (`season.py --cuts` fits them as `grade_cuts.py` fits the game cuts, to
 every pitcher's season). Movement shows each pitch type as three KDE tiers around its densest
@@ -245,19 +254,21 @@ on (`plus_scale`). They are coloured on `card.js`'s `SEASON_TYPE_BINS`: each typ
 `TYPE_BINS`. The Skills letters are already graded against seasons.
 
 The cards are pooled from the game cards by
-[`tools/pitcher_card/season.py`](tools/pitcher_card/season.py), the regular season being MLB's
-schedule's (`gameType` R), and written to the bucket:
+[`tools/pitcher_card/season.py`](tools/pitcher_card/season.py) (`--level mlb`, `aaa` or `afx`),
+the regular season being the level's schedule's (`gameType` R), and written to the bucket
+under the level's game cards:
 
-- `https://data.blandalytics.com/cards/mlb/seasons/index.json` — the seasons built;
+- `https://data.blandalytics.com/cards/<level>/seasons/index.json` — the seasons built;
 - `.../seasons/<season>/index.json` — the season's cards (name, team, pitches, innings, the
   grade means and Stuff+ by type: what the list and the table show), its last day, the
   games each team had played by then (`team_games`, which the threshold is prorated by) and
   the scale its Stuff+ is on (`plus_scale`);
 - `.../seasons/<season>/<key>.json` — a card (about 25 KB).
 
-This season's are pooled from the Game Cards page's day files by the workflow's last job, each
-morning that they have moved (about six minutes for the whole season). A past season's game
-cards are built for its season cards alone: the same pipeline, into a folder, without
+This season's are pooled from the Game Cards page's day files by the workflow's last job, at
+each level each morning that they have moved (about six minutes for MLB's whole season); one
+level failing doesn't stop the others. A past season's MLB game cards are built for its season
+cards alone: the same pipeline, into a folder, without
 comparison seasons, and kept in `cards/mlb/archive/<date>.json`, which the Game Cards page
 doesn't list, so the season cards can be pooled again without building them again. Run the
 workflow with `past_seasons` (`2023`, or `2020-2025`) to build them; see *Backfilling or
@@ -311,7 +322,7 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 | `shapes.py` | the comparison season's movement regions (seaborn's 90%-mass KDE contours) as SVG paths |
 | `grades.py` | pitch-type maps, letter grades and both game-score formulas |
 | `grade_cuts.py` | fits the Stuff / Locations / PLV letter cuts (`card.js`'s `GRADE_CUTS`) to a target grade distribution |
-| `season.py` | the season cards and their index, pooled from the game cards; a past season's game cards into the archive; the season letter cuts |
+| `season.py` | the season cards and their index at each level (MLB, Triple-A, Single-A), pooled from the game cards; a past season's game cards into the archive; the season letter cuts and colour bins |
 | `build_data.py` | assembles all of that into one card dict (numbers; `card.js` formats them) |
 | `render.py` | a standalone page around one card dict, drawn by `card.js` |
 | `build_site.py` | builds a date range into the bucket (or a folder with `--out`) and maintains the manifests; `--reindex` rebuilds the index alone; `--prune-pages` retires the old per-card pages |
@@ -411,10 +422,13 @@ files use.
 Set `past_seasons` (`2023`, or `2020-2025`) to build those seasons' season cards instead of
 the dates: each season's regular season is built as month jobs, eight at a time and without
 comparison seasons, into a folder rather than the Game Cards page, archived in the bucket, and
-pooled (about 40 minutes a season). The last job also pools this season's, as every run does
-when its game cards have moved (`force` pools it regardless). Locally, `season.py --out DIR`
-writes the season cards to a folder (`--out pitcher-cards`, then
-`season.html?seasons=cards/mlb/seasons/index.json`).
+pooled (about 40 minutes a season; MLB's alone, the only level archived). Set `pool_seasons`
+(`2026`, or `2020-2026`) to pool those seasons' cards again from the game cards already built,
+at every level with game cards that season (after a change to `season.py`). The last job also
+pools this season's at each level, as every run does when its game cards have moved (`force`
+pools them regardless). Locally, `season.py --out DIR` (with `--level aaa` or `afx` for the
+minors) writes the season cards to a folder (`--out pitcher-cards`, then
+`season.html?cards=cards/`).
 
 After a `force` rebuild, set `prune_pages` to retire the old per-card pages: `report` lists
 what would happen, `apply` does it. A page whose card is still listed is rewritten as a
