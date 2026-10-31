@@ -904,11 +904,10 @@
     const types = card.types;
     const n = types.length;
     const out = [text(fx(0.5), fy(0.255), "Pitch Type Metrics", 30)];
-    // a season card keeps the note but marks no title: over a season nearly every pitcher has some
-    if (card.missing_data) {
-      if (!card.season) out.push(text(fx(0.632), fy(0.2575), "*", 18, { alpha: 0.5 }));
-      const note = `${card.season ? "" : "*"}Some pitches missing data`;
-      out.push(text(fx(0.97), fy(0.005), note, 12, { ha: "right", alpha: 0.5 }));
+    // not on a season card: over a season nearly every pitcher has some pitches missing data
+    if (card.missing_data && !card.season) {
+      out.push(text(fx(0.632), fy(0.2575), "*", 18, { alpha: 0.5 }));
+      out.push(text(fx(0.97), fy(0.005), "*Some pitches missing data", 12, { ha: "right", alpha: 0.5 }));
     }
     const hdr = new Axes([0.01, 0.015, 0.25, 0.205], [0, 1], [n - 0.5, -0.5]);
     const tbl = new Axes([0.26, 0.015, 0.73, 0.205], [-0.5, 6.5], [n - 0.5, -0.5]);
