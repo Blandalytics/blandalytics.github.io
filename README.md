@@ -225,7 +225,9 @@ A season card has no comparison season. The summary line is in segments sized to
 the same room either side of each, ruled between: IP, ERA, WHIP, strikeouts, K% and BB%
 (the level's season line in MLB's Stats API) and CSW% (from the pitches); the bio's age is the
 pitcher's on June 30 of the season. The title is the season and its level ("2026 MLB Season",
-"2026 Triple-A Season"). One Skills tile takes the room of Skills and Results, ruled between its three
+"2026 Triple-A Season"). A major leaguer is named by every team he pitched for ("STL/MIL"); a
+minor leaguer by the team he last pitched for and its MLB organization ("DUR (TBR)", the
+organization abbreviated as the cards abbreviate MLB teams), on the card and in the page's lists. One Skills tile takes the room of Skills and Results, ruled between its three
 letters as the summary line is, its letters the season means on `card.js`'s
 `SEASON_GRADE_CUTS` (`season.py --cuts` fits them as `grade_cuts.py` fits the game cuts, to
 every pitcher's season). Movement shows each pitch type as three KDE tiers around its densest
