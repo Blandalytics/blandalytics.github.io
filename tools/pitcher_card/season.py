@@ -77,7 +77,7 @@ from typing import NamedTuple
 import numpy as np
 import requests
 
-from grades import DESC_MAP
+from grades import DESC_MAP, TEAM_ABBR
 from shapes import _paths
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -567,16 +567,21 @@ def chart_limit(pitches: list[dict]) -> int:
 
 
 def build(games: list[dict], year: int, line: dict | None, age: int | None, teams: list[str],
-          scale: Scale, level: Level, stint: bool = False) -> dict:  # fmt: skip
+          scale: Scale, level: Level, org: str | None = None,
+          stint: bool = False) -> dict:  # fmt: skip
     """The season card dict for some of a pitcher's regular-season game cards at a level:
-    all of them, with ``teams`` every team he pitched for, or one team's (a ``stint``)."""
+    all of them, with ``teams`` every team he pitched for, or one team's (a ``stint``).
+    Below MLB ``org`` is the MLB organization of the team he last pitched for."""
     last = games[-1]
     pitches = [p for g in games for p in g["pitches"]]
     rows = type_rows(pitches, last["hand"], scale)
     order = [r["code"] for r in rows]
     segments, nums = summary(line, pitches)
     arm = _weighted([(g.get("arm_angle"), len(g["pitches"])) for g in games])
-    team = "/".join(teams)
+    # a major leaguer is named by every team he pitched for (STL/MIL); a minor leaguer by the
+    # one he last pitched for and its organization (DUR (TBR))
+    team = "/".join(teams) if level == MLB else last["team"]
+    named = f"{team} ({org})" if org else team
     return {
         "version": 4,
         "season": year,
@@ -585,9 +590,10 @@ def build(games: list[dict], year: int, line: dict | None, age: int | None, team
         "hand": last["hand"],
         "team": team,
         "teams": teams,
+        "org": org,
         "stint": stint,
-        "title": f"Pitcher Performance: {year} {'Regular' if level == MLB else level.name} Season",
-        "bio": f"{last['hand']}HP | {team}" + ("" if age is None else f" | Age: {age}"),
+        "title": f"{year} {level.name} Season",  # 2026 MLB Season, 2026 Triple-A Season
+        "bio": f"{last['hand']}HP | {named}" + ("" if age is None else f" | Age: {age}"),
         "line": ", ".join(segments),
         "summary": segments,
         "stats": nums,
@@ -623,23 +629,26 @@ def stints(games: list[dict], sched: dict[int, Game]) -> list[tuple[int, str, li
 
 
 # a pitcher's: see pitcher_cards
-Job = tuple[int, list[dict], Person, dict[int, Game], int, Scale, Level]
+Job = tuple[int, list[dict], Person, dict[int, Game], int, Scale, Level, dict[int, str]]
 
 
 def pitcher_cards(job: Job) -> list[tuple[str, dict]]:
     """(key, card) for a pitcher's season and, if he pitched for more than one team, for
     each team's part of it."""
-    pid, games, info, sched, year, scale, level = job
+    pid, games, info, sched, year, scale, level, org = job
     parts = stints(games, sched)
     age = season_age(info.birth, year)
     teams = [t for _, t, _ in parts]
     # one team's games take that team's line: at Single-A his season line can hold games in
     # the leagues without Statcast, which have no cards
     line = info.lines.get(parts[0][0]) if len(parts) == 1 else None
-    out = [(str(pid), build(games, year, line or info.lines.get(None), age, teams, scale, level))]
+    last = sched[games[-1]["game_pk"]]
+    latest = org.get(last.home if games[-1]["home"] else last.away)
+    out = [(str(pid), build(games, year, line or info.lines.get(None), age, teams, scale, level,
+                            latest))]  # fmt: skip
     if len(parts) > 1:
-        out += [(f"{pid}-{team}",
-                 build(gs, year, info.lines.get(tid), age, [team], scale, level, stint=True))
+        out += [(f"{pid}-{team}", build(gs, year, info.lines.get(tid), age, [team], scale, level,
+                                        org.get(tid), stint=True))
                 for tid, team, gs in parts]  # fmt: skip
     return out
 
@@ -647,11 +656,28 @@ def pitcher_cards(job: Job) -> list[tuple[str, dict]]:
 def build_all(s: requests.Session, by: dict[int, list[dict]], sched: dict[int, Game], year: int,
               level: Level):  # fmt: skip
     """Every pitcher's cards, built across the machine's cores."""
-    info, scale = people(s, list(by), year, level.sport), season_scale(s)
+    info, scale, org = people(s, list(by), year, level.sport), season_scale(s), orgs(s, year, level)
     jobs = [(pid, games, info[pid], {g["game_pk"]: sched[g["game_pk"]] for g in games}, year,
-             scale, level) for pid, games in by.items()]  # fmt: skip
+             scale, level, org) for pid, games in by.items()]  # fmt: skip
     with concurrent.futures.ProcessPoolExecutor() as pool:
         return [c for cs in pool.map(pitcher_cards, jobs, chunksize=4) for c in cs]
+
+
+def orgs(s: requests.Session, year: int, level: Level) -> dict[int, str]:
+    """Each of a minor league's teams' MLB organization that season, abbreviated as the cards
+    abbreviate MLB teams (TBR), by team id; nothing at MLB."""
+    if level == MLB:
+        return {}
+
+    def teams(sport: int) -> list[dict]:
+        q = {"sportId": sport, "season": year, "fields": "teams,id,abbreviation,parentOrgId"}
+        r = s.get(f"{STATSAPI}/teams", params=q, timeout=30)
+        r.raise_for_status()
+        return r.json().get("teams", [])
+
+    mlb = {t["id"]: TEAM_ABBR.get(t["abbreviation"], t["abbreviation"]) for t in teams(MLB.sport)}
+    minors = [t for t in teams(level.sport) if t.get("parentOrgId") in mlb]
+    return {t["id"]: mlb[t["parentOrgId"]] for t in minors}
 
 
 def entry(key: str, card: dict) -> dict:
@@ -660,7 +686,8 @@ def entry(key: str, card: dict) -> dict:
     the page's table and Pitcher list show them. A team's part of a traded pitcher's season
     is a ``stint``; his whole season is ``traded``."""
     e = {
-        "key": key, "id": card["pitcher_id"], "name": card["name"], "team": card["team"],
+        "key": key, "id": card["pitcher_id"], "name": card["name"],
+        "team": f"{card['team']} ({card['org']})" if card.get("org") else card["team"],
         "hand": card["hand"], "n": sum(r["n"] for r in card["types"]), "g": card["games"],
         "gs": card["starts"], "ip": card["stats"]["IP"],
         "skills": {k: _num(card["skills"][k], 2) for k in ("stuff", "loc", "plv")},
