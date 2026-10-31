@@ -586,7 +586,7 @@ def build(games: list[dict], year: int, line: dict | None, age: int | None, team
         "team": team,
         "teams": teams,
         "stint": stint,
-        "title": f"Pitcher Performance: {year} {'Regular' if level == MLB else level.name} Season",
+        "title": f"{year} {'Regular' if level == MLB else level.name} Season",
         "bio": f"{last['hand']}HP | {team}" + ("" if age is None else f" | Age: {age}"),
         "line": ", ".join(segments),
         "summary": segments,
