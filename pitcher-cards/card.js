@@ -515,13 +515,10 @@
   // name, bio line, the game and its box-score line, and the Pitcher List mark
   function header(card, logoHref) {
     const size = Math.min(150.0, 1230 / [...card.name].length); // the original sized the name by length
-    // a season card's title is its season alone ("2026 Regular Season"), also on cards pooled while
-    // season.py still began it "Pitcher Performance: "
-    const title = card.season ? card.title.replace(/^Pitcher Performance: /, "") : card.title;
     return [
       `<text x="45" y="130.8" font-size="${fixed(size, 1)}" fill="url(#name)">${esc(card.name)}</text>`,
       text(57, fy(0.91), card.bio, 20, { color: LINE, ha: "left" }),
-      text(fx(0.5), fy(0.896), title, 24),
+      text(fx(0.5), fy(0.896), card.title, 24),
       rect(fx(0.01), fy(0.883), fx(0.98), 86, { fill: BACKGROUND, stroke: TEXT, width: 3, alpha: LINE_ALPHA, rx: 15 }),
       ...(card.summary ? segments(card.summary) : [text(fx(0.5), fy(0.8425 + 0.037 / 2), card.line, 30, { color: LINE_TEXT })]),
       logo(logoHref),
