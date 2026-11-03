@@ -94,18 +94,55 @@ export function readProjections(text) {
     }
     data[col] = TEXT_COLS.has(col) ? raw : numericOrText(raw);
   });
+  const notes = standardize(columns, data, n);
   for (const col of ["MLBAMID", "Team"]) {
     if (!(col in data)) { columns.push(col); data[col] = new Array(n).fill(col === "Team" ? null : NaN); }
   }
-  return { columns, n, data };
+  return { columns, n, data, notes };
 }
 
-// '13.6%' and '1,031' are numbers too, as long as every value in the column is one
+// Other layouts, a FanGraphs projections export above all (Steamer, ZiPS, ATC, THE BAT, Depth
+// Charts, OOPSY; the CSV or its JSON's names): strikeouts as SO, holds as HLD, its API's PlayerName
+// and xMLBAMID, positions as POS; no SV+H, XBH or TB, and 1B only in some. A column the file has
+// under the page's own name is left alone, so the page's own files read as they always have
+const ALIASES = [["Name", ["PlayerName"]], ["MLBAMID", ["xMLBAMID", "mlbamid"]], ["PlayerId", ["playerid", "playerids"]],
+  ["K", ["SO"]], ["HD", ["HLD"]], ["Y! Pos", ["POS", "Pos", "Position", "Positions"]]];
+// A derived column: from its parts, when the file has them all and not the column itself
+const DERIVED = [
+  ["SV+H", ["SV", "HD"], (d, i) => d.SV[i] + d.HD[i]],
+  ["1B", ["H", "2B", "3B", "HR"], (d, i) => d.H[i] - d["2B"][i] - d["3B"][i] - d.HR[i]],
+  ["XBH", ["2B", "3B", "HR"], (d, i) => d["2B"][i] + d["3B"][i] + d.HR[i]],
+  ["TB", ["1B", "2B", "3B", "HR"], (d, i) => d["1B"][i] + 2 * d["2B"][i] + 3 * d["3B"][i] + 4 * d.HR[i]],
+];
+/** Rename a known layout's columns and derive the missing ones in place; returns what it did, for the page */
+function standardize(columns, data, n) {
+  const notes = [];
+  for (const [col, names] of ALIASES) {
+    if (col in data) continue;
+    const from = names.find((c) => c in data);
+    if (from === undefined) continue;
+    data[col] = col === "Y! Pos" || col === "Name" ? data[from].map((v) => (v === null || typeof v === "string" ? v : String(v))) : data[from];
+    columns.push(col);
+    notes.push(`${from} as ${col}`);
+  }
+  const numeric = (c) => c in data && data[c].some((v) => typeof v === "number" && Number.isFinite(v));
+  const made = [];
+  for (const [col, parts, f] of DERIVED) {
+    if (col in data || !parts.every(numeric)) continue;
+    data[col] = Array.from({ length: n }, (_, i) => f(data, i));
+    columns.push(col);
+    made.push(col);
+  }
+  if (made.length) notes.push(`${made.join(", ")} from ${made.length > 1 ? "their" : "its"} parts`);
+  return notes;
+}
+
+// '13.6%', '13.6 %' and '1,031' are numbers too, as long as every value in the column is one
 function numericOrText(raw) {
   const out = new Array(raw.length);
   for (let i = 0; i < raw.length; i++) {
     if (raw[i] === null) { out[i] = NaN; continue; }
-    const t = raw[i].trim().replace(/%+$/, "").replaceAll(",", "");
+    const t = raw[i].trim().replace(/\s*%+$/, "").replaceAll(",", "");
     if (!NUMBER.test(t)) return raw;
     out[i] = Number(t);
   }
@@ -115,8 +152,8 @@ function numericOrText(raw) {
 export const isNumeric = (table, col) => col in table.data && (table.n === 0 || typeof firstPresent(table.data[col]) === "number");
 const firstPresent = (arr) => { for (const v of arr) if (v !== null) return v; return 0; };
 
-/** Only offer stats the projections have, as numbers */
-export const availableStats = (options, table) => options.filter((c) => isNumeric(table, c));
+/** Only offer stats the projections have, as numbers (a column with none, FanGraphs' blank BS, isn't one) */
+export const availableStats = (options, table) => options.filter((c) => isNumeric(table, c) && (table.n === 0 || table.data[c].some(Number.isFinite)));
 
 function take(table, keep) {
   const data = {};
@@ -213,6 +250,12 @@ export function prepPitchers(table, pool, includeFa, elig = null) {
   let t = filterLeague(table, pool, includeFa);
   if (elig) t = withEligibility(t, elig.table, "p", elig.rules);
   const d = t.data;
+  // a pitcher with no position from either (a FanGraphs export has none) is an SP if half his
+  // projected games are starts, as the Pitcher List pools are split, and an RP otherwise
+  if (isNumeric(t, "GS") && isNumeric(t, "G") && (!d["Y! Pos"] || d["Y! Pos"].some((p) => p === null))) {
+    const own = d["Y! Pos"] || new Array(t.n).fill(null);
+    addColumn(t, "Y! Pos", own.map((p, i) => p ?? (d.G[i] > 0 ? (d.GS[i] / d.G[i] >= 0.5 ? "SP" : "RP") : null)));
+  }
   if (isNumeric(t, "W") && isNumeric(t, "QS")) addColumn(t, "W+QS", d.W.map((w, i) => w + d.QS[i]));
   if (isNumeric(t, "K") && isNumeric(t, "BB")) {
     addColumn(t, "K/BB", d.K.map((k, i) => rint(k / Math.min(Math.max(d.BB[i], 0.1), 1000) * 100) / 100));
@@ -687,14 +730,47 @@ export function twoWayShares(H, P, mode, starts, lock = "daily") {
   }
   return { hit, pitch };
 }
-// The hitter and pitcher rows of each two-way player (one MLBAM id, playing time in both files)
+// A player's id across files: his MLBAM id, or a FanGraphs export's PlayerId when that's all the
+// row has. A missing one (readProjections' NaN, or blank) is null: as a key, every one would match
+const idKey = (v) => (v === null || v === undefined || Number.isNaN(v) || String(v).trim() === "" ? null : String(v).trim());
+export function playerId(T, i) {
+  const m = T.data.MLBAMID ? idKey(T.data.MLBAMID[i]) : null;
+  if (m !== null) return m;
+  const f = T.data.PlayerId ? idKey(T.data.PlayerId[i]) : null;
+  return f === null ? null : "fg:" + f;
+}
+
+/**
+ * T with the columns cols of D, matched by MLBAM id, where T has none of them (the Pitcher List
+ * ranks of the default projections, for an uploaded file). T is left as it is; returns
+ * { table, found }, found the rows of T with a value in any of them.
+ */
+export function borrowColumns(T, D, cols) {
+  const want = cols.filter((c) => c in D.data && !(c in T.data));
+  if (!want.length || !T.data.MLBAMID || !D.data.MLBAMID) return { table: T, found: 0 };
+  const rowOf = new Map();
+  D.data.MLBAMID.forEach((v, j) => { if (idKey(v) !== null) rowOf.set(idKey(v), j); });
+  const t = { columns: T.columns.slice(), n: T.n, data: { ...T.data }, notes: T.notes };
+  const rows = T.data.MLBAMID.map((v) => (idKey(v) === null ? undefined : rowOf.get(idKey(v))));
+  let found = 0;
+  const has = new Array(T.n).fill(false);
+  for (const c of want) {
+    const vals = rows.map((j) => (j === undefined ? (typeof D.data[c][0] === "number" ? NaN : null) : D.data[c][j]));
+    vals.forEach((v, i) => { if (v !== null && !Number.isNaN(v)) has[i] = true; });
+    addColumn(t, c, vals);
+  }
+  for (const h of has) if (h) found++;
+  return { table: t, found };
+}
+
+// The hitter and pitcher rows of each two-way player (one id, playing time in both files)
 function twoWayPairs(H, P) {
-  const id = (T, i) => (T.data.MLBAMID ? T.data.MLBAMID[i] : null);
+  const id = playerId;
   const hitters = new Map();
-  for (let i = 0; i < H.n; i++) if (id(H, i) !== null && id(H, i) !== "" && H.data.PA[i] > 0) hitters.set(String(id(H, i)), i);
+  for (let i = 0; i < H.n; i++) if (id(H, i) !== null && H.data.PA[i] > 0) hitters.set(id(H, i), i);
   const pairs = [];
   for (let i = 0; i < P.n; i++) {
-    const ih = id(P, i) !== null ? hitters.get(String(id(P, i))) : undefined;
+    const ih = id(P, i) !== null ? hitters.get(id(P, i)) : undefined;
     if (ih !== undefined && P.data.IP[i] > 0) pairs.push({ ih, ip: i });
   }
   return pairs;
@@ -732,7 +808,9 @@ function valueSide(c) {
   const bare = valueSideWith({ ...c, span: 0, specialists: false }, null, null);
   const lockSpec = locked ? lockSpecOf(c, bare) : null;
   const fillSpec = c.fillPT ? fillSpecOf(c, bare) : null;
-  return { ...valueSideWith(c, fillSpec, lockSpec), lock: lockSpec };
+  const out = valueSideWith(c, fillSpec, lockSpec);
+  // settled only if the bare run settled too: its pool sets the fill and the lock
+  return { ...out, lock: lockSpec, converged: out.converged && bare.converged };
 }
 
 function fillSpecOf(c, bare) {
@@ -753,6 +831,8 @@ function fillSpecOf(c, bare) {
     const per = (arr) => (v > 0 ? repl.reduce((a, i) => a + arr[i], 0) / v : 0);
     fillSpec[role] = {
       target: drafted.length >= 5 ? quantile(drafted.map((i) => vol[i]), 0.9) : sideTarget,
+      // the share of the time short of it his team fills (1: all of it)
+      share: c.fillShare ?? 1,
       // per unit of playing time: counts, or a rate stat's numerator and denominator
       perUnit: c.specs.map((sp) => (sp.kind === "count" ? { count: per(sp.raw) } : { num: per(sp.num), den: per(sp.den) })),
     };
@@ -775,7 +855,7 @@ function rosterLines(T, side, specs, targets, cols, pts) {
     const t = targets[role];
     if (!t) return null;
     const vol = Number.isFinite(T.data[volCol][i]) ? T.data[volCol][i] : 0;
-    const fill = Math.max(0, t.target - vol);
+    const fill = t.share * Math.max(0, t.target - vol);
     const out = { filled: fill };
     for (const c of cols) out[c] = T.data[c][i];
     out[volCol] = vol + fill;
@@ -834,11 +914,15 @@ function valueSideWith(c, fillSpec, lockSpec) {
     let fill = null;
     if (fillSpec) {
       fill = c.specs.map((sp, k) => vol.map((v, i) => {
-        const f = fillSpec[roles[i]], u = f.perUnit[k], missing = Math.max(0, f.target - v);
+        const f = fillSpec[roles[i]], u = f.perUnit[k], missing = f.share * Math.max(0, f.target - v);
         return missing * sp.sign * (sp.kind === "count" ? u.count : u.num - rates[k] * u.den);
       }));
     }
     const x = own.map((o, k) => (fill ? o.map((v, i) => v + fill[k][i]) : o));
+    // a replacement player's contribution per PA (IP) in each category, by role, at this pass's
+    // pool rates: what the fill adds per unit, and what the value breakdown prices a player against
+    const unit = fillSpec ? Object.fromEntries(Object.entries(fillSpec).map(([r, f]) => [r, c.specs.map((sp, k) =>
+      sp.sign * (sp.kind === "count" ? f.perUnit[k].count : f.perUnit[k].num - rates[k] * f.perUnit[k].den))])) : null;
 
     let G = G0, sigmaDraft = new Array(K).fill(NaN), nu = new Array(K).fill(NaN);
     if (c.points) G = G || new Array(K).fill(1);
@@ -916,15 +1000,15 @@ function valueSideWith(c, fillSpec, lockSpec) {
     const ownScore = new Array(n).fill(0);
     for (let k = 0; k < K; k++) for (let i = 0; i < n; i++) ownScore[i] += G[k] * own[k][i];
     return {
-      G, sigmaDraft, nu, rates, own, fill, x, targets: fillSpec, score, ownScore, byPos: bp, lin, specAdj, lockAdj, sgpar, deepLevel, deepVec,
+      G, sigmaDraft, nu, rates, own, fill, x, unit, roles, vol, targets: fillSpec, score, ownScore, byPos: bp, lin, specAdj, lockAdj, sgpar, deepLevel, deepVec,
       inPool, poolSlot: byPos.slot, order: value, sigma, caps: c.caps,
     };
   }
 
   // Task 10: until the pool stops changing and no weight moves 1%. A pool that cycles through
   // the same few states, swapping marginal players, with weights within 3% across the cycle,
-  // has settled too: on the mean of the cycle's weights; so has a cycle of any spread that
-  // repeats itself exactly for two periods (pools and weights within 0.1%). Otherwise, after 20
+  // has settled too: on the mean of the cycle's weights; so has a cycle of any spread (and a
+  // period up to 6) that repeats itself exactly for two periods (pools and weights within 0.1%). Otherwise, after 20
   // passes, the mean of the last two (the procedure's fallback), flagged.
   let converged = false, cycle = 0, it = 0;
   const key = (bp) => bp.slot.map((t) => (t === null ? 0 : 1)).join("");
@@ -947,7 +1031,9 @@ function valueSideWith(c, fillSpec, lockSpec) {
     for (let p = 2; p <= 4 && !cycle; p++) {
       if (keys.length >= p && k === keys[keys.length - p] && history.length >= p && spreadOk(history.slice(-p), 0.03)) cycle = p;
     }
-    for (let p = 2; p <= 4 && !cycle; p++) if (repeats([...keys, k], p)) cycle = p;
+    // an exact repeat settles at any period up to 6 (a 5-pass cycle of pitcher pools, swapping
+    // marginal relievers, on a FanGraphs export in a K/BB, W+QS, SV+H league)
+    for (let p = 2; p <= 6 && !cycle; p++) if (repeats([...keys, k], p)) cycle = p;
     if (cycle) { converged = true; break; }
     keys.push(k);
   }
@@ -1003,7 +1089,7 @@ export function auctionValues(H, P, s) {
   const pitcherCats = points ? pPoints.map(([c]) => c) : s.pitcherCats;
   const opts = {
     N: s.teams, span: s.span ?? 3, points, format: s.format ?? "roto", weeks: s.weeks ?? 23,
-    phi: s.phi ?? 1, ptCV: s.ptCV ?? 0.15, fillPT: s.fillPT ?? true, specialists: s.specialists ?? true,
+    phi: s.phi ?? 1, ptCV: s.ptCV ?? 0.15, fillPT: s.fillPT ?? true, fillShare: s.fillShare ?? 1, specialists: s.specialists ?? true,
   };
 
   // Task 2's start values: the z-scores (or points) the calculator has always had
@@ -1110,28 +1196,54 @@ export function auctionValues(H, P, s) {
   });
   const hValue = dollars(h.sgpar, hSlot, hBase, hRate), pValue = dollars(p.sgpar, pSlot, pBase, pRate);
 
-  // Each player's dollars, part by part (they add back up exactly): the min bid; the side's
-  // baseline (its last drafted player); his position's premium over the side's deepest one;
-  // each stat over the deepest position's replacement; the playing time filled in for him;
-  // the specialist correction; and anything holding a player with no roster spot under the min bid
-  // (each at the player's own rate along the curve)
+  // Each player's dollars, part by part (they add back up exactly), each at the player's own rate
+  // along the curve: the min bid; the baseline; his position's premium over the side's deepest one;
+  // each stat; his playing time; the specialist correction; a lineup lock; a one-slot two-way
+  // player's pitching; and anything holding a player with no roster spot under the min bid.
+  // With the playing-time fill, each stat is what he adds over a replacement player in his own
+  // playing time: his role's per-PA (per-IP) replacement production, the fill's, times his PA
+  // (IP). Hitters are all held to the hitters' (a catcher's scarcity is his Position), pitchers
+  // to their own role's, SP or RP, so a starter isn't charged for a closer's saves. What's left
+  // splits into that role's full season (its target) at replacement against the deepest position's
+  // replacement level, part of the baseline, and Playing time: past that season, the extra at
+  // replacement; short of it, nothing, since his team fills it at replacement, or at a Share filled
+  // under 100% the part it doesn't fill, at replacement (a catcher: his
+  // shorter season, and the time he misses filled at the catchers' rates, against the hitters'
+  // season at theirs). Without the fill each stat is against the deepest
+  // position's replacement line over a full season, and the time he misses is in the stats.
+  // filled: the fill's own production in dollars (not a part; for the checks' reports)
   const parts = (side, value, slot, base, r) => side.score.map((_, i) => {
     if (Number.isNaN(value[i])) return null;
     const perSGP = rateAt(side.sgpar[i] - base, r), flat = r.flat;
     const stats = {};
     let sum = s.minBid;
-    side.own.forEach((o, k) => { stats[side.catNames[k]] = perSGP * side.G[k] * (o[i] - side.deepVec[k]); sum += stats[side.catNames[k]]; });
-    const fill = side.fill ? perSGP * side.fill.reduce((a, f, k) => a + side.G[k] * f[i], 0) : 0;
+    const G = side.G;
+    const fillOf = (k) => (side.fill ? side.fill[k][i] : 0);
+    const filled = perSGP * side.own.reduce((a, _, k) => a + G[k] * fillOf(k), 0);
+    const role = !side.unit ? null : side === h && side.unit.H ? "H" : side.roles[i];
+    // the full season of the role he's held to: a catcher's shorter one is his Playing time
+    const u = role ? side.unit[role] : null, full = role ? side.targets[role].target : 0, v = side.vol[i];
+    let roleLine = 0, fill = 0;
+    side.own.forEach((o, k) => {
+      const line = u ? u[k] * v : side.deepVec[k];
+      stats[side.catNames[k]] = perSGP * G[k] * (o[i] - line);
+      sum += stats[side.catNames[k]];
+      if (u) {
+        roleLine += perSGP * G[k] * (u[k] * full - side.deepVec[k]);
+        fill += perSGP * G[k] * (fillOf(k) + u[k] * (v - full));
+      }
+    });
+    if (!u) fill = filled;
     const t = side.byPos.valuedAt[i];
     const level = t === null ? side.deepLevel : side.byPos.levels.find((l) => l.slot === t).level;
     const position = perSGP * (side.deepLevel - level);
     const specialist = perSGP * side.specAdj[i];
     const lock = perSGP * (side.lockAdj ? side.lockAdj[i] : 0);
     const twoWayPart = perSGP * (side.twAdj ? side.twAdj[i] : 0);
-    const baseline = -perSGP * base + (slot[i] !== null ? flat : 0);
+    const baseline = -perSGP * base + (slot[i] !== null ? flat : 0) + roleLine;
     sum += fill + position + specialist + lock + twoWayPart + baseline;
     const other = value[i] - sum;
-    return { minBid: s.minBid, baseline, position, fill, specialist, lock, twoWay: twoWayPart, stats, other: Math.abs(other) < 1e-9 ? 0 : other };
+    return { minBid: s.minBid, baseline, position, fill, specialist, lock, twoWay: twoWayPart, stats, other: Math.abs(other) < 1e-9 ? 0 : other, filled };
   });
   h.catNames = hitterCats; p.catNames = pitcherCats;
   const hParts = parts(h, hValue, hSlot, hBase, hRate), pParts = parts(p, pValue, pSlot, pBase, pRate);
@@ -1166,7 +1278,7 @@ export function auctionValues(H, P, s) {
   // parts added on (he's drafted for both spots), so the rows' totals don't change
   const sumParts = (a, b) => {
     const out = { stats: a.stats, pstats: b.stats };
-    for (const key of ["minBid", "baseline", "position", "fill", "specialist", "lock", "twoWay", "other"]) out[key] = a[key] + b[key];
+    for (const key of ["minBid", "baseline", "position", "fill", "specialist", "lock", "twoWay", "other", "filled"]) out[key] = a[key] + b[key];
     return out;
   };
   for (const t of pairs) {

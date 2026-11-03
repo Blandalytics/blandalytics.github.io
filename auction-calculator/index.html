@@ -276,9 +276,9 @@ button:not(.tip,.link,.settoggle):active:not(:disabled){transform:scale(.96)}
       </div>
       <details class="adv" id="proj">
         <summary>Projections</summary>
-        <label><span class="lab"><b>Hitter projections (CSV)</b><button type="button" class="tip" data-tip="Leave empty for the default projections. Needs Name and PA; Team, MLBAMID and Y! Pos are used when present (Y! Pos for players without last season's games, matched by MLBAMID)">i</button></span><input id="up_h" type="file" accept=".csv,text/csv"></label>
+        <label><span class="lab"><b>Hitter projections (CSV)</b><button type="button" class="tip" data-tip="Leave empty for the default projections. Needs Name and PA; Team, MLBAMID and Y! Pos are used when present (Y! Pos for players without last season's games, matched by MLBAMID). A FanGraphs projections export works as it downloads (Steamer, ZiPS, ATC, THE BAT, Depth Charts): SO reads as K, and XBH and TB come from their parts; with no positions in it, a player without last season's games is a UT">i</button></span><input id="up_h" type="file" accept=".csv,text/csv"></label>
         <p class="src" id="src_h"></p>
-        <label><span class="lab"><b>Pitcher projections (CSV)</b><button type="button" class="tip" data-tip="Leave empty for the default projections. Needs Name and IP; Team, MLBAMID and Y! Pos are used when present (Y! Pos for players without last season's games, matched by MLBAMID)">i</button></span><input id="up_p" type="file" accept=".csv,text/csv"></label>
+        <label><span class="lab"><b>Pitcher projections (CSV)</b><button type="button" class="tip" data-tip="Leave empty for the default projections. Needs Name and IP; Team, MLBAMID and Y! Pos are used when present (Y! Pos for players without last season's games, matched by MLBAMID). A FanGraphs projections export works as it downloads: SO reads as K, HLD as HD, and SV+H comes from SV and HD; with no positions in it, a pitcher without last season's games is an SP if half his projected games are starts, an RP otherwise">i</button></span><input id="up_p" type="file" accept=".csv,text/csv"></label>
         <p class="src" id="src_p"></p>
       </details>
       <details class="adv" id="adv">
@@ -286,6 +286,7 @@ button:not(.tip,.link,.settoggle):active:not(:disabled){transform:scale(.96)}
         <label class="block"><span class="lab"><b>Replacement span</b><button type="button" class="tip" data-tip="Players either side of each position's cutoff averaged into its replacement level; 0 is the last starter alone">i</button></span><input id="span" type="number" min="0" max="10" step="1" value="3" required></label>
         <label class="block"><span class="lab"><b>Dollar curve</b><button type="button" class="tip" data-tip="How fast dollars rise with value. 1 is a straight line: each SGP above a side's last drafted player is worth the same. Above 1, stars cost more than a straight line gives them and the middle rounds less; the last drafted player still gets the min bid">i</button></span><input id="curve" type="number" min="1" max="2" step="0.05" value="1.05" required></label>
         <label class="check"><input id="fill_pt" type="checkbox" checked><span>Fill missing playing time</span><button type="button" class="tip" data-tip="What a player doesn't play, his team fills with replacement production for his role">i</button></label>
+        <label class="block" id="fill_share_field"><span class="lab"><b>Share filled (%)</b><button type="button" class="tip" data-tip="How much of the time a player misses (short of his role&#39;s full season, its 90th percentile among drafted players) his team fills at replacement. 100 fills all of it, as with daily moves and an open bench; less, for the days a team can&#39;t cover (weekly lineups, a short bench, a platoon&#39;s off days). Part-timers are worth less with less of it, and the top of the price list comes down: in the default league Pete Crow-Armstrong is 9 at 100, 7 at 75, 9 at 50 and 0 with no fill">i</button></span><input id="fill_share" type="number" min="0" max="100" step="5" value="100" required></label>
         <label class="check" id="spec_field"><input id="specialists" type="checkbox" checked><span>Specialist correction</span><button type="button" class="tip" data-tip="Roto: a category far above replacement buys standings points on a curve, not a line">i</button></label>
         <div class="pair">
           <label><span class="lab"><b>Count noise ×</b><button type="button" class="tip" data-tip="A season's luck in a category where the projections have no 10th/90th percentiles for it: φ × the player's count, with φ fit by category to how far the projections' 2023-26 seasons landed from them (about 1 to 3; steals 4.4, saves 8.9, holds 6.3). This scales every φ: 1 is the fitted luck">i</button></span><input id="phi" type="number" min="0" max="5" step="0.1" value="1" required></label>
@@ -346,6 +347,6 @@ button:not(.tip,.link,.settoggle):active:not(:disabled){transform:scale(.96)}
   </div>
 </main>
 <div id="tip" role="tooltip" hidden></div>
-<script type="module" src="app.js?v=32"></script>
+<script type="module" src="app.js?v=34"></script>
 </body>
 </html>

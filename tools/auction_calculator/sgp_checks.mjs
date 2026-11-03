@@ -85,7 +85,7 @@ for (const [side, cats] of [["h", s.hitterCats], ["p", s.pitcherCats]]) {
 {
   const why = (p) => {
     const b = p.breakdown, out = [];
-    if (Math.abs(b.fill) >= 2) out.push(`playing time ${b.fill > 0 ? "+" : "−"}$${Math.abs(b.fill).toFixed(0)}`);
+    if (Math.abs(b.filled) >= 2) out.push(`playing time filled +$${b.filled.toFixed(0)}`);
     if (Math.abs(b.specialist) >= 1) out.push(`specialist −$${Math.abs(b.specialist).toFixed(0)}`);
     const [cat, v] = Object.entries(b.stats).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0];
     out.push(`${cat} ${v > 0 ? "+" : "−"}$${Math.abs(v).toFixed(0)}`);
