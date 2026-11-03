@@ -183,11 +183,12 @@ p{text-wrap:pretty}
 
   <section class="plpd-pane" aria-labelledby="min_title">
     <h2 class="plpd-pane__title" id="min_title">Team Minutes</h2>
-    <p class="plpd-pane__desc">Each player's average minutes over the team's last 3, 5 and 10 games and the season, then minutes in each of the team's last five games, latest first. A blank means the player didn't play that game. Pick a column to sort every table by it.</p>
+    <p class="plpd-pane__desc">Each player's average minutes over the team's last 3, 5 and 10 games and the season, then minutes in each of the team's last five games, latest first. A blank means the player didn't play that game. Pick a column to sort every table by it. Download saves every team's table as one CSV, with a Team column.</p>
     <div class="controls">
       <label class="plpd-filter-field"><span class="plpd-filter-field__label">Team</span>
         <select id="team" class="plpd-filter-dropdown"></select></label>
       <label class="plpd-check"><input type="checkbox" id="all_teams">Every team</label>
+      <button id="minutes_csv" class="plpd-btn" type="button" disabled>Download</button>
     </div>
     <div class="minutes" id="minutes"><p class="plpd-status">Loading minutes…</p></div>
   </section>
@@ -205,6 +206,6 @@ p{text-wrap:pretty}
   </section>
 </div>
 <script src="/shared/share-image.js?v=2"></script>
-<script type="module" src="app.js?v=15"></script>
+<script type="module" src="app.js?v=16"></script>
 </body>
 </html>
