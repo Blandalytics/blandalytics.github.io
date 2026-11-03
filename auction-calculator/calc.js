@@ -689,12 +689,16 @@ export function twoWayShares(H, P, mode, starts, lock = "daily") {
 }
 // The hitter and pitcher rows of each two-way player (one MLBAM id, playing time in both files)
 function twoWayPairs(H, P) {
-  const id = (T, i) => (T.data.MLBAMID ? T.data.MLBAMID[i] : null);
+  // a missing id (readProjections' NaN, or blank) pairs no one: as a key, every one would match
+  const id = (T, i) => {
+    const v = T.data.MLBAMID ? T.data.MLBAMID[i] : null;
+    return v === null || v === undefined || Number.isNaN(v) || String(v).trim() === "" ? null : String(v).trim();
+  };
   const hitters = new Map();
-  for (let i = 0; i < H.n; i++) if (id(H, i) !== null && id(H, i) !== "" && H.data.PA[i] > 0) hitters.set(String(id(H, i)), i);
+  for (let i = 0; i < H.n; i++) if (id(H, i) !== null && H.data.PA[i] > 0) hitters.set(id(H, i), i);
   const pairs = [];
   for (let i = 0; i < P.n; i++) {
-    const ih = id(P, i) !== null ? hitters.get(String(id(P, i))) : undefined;
+    const ih = id(P, i) !== null ? hitters.get(id(P, i)) : undefined;
     if (ih !== undefined && P.data.IP[i] > 0) pairs.push({ ih, ip: i });
   }
   return pairs;
@@ -732,7 +736,9 @@ function valueSide(c) {
   const bare = valueSideWith({ ...c, span: 0, specialists: false }, null, null);
   const lockSpec = locked ? lockSpecOf(c, bare) : null;
   const fillSpec = c.fillPT ? fillSpecOf(c, bare) : null;
-  return { ...valueSideWith(c, fillSpec, lockSpec), lock: lockSpec };
+  const out = valueSideWith(c, fillSpec, lockSpec);
+  // settled only if the bare run settled too: its pool sets the fill and the lock
+  return { ...out, lock: lockSpec, converged: out.converged && bare.converged };
 }
 
 function fillSpecOf(c, bare) {
