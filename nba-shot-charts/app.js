@@ -16,7 +16,7 @@ const el = {
   seasonLabel: $("season_label"), through: $("through"), chartBox: $("chart_box"), fig: $("fig"), figTip: $("fig_tip"), share: $("share_png"),
   sliders: $("sliders"), seasonMin: $("season_min"), gameMin: $("game_min"), seasonMinV: $("season_min_v"), gameMinV: $("game_min_v"),
   seasonBoard: $("season_board"), gameBoard: $("game_board"), seasonBoardDesc: $("season_board_desc"), gameBoardDesc: $("game_board_desc"),
-  va: $("va"), vaBox: $("va_box"), vaTip: $("va_tip"), vaDesc: $("va_desc"), team: $("team"), allTeams: $("all_teams"), minutes: $("minutes"),
+  va: $("va"), vaBox: $("va_box"), vaTip: $("va_tip"), vaDesc: $("va_desc"), team: $("team"), allTeams: $("all_teams"), minutes: $("minutes"), minutesCsv: $("minutes_csv"),
 };
 const viewChips = [...document.querySelectorAll("[data-view]")];
 const modeChips = [...document.querySelectorAll("[data-mode]")];
@@ -408,10 +408,10 @@ el.va.addEventListener("click", () => {
 // One sort for every team's table. The day columns are keyed by how many games back they are
 // (day0 the latest), so they line up across teams whose dates differ. A blank stays last either
 // way, and ties keep the app's order (Last 3, then 5, then 10, then the season, most first).
-function minutesTable(teamId) {
+const MINUTE_COLS = [["Last 3", "last3"], ["Last 5", "last5"], ["Last 10", "last10"], ["Season", "all"]];
+
+function sortedMinutes(teamId) {
   const { dates, rows } = teamMinutes(state.minutes, teamId);
-  if (!rows.length) return `<p class="plpd-status">No games yet.</p>`;
-  const cols = [["Last 3", "last3"], ["Last 5", "last5"], ["Last 10", "last10"], ["Season", "all"]];
   const sort = state.sort.minutes;
   const val = (r) => (sort.key === "name" ? r.name : sort.key.startsWith("day") ? r.days[Number(sort.key.slice(3))] : r[sort.key]);
   rows.sort((a, b) => {
@@ -421,6 +421,13 @@ function minutesTable(teamId) {
     if (nx || ny) return nx - ny;
     return (x - y) * sort.dir;
   });
+  return { dates, rows };
+}
+
+function minutesTable(teamId) {
+  const { dates, rows } = sortedMinutes(teamId);
+  if (!rows.length) return `<p class="plpd-status">No games yet.</p>`;
+  const cols = MINUTE_COLS, sort = state.sort.minutes;
   const head = (k, label, cls = "") => {
     const sorted = sort.key === k ? ` aria-sort="${sort.dir < 0 ? "descending" : "ascending"}"` : "";
     return `<th scope="col" class="${cls}"${sorted}><button type="button" data-sort="${k}">${label}</button></th>`;
@@ -441,6 +448,35 @@ function renderMinutes() {
   el.minutes.innerHTML = `<div class="conferences">${CONFERENCES.map(([conf, divisions], c) => `<div class="conference"><h3>${conf} Conference</h3>
     ${divisions.map((div, d) => `<div class="plpd-mini"><h3 class="plpd-mini__title">${div}</h3></div>${TEAMS.slice((c * 3 + d) * 5, (c * 3 + d + 1) * 5).map(teamBlock).join("")}`).join("")}</div>`).join("")}</div>`;
 }
+
+// Every team's table in one CSV, in the tables' current sort and the divisions' team order. The
+// last five games are by how many games back (Game 1 the latest), each with its date, as teams'
+// dates differ; a blank is a game the player didn't play.
+function minutesCsv() {
+  const cell = (v) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const fixed = (v) => (Number.isFinite(v) ? v.toFixed(1) : "");
+  const games = [1, 2, 3, 4, 5];
+  const lines = [["Team", "Player", ...MINUTE_COLS.map(([l]) => l), ...games.flatMap((g) => [`Game ${g} Date`, `Game ${g} Min`])]];
+  for (const t of TEAMS) {
+    const { dates, rows } = sortedMinutes(t.id);
+    for (const r of rows) {
+      lines.push([t.name, r.name, ...MINUTE_COLS.map(([, k]) => fixed(r[k])), ...games.flatMap((g, i) => [dates[i] ?? "", fixed(r.days[i])])]);
+    }
+  }
+  return lines.map((l) => l.map(cell).join(",")).join("\r\n") + "\r\n";
+}
+
+el.minutesCsv.addEventListener("click", () => {
+  if (!state.minutes) return;
+  // a BOM, so Excel reads the CSV as UTF-8 (accented names)
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\uFEFF" + minutesCsv()], { type: "text/csv;charset=utf-8" }));
+  a.download = `nba-team-minutes-${state.season.season}-${state.season.last_date ?? "season"}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+});
 
 el.team.innerHTML = TEAMS.slice().sort((a, b) => a.name.localeCompare(b.name)).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("");
 el.team.value = String(DEFAULT_TEAM);
@@ -496,10 +532,12 @@ async function useSeason(entry, want = {}) {
 
   el.minutes.innerHTML = `<p class="plpd-status">Loading minutes…</p>`;
   state.minutes = null;
+  el.minutesCsv.disabled = true;
   try {
     const m = await loadMinutes(entry);
     if (state.season !== entry) return;
     state.minutes = m;
+    el.minutesCsv.disabled = false;
     renderMinutes();
   } catch (e) {
     el.minutes.innerHTML = `<p class="plpd-status err">Couldn't load minutes: ${esc(e.message)}</p>`;
