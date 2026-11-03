@@ -2,8 +2,8 @@
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket, and the
 // positions come from a third, last season's games by position.
 
-import * as C from "./calc.js?v=22";
-import * as R from "./risk.js?v=2";
+import * as C from "./calc.js?v=23";
+import * as R from "./risk.js?v=3";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -27,7 +27,7 @@ const PL_FILE = "pl_lists.json";
 const PL_NAMES = { H: "Hitters", SP: "SP", "RP-SV": "SV", "RP-HD": "HD", "RP-SVHD": "SV+HD" };
 const SLOT_IDS = Object.keys(C.SLOT_TYPES).map((t) => "slot_" + t);
 const PSLOT_IDS = Object.keys(C.PITCHER_SLOT_TYPES).map((t) => "pslot_" + t);
-const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "span", "curve", "weeks", "phi", "pt_cv", ...SLOT_IDS, ...PSLOT_IDS];
+const NUM_INPUTS = ["bench", "teams", "min_bid", "budget", "span", "curve", "weeks", "phi", "pt_cv", "fill_share", ...SLOT_IDS, ...PSLOT_IDS];
 // The eligibility thresholds: hitter starts and games at a position, SP starts, RP relief games.
 // A blank one skips that test
 const ELIG_INPUTS = ["elig_gs", "elig_g", "elig_sp", "elig_rp"];
@@ -162,7 +162,9 @@ function renderSources() {
     const el = $("src_" + k);
     const up = uploads[k];
     if (up) {
-      el.innerHTML = `<b>${esc(up.name)}</b> · ${int(up.table.n)} players · <button type="button" class="link" data-default="${k}">use the default</button>`;
+      // a FanGraphs export's renamed and derived columns, so it's plain how the file was read
+      const read = up.table.notes && up.table.notes.length ? ` · read ${esc(up.table.notes.join("; "))}` : "";
+      el.innerHTML = `<b>${esc(up.name)}</b> · ${int(up.table.n)} players${read} · <button type="button" class="link" data-default="${k}">use the default</button>`;
     } else if (defaults[k]) {
       el.innerHTML = `Default projections · ${int(defaults[k].n)} players`;
     } else {
@@ -179,6 +181,15 @@ function renderSources() {
 }
 
 const raw = (k) => (uploads[k] ? uploads[k].table : defaults[k]);
+// With the Pitcher List ranks on, an upload without rank columns takes the default projections'
+// ranks, matched by MLBAM id (a FanGraphs export has none). found: the uploads' players matched
+function rawRanked(k) {
+  const up = uploads[k];
+  if (!up || !plOn() || !defaults[k]) return { table: raw(k), found: null };
+  const cols = Object.values(C.RANK_COLS);
+  if (cols.some((c) => c in up.table.data)) return { table: up.table, found: null };
+  return C.borrowColumns(up.table, defaults[k], cols);
+}
 
 // ---- scoring controls ------------------------------------------------------------
 
@@ -267,6 +278,7 @@ function showFormat() {
   $("format_field").hidden = !cats;
   $("weeks_field").hidden = !cats || $("format").value === "roto";
   $("spec_field").hidden = !cats || $("format").value !== "roto";
+  $("fill_share_field").hidden = !$("fill_pt").checked;
 }
 document.querySelectorAll('input[name="style"]').forEach((r) => r.addEventListener("change", () => {
   showFormat();
@@ -276,6 +288,7 @@ document.querySelectorAll('input[name="style"]').forEach((r) => r.addEventListen
   changed();
 }));
 $("format").addEventListener("change", showFormat);
+$("fill_pt").addEventListener("change", showFormat);
 
 // ---- the hitter split --------------------------------------------------------------------
 
@@ -329,7 +342,7 @@ function readSettings() {
     minimizeBench: $("min_bench").checked, style: style(), teams: n("teams"), minBid: n("min_bid"),
     budget: n("budget"), pool: $("pool").value, includeFa: $("include_fa").checked,
     format: $("format").value, weeks: n("weeks"), phi: n("phi"), ptCV: $("pt_cv").value === "" ? null : n("pt_cv"), lock: $("lock").value, twoWay: $("twoway").value,
-    fillPT: $("fill_pt").checked, specialists: $("specialists").checked, curve: n("curve"),
+    fillPT: $("fill_pt").checked, fillShare: n("fill_share") / 100, specialists: $("specialists").checked, curve: n("curve"),
     hitterShare: autoSplit() ? null : n("split") / 100,
     hitterCats: cats.h, pitcherCats: cats.p, hitterPoints: points.h, pitcherPoints: points.p,
   };
@@ -437,10 +450,12 @@ $("pslots_ui").addEventListener("input", showSlotTotals);
 // ---- league formats ------------------------------------------------------------------------
 
 // Each site's default league: teams, hitter slots and pitcher slots.
-// Yahoo and ESPN are from their own help pages; CBS and Fantrax from third-party write-ups.
+// Yahoo is from its help page; ESPN from its own 2026 description of its default league (C, 1B, 2B,
+// 3B, SS, 3 OF, UTIL and 7 P since 2023, which replaced CI, MI, 5 OF and 9 P); CBS and Fantrax
+// from third-party write-ups.
 const PRESETS = {
   yahoo: { teams: 12, slots: { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UT: 2 }, pslots: { SP: 2, RP: 2, P: 4 } },
-  espn: { teams: 10, slots: { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 1, MI: 1, OF: 5, UT: 1 }, pslots: { P: 9 } },
+  espn: { teams: 10, slots: { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UT: 1 }, pslots: { P: 7 } },
   cbs: { teams: 12, slots: { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UT: 1 }, pslots: { SP: 5, RP: 2 } },
   fantrax: { teams: 12, slots: { C: 2, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 1, MI: 1, OF: 5, UT: 1 }, pslots: { P: 9 } },
   nfbc: { teams: 15, slots: { C: 2, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 1, MI: 1, OF: 5, UT: 1 }, pslots: { P: 9 } },
@@ -527,8 +542,9 @@ function update() {
   }
   const missing = C.missingColumns(raw("h"), raw("p"));
   if (missing.length) return fail(`The projections are missing required columns: ${missing.join(", ")}`);
-  const H = C.prepHitters(raw("h"), $("pool").value, $("include_fa").checked, eligOf());
-  const P = C.prepPitchers(raw("p"), $("pool").value, $("include_fa").checked, eligOf());
+  const ranked = { h: rawRanked("h"), p: rawRanked("p") };
+  const H = C.prepHitters(ranked.h.table, $("pool").value, $("include_fa").checked, eligOf());
+  const P = C.prepPitchers(ranked.p.table, $("pool").value, $("include_fa").checked, eligOf());
   syncOptions(H, P);   // first, so the scoring controls are there even while a setting is invalid
 
   const s = readSettings();
@@ -563,6 +579,10 @@ function update() {
     if (pl.state === "idle" || pl.state === "loading") { warnings.push("Loading the Pitcher List ranks…"); loadPL(); }
     else if (pl.state === "error") warnings.push(`The Pitcher List ranks didn't load (${pl.error}).`);
     else if (!hasRanks) warnings.push("These projections have no Pitcher List rank columns, so the values are the projections' own.");
+    else if (ranked.p.found !== null || ranked.h.found !== null) {
+      const n = (ranked.h.found || 0) + (ranked.p.found || 0);
+      warnings.push(`The Pitcher List ranks are the default projections', matched to your file by MLBAM id (${int(n)} ranked players found).`);
+    }
     else if (useRisk) warnings.push("The risk-aware $ prices the projections' own draws, without the Pitcher List credit.");
   }
   showPLSources();
@@ -707,13 +727,20 @@ const part = (key, label, title, get, extra = {}) => ({ key, label, title, get, 
 function breakdownColumns() {
   const b = (p) => p.breakdown;
   const any = (key) => result.players.some((p) => b(p) && Math.abs(b(p)[key]) >= 0.005);
+  const filled = result.settings.fillPT;
   const base = [
     part("b:min", "Min bid", "Every drafted player's floor", (p) => (b(p) ? b(p).minBid : NaN)),
-    part("b:base", "Baseline", "Less the last drafted player's value over replacement. On a dollar curve above 1, each part is at the player's own dollars per SGP, so stars' parts are larger",
+    part("b:base", "Baseline", "Less the last drafted player's value over replacement"
+      + (filled ? ", plus a full season of replacement play in his role (the hitters'; SP or RP) against the deepest position's replacement level" : "")
+      + ". On a dollar curve above 1, each part is at the player's own dollars per SGP, so stars' parts are larger",
       (p) => (b(p) ? b(p).baseline : NaN)),
     part("b:pos", "Position", "His position's premium over his side's deepest position", (p) => (b(p) ? b(p).position : NaN)),
   ];
-  if (any("fill")) base.push(part("b:fill", "Playing time", "What his team gets from replacement production in the time he doesn't play", (p) => (b(p) ? b(p).fill : NaN)));
+  const share = result.settings.fillShare ?? 1;
+  if (any("fill")) base.push(part("b:fill", "Playing time", "His playing time against his role's full season (its 90th percentile among drafted players), at replacement: past it, the extra; short of it, "
+    + (share < 1 ? `the ${Math.round(100 * (1 - share))}% of the time he misses that his team doesn't fill (Share filled)` : "nothing, since his team fills the time at replacement")
+    + ". A catcher's is his shorter season, the time he misses filled at catchers' rates",
+  (p) => (b(p) ? b(p).fill : NaN)));
   if (any("specialist")) base.push(part("b:spec", "Specialist", "Roto: a category far above replacement buys standings points on a curve, not a line", (p) => (b(p) ? b(p).specialist : NaN)));
   if (any("lock")) base.push(part("b:lock", "Lineup lock", "What a binding lineup lock takes from an SP: he keeps his tier's share of his value above replacement", (p) => (b(p) ? b(p).lock : NaN)));
   if (any("twoWay")) base.push(part("b:tw", "Two-way", "A two-way player's pitching in a one-spot league, less the hitting he gives up for it, at the pitchers' price", (p) => (b(p) ? b(p).twoWay : NaN)));
@@ -722,7 +749,8 @@ function breakdownColumns() {
   base.forEach((c, i) => Object.assign(c, { group: "v", first: i === 0 }));
   const unit = (side, cat) => (result.weights[side].find((w) => w.cat === cat) || {}).unit;
   const stat = (type, cat, i) => part(`$${type}:${cat}`, cat,
-    `What his ${cat} adds over his side's deepest replacement, in his own playing time`
+    (filled ? `What his ${cat} adds over a replacement player in his own playing time (${type === "h" ? "a replacement hitter's per PA" : "a replacement SP's or RP's per IP, by his role"})`
+      : `What his ${cat} adds over his side's deepest replacement, a full season`)
       + (unit(type, cat) && unit(type, cat) !== cat && unit(type, cat) !== "points" ? ` (as ${unit(type, cat)} against the drafted pool's rate)` : ""),
     (p) => (stat$Of(p, type) ? stat$Of(p, type)[cat] : NaN), { group: type + "$", first: i === 0 });
   return [...base, ...result.valueCols.h.map((c, i) => stat("h", c, i)), ...result.valueCols.p.map((c, i) => stat("p", c, i))];

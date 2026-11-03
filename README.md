@@ -1182,10 +1182,12 @@ slot; below), the **Hitter split
 (%)** (65 in categories and 50 in points, as the script has it, or **From the values**, which shows
 the split the values make in the box) and **Include free agents**; the scoring, as category
 toggles (5x5 roto by default) or editable points tables; and two collapsed sections:
-**Projections**, optional hitter and pitcher projection CSVs (it opens itself if the defaults don't
-load), and **Valuation details**, the **Replacement span**, the **Dollar curve**, **Fill missing
-playing time**, **Specialist correction** and the noise placeholders (**Count noise φ**,
-**Playing-time CV**). A
+**Projections**, optional hitter and pitcher projection CSVs, the page's own layout or a FanGraphs
+export as it downloads (below; it opens itself if the defaults don't load), and **Valuation
+details**, the **Replacement span**, the **Dollar curve**, **Fill missing playing time** and its
+**Share filled (%)**, **Specialist correction** and a season's luck (**Count noise ×**, which
+scales the fitted φ, and **Playing-time CV**, blank for the fitted one). Two more collapsed
+sections hold the betas, **Risk (beta)** and **Pitcher List ranks** (below). A
 setting's small print is in the tooltip on its ⓘ (on hover, keyboard focus or a tap). Any change
 reprices at once. The table beside it is every player by auction dollars, with the stats grouped
 under Hitting and Pitching; a **Slot** column says where each drafted player plays, BN for the
@@ -1197,7 +1199,10 @@ over the table. Over it, a row of **Position premiums** says what each position 
 side's deepest one. Any header sorts the table, a search box and position filter narrow it, and
 **Download CSV** saves the whole table in the script's layout (a stat both sides score is suffixed
 `_h` / `_p`). **View** switches the stat columns for a **Value breakdown** of each player's dollars
-(below), and the CSV follows it. Settings are kept in the browser between visits; **Reset all
+(below), and the CSV follows it. **Roster impact** (with the stats view and the fill on) shows each
+player's line with the time he doesn't play filled at his role's replacement production, up to
+his role's full season: what his roster spot gives a team over a season, the same fill the
+dollars price; a stat's tooltip says how much of it is replacement. Settings are kept in the browser between visits; **Reset all
 settings** clears them. The chevron at the top of the sidebar folds it away, to a slim rail beside
 the table (a bar over it on a phone), and it stays folded between visits.
 
@@ -1230,6 +1235,20 @@ way:
 - **Default projections from the bucket.** `https://data.blandalytics.com/projections/hitters_auction_ev.csv`
   and `pitchers_auction_ev.csv`, not the app's Google Sheet, with `position_eligibility.csv` beside
   them; `?data=<base>` reads all three from elsewhere.
+- **FanGraphs exports.** An uploaded file can be a FanGraphs projections export as it downloads
+  (Steamer, ZiPS, ATC, THE BAT, Depth Charts, OOPSY; its CSV, or its JSON API's names). Where the
+  file lacks the page's own name for a column, `SO` reads as K, `HLD` as HD, `PlayerName` as Name,
+  `xMLBAMID` as MLBAMID and `POS` as Y! Pos, and SV+H, 1B, XBH and TB come from their parts; the
+  file's line says what it read (`calc.js` `readProjections`). A column with no numbers in it
+  (FanGraphs' blank BS and GDP) isn't offered as a category. A FanGraphs export has no positions:
+  a player with last season's games gets his positions from them (by MLBAM id, as for any file),
+  a hitter without them is a UT, and a pitcher without them an SP if half his projected games are
+  starts, an RP otherwise (the Pitcher List pools' split). Two-way players pair by MLBAM id, or
+  by FanGraphs' PlayerId in a file without MLBAM ids. With the Pitcher List ranks on, a file
+  without rank columns takes the default projections' ranks by MLBAM id. On the 2027 FanGraphs
+  export (4,166 hitters and 5,169 pitchers, most of them 1-PA organizational filler) the default
+  league prices in about 1.2 s, against 0.4 s for the default files, and its 215 invariant
+  leagues all pass; 208 of its 216 drafted players have positions from 2026 games.
 - **Team abbreviations.** The All pool keeps every player whatever their team (the script drops a
   team it doesn't know), and AL/NL-Only also knows `TB`, `SD`, `SF`, `KC`, `WSH`, `CWS` and `AZ`.
   A blank team, `FA` or `- - -` is a free agent.
@@ -1252,7 +1271,8 @@ start, then in passes until it settles:
 3. **Playing time**: what each player doesn't play is filled with replacement production for his
    role (C or other hitter; SP or RP, by starts): the per-PA (per-IP) output of the players a tier
    (N) either side of the role's cutoff, ranked by their own projections, up to the role's 90th
-   percentile among drafted players. That production is set once, from the side valued without any
+   percentile among drafted players, times the **Share filled** (100% by default: every missed
+   day covered). That production is set once, from the side valued without any
    fill, then held: set from the filled values, the cutoff fills with part-timers whose rates no
    free agent supplies over a season, and the pool and the fill chase each other.
 4. **The draft's spread** (σ²_draft): the pool in draft order cut into tiers of N (one player per
@@ -1262,9 +1282,14 @@ start, then in passes until it settles:
    the projections' 10th and 90th percentiles where the file has them (`HR_p10`, `HR_p90`, …: SD =
    (p90 − p10) / 2.563; for a rate stat, the rate's spread times its denominator, plus the playing
    time's); elsewhere count noise φ × the count plus (CV × the contribution)², with each player's CV
-   from his PA/IP percentiles when there are some. φ = 1 and CV = 0.15 are placeholders until
-   they're fit to projection errors. No strategy term (τ² = 0), so SB and SV may weigh a little
-   heavy.
+   from his PA/IP percentiles when there are some. φ and CV are fit to how far the projections'
+   2023–26 seasons landed from them (`calc.js` `NOISE_FIT`): φ by category, about 1 to 3 (R 1.49,
+   HR 1.76, RBI 2.32, AVG 1.39; W 0.91, K 1.91, ERA 2.98, WHIP 2.33), steals 4.36, saves 8.92,
+   holds 6.34; CV .46 for hitters and .61 for pitchers. The page's **Count noise ×** scales every
+   φ (1 is the fit) and a **Playing-time CV** replaces both CVs; noise "off" (code only) is the old
+   placeholders, φ = 1 and CV = 0.15. A few categories (`fitOnly`: BB%, K, OPS, SLG; HD, SV+H, BS,
+   H, L, BB/9, HR/9, K/9) are priced by φ even where the file has their percentiles. No strategy
+   term (τ² = 0), so SB and SV may weigh a little heavy.
 6. **The weights**: `G = C / (2√π · √(σ²_draft + P·ν))` standings points per unit, with C
    comparisons per category and P scoring periods a season: roto N − 1 and 1, head-to-head W and W,
    all-play W·(N − 1) and W weeks. The SGP denominator is `D = 1 / G`. Points leagues skip this: a
@@ -1276,8 +1301,11 @@ start, then in passes until it settles:
    not 5.7.
 
 The passes stop when the pool doesn't change and no denominator moves 1%; a pool that only swaps
-marginal players back and forth with weights within 3% has settled on the mean of its states; after
-20 passes, the mean of the last two (the page says so). On the 2027 projections (as of October 13)
+marginal players back and forth with weights within 3% has settled on the mean of its states, and
+so has a cycle of any spread, 2 to 6 passes long, that repeats itself exactly for two periods (a
+5-pass cycle of marginal relievers on the FanGraphs export, in a K/BB, W+QS, SV+H league); after
+20 passes, the mean of the last two (the page says so). A side counts as settled only if the run
+without the fill and the lock, whose pool sets both, settled too. On the 2027 projections (as of October 13)
 the Yahoo format settles in 4 passes for hitters and 3 for pitchers, in about 0.2 s. Its
 denominators: R 22.6, HR 10.1, RBI 23.9, SB 11.3, AVG 13.4 hits; W 4.3, SV 9.7, K 59.4, ERA 10.9
 earned runs, WHIP 16.9 walks + hits.
@@ -1309,15 +1337,27 @@ rates (Byron Buxton, Luis Robert Jr., closers) and away from full-time players n
 rates (Bo Bichette, Luis Arraez, back-end starters).
 
 **Value breakdown.** A player's dollars split exactly into: **Min bid**; **Baseline** (less the last
-drafted player's SGP above replacement); **Position**, his
-position's premium over his side's deepest one; **Playing time**, the replacement production filled
-in for the time he doesn't play; **each stat**, what it adds over the deepest position's replacement
-in his own playing time; **Specialist**, the roto curve's correction; **Lineup lock**, what a
+drafted player's SGP above replacement, plus, with the fill, a full season of replacement play in
+his role against the deepest position's replacement level); **Position**, his
+position's premium over his side's deepest one; **each stat**, what it adds over a replacement
+player in his own playing time: his PA (IP) at the replacement production per PA (per IP) the fill
+uses, the hitters' for every hitter (a catcher's scarcity is his Position) and the SP's or RP's for
+a pitcher, by his role, so a starter isn't charged for a closer's saves; **Playing time**, his
+playing time against that role's full season at replacement (the extra past it; short of it,
+nothing at a 100% share, since his team fills the time at replacement, and the unfilled part of it
+at a lower share; a catcher's shorter season and the time he misses filled at catchers' rates);
+**Specialist**, the roto curve's correction; **Lineup lock**, what a
 binding lock takes from an SP; **Two-way**, a one-slot two-way player's pitching less the hitting he
-gives up for it; and **No spot**, shown only when it isn't zero, what holds a player no legal roster
-has room for under the min bid. Each part
+gives up for it; **Pitcher List**, with the ranks on; and **No spot**, shown only when it isn't zero, what holds a player no legal roster
+has room for under the min bid. With the fill off, each stat is against the deepest position's
+replacement line over a full season, so the time he misses is in his stats. Each part
 is at the player's own dollars per SGP along the dollar curve (`k × u^(γ − 1)`), so they add back up
-to the dollars to the cent for every player.
+to the dollars to the cent for every player. A stat's shading in the stats view is the same
+dollars. In the default league: Matt Shaw (307 PA of the hitters' 616) is R +$3.60, HR +$0.80,
+RBI +$1.40, SB +$7.70, AVG +$4.20, Playing time $0; Tarik Skubal (160 IP of the SPs' 147) is W
++$6.30, SV −$0.20, K +$5.10, ERA +$19.90, WHIP +$23.80, Playing time +$2.40; before, each stat was
+against a full-season line from the deepest slot, so Shaw read R −$19.60 and Playing time +$58.60,
+and Skubal SV −$7.70. The dollars don't change.
 
 **Lineup locks** (the research bundle's lineup-locks spec, Tasks 1–4, capture-factor method). With
 daily lineups a team starts whichever SPs pitch that day. With weekly ones, or Monday/Friday ones,
@@ -1404,7 +1444,10 @@ projections (as of October 13) the Yahoo format prices C at +$12.36 and everythi
 every slot takes anyone.
 
 The league formats set teams, hitter slots and pitcher slots only; budget ($260), bench and scoring
-stay as they are. Yahoo, the page's default, and ESPN are from the sites' own help pages; CBS is
+stay as they are. Yahoo, the page's default, is from its help page; ESPN from its own 2026
+description of its default league ("seven pitchers of any kind along with a C, 1B, 2B, 3B, SS,
+three outfielders and a utility player", three bench spots; ESPN's 2026 points mock draft), which
+replaced the CI, MI, 5 OF and 9 P layout of its older settings guide in 2023; CBS is
 from third-party write-ups that agree with CBS's prize-league roster counts; Fantrax's 14 hitters
 and 9 pitchers are from FantraxHQ, laid out as the classic 23-player roto roster, with the team
 count assumed.
@@ -1412,7 +1455,7 @@ count assumed.
 | format | teams | hitter slots | pitchers |
 |---|---|---|---|
 | Yahoo | 12 | C, 1B, 2B, 3B, SS, 3 OF, 2 UT | 2 SP, 2 RP, 4 P |
-| ESPN | 10 | C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT | 9 P |
+| ESPN | 10 | C, 1B, 2B, 3B, SS, 3 OF, UT | 7 P |
 | CBS | 12 | C, 1B, 2B, 3B, SS, 3 OF, UT | 5 SP, 2 RP |
 | Fantrax | 12 | 2 C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT | 9 P |
 | NFBC | 15 | 2 C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT | 9 P |
@@ -1422,10 +1465,35 @@ projections and schedules, so the capture factors stand in; a rotation-size sett
 chances and the capture factors assume 5-man rotations); innings or starts caps, which bind even
 daily; and the optional H2H daily-lock haircut (Task 5.5).
 Not done from the procedure: the draft-state weights (Task 12, re-weighting categories for one
-team during a live draft) and the history check against real standings (Task 13.4); risk as an
-option value is the beta below. The dollar curve's γ = 1.05 is the handoff's "mildly convex", not
-fit to auction prices. The method is checked by simulation only, not against real
-league standings.
+team during a live draft); risk as an option value is the beta below. The dollar curve's γ = 1.05
+is the handoff's "mildly convex", not fit to auction prices.
+
+**Against real standings** (Task 13.4, `tools/auction_calculator/standings_check.mjs`). Given a
+league's final standings (one row per team and season, the category totals, and AB and IP), it
+ranks each season's teams into roto points, regresses each category's total on its points (Todd
+Zola's regression) and puts the history's denominators beside the calculator's; on made-up
+standings with known slopes it gets them back (HR 10.01 for 10, SB 8.02 for 8, ERA 12.61 earned
+runs for 12.5). No league history is in the repository yet, so without a file it compares the
+calculator's denominators with published ones from real 12-team mixed leagues, each relative to
+its own HR (sources differ in scale far more than in proportion). On the October 15 projections
+(Yahoo format) the calculator's HR is 10.2 (Razzball's 12-team 10.4, Ottoneu 5x5 leagues' 10.6),
+and its AVG 13.5 hits is .0024 BA over a drafted team's AB, as Razzball's; W 0.40 × HR (Ottoneu
+0.42) and K 5.5 × (5.3) agree; R 2.2 × and RBI 2.3 × run under Ottoneu's 2.6 and 2.7, and SB 1.1 ×
+and SV 1.0 × over its 0.7 and 0.8, so the calculator prices a run or an RBI a little higher and a
+steal or a save lower than those leagues' standings do. Ottoneu's 40-man rosters make that a
+loose check; a league's own history is the real one.
+
+**Against auction prices.** In the default league the calculator's top hitter (Pete Crow-Armstrong)
+is $89.10; the 2026 market paid about $45 to $48 for the best hitters (RT Sports' roto 5x5 average
+auction values through April 29: Aaron Judge $46.27, Shohei Ohtani $44.98, Bobby Witt Jr.
+$40.47, Tarik Skubal $38.06). The playing-time fill makes most of the gap: it lifts part-timers to
+the cutoff (31 drafted hitters under 450 PA, against 5 without it), so the last drafted player's
+value rises against the stars' and the dollars per SGP double. Its replacement production isn't
+the cause: the undrafted band just below each cutoff gives the same per-PA line (R 68.0, HR 18.3,
+RBI 67.8, SB 9.5, AVG .248 per 600 PA, against 68.6, 18.5, 67.1, 8.6, .243 from the band around
+it). The share of missed time filled is: at 75% the top hitter is $77, at 50% $69, with no fill
+$60 (γ = 1 takes about $4 more off each). Values are not prices (markets flatten the top), so the
+market doesn't set the share; **Share filled** lets a league set its own, 100% by default.
 
 **Risk-aware $ (beta, off by default; `risk.js`).** The risk-aware valuation spec
 (`risk-aware-valuation-parameters.md` in the projections repository; its plan's steps R6, R7 and
@@ -1458,11 +1526,33 @@ league on the 2027 test simulation the largest moves are about ±$5: high-varian
 (Misiorowski +$4.25), low-variance closers lose (their draws carry no preseason role risk yet).
 Not done: the spread factor, λ and the in-season premium are placeholders (all 1, the spec's
 values, and 0) until the backtests fit them; no correlation between players; no keeper horizon.
+**Pitcher List ranks (beta, off by default; `calc.js` `rankCredit`).** With **Pitcher List ranks ›
+Credit the staff's ranks** on, the page loads `pl_lists.json` beside the projections (each list's
+date, article, title and weights; the ranks themselves are the projections' `PL rank`, `PL SP
+rank`, `PL SV rank`, `PL HD rank` and `PL SV+HD rank` columns, by MLBAM id). A list's rank k
+implies the dollars of the k-th player of the same pool (hitters; SPs, GS / G of .5 or more; the
+other pitchers), and a ranked player's dollars move by `w × (implied − his own)`, w by list and rank
+band (1–25, 26–75, 76–150, 151+), fit to how the ranks and the projections did against the seasons
+that followed (2023–26; the projections repository's `decisions/2026-10-15-pl-credit.md`, option 4:
+the pitcher lists only), preseason or in-season weights by the list's date. Each side's drafted
+players then give back the side's mean credit, so the budget is still spent once. The relievers'
+list follows the league's categories (saves, holds, saves plus holds; saves and holds scored apart,
+each list on its own category). **Strength** runs from None (the projections alone) through Fitted
+(the weights) to Full (every ranked player at his rank's value). The table gains **PL rank** and
+**PL ±**, the breakdown a **Pitcher List** part, and the section names each list's article and
+date. With it off, the values don't change. As of October 14 the file has the relievers' lists
+only (`RP-SV`, and `RP-SVHD` on its weights); the starters' list (Pitcher List's Top 200 Starting
+Pitchers for 2027) comes in when the projections' publisher (`publish/pl.py`) adds it to
+`pl_rankings` and republishes, on its fitted SP weights (preseason .44 / .71 / 1.00 / 0 by band,
+in-season .36 / .95 / .46 / 0); the page needs no change for it (checked on a made-up SP rank
+column: 114 SPs credited, the budget spent exactly). An uploaded file without rank columns takes
+the default projections' ranks by MLBAM id, and the page says how many it matched.
+
 The draft mode is its own page, `auction-calculator/draft/` (beta; its `DESIGN.md`), linked from the calculator's header. Turned off, the page's values are byte-for-byte what they were.
 
 | file | role |
 |---|---|
-| `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`), the player pool, positions from last season's games (`eligibilityOf`, `withEligibility`), the start z-scores and points, the SGP passes (`valueSide`), replacement by lineup slot (`positionReplacement`, with a span and per category), the drafted players, dollars and value breakdown (`auctionValues`), rank; no DOM, so Node runs it too |
+| `auction-calculator/calc.js` | the model: CSV reading and cleaning (`'13.6%'`, `'1,031'`; a FanGraphs export's names, `standardize`), the player pool, positions from last season's games (`eligibilityOf`, `withEligibility`), the start z-scores and points, the SGP passes (`valueSide`), replacement by lineup slot (`positionReplacement`, with a span and per category), the drafted players, dollars and value breakdown (`auctionValues`), rank; no DOM, so Node runs it too |
 | `auction-calculator/index.html`, `app.js` | the page: settings and the league formats (`PRESETS`), uploads (UTF-8 or Windows-1252), the scoring controls, the table, the CSV; with the Risk setting on, the risk files and the Risk $ columns |
 | `auction-calculator/risk.js` | the risk-aware $: the risk file's reader, each draw valued in the calculator's frame (`lineValues`), the option value, the objective (`objective`, simulated), CE and its pricing (`applyRisk`), and the spec's section 9 formulas; the placeholder tables (`SPREAD`, `LAMBDA`, `R_PREMIUM`, `TRANSACTIONS`); no DOM |
 | `tools/auction_calculator/risk_checks.mjs`, `risk_ref.py` | the spec's section 7 checks; parity with its section 9 reference code in Python (`risk_ref.py`, or the spec bundle's `risk_reference.py` with `--ref`); that `risk.js` values every projection line exactly as `calc.js` does and that the Risk $ spends the same dollars on the same roster spots, over 51 leagues; that the calculator's output is the same with risk's hook on or off (and as an older `calc.js` with `--baseline`); the risk files against the CSVs; and an end-to-end run with the 15 largest moves and Δ by $ tier (`--csv` writes every player's numbers) |
@@ -1472,7 +1562,8 @@ The draft mode is its own page, `auction-calculator/draft/` (beta; its `DESIGN.m
 | `tools/auction_calculator/sgp_checks.mjs` | the procedure's own validation: the 2√π / (N − 1) constant against simulated standings (within 2%), the tier variance against 3000 simulated snake drafts with ADP noise (within 5%), and a report of players who moved more than 20 places against the z-scores, with why |
 | `tools/auction_calculator/locks_checks.mjs` | the lineup-locks spec's own validation (Task 7): the binding chances against its Table 9.1 (within 0.03) and its 0.118 example, the q values, the two-way values against its Table 9.6 (one slot under daily locks and simultaneous exact, under weekly ones within 0.12), simultaneous ≥ max(H, P) and one slot daily ≥ Monday/Friday ≥ weekly ≥ H over a grid, daily locks changing no value, weekly locks not shrinking the pitchers' share, and the default league's two-way values in order under each lock |
 | `tools/auction_calculator/eligibility_checks.mjs` | the eligibility rule on made-up players (starts or games, a blank threshold, where he played most, UT for a DH, SP / RP, ids, the projections' positions for the rest), then Yahoo's thresholds against the file's own `Y! Pos` (never a position it doesn't list; one looser, some), and whose positions the games change |
-| `tools/auction_calculator/invariants.mjs` | over 190 leagues (every format; bench on and off, Points, roto / H2H / all-play, AL/NL-only, min bids, spans, fill and specialists off, hitter splits from 0 to 100% and the values' own, dollar curves, lineup locks, two-way modes, other categories; with an eligibility file, Yahoo's thresholds throughout and 20 more leagues on other ones), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget (less a minimized bench's min bids), that the hitters get exactly their split, that every value breakdown adds up, and that the values settled |
+| `tools/auction_calculator/standings_check.mjs` | the history check (Task 13.4): a league's final standings regressed into each category's denominator, against the calculator's; without a standings file, the calculator's against published 12-team ones, each relative to HR |
+| `tools/auction_calculator/invariants.mjs` | over 190 leagues (every format; bench on and off, Points, roto / H2H / all-play, AL/NL-only, min bids, spans, fill and specialists off, hitter splits from 0 to 100% and the values' own, dollar curves, lineup locks, two-way modes, other categories, fill shares of 50% and 0; with an eligibility file, Yahoo's thresholds throughout and 20 more leagues on other ones), checks that exactly the roster spots are drafted at the min bid or more, on legal rosters, for exactly the budget (less a minimized bench's min bids), that the hitters get exactly their split, that every value breakdown adds up, and that the values settled |
 
 To check the model after a change (pandas, Pillow, numpy and scipy for the Python side):
 
@@ -1491,6 +1582,8 @@ node tools/auction_calculator/eligibility_checks.mjs position_eligibility.csv hi
 node tools/auction_calculator/invariants.mjs hitters_auction_ev.csv pitchers_auction_ev.csv position_eligibility.csv   # and without it
 node tools/auction_calculator/locks_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv position_eligibility.csv
 node tools/auction_calculator/risk_checks.mjs hitters_auction_ev.csv pitchers_auction_ev.csv hitters_risk_ev.bin pitchers_risk_ev.bin
+node tools/auction_calculator/standings_check.mjs hitters_auction_ev.csv pitchers_auction_ev.csv position_eligibility.csv [standings.csv]
+node tools/auction_calculator/invariants.mjs fangraphs_hitters.csv fangraphs_pitchers.csv position_eligibility.csv   # a FanGraphs export too
 ```
 
 To update the projections, upload new `hitters_auction_ev.csv` / `pitchers_auction_ev.csv` to the

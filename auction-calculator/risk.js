@@ -339,7 +339,7 @@ export function lineValues(C, d, side, specs, Tl, rowOf, ctx) {
       const own = sp.kind === "count" ? sp.sign * sp.raw[j] : sp.sign * (sp.num[j] - d.rates[k] * sp.den[j]);
       let xk = own;
       if (f) {
-        const u = f.perUnit[k], missing = Math.max(0, f.target - v);
+        const u = f.perUnit[k], missing = (f.share ?? 1) * Math.max(0, f.target - v);
         xk = own + missing * sp.sign * (sp.kind === "count" ? u.count : u.num - d.rates[k] * u.den);
       }
       x[k] = xk;

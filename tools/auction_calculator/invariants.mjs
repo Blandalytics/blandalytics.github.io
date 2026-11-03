@@ -16,7 +16,7 @@ const E = process.argv[4] ? C.readProjections(readFileSync(process.argv[4], "utf
 const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
 const fmts = {
   Yahoo: [12, { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UT: 2 }, { SP: 2, RP: 2, P: 4 }],
-  ESPN: [10, { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 1, MI: 1, OF: 5, UT: 1 }, { P: 9 }],
+  ESPN: [10, { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UT: 1 }, { P: 7 }],
   CBS: [12, { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UT: 1 }, { SP: 5, RP: 2 }],
   NFBC: [15, { C: 2, "1B": 1, "2B": 1, "3B": 1, SS: 1, CI: 1, MI: 1, OF: 5, UT: 1 }, { P: 9 }],
   noUT: [12, { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 5 }, { SP: 6, RP: 3 }],
@@ -35,7 +35,7 @@ const variants = [
   { lock: "weekly", style: "Points", hitterPoints: C.DEFAULT_HITTER_POINTS, pitcherPoints: C.DEFAULT_PITCHER_POINTS },
   { twoWay: "simultaneous" }, { twoWay: "simultaneous", hitterShare: 0.65, minimizeBench: false }, { twoWay: "oneslot" },
   { twoWay: "oneslot", hitterShare: 0.65, curve: 1.05 }, { twoWay: "oneslot", lock: "split" }, { twoWay: "oneslot", lock: "weekly" },
-  { twoWay: "oneslot", hitterShare: 0.65, lock: "weekly" },
+  { twoWay: "oneslot", hitterShare: 0.65, lock: "weekly" }, { fillShare: 0.5 }, { fillShare: 0, hitterShare: 0.65, lock: "weekly" },
   // eligibility thresholds (with a file): 20 games alone, everyone where he played most, everywhere he played
   ...(E ? [{ eligibility: { gs: null, g: 20, sp: 5, rp: 8 } }, { eligibility: { gs: null, g: null, sp: null, rp: null } },
     { eligibility: { gs: 1, g: 1, sp: 1, rp: 1 } }, { eligibility: { gs: 1, g: 1, sp: 1, rp: 1 }, twoWay: "simultaneous", lock: "weekly" }] : []),
