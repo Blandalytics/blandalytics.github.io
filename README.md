@@ -1271,8 +1271,12 @@ start, then in passes until it settles:
 3. **Playing time**: what each player doesn't play is filled with replacement production for his
    role (C or other hitter; SP or RP, by starts): the per-PA (per-IP) output of the players a tier
    (N) either side of the role's cutoff, ranked by their own projections, up to the role's 90th
-   percentile among drafted players, times the **Share filled** (100% by default: every missed
-   day covered). That production is set once, from the side valued without any
+   percentile among drafted players (a reliever's 60 IP at most, a closer's workload, so a
+   reliever projected for 50 IP is filled with 10, not up to the 70-odd IP a few multi-inning arms
+   set; `calc.js` `FILL_CAPS`), times the **Share filled** (100% by default: every missed day
+   covered). On the November 3 projections the cap takes the default league's RP season from 69 IP
+   to 60: closers lose $2 to $4 (Mason Miller $35.11 to $31.15, Jhoan Duran $27.80 to $24.72), 28
+   relievers are drafted instead of 41, and hitters don't move. That production is set once, from the side valued without any
    fill, then held: set from the filled values, the cutoff fills with part-timers whose rates no
    free agent supplies over a season, and the pool and the fill chase each other.
 4. **The draft's spread** (σ²_draft): the pool in draft order cut into tiers of N (one player per
@@ -1483,8 +1487,8 @@ and SV 1.0 × over its 0.7 and 0.8, so the calculator prices a run or an RBI a l
 steal or a save lower than those leagues' standings do. Ottoneu's 40-man rosters make that a
 loose check; a league's own history is the real one.
 
-**Against auction prices.** In the default league the calculator's top hitter (Pete Crow-Armstrong)
-is $89.10; the 2026 market paid about $45 to $48 for the best hitters (RT Sports' roto 5x5 average
+**Against auction prices.** In the default league on the October 15 projections the calculator's top
+hitter (Pete Crow-Armstrong) is $89.10; the 2026 market paid about $45 to $48 for the best hitters (RT Sports' roto 5x5 average
 auction values through April 29: Aaron Judge $46.27, Shohei Ohtani $44.98, Bobby Witt Jr.
 $40.47, Tarik Skubal $38.06). The playing-time fill makes most of the gap: it lifts part-timers to
 the cutoff (31 drafted hitters under 450 PA, against 5 without it), so the last drafted player's
