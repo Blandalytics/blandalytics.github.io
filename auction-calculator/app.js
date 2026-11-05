@@ -2,7 +2,7 @@
 // beside it. The model is calc.js; the default projections are two CSVs in the bucket, and the
 // positions come from a third, last season's games by position.
 
-import * as C from "./calc.js?v=23";
+import * as C from "./calc.js?v=24";
 import * as R from "./risk.js?v=3";
 
 const $ = (id) => document.getElementById(id);
@@ -737,7 +737,7 @@ function breakdownColumns() {
     part("b:pos", "Position", "His position's premium over his side's deepest position", (p) => (b(p) ? b(p).position : NaN)),
   ];
   const share = result.settings.fillShare ?? 1;
-  if (any("fill")) base.push(part("b:fill", "Playing time", "His playing time against his role's full season (its 90th percentile among drafted players), at replacement: past it, the extra; short of it, "
+  if (any("fill")) base.push(part("b:fill", "Playing time", "His playing time against his role's full season (its 90th percentile among drafted players; 60 IP at most for a reliever), at replacement: past it, the extra; short of it, "
     + (share < 1 ? `the ${Math.round(100 * (1 - share))}% of the time he misses that his team doesn't fill (Share filled)` : "nothing, since his team fills the time at replacement")
     + ". A catcher's is his shorter season, the time he misses filled at catchers' rates",
   (p) => (b(p) ? b(p).fill : NaN)));

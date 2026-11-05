@@ -813,6 +813,11 @@ function valueSide(c) {
   return { ...out, lock: lockSpec, converged: out.converged && bare.converged };
 }
 
+// The most playing time the fill brings a role to, whatever its drafted players' 90th percentile:
+// a reliever's season is 60 IP at most, a closer's workload, so a reliever projected for 50 IP is
+// filled with 10, not up to the 80-odd IP a few multi-inning arms set
+export const FILL_CAPS = { RP: 60 };
+
 function fillSpecOf(c, bare) {
   const roles = rolesOf(c.T, c.side);
   const vol = c.T.data[c.side === "h" ? "PA" : "IP"].map((v) => (Number.isNaN(v) ? 0 : v));
@@ -829,8 +834,9 @@ function fillSpecOf(c, bare) {
     const repl = ranked.slice(Math.max(0, cut - c.N), cut + c.N);
     const v = repl.reduce((a, i) => a + vol[i], 0);
     const per = (arr) => (v > 0 ? repl.reduce((a, i) => a + arr[i], 0) / v : 0);
+    const target = drafted.length >= 5 ? quantile(drafted.map((i) => vol[i]), 0.9) : sideTarget;
     fillSpec[role] = {
-      target: drafted.length >= 5 ? quantile(drafted.map((i) => vol[i]), 0.9) : sideTarget,
+      target: c.side === "p" && FILL_CAPS[role] !== undefined ? Math.min(FILL_CAPS[role], target) : target,
       // the share of the time short of it his team fills (1: all of it)
       share: c.fillShare ?? 1,
       // per unit of playing time: counts, or a rate stat's numerator and denominator
