@@ -228,6 +228,12 @@ p,li,.note,.prov{text-wrap:pretty}
   var LEVELS = [['mlb', 'MLB'], ['aaa', 'Triple-A'], ['afx', 'Single-A'], ['win', 'Winter Leagues'],
     ['rok', 'Rookie'], ['bbc', 'College'], ['int', 'International'], ['hsb', 'High School']];
   var level = params.get('level') || MLB;
+  // a level whose games come from more than one league (the winter leagues: the Arizona Fall
+  // League and the Dominican league) is offered as each of its leagues with cards on the
+  // date, from the index's league_days; ?league=<name> opens on one
+  var league = params.get('league') || '';
+  var LEAGUE_NAMES = {'Liga de Beisbol Dominicano': 'LIDOM'};  // the Level list's name, if not the API's
+  function leagueName(lg) { return LEAGUE_NAMES[lg] || lg; }
   var LIVE_POLL_MS = 20000;
   var LOGO = 'PitcherList_Stats_watermark_with_logo.webp';
   var live = {games: {}};              // the live index as last fetched
@@ -275,11 +281,30 @@ p,li,.note,.prov{text-wrap:pretty}
     if (date === LIVE_KEY) return [MLB];
     return allLevels().filter(function (c) { return levelDays(c)[date]; });
   }
-  // a level with one league is named for it (the Arizona Fall League, for the winter leagues)
+  // a level with one league is named for it (the Florida State League, for Single-A)
   function levelLabel(code) {
     var leagues = ((index.levels || {})[code] || {}).leagues || [];
     var named = LEVELS.filter(function (l) { return l[0] === code; })[0];
-    return leagues.length === 1 && code !== MLB ? leagues[0] : named ? named[1] : code.toUpperCase();
+    return leagues.length === 1 && code !== MLB ? leagueName(leagues[0]) : named ? named[1] : code.toUpperCase();
+  }
+  function leagueDays(code) { return ((index.levels || {})[code] || {}).league_days || {}; }
+  function split(code) { return Object.keys(leagueDays(code)).length > 1; }
+  // the Level list's entries on a date: [value, label], the value '<code>|<league>' for a
+  // league of a split level
+  function levelItems(date) {
+    var items = [];
+    levelsOn(date).forEach(function (c) {
+      if (!split(c)) { items.push([c, levelLabel(c)]); return; }
+      var lds = leagueDays(c);
+      Object.keys(lds).sort().forEach(function (lg) { if (lds[lg][date]) items.push([c + '|' + lg, leagueName(lg)]); });
+    });
+    return items;
+  }
+  function inLeague(d) {                // a day's games, narrowed to the chosen league
+    if (!league) return d;
+    var out = {};
+    Object.keys(d).forEach(function (pk) { if (d[pk].league === league) out[pk] = d[pk]; });
+    return out;
   }
   function liveCount() { return Object.keys(live.games || {}).length; }
   function liveLabel() {
@@ -334,9 +359,9 @@ p,li,.note,.prov{text-wrap:pretty}
   // Pitcher list's order), once the day's grades are in
   function fillPitchers() {
     fill(pitcherSel, pitcherItems(), false);
-    var rows = pitcherRows(), date = dateSel.value, lvl = level, game = gameSel.value;
+    var rows = pitcherRows(), date = dateSel.value, lvl = levelSel.value, game = gameSel.value;
     (isLive() ? Promise.resolve(null) : loadData(date)).then(function (data) {
-      if (dateSel.value !== date || level !== lvl || gameSel.value !== game) return;
+      if (dateSel.value !== date || levelSel.value !== lvl || gameSel.value !== game) return;
       var top = topByStuff(rows, data);
       if (top) pitcherSel.value = top;
       onPitcher();
@@ -540,9 +565,9 @@ p,li,.note,.prov{text-wrap:pretty}
   function renderGrades() {
     var rows = pitcherRows();
     if (!rows.length) { gradesEl.hidden = true; gradesDrawn = null; return; }
-    var date = dateSel.value, lvl = level;
+    var date = dateSel.value, lvl = levelSel.value;
     (isLive() ? Promise.resolve(null) : loadData(date)).then(function (data) {
-      if (dateSel.value === date && level === lvl) drawGrades(rows, data);
+      if (dateSel.value === date && levelSel.value === lvl) drawGrades(rows, data);
     });
   }
   function markGradeRow() {
@@ -602,7 +627,7 @@ p,li,.note,.prov{text-wrap:pretty}
     var date = dateSel.value;
     loadDay(date).then(function (d) {
       if (dateSel.value !== date) return;
-      day = d;
+      day = inLeague(d);
       prov.hidden = level === MLB;
       fillGames();
       fillPitchers();
@@ -649,19 +674,24 @@ p,li,.note,.prov{text-wrap:pretty}
       + (liveCount() ? ' · ' + liveCount() + ' live' : '');
     return items;
   }
-  // the levels with cards on the chosen date: the current one if it has some, else MLB, else
-  // the first
+  // the levels (a split level's leagues) with cards on the chosen date: the current one if it
+  // has some, else another league of its level, else MLB, else the first
   function fillLevels() {
-    var codes = levelsOn(dateSel.value);
-    var pick = codes.indexOf(level) >= 0 ? level : codes.indexOf(MLB) >= 0 ? MLB : codes[0] || MLB;
-    fill(levelSel, codes.map(function (c) { return [c, levelLabel(c)]; }));
+    var items = levelItems(dateSel.value), values = items.map(function (it) { return it[0]; });
+    var cur = league ? level + '|' + league : level;
+    var same = values.filter(function (v) { return v.split('|')[0] === level; })[0];
+    var pick = values.indexOf(cur) >= 0 ? cur : same || (values.indexOf(MLB) >= 0 ? MLB : values[0] || MLB);
+    fill(levelSel, items);
     setLevel(pick);
   }
-  function setLevel(code) {
-    level = code;
-    levelSel.value = code;
+  function setLevel(value) {            // a level's code, or '<code>|<league>'
+    var bar = value.indexOf('|');
+    level = bar < 0 ? value : value.slice(0, bar);
+    league = bar < 0 ? '' : value.slice(bar + 1);
+    levelSel.value = value;
     var q = new URLSearchParams(location.search);
-    if (code === MLB) q.delete('level'); else q.set('level', code);
+    if (level === MLB) q.delete('level'); else q.set('level', level);
+    if (league) q.set('league', league); else q.delete('league');
     var s = q.toString();
     history.replaceState(null, '', location.pathname + (s ? '?' + s : '') + location.hash);
   }
@@ -706,10 +736,12 @@ p,li,.note,.prov{text-wrap:pretty}
     var date = at ? at[1] : index.games[m[1]] || (live.games && live.games[m[1]] ? LIVE_KEY : null);
     if (!date) return false;
     level = at ? at[0] : MLB;
+    league = '';
     dateSel.value = date;
-    fillLevels();
     loadDay(date).then(function (d) {
-      day = d;
+      if (split(level) && d[m[1]]) league = d[m[1]].league || '';  // the game's league
+      fillLevels();
+      day = inLeague(d);
       prov.hidden = level === MLB;
       fillGames();
       gameSel.value = m[1];
@@ -730,8 +762,8 @@ p,li,.note,.prov{text-wrap:pretty}
       if (!items.length && !location.hash) { empty.textContent = 'No cards built yet.'; return; }
       if (selectFromHash()) return;
       // land on the games in progress if there are any, else the most recent day; a ?level=
-      // link, on that level's most recent day
-      var days = level !== MLB ? levelDays(level) : null;
+      // link (with ?league=), on that level's (league's) most recent day
+      var days = level !== MLB ? (league && leagueDays(level)[league]) || levelDays(level) : null;
       var first = days ? items.filter(function (it) { return days[it[0]]; })[0] : null;
       dateSel.value = (first || items[0])[0];
       fillLevels();
