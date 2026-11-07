@@ -129,9 +129,10 @@ the Worker on any push that touches `tools/live/`. Setup and local testing are i
 
 [blandalytics.com/pitcher-cards/](https://blandalytics.com/pitcher-cards/) — the Pitcher List
 Stats game card for every pitcher in every game with Statcast tracking: MLB, Triple-A, the
-Florida State League's Hawk-Eye parks, the Arizona Fall League's MLB-park games and the rest
-(see *Levels*). Pick a date, then a level (those with cards that day), a game (or every game
-that day) and a pitcher; toggle
+Florida State League's Hawk-Eye parks, the Arizona Fall League's MLB-park games, the Dominican
+league and the rest (see *Levels*). Pick a date, then a level (those with cards that day; the
+winter leagues are listed league by league), a game (or every game that day) and a pitcher;
+toggle
 the comparison to an earlier season (MLB only) and choose which one. The card
 is the same one the Streamlit app in
 [Blandalytics/player_cards](https://github.com/Blandalytics/player_cards) draws
@@ -156,7 +157,10 @@ The picker in [`pitcher-cards/index.html`](pitcher-cards/index.html) draws the c
 page, and [`pitcher-cards/card.html`](pitcher-cards/card.html)`#<gamePk>-<pitcherId>` shows
 one full size (`&cmp=<year>` picks the comparison season, `&cmp=0` none). A card can be
 linked in the picker as `pitcher-cards/#<gamePk>-<pitcherId>`, at any level (the index's
-`level_games` finds it); `?level=<code>` opens the picker on a level, MLB otherwise. Below MLB
+`level_games` finds it); `?level=<code>` opens the picker on a level, MLB otherwise, and
+`&league=<name>` on one of its leagues. A level whose games come from more than one league
+(`win`: the Arizona Fall League and the Dominican league, listed as LIDOM) is listed as each
+of its leagues with cards that day, from the index's `league_days`. Below MLB
 both pages note that PLV and Location are provisional. Either page reads an index from before
 the levels as MLB's alone.
 
@@ -186,7 +190,8 @@ the window again, and remembers it.
   compressed).
 - `https://data.blandalytics.com/cards/<level>/days/<date>.json` — that day's games and
   pitchers at a level, which the picker lists; each game carries its `level` and `league`.
-- `.../cards/index.json` — `levels` (each level's dates, card counts and leagues) and
+- `.../cards/index.json` — `levels` (each level's dates, card counts and leagues, and in
+  `league_days` each league's dates and card counts) and
   `level_games` (gamePk → [level, date]); and, for the picker and the live Worker that read
   them today, the MLB-only `days` and `games` (gamePk → date) of before the levels. MLB's
   cards are also still written to `cards/data/` and `cards/days/`, and the reindex copies any
@@ -379,8 +384,9 @@ three appearances in it before the game.
 #### Levels
 
 A level is a Stats API sport code, as in the data files: `mlb`, `aaa`, `afx` (the Florida
-State League's Hawk-Eye parks), `win` (the Arizona Fall League's MLB-park games; the other
-winter leagues aren't tracked), `rok`, `bbc` (college), `int`, `hsb`. Every level with
+State League's Hawk-Eye parks), `win` (the Arizona Fall League's MLB-park games and the
+Dominican league, every park since its 2026–27 season; the other winter leagues aren't
+tracked), `rok`, `bbc` (college), `int`, `hsb`. Every level with
 tracked games in the data files' manifest gets cards, built the same way, with these
 differences below MLB:
 

@@ -9,13 +9,15 @@
     python build_site.py --out ./pitcher-cards ...    # a folder instead of the bucket
 
 A level is a Stats API sport code, as in the data files (data/<code>/): mlb, aaa, afx
-(Single-A), win (winter leagues: the Arizona Fall League), rok, bbc, int, hsb. Every level
-with tracked games in the data files' manifest is built. Writes, under the bucket's
+(Single-A), win (winter leagues: the Arizona Fall League and the Dominican league), rok, bbc,
+int, hsb. Every level with tracked games in the data files' manifest is built. Writes, under
+the bucket's
 ``cards/`` prefix (served from https://data.blandalytics.com):
 
     cards/<level>/data/<date>.json    that day's card dicts, keyed "<gamePk>-<pitcherId>"
     cards/<level>/days/<date>.json    that day's games and pitchers: what the picker lists
-    cards/index.json                  the dates built at each level, and where each game is
+    cards/index.json                  the dates built at each level (and at each of its
+                                      leagues), and where each game is
 
 MLB's cards are written to cards/data/ and cards/days/ as well, and cards/index.json keeps
 the MLB-only ``days`` and ``games`` beside ``levels`` and ``level_games``, for the picker
@@ -58,6 +60,10 @@ from backfill import LocalStore, R2Store  # noqa: E402
 from card import MLB  # noqa: E402
 
 PREFIX = "cards"
+# levels whose leagues the picker lists one by one, from the index's league_days: the winter
+# leagues are separate leagues (the Arizona Fall League, the Dominican league), where MLB's
+# and Triple-A's two are halves of one
+SPLIT_LEVELS = ("win",)
 # a day's data is rewritten when the day is rebuilt; the manifests move every night
 DATA_CACHE = "public, max-age=300"
 INDEX_CACHE = "public, max-age=120"
@@ -202,8 +208,12 @@ class Site:
         entry["days"][date] = sum(len(g["pitchers"]) for g in day.values())
         for pk, game in day.items():
             index["level_games"][pk] = [level, date]
-            if game.get("league") and game["league"] not in entry["leagues"]:
-                entry["leagues"].append(game["league"])
+            league = game.get("league")
+            if league and league not in entry["leagues"]:
+                entry["leagues"].append(league)
+            if league and level in SPLIT_LEVELS:
+                days = entry.setdefault("league_days", {}).setdefault(league, {})
+                days[date] = days.get(date, 0) + len(game["pitchers"])
 
     def listed(self) -> tuple[set[str], set[str]]:
         """("<gamePk>-<pitcherId>" of every card the manifests list, the pages any of
