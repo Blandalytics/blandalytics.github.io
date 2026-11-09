@@ -19,15 +19,15 @@ npx wrangler r2 object put blandalytics-live/player-rater/index.json --file=out/
 ```
 
 The chart's 95% intervals at the default league settings are precomputed per season with the page's own
-engine (`bootstrap_ci.js`, about 10 s a season on 11 threads) and published to `player-rater/ci/<season>.json`.
+engine (`bootstrap_ci.js`, about 10 s a season on 11 threads) and published to `player-rater/ci/<method>/<season>.json`.
 Rebuild and re-upload them after rebuilding a season or changing the engine's numbers (then also bump
 `CI.method` in `player-rater/app.js` and `METHOD` in the script); the page ignores a file whose `method` or
 `built` does not match and computes the intervals in the browser instead. `check_bootstrap.js` checks the fast
 bootstrap against the reference one, replicate by replicate.
 
 ```
-node bootstrap_ci.js --data out --out out/ci            # every season in out/, or name them: ... 2026
-npx wrangler r2 object put blandalytics-live/player-rater/ci/2026.json --file=out/ci/2026.json --content-type=application/json --remote
+node bootstrap_ci.js --data out          # every season in out/ into out/ci/<method>/, or name them: ... 2026
+npx wrangler r2 object put blandalytics-live/player-rater/ci/retro-mode-r-2/2026.json --file=out/ci/retro-mode-r-2/2026.json --content-type=application/json --remote
 node check_bootstrap.js out/2026.json 100
 ```
 
