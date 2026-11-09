@@ -374,12 +374,42 @@
     return m * w;
   }
 
+  // The production missing time is filled with: the season's replacement players at every position (a valuation
+  // of the whole season's actual lines) and their production per day present, with the position each player is
+  // replaced at. Found once per season and settings and kept on db, so every period valued (each date of the
+  // chart, the halves and months, the table's range, the bootstraps) fills at the same rates, and each is valued
+  // once rather than twice.
+  function seasonFill(db, settings, g, cats) {
+    const key = g + JSON.stringify(settings), cache = db.fillCache || (db.fillCache = new Map());
+    if (cache.has(key)) return cache.get(key);
+    const a = 0, b = db.ndays - 1, n = b - a + 1, rows = [];
+    for (const p of db.players) {
+      if (p.g !== g) continue;
+      const s = rangeStats(p, a, b);
+      if (!s || (g === "h" ? s[HI.PA] : s[PI.G]) <= 0) continue;
+      const miss = missingStretches(p, a, b).reduce((m, [x, y]) => m + y - x + 1, 0);
+      rows.push({ key: p.key, elig: p.elig.length ? p.elig : [], g, s, miss, rosterable: n - miss >= MIN_PRESENT * n });
+    }
+    let fill = null;
+    if (rows.length) {
+      const first = valuePool(rows, settings, g, cats, {});
+      const byKey = new Map(rows.map((r) => [r.key, r])), rate = {};
+      for (const [pos, set] of Object.entries(first.members.sets)) {
+        const v = new Float64Array(rows[0].s.length); let days = 0;
+        for (const k of set.top) { const r = byKey.get(k); for (let q = 0; q < v.length; q++) v[q] += r.s[q]; days += n - r.miss; }
+        if (days > 0) { for (let q = 0; q < v.length; q++) v[q] /= days; rate[pos] = v; }
+      }
+      fill = { rate, at: new Map(first.rows.map((r) => [r.key, r.replAt])) };
+    }
+    cache.set(key, fill);
+    return fill;
+  }
+
   // opt.stats(p): each player's line (a bootstrap replicate's) in place of days a..b, and opt.missing(p) his
   // missing days among them; opt.fill[g]: the replacement production to fill them with (a point valuation's
-  // .fill), instead of finding it; opt.fixed[g], opt.perSgp[g]: as in valuePool.
-  // With settings.fillMissing, each pool is valued twice: once on the actual lines, which finds the replacement
-  // players at every position and their production per day present, then on lines with each player's missing
-  // days filled at the position he is replaced at. Rows keep the actual line in .s (what the table shows); the
+  // .fill), instead of the season's; opt.fixed[g], opt.perSgp[g]: as in valuePool.
+  // With settings.fillMissing, each player's missing days are filled at the season's replacement production at
+  // the position he is replaced at (seasonFill). Rows keep the actual line in .s (what the table shows); the
   // filled one is .sFill.
   function valuate(db, settings, a, b, opt = {}) {
     const out = {}, n = b - a + 1;
@@ -402,19 +432,7 @@
         r.miss = opt.missing ? opt.missing(r.p) : frameMiss; // a replicate's drawn missing days, else the frame's
         r.rosterable = n - frameMiss >= MIN_PRESENT * n; // from the actual record, the same in every replicate
       }
-      let fill = opt.fill && opt.fill[g];
-      if (!fill) {
-        // the replacement players on the actual lines, and their production per day present
-        const first = valuePool(rows.map((r) => ({ key: r.key, elig: r.elig, g, s: r.s, rosterable: r.rosterable })), settings, g, cats, {});
-        const byKey = new Map(rows.map((r) => [r.key, r]));
-        const rate = {};
-        for (const [pos, set] of Object.entries(first.members.sets)) {
-          const v = new Float64Array(rows[0].s.length); let days = 0;
-          for (const k of set.top) { const r = byKey.get(k); for (let q = 0; q < v.length; q++) v[q] += r.s[q]; days += n - r.miss; }
-          if (days > 0) { for (let q = 0; q < v.length; q++) v[q] /= days; rate[pos] = v; }
-        }
-        fill = { rate, at: new Map(first.rows.map((r) => [r.key, r.replAt])) };
-      }
+      const fill = (opt.fill && opt.fill[g]) || seasonFill(db, settings, g, cats) || { rate: {}, at: new Map() };
       for (const r of rows) {
         r.sAct = r.s;
         const v = fill.rate[fill.at.get(r.key) || "_any"] || fill.rate._any;
