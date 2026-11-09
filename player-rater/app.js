@@ -91,7 +91,16 @@
     }
     if (out.length > 1 && out[0].b - out[0].a < 14) { const f = out.shift(); out[0].a = f.a; out[0].months.unshift(f.m); }
     if (out.length > 1 && out[out.length - 1].b - out[out.length - 1].a < 14) { const l = out.pop(); out[out.length - 1].b = l.b; out[out.length - 1].months.push(l.m); }
-    return out.map((s) => ({ ...s, label: s.months.map((m) => MONTH[m]).join(" / "), short: MON[s.m].toUpperCase(), tick: Math.max(0, s.first) }));
+    return out.map((s) => ({ ...s, label: s.months.map((m) => MONTH[m]).join(" / "), short: MON[s.m].toUpperCase(), tick: Math.max(0, s.first), mid: (s.a + s.b) / 2 }));
+  }
+  // the 1st of each month within the season
+  function monthFirsts() {
+    const out = [], t = dateOf(0);
+    for (let y = t.getUTCFullYear(), m = t.getUTCMonth(); ; m++) {
+      const d = dayOfUTC(Date.UTC(y, m, 1));
+      if (d > state.N - 1) return out;
+      if (d >= 0) out.push(d);
+    }
   }
 
   // ---------- loading ----------
@@ -127,6 +136,7 @@
     state.N = raw.ndays;
     state.start = Date.parse(raw.start + "T00:00:00Z");
     state.segs = monthSegs();
+    state.firsts = monthFirsts();
     const h1 = raw.half1End && dayOf(raw.half1End), h2 = raw.half2Start && dayOf(raw.half2Start);
     // halves split at the All-Star break (2020 had none: its API "halves" are back to back)
     state.halves = h1 > TREND_START && h2 > h1 + 1 && h2 < state.N - 1 ? { h1, h2 } : null;
@@ -555,10 +565,13 @@
       el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, money(v));
     }
     el("line", { x1: m.l, x2: W - m.r, y1: base, y2: base, stroke: "var(--chart-muted)" });
-    // a tick and label on the first of each month (the season's first month at its first day)
+    // a tick and label on the first of each month (the season's first month at its first day);
+    // one player: ticks on every 1st, each month's label and value centred between its first
+    // and last game days
+    if (one) state.firsts.forEach((d) => { const x = X(d); el("line", { x1: x, x2: x, y1: base, y2: base + 6, stroke: "var(--chart-muted)" }); });
     state.segs.forEach((s, i) => {
-      const x = X(s.tick);
-      el("line", { x1: x, x2: x, y1: base, y2: base + 6, stroke: "var(--chart-muted)" });
+      const x = X(one ? s.mid : s.tick);
+      if (!one) el("line", { x1: x, x2: x, y1: base, y2: base + 6, stroke: "var(--chart-muted)" });
       el("text", { x, y: base + 21, "text-anchor": "middle" }, s.short);
       if (one) { const v = segValue(state.chart[0], i); el("text", { x, y: base + 40, "text-anchor": "middle", class: "val" }, isNaN(v) ? "" : money1(v)); }
     });
@@ -720,9 +733,11 @@
     g.strokeStyle = IMG.base; g.lineWidth = 2;
     g.beginPath(); g.moveTo(L, B); g.lineTo(R, B); g.stroke();
     g.textAlign = "center";
+    const tick = (x) => { g.strokeStyle = IMG.base; g.lineWidth = 2; g.beginPath(); g.moveTo(x, B); g.lineTo(x, B + 12); g.stroke(); };
+    if (one) state.firsts.forEach((d) => tick(X(d)));
     state.segs.forEach((s, i) => {
-      const x = X(s.tick);
-      g.strokeStyle = IMG.base; g.lineWidth = 2; g.beginPath(); g.moveTo(x, B); g.lineTo(x, B + 12); g.stroke();
+      const x = X(one ? s.mid : s.tick);
+      if (!one) tick(x);
       g.font = '400 24px "Work Sans"'; g.fillStyle = IMG.axis; g.fillText(s.short, x, B + 42);
       if (one) {
         const v = segValue(state.chart[0], i);
