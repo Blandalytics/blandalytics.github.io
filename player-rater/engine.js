@@ -1,11 +1,13 @@
 // SGP player-rater engine. Pure functions; no DOM.
 // Method (project doc claude/generalized-sgp-procedure-ste.md):
-//  - rate stats become volume-weighted marginals vs the rostered-pool rate, in team-rate units
+//  - rate stats become volume-weighted marginals vs the rostered-pool rate, in team-rate units; that pool
+//    is the one the counting categories alone would roster, so it isn't picked for its rates
 //  - team-total spread from draft tiers of N players: sigma^2 = sum of within-tier variances
 //  - roto SGP denominator D_k = 2*sqrt(pi)*sigma_k/(N-1)
 //  - starting slots by greedy assignment; bench = next best players (roster spots, no team totals)
 //  - replacement = mean SGP of the best W players outside starters+bench; a position gets its own
-//    replacement level only when it binds (no player eligible there is starting in a flex slot)
+//    replacement level only when it binds (no player eligible there is starting in a flex slot).
+//    Its split by category comes from the best `teams` such players, shifted to the same total.
 //  - dollars: min bid per rostered spot, the rest of each pool (hitter/pitcher split) by SGP above replacement
 (function (root) {
   "use strict";
@@ -131,7 +133,9 @@
     const startN = Object.values(plan.pos).reduce((a, b) => a + b, 0) + plan.flex.reduce((a, f) => a + f[1], 0);
     const rosterN = startN + plan.bench;
     const vol = g === "h" ? (s) => s[HI.PA] : (s) => s[PI.OUTS] + 3 * s[PI.SV] + 3 * s[PI.HLD];
-    for (const r of rows) r.v = vol(r.s);
+    for (const r of rows) { r.v = vol(r.s); r.vc = r.v; }
+    // counting categories: they alone pick the pool that sets the rate-stat baselines (see below)
+    const countCats = cats.filter((c) => CATS[c].kind !== "rate" && CATS[c].kind !== "sum");
     const flatCats = [];
     for (const c of cats) { const d = CATS[c]; if (d.kind === "sum") d.parts.forEach((p) => flatCats.push([c, p])); else flatCats.push([c, c]); }
     let rostered = new Map(), D = {}, rates = {};
@@ -142,12 +146,18 @@
       const ros = rows.filter((r) => rostered.has(r.key));
       // bench = next best non-starters (by current value); they take roster spots but not team totals
       const bench = new Set(rows.filter((r) => !rostered.has(r.key)).slice(0, plan.bench).map((r) => r.key));
-      // pool rates and team denominators
+      // pool rates and team denominators. The baseline rate comes from the players who would be rostered on
+      // counting categories alone: the full-value pool is picked partly for its rates, so after the season
+      // it is full of low-innings relievers with tiny ERAs (2026: a 2.88 ERA when MLB was 4.15), and an
+      // excellent 200-inning starter scores as average or worse.
+      const rateRos = [...rows].sort((a, b) => b.vc - a.vc);
+      const rateMap = assign(rateRos, plan);
+      const ratePool = rateRos.filter((r) => rateMap.has(r.key));
       for (const [, c] of flatCats) {
         const d = CATS[c];
         if (d.kind !== "rate") continue;
         let num = 0, den = 0;
-        for (const r of ros) { num += d.num(r.s); den += d.den(r.s); }
+        for (const r of ratePool) { num += d.num(r.s); den += d.den(r.s); }
         rates[c] = { r: den > 0 ? num / den : 0, teamDen: den / T };
       }
       // marginal x per player per (sub)category
@@ -178,17 +188,23 @@
         r.sgpCat = {}; let tot = 0;
         for (const cat of cats) { const q = r.x[cat] / D[cat]; r.sgpCat[cat] = q; tot += q; }
         r.sgp = tot;
+        if (countCats.length) r.vc = countCats.reduce((a, c) => a + r.sgpCat[c], 0);
       }
       // replacement levels: mean SGP of the best W players outside the full roster (starters + bench)
       const un = rows.filter((r) => !rostered.has(r.key) && !bench.has(r.key)).sort((a, b) => b.sgp - a.sgp);
       const W = settings.replW;
       const repl = {};
       const meanTop = (arr) => arr.length ? arr.slice(0, W).reduce((a, r) => a + r.sgp, 0) / Math.min(W, arr.length) : 0;
-      // the same players' SGP in each category: it sums to meanTop, so (player - replacement) by category
-      // sums to the player's SGP above replacement
+      // the category baseline averages a wider group (one player per team), because the best W players'
+      // category mix is a few small samples (e.g. two relievers with tiny ERAs). It is shifted by the same
+      // amount in every category so it sums to meanTop, so (player - replacement) by category still sums
+      // to the player's SGP above replacement.
       const meanTopCats = (arr) => {
-        const top = arr.slice(0, W), o = {};
-        for (const cat of cats) o[cat] = top.length ? top.reduce((a, r) => a + r.sgpCat[cat], 0) / top.length : 0;
+        const top = arr.slice(0, settings.teams), o = {};
+        let sum = 0;
+        for (const cat of cats) { o[cat] = top.length ? top.reduce((a, r) => a + r.sgpCat[cat], 0) / top.length : 0; sum += o[cat]; }
+        const shift = (meanTop(arr) - sum) / cats.length;
+        for (const cat of cats) o[cat] += shift;
         return o;
       };
       repl._any = meanTop(un);
