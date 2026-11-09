@@ -455,7 +455,7 @@
     trend = null;
     const segs = state.segs.map((s) => [s.a, s.b]);
     if (state.halves) segs.push([0, state.halves.h1], [state.halves.h2, state.N - 1]);
-    const mine = new Worker("trend-worker.js?v=3");
+    const mine = new Worker("trend-worker.js?v=4");
     worker = mine;
     mine.onmessage = (e) => {
       if (worker !== mine) return;
