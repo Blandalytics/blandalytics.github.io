@@ -77,7 +77,7 @@
   // default settings they come precomputed from R2 (tools/player_rater/bootstrap_ci.js, the same engine and
   // seeds); `method` names the engine's numbers, and a file with another method or season build is not used.
   // Computed in the browser: a quick pass, then 1,000 replicates if that fits the budget, else 500.
-  const CI = { reps: 1000, quick: 250, minReps: 500, budgetMs: 20000, first: 13, step: 14, maxWorkers: 6, method: "retro-mode-r-2" };
+  const CI = { reps: 1000, quick: 250, minReps: 500, budgetMs: 20000, first: 13, step: 14, maxWorkers: 6, method: "retro-mode-r-3" };
   let ci = null; // { days: [day], got: Map(day -> { lo, hi } by trend index), done, failed, workers }
 
   // ---------- dates ----------
@@ -463,7 +463,7 @@
     trend = null;
     const segs = state.segs.map((s) => [s.a, s.b]);
     if (state.halves) segs.push([0, state.halves.h1], [state.halves.h2, state.N - 1]);
-    const mine = new Worker("trend-worker.js?v=8");
+    const mine = new Worker("trend-worker.js?v=9");
     worker = mine;
     mine.onmessage = (e) => {
       if (worker !== mine) return;
@@ -549,7 +549,7 @@
       renderChart();
     };
     for (let i = 0; i < n; i++) {
-      const w = new Worker("ci-worker.js?v=4");
+      const w = new Worker("ci-worker.js?v=5");
       mine.workers.push(w);
       w.onmessage = (e) => {
         if (ci !== mine) return;

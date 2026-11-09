@@ -27,7 +27,7 @@ bootstrap against the reference one, replicate by replicate.
 
 ```
 node bootstrap_ci.js --data out          # every season in out/ into out/ci/<method>/, or name them: ... 2026
-npx wrangler r2 object put blandalytics-live/player-rater/ci/retro-mode-r-2/2026.json --file=out/ci/retro-mode-r-2/2026.json --content-type=application/json --remote
+npx wrangler r2 object put blandalytics-live/player-rater/ci/retro-mode-r-3/2026.json --file=out/ci/retro-mode-r-3/2026.json --content-type=application/json --remote
 node check_bootstrap.js out/2026.json 100
 ```
 

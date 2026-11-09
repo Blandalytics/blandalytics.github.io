@@ -14,7 +14,7 @@ const fs = require("fs"), path = require("path"), os = require("os");
 const { Worker, isMainThread, parentPort, workerData } = require("worker_threads");
 const E = require(path.join(__dirname, "../../player-rater/engine.js"));
 
-const METHOD = "retro-mode-r-2"; // = app.js CI.method (r-2: missing time filled at replacement level)
+const METHOD = "retro-mode-r-3"; // = app.js CI.method (r-3: missing time filled at replacement level; under a fifth of the frame present can't be rostered)
 const CI = { reps: 1000, conf: 0.95, first: 13, step: 14 }; // = app.js CI (reps, first, step)
 
 // the dates the page bootstraps: day 13, every 14 days after, and the season's last day
