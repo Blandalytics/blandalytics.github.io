@@ -77,7 +77,8 @@
   // between those dates is interpolated as an offset from the line, so it follows the line's shape. At the
   // default settings they come precomputed from R2 (tools/player_rater/bootstrap_ci.js, the same engine and
   // seeds); `method` names the engine's numbers, and a file with another method or season build is not used.
-  const CI = { reps: 1000, first: 13, step: 14, maxWorkers: 6, method: "retro-mode-r-1" };
+  // Computed in the browser: a quick pass, then 1,000 replicates if that fits the budget, else 500.
+  const CI = { reps: 1000, quick: 250, minReps: 500, budgetMs: 20000, first: 13, step: 14, maxWorkers: 6, method: "retro-mode-r-1" };
   let ci = null; // { days: [day], got: Map(day -> { lo, hi } by trend index), done, failed, workers }
 
   // ---------- dates ----------
@@ -463,7 +464,7 @@
     trend = null;
     const segs = state.segs.map((s) => [s.a, s.b]);
     if (state.halves) segs.push([0, state.halves.h1], [state.halves.h2, state.N - 1]);
-    const mine = new Worker("trend-worker.js?v=6");
+    const mine = new Worker("trend-worker.js?v=7");
     worker = mine;
     mine.onmessage = (e) => {
       if (worker !== mine) return;
@@ -515,22 +516,64 @@
       } catch (e) { /* not published for this season: compute them */ }
       if (ci !== mine) return;
     }
-    const queue = days.slice();
-    const n = Math.max(1, Math.min(CI.maxWorkers, (navigator.hardwareConcurrency || 2) - 1, days.length));
-    let paint = 0;
+    // Computed here, in passes that adapt to the device. A quick pass (CI.quick replicates at every date) draws
+    // the whole band soon, and Share opens. Its time then sets the refining pass: CI.reps replicates if that
+    // fits CI.budgetMs, else CI.minReps (the spec's floor for tail percentiles). The refining pass redoes each
+    // date from the start of the same random stream, so at CI.reps it ends exactly at the precomputed numbers,
+    // and no pass keeps another's draws (phones have little memory to spare).
+    // In the refining pass every worker takes a share of each date's replicates, so each date finishes about n
+    // times sooner; the shares are merged in replicate order, which gives exactly the single-run result. The
+    // quick pass hands out whole dates instead: its shares would be too small to be worth each one's setup.
+    const n = Math.max(1, Math.min(CI.maxWorkers, (navigator.hardwareConcurrency || 2) - 1));
+    const budget = +(new URLSearchParams(location.search).get("ci-budget-ms") ?? CI.budgetMs); // ?ci-budget-ms=0 tests the slow path
+    const queue = [], idle = [];
+    let parts = new Map(), paint = 0, t0 = 0, chunks = 1;
+    mine.pass = 0; mine.reps = 0; mine.passDone = 0; mine.ready = false;
     const next = (w) => {
-      if (queue.length) { w.postMessage({ type: "day", day: queue.shift(), reps: CI.reps }); return; }
-      w.terminate(); mine.workers = mine.workers.filter((x) => x !== w);
-      if (!mine.workers.length) { mine.done = true; renderChart(); }
+      if (queue.length) w.postMessage(Object.assign({ type: "part" }, queue.shift()));
+      else idle.push(w);
+    };
+    const startPass = (reps, k) => {
+      mine.pass++; mine.reps = reps; mine.passDone = 0; parts = new Map(); t0 = performance.now(); chunks = k;
+      for (const day of days) for (let c = 0; c < k; c++) queue.push({ day, chunk: c, reps, part: [Math.round((c * reps) / k), Math.round(((c + 1) * reps) / k)] });
+      for (const w of idle.splice(0)) next(w);
+    };
+    const passDone = () => {
+      if (mine.pass === 1) {
+        mine.ready = true;
+        const projected = ((performance.now() - t0) * CI.reps) / CI.quick;
+        startPass(projected <= budget ? CI.reps : CI.minReps, n);
+      } else {
+        for (const x of mine.workers) x.terminate();
+        mine.workers = []; mine.done = true;
+      }
+      renderChart();
     };
     for (let i = 0; i < n; i++) {
-      const w = new Worker("ci-worker.js?v=2");
+      const w = new Worker("ci-worker.js?v=3");
       mine.workers.push(w);
       w.onmessage = (e) => {
         if (ci !== mine) return;
-        mine.got.set(e.data.day, { lo: e.data.lo, hi: e.data.hi });
-        // repaint at most every 300 ms while dates come in
-        if (Date.now() - paint > 300) { paint = Date.now(); renderChart(); }
+        const m = e.data;
+        if (m.type === "summary") {
+          const nk = trend.keys.size, lo = new Float32Array(nk).fill(NaN), hi = new Float32Array(nk).fill(NaN);
+          m.keys.forEach((k, u) => { const ix = trend.keys.get(k); if (ix != null) { lo[ix] = m.lo[u]; hi[ix] = m.hi[u]; } });
+          mine.got.set(m.day, { lo, hi });
+          if (++mine.passDone === days.length) passDone();
+          // repaint at most every 300 ms while dates come in
+          else if (Date.now() - paint > 300) { paint = Date.now(); renderChart(); }
+          if (!mine.done) next(w);
+          return;
+        }
+        if (!parts.has(m.day)) parts.set(m.day, []);
+        const got = parts.get(m.day);
+        got[m.chunk] = { pools: m.pools };
+        if (got.filter(Boolean).length === chunks) {
+          // the worker that brought the last share merges the date before taking more work
+          parts.delete(m.day);
+          w.postMessage({ type: "summary", day: m.day, parts: got }, got.flatMap((p) => p.pools.flatMap((x) => [x.pointDollars.buffer, x.dollars.buffer])));
+          return;
+        }
         next(w);
       };
       w.onerror = () => {
@@ -539,8 +582,9 @@
         mine.workers = []; mine.failed = true; mine.done = true; renderChart();
       };
       w.postMessage({ type: "init", raw: state.raw, settings });
-      next(w);
+      idle.push(w);
     }
+    startPass(CI.quick, 1);
   }
   // a player's band over the days its computed dates span: the interval's offsets from the raw line at those
   // dates, interpolated between them and added to `line` (the raw line, or the share image's filtered one)
@@ -713,13 +757,15 @@
     }
     const cross = el("line", { x1: 0, x2: 0, y1: m.t, y2: base, stroke: "var(--chart-axis)", "stroke-width": 1, visibility: "hidden" });
     geo = { X, m, W, x0, x1, ser, cross };
-    // the share image waits for the intervals too, so it never shows a half-drawn band
-    $("share").disabled = !ser.length || !trend || !trend.done || !ci || !ci.done;
+    // the share image waits for a whole band (the quick pass, when computed here), so it never shows half of one
+    $("share").disabled = !ser.length || !trend || !trend.done || !ci || !(ci.done || ci.ready);
     const st2 = $("chart-status");
+    const pct = (k) => Math.round((k / ci.days.length) * 100);
     if (!trend || !trend.done) st2.textContent = `Valuing every date of the ${state.season} season${trend && trend.vals ? ", " + Math.round(((trend.upto - TREND_START + 1) / (state.N - TREND_START)) * 100) + "%" : ""}`;
     else if (ci && ci.failed) st2.textContent = "The 95% intervals could not be computed in this browser.";
     else if (ci && !ci.done && !ci.workers.length) st2.textContent = "Loading 95% intervals";
-    else if (ci && !ci.done) st2.textContent = `Estimating 95% intervals, ${Math.round((ci.got.size / ci.days.length) * 100)}%`;
+    else if (ci && !ci.done && !ci.ready) st2.textContent = `Estimating 95% intervals, ${pct(ci.got.size)}%`;
+    else if (ci && !ci.done) st2.textContent = `Refining 95% intervals (${ci.reps.toLocaleString("en-US")} resamples), ${pct(ci.passDone)}%`;
     else st2.textContent = "";
   }
   function showTip(day) {
