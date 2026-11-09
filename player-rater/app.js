@@ -690,8 +690,8 @@
   }
 
   async function shareBlob() {
-    await Promise.all(['700 52px "DM Sans"', '500 30px "DM Sans"', '600 26px "DM Sans"', '600 24px "DM Sans"', '400 24px "Work Sans"',
-      '600 24px "Work Sans"', '600 28px "Work Sans"'].map((f) => document.fonts.load(f)));
+    await Promise.all(['700 78px "DM Sans"', '500 45px "DM Sans"', '500 36px "DM Sans"', '600 39px "DM Sans"', '600 36px "DM Sans"', '400 36px "Work Sans"',
+      '600 36px "Work Sans"', '600 42px "Work Sans"'].map((f) => document.fonts.load(f)));
     const mark = await loadMark().catch(() => null);
     const { W, H, P } = IMG, one = state.chart.length === 1;
     const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
@@ -711,35 +711,41 @@
     const mw = 330;
     if (mark) g.drawImage(mark, W - P - mw, 44, mw, (mw * mark.naturalHeight) / mark.naturalWidth);
     const title = one ? nameTag(ser[0].r) : "Fantasy Value Through the Season";
-    g.font = '700 52px "DM Sans"'; g.fillStyle = IMG.title;
-    g.fillText(fit(g, title, W - 2 * P - mw - 32), P, 104);
-    g.font = '500 30px "DM Sans"';
+    // the title at 78px, smaller only as far as it takes to clear the wordmark
+    let ts = 78; g.font = `700 ${ts}px "DM Sans"`;
+    while (ts > 44 && g.measureText(title).width > W - 2 * P - mw - 32) g.font = `700 ${--ts}px "DM Sans"`;
+    g.fillStyle = IMG.title;
+    g.fillText(fit(g, title, W - 2 * P - mw - 32), P, 118);
+    g.font = '500 45px "DM Sans"';
     if (one) {
       const v = valueAt(ser[0].raw, state.N - 1);
-      runs([["Fantasy Value Through the Season: ", IMG.text], [money1(v), tone(v)]], P, 156);
-    } else { g.fillStyle = IMG.text; g.fillText(fit(g, ser.map((s) => nameTag(s.r)).join(", "), W - 2 * P), P, 156); }
-    // the key, for two or more players
+      runs([["Fantasy Value Through the Season: ", IMG.text], [money1(v), tone(v)]], P, 186);
+    } else { g.fillStyle = IMG.text; g.fillText(fit(g, ser.map((s) => nameTag(s.r)).join(", "), W - 2 * P), P, 186); }
+    // the key, for two or more players, onto another row when the next one would run past the edge
+    let ky = 252;
     if (!one) {
-      let kx = P; const ky = 212;
-      g.font = '500 24px "DM Sans"'; g.textBaseline = "middle";
+      let kx = P;
+      g.font = '500 36px "DM Sans"'; g.textBaseline = "middle";
       for (const s of ser) {
-        g.fillStyle = s.color; g.fillRect(kx, ky - 3, 32, 6); kx += 44;
-        const v = valueAt(s.raw, state.N - 1);
-        kx = runs([[nameTag(s.r) + " ", IMG.text], [money1(v), tone(v)]], kx, ky) + 36;
+        const v = valueAt(s.raw, state.N - 1), name = nameTag(s.r) + " ";
+        const w = 60 + g.measureText(name).width + g.measureText(money1(v)).width;
+        if (kx > P && kx + w > W - P) { kx = P; ky += 54; }
+        g.fillStyle = s.color; g.fillRect(kx, ky - 4, 44, 8); kx += 60;
+        kx = runs([[name, IMG.text], [money1(v), tone(v)]], kx, ky) + 48;
       }
       g.textBaseline = "alphabetic";
     }
     // the chart (one player: room under it for the month values and the category row)
-    const L = P + 76, R = W - P, T = one ? 318 : 262, B = H - (one ? 300 : 124);
+    const L = P + 112, R = W - P, T = one ? 340 : ky + 64, B = H - (one ? 372 : 176);
     const X = (d) => L + (d / (state.N - 1)) * (R - L);
     const { lo, hi, st } = yScale(ser);
     const Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (B - T);
     if (state.preset !== "season") { g.fillStyle = IMG.band; g.fillRect(X(state.a), T, Math.max(3, X(state.b) - X(state.a)), B - T); }
-    g.font = '400 24px "Work Sans"'; g.textAlign = "right";
+    g.font = '400 36px "Work Sans"'; g.textAlign = "right";
     for (let v = lo; v <= hi + 1e-9; v += st) {
       g.strokeStyle = Math.abs(v) < 1e-9 ? IMG.zero : IMG.grid; g.lineWidth = Math.abs(v) < 1e-9 ? 2 : 1.5;
       g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(R, Y(v)); g.stroke();
-      g.fillStyle = ink(v, IMG.axis); g.fillText(money(v), L - 16, Y(v) + 8);
+      g.fillStyle = ink(v, IMG.axis); g.fillText(money(v), L - 20, Y(v) + 12);
     }
     g.strokeStyle = IMG.base; g.lineWidth = 2;
     g.beginPath(); g.moveTo(L, B); g.lineTo(R, B); g.stroke();
@@ -749,10 +755,10 @@
     state.segs.forEach((s, i) => {
       const x = X(one ? s.mid : s.tick);
       if (!one) tick(x);
-      g.font = '400 24px "Work Sans"'; g.fillStyle = IMG.axis; g.fillText(s.short, x, B + 42);
+      g.font = '400 36px "Work Sans"'; g.fillStyle = IMG.axis; g.fillText(s.short, x, B + 56);
       if (one) {
         const v = segValue(state.chart[0], i);
-        g.font = '600 24px "Work Sans"'; g.fillStyle = tone(v); if (!isNaN(v)) g.fillText(money1(v), x, B + 76);
+        g.font = '600 36px "Work Sans"'; g.fillStyle = tone(v); if (!isNaN(v)) g.fillText(money1(v), x, B + 104);
       }
     });
     if (one && state.halves) {
@@ -760,20 +766,20 @@
       g.strokeStyle = IMG.base; g.lineWidth = 2; g.setLineDash([8, 8]);
       g.beginPath(); g.moveTo(xs, T - 8); g.lineTo(xs, B); g.stroke(); g.setLineDash([]);
       [["1st Half", X(state.halves.h1 / 2), segValue(state.chart[0], k)], ["2nd Half", X((state.halves.h2 + state.N - 1) / 2), segValue(state.chart[0], k + 1)]].forEach(([label, x, v]) => {
-        g.font = '600 26px "DM Sans"'; g.fillStyle = IMG.text; g.fillText(label, x, T - 52);
-        g.font = '600 24px "Work Sans"'; g.fillStyle = tone(v); if (!isNaN(v)) g.fillText(money1(v), x, T - 18);
+        g.font = '600 39px "DM Sans"'; g.fillStyle = IMG.text; g.fillText(label, x, T - 70);
+        g.font = '600 36px "Work Sans"'; g.fillStyle = tone(v); if (!isNaN(v)) g.fillText(money1(v), x, T - 22);
       });
     }
     // one player: a one-row table of the season's dollars from each category, spread evenly across
     if (one) {
-      const cats = categoryDollars(state.chart[0]), top = B + 104, h = 104, w = W - 2 * P;
+      const cats = categoryDollars(state.chart[0]), top = B + 136, h = 140, w = W - 2 * P;
       g.fillStyle = IMG.row; g.beginPath();
       if (g.roundRect) g.roundRect(P, top, w, h, 12); else g.rect(P, top, w, h);
       g.fill();
       cats.forEach(({ c, v }, i) => {
         const x = P + ((i + 0.5) * w) / cats.length;
-        g.font = '600 24px "DM Sans"'; g.fillStyle = IMG.title; g.fillText(E.CATS[c].label, x, top + 40);
-        g.font = '600 28px "Work Sans"'; g.fillStyle = tone(v); g.fillText(money1(v), x, top + 82);
+        g.font = '600 36px "DM Sans"'; g.fillStyle = IMG.title; g.fillText(E.CATS[c].label, x, top + 54);
+        g.font = '600 42px "Work Sans"'; g.fillStyle = tone(v); g.fillText(money1(v), x, top + 112);
       });
     }
     g.lineJoin = "round"; g.lineCap = "round"; g.lineWidth = 5;
@@ -786,9 +792,9 @@
     }
     g.globalAlpha = 1;
     // footer: the season, the league size and its categories
-    g.textAlign = "left"; g.font = '400 24px "Work Sans"'; g.fillStyle = IMG.foot;
+    g.textAlign = "left"; g.font = '400 36px "Work Sans"'; g.fillStyle = IMG.foot;
     const cats = settings.hitCats.map((c) => E.CATS[c].label).join(",") + " / " + settings.pitCats.map((c) => E.CATS[c].label).join(",");
-    g.fillText(fit(g, `${state.season} regular season  |  ${settings.teams} teams  |  ${cats}`, W - 2 * P), P, H - 40);
+    g.fillText(fit(g, `${state.season} regular season  |  ${settings.teams} teams  |  ${cats}`, W - 2 * P), P, H - 36);
     return new Promise((res) => cv.toBlob(res, "image/png"));
   }
   ShareImage.image($("share"), shareBlob, imageName);
