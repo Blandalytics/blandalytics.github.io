@@ -10,6 +10,7 @@
   const COLORS = ["var(--brand-brand-cyan)", "var(--pitch-four-seamer)", "var(--pitch-slider)", "var(--pitch-curveball)"];
   const GAP_DAYS = 30; // a longer break between games (or before the season's end) fades the line
   const QUIET_OPACITY = 0.25; // the faded stretch: 75% transparent
+  const BAND_OPACITY = 0.16; // a 95% interval's shading, in its line's colour
   const PAGE = 25;
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const MONTH = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -72,6 +73,10 @@
   };
   let trend = null; // { keys: Map(key -> index), vals: Float32Array (index * N + day), done, upto, seg: [Float32Array] }
   let worker = null;
+  // 95% intervals: bootstraps of the season to date, every CI.step days and at the season's last day; the band
+  // between those dates is interpolated as an offset from the line, so it follows the line's shape
+  const CI = { reps: 200, first: 13, step: 14, maxWorkers: 6 };
+  let ci = null; // { days: [day], got: Map(day -> { lo, hi } by trend index), done, failed, workers }
 
   // ---------- dates ----------
   const dayOfUTC = (ms) => Math.round((ms - state.start) / 864e5);
@@ -452,10 +457,11 @@
   // ---------- trend: the season to date at every date, in a worker ----------
   function startTrend() {
     if (worker) worker.terminate();
+    stopCI();
     trend = null;
     const segs = state.segs.map((s) => [s.a, s.b]);
     if (state.halves) segs.push([0, state.halves.h1], [state.halves.h2, state.N - 1]);
-    const mine = new Worker("trend-worker.js?v=4");
+    const mine = new Worker("trend-worker.js?v=5");
     worker = mine;
     mine.onmessage = (e) => {
       if (worker !== mine) return;
@@ -466,12 +472,83 @@
         trend.vals = m.trend; trend.upto = m.done;
       } else if (m.type === "done") {
         trend.vals = m.trend; trend.upto = state.N - 1; trend.done = true; worker = null; mine.terminate();
+        startCI();
       }
       renderChart();
     };
     mine.onerror = () => { $("chart-status").textContent = "The chart could not be computed in this browser."; };
     mine.postMessage({ raw: state.raw, settings, from: TREND_START, segs });
     renderChart();
+  }
+
+  // ---------- 95% intervals: a few workers, each taking the next date when it finishes one ----------
+  function stopCI() {
+    if (ci) for (const w of ci.workers) w.terminate();
+    ci = null;
+  }
+  function startCI() {
+    stopCI();
+    const last = state.N - 1, days = [last];
+    for (let d = CI.first; d < last; d += CI.step) days.push(d);
+    days.sort((a, b) => (a === last ? -1 : b === last ? 1 : b - a)); // the season total first, then back from the end
+    const mine = { days, got: new Map(), done: false, failed: false, workers: [] };
+    ci = mine;
+    const queue = days.slice();
+    const n = Math.max(1, Math.min(CI.maxWorkers, (navigator.hardwareConcurrency || 2) - 1, days.length));
+    let paint = 0;
+    const next = (w) => {
+      if (queue.length) { w.postMessage({ type: "day", day: queue.shift(), reps: CI.reps }); return; }
+      w.terminate(); mine.workers = mine.workers.filter((x) => x !== w);
+      if (!mine.workers.length) { mine.done = true; renderChart(); }
+    };
+    for (let i = 0; i < n; i++) {
+      const w = new Worker("ci-worker.js?v=1");
+      mine.workers.push(w);
+      w.onmessage = (e) => {
+        if (ci !== mine) return;
+        mine.got.set(e.data.day, { lo: e.data.lo, hi: e.data.hi });
+        // repaint at most every 300 ms while dates come in
+        if (Date.now() - paint > 300) { paint = Date.now(); renderChart(); }
+        next(w);
+      };
+      w.onerror = () => {
+        if (ci !== mine) return;
+        for (const x of mine.workers) x.terminate();
+        mine.workers = []; mine.failed = true; mine.done = true; renderChart();
+      };
+      w.postMessage({ type: "init", raw: state.raw, settings });
+      next(w);
+    }
+  }
+  // a player's band over the days its computed dates span: the interval's offsets from the raw line at those
+  // dates, interpolated between them and added to `line` (the raw line, or the share image's filtered one)
+  function band(key, raw, line) {
+    if (!ci || !trend || !raw) return null;
+    const i = trend.keys.get(key);
+    if (i == null) return null;
+    const pts = [];
+    for (const [d, c] of ci.got) {
+      const lo = c.lo[i], hi = c.hi[i], v = raw[d];
+      if (d <= trend.upto && !isNaN(lo) && !isNaN(hi) && !isNaN(v)) pts.push([d, lo - v, hi - v]);
+    }
+    if (pts.length < 2) return null;
+    pts.sort((a, b) => a[0] - b[0]);
+    const from = pts[0][0], to = pts[pts.length - 1][0];
+    const lo = new Float32Array(state.N).fill(NaN), hi = new Float32Array(state.N).fill(NaN);
+    let j = 0;
+    for (let d = from; d <= to; d++) {
+      while (j < pts.length - 2 && d > pts[j + 1][0]) j++;
+      const [a, la, ha] = pts[j], [b, lb, hb] = pts[j + 1], t = (d - a) / (b - a), v = line[d];
+      if (isNaN(v)) continue;
+      lo[d] = v + la + (lb - la) * t; hi[d] = v + ha + (hb - ha) * t;
+    }
+    return { from, to, lo, hi };
+  }
+  // the band as one closed outline: along the top, back along the bottom
+  function bandPts(b) {
+    const top = [], bot = [];
+    for (let d = b.from; d <= b.to; d++) if (!isNaN(b.lo[d])) { top.push([d, b.hi[d]]); bot.push([d, b.lo[d]]); }
+    return top.concat(bot.reverse());
   }
   const series = (key) => {
     if (!trend || !trend.vals) return null;
@@ -514,6 +591,7 @@
   function yScale(ser) {
     let lo = 0, hi = 10;
     for (const s of ser) if (s.arr) for (let d = TREND_START; d <= trend.upto; d++) { const v = s.arr[d]; if (!isNaN(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
+    for (const s of ser) if (s.band) for (let d = s.band.from; d <= s.band.to; d++) if (!isNaN(s.band.lo[d])) { lo = Math.min(lo, s.band.lo[d]); hi = Math.max(hi, s.band.hi[d]); }
     const st = niceStep(hi - lo);
     return { lo: Math.floor(lo / st) * st, hi: Math.ceil(hi / st) * st, st };
   }
@@ -559,7 +637,7 @@
     m.b = (one ? 78 : 42) + (stagger ? row : 0);
     const H = (phone ? 238 : 318) + (one ? 134 : 0) + (stagger ? row : 0);
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("height", H);
-    const ser = state.chart.map((k, i) => ({ key: k, color: COLORS[i], arr: series(k), r: player(k) }));
+    const ser = state.chart.map((k, i) => { const arr = series(k); return { key: k, color: COLORS[i], arr, r: player(k), band: band(k, arr, arr) }; });
     const { lo, hi, st } = yScale(ser);
     const Y = (v) => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
     const el = (tag, attrs, text) => { const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; svg.appendChild(e); return e; };
@@ -596,7 +674,12 @@
         el("text", { x, y: m.t - 16, "text-anchor": "middle", class: "val" }, isNaN(v) ? "" : money1(v));
       });
     }
-    // the lines: faded through each long break and after an early last game
+    // the 95% bands under all the lines, then the lines: faded through each long break and after an early last game
+    for (const s of ser) {
+      if (!s.band) continue;
+      el("path", { d: bandPts(s.band).map(([d, v], i) => (i ? "L" : "M") + X(d).toFixed(1) + " " + Y(v).toFixed(1)).join("") + "Z",
+        fill: s.color, "fill-opacity": BAND_OPACITY, stroke: "none" });
+    }
     for (const s of ser) {
       if (!s.arr) continue;
       for (const run of lineRuns(s.key, s.arr)) {
@@ -606,9 +689,12 @@
     }
     const cross = el("line", { x1: 0, x2: 0, y1: m.t, y2: base, stroke: "var(--chart-axis)", "stroke-width": 1, visibility: "hidden" });
     geo = { X, m, W, x0, x1, ser, cross };
-    $("share").disabled = !ser.length || !trend || !trend.done;
+    // the share image waits for the intervals too, so it never shows a half-drawn band
+    $("share").disabled = !ser.length || !trend || !trend.done || !ci || !ci.done;
     const st2 = $("chart-status");
     if (!trend || !trend.done) st2.textContent = `Valuing every date of the ${state.season} season${trend && trend.vals ? ", " + Math.round(((trend.upto - TREND_START + 1) / (state.N - TREND_START)) * 100) + "%" : ""}`;
+    else if (ci && ci.failed) st2.textContent = "The 95% intervals could not be computed in this browser.";
+    else if (ci && !ci.done) st2.textContent = `Estimating 95% intervals, ${Math.round((ci.got.size / ci.days.length) * 100)}%`;
     else st2.textContent = "";
   }
   function showTip(day) {
@@ -618,8 +704,11 @@
     geo.cross.setAttribute("x1", x); geo.cross.setAttribute("x2", x); geo.cross.setAttribute("visibility", "visible");
     const tip = $("tip");
     const rows = geo.ser.map((s) => ({ s, v: s.arr ? s.arr[day] : NaN })).sort((a, b) => (isNaN(b.v) ? -1e9 : b.v) - (isNaN(a.v) ? -1e9 : a.v));
+    const range = (s) => (s.band && day >= s.band.from && day <= s.band.to && !isNaN(s.band.lo[day])
+      ? `<span class="ci">${money1(s.band.lo[day])} to ${money1(s.band.hi[day])}</span>` : "");
     tip.innerHTML = `<div class="d">Season to date through ${fmtDay(day)}</div>` + rows.map(({ s, v }) =>
-      `<div class="row"><i style="background:${s.color}"></i><span>${esc(nameTag(s.r))}</span><b>${isNaN(v) ? "—" : money1(v)}</b></div>`).join("");
+      `<div class="row"><i style="background:${s.color}"></i><span>${esc(nameTag(s.r))}</span><b>${isNaN(v) ? "—" : money1(v)}</b>${range(s)}</div>`).join("") +
+      (geo.ser.some((s) => s.band) ? `<div class="note">95% interval after each value</div>` : "");
     tip.hidden = false;
     const scale = $("chart-box").clientWidth / geo.W;
     let left = x * scale + 14;
@@ -721,7 +810,8 @@
     g.fillStyle = IMG.bg; g.fillRect(0, 0, W, H);
     const ser = state.chart.map((k, i) => {
       const raw = series(k);
-      return { key: k, color: HEX[i], raw, arr: raw && kalman(raw), r: player(k) };
+      const arr = raw && kalman(raw);
+      return { key: k, color: HEX[i], raw, arr, r: player(k), band: band(k, raw, arr) };
     });
     const ink = (v, base) => (v < 0 ? IMG.neg : base); // every negative number on the image is pitch-four-seamer
     // a dollar value: negative in pitch-four-seamer, above zero (as shown, to a dime) in green-300
@@ -738,12 +828,19 @@
     while (ts > 44 && g.measureText(title).width > W - 2 * P - mw - 32) g.font = `700 ${--ts}px "DM Sans"`;
     g.fillStyle = IMG.title;
     g.fillText(fit(g, title, W - 2 * P - mw - 32), P, 118);
+    // what the shading is, right-aligned on the subtitle's line; the subtitle keeps clear of it
+    let noteW = 0;
+    if (ser.some((s) => s.band)) {
+      g.font = '400 36px "Work Sans"'; g.textAlign = "right"; g.fillStyle = IMG.foot;
+      g.fillText("Shaded: 95% interval", W - P, 186);
+      noteW = g.measureText("Shaded: 95% interval").width + 40; g.textAlign = "left";
+    }
     g.font = '500 45px "DM Sans"';
     if (one) {
       const v = valueAt(ser[0].raw, state.N - 1);
       const pr = positionRank(ser[0].key);
       runs([["Fantasy Value Through the Season: ", IMG.text], [money1(v), tone(v)], [pr ? ` (${pr})` : "", IMG.white]], P, 186);
-    } else { g.fillStyle = IMG.text; g.fillText(fit(g, ser.map((s) => nameTag(s.r)).join(", "), W - 2 * P), P, 186); }
+    } else { g.fillStyle = IMG.text; g.fillText(fit(g, ser.map((s) => nameTag(s.r)).join(", "), W - 2 * P - noteW), P, 186); }
     // the key, for two or more players, onto another row when the next one would run past the edge
     let ky = 252;
     if (!one) {
@@ -811,6 +908,14 @@
         g.font = '600 42px "Work Sans"'; g.fillStyle = tone(v); g.fillText(money1(v), x, top + 112);
       });
     }
+    // the 95% bands, around the filtered lines, under all of them
+    for (const s of ser) {
+      if (!s.band) continue;
+      g.globalAlpha = BAND_OPACITY; g.fillStyle = s.color; g.beginPath();
+      bandPts(s.band).forEach(([d, v], i) => (i ? g.lineTo(X(d), Y(v)) : g.moveTo(X(d), Y(v))));
+      g.closePath(); g.fill();
+    }
+    g.globalAlpha = 1;
     g.lineJoin = "round"; g.lineCap = "round"; g.lineWidth = 5;
     for (const s of ser) {
       if (!s.arr) continue;

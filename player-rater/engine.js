@@ -134,8 +134,14 @@
   // set its own baselines feeds back on itself: low-innings relievers with tiny ERAs pull the pool ERA
   // down, good 200-inning starters then grade out as ratio negatives and drop out, and the loop settles on
   // a reliever-heavy pool no real league rosters (2026: a 2.81 ERA, 47 of 96 starters relievers).
-  function valuePool(rows, settings, g, cats) {
-    const T = settings.teams;
+  //
+  // opt.fixed: another valuation's members (a bootstrap replicate's pools: who is in the anchor, who is rostered
+  // and on the bench, and which players set replacement). Baselines, SGP and replacement are then computed from
+  // these rows' lines for exactly those players, with no selection. opt.perSgp: a fixed price per point.
+  function valuePool(rows, settings, g, cats, opt = {}) {
+    const T = settings.teams, fixed = opt.fixed;
+    const byKey = fixed ? new Map(rows.map((r) => [r.key, r])) : null;
+    const pick = (keys) => keys.map((k) => byKey.get(k)).filter(Boolean);
     const plan = slotPlan(settings, g);
     const startN = Object.values(plan.pos).reduce((a, b) => a + b, 0) + plan.flex.reduce((a, f) => a + f[1], 0);
     const rosterN = startN + plan.bench;
@@ -171,34 +177,42 @@
       new Set(rows.filter((r) => !starting.has(r.key)).sort((a, b) => val(b) - val(a)).slice(0, plan.bench).map((r) => r.key));
     const sigOf = (starting, bench) => [...starting.keys()].sort().join() + "|" + (bench ? [...bench].sort().join() : "");
 
-    // replacement levels: mean SGP (sc) of the best W players outside the full roster (starters + bench).
-    // With withCats, also each level's split by category.
-    const replacement = (starting, bench, sc, withCats) => {
+    // replacement players: the best W outside the full roster (starters + bench) by sc, and the best T for the
+    // category split; per position too, where it binds. A replacement level is the mean SGP of those W.
+    // With `given` (a replicate's players, as rows of this valuation), reuse them instead of choosing.
+    const replacement = (starting, bench, sc, withCats, given) => {
       const W = settings.replW;
-      const un = rows.filter((r) => !starting.has(r.key) && !bench.has(r.key)).sort((a, b) => sc(b) - sc(a));
-      const meanTop = (arr) => arr.length ? arr.slice(0, W).reduce((a, r) => a + sc(r), 0) / Math.min(W, arr.length) : 0;
+      let sets, binding;
+      if (given) ({ sets, binding } = given);
+      else {
+        const un = rows.filter((r) => !starting.has(r.key) && !bench.has(r.key)).sort((a, b) => sc(b) - sc(a));
+        const choose = (arr) => ({ top: arr.slice(0, W), wide: arr.slice(0, T) });
+        sets = { _any: choose(un) }; binding = {};
+        // a position has its own (lower) replacement level only when it binds: no player eligible there
+        // sits in a flex slot. Otherwise removing him chains to the best unrostered player overall.
+        for (const pos of Object.keys(plan.pos)) {
+          binding[pos] = !rows.some((r) => starting.has(r.key) && r.elig.includes(pos) && !(starting.get(r.key) in plan.pos));
+          if (binding[pos]) sets[pos] = choose(un.filter((r) => r.elig.includes(pos)));
+        }
+      }
+      const meanTop = (set) => set.top.length ? set.top.reduce((a, r) => a + sc(r), 0) / set.top.length : 0;
       // the category baseline averages a wider group (one player per team), because the best W players'
       // category mix is a few small samples (e.g. two relievers with tiny ERAs). It is shifted by the same
       // amount in every category so it sums to meanTop, so (player - replacement) by category still sums
       // to the player's SGP above replacement.
-      const meanTopCats = (arr) => {
-        const top = arr.slice(0, T), o = {};
+      const meanTopCats = (set) => {
+        const top = set.wide, o = {};
         let sum = 0;
         for (const cat of cats) { o[cat] = top.length ? top.reduce((a, r) => a + r.sgpCat[cat], 0) / top.length : 0; sum += o[cat]; }
-        const shift = (meanTop(arr) - sum) / cats.length;
+        const shift = (meanTop(set) - sum) / cats.length;
         for (const cat of cats) o[cat] += shift;
         return o;
       };
-      const repl = { _any: meanTop(un) };
-      const replCat = withCats ? { _any: meanTopCats(un) } : null;
-      // a position has its own (lower) replacement level only when it binds: no player eligible there
-      // sits in a flex slot. Otherwise removing him chains to the best unrostered player overall.
-      const binding = {};
+      const repl = { _any: meanTop(sets._any) };
+      const replCat = withCats ? { _any: meanTopCats(sets._any) } : null;
       for (const pos of Object.keys(plan.pos)) {
-        binding[pos] = !rows.some((r) => starting.has(r.key) && r.elig.includes(pos) && !(starting.get(r.key) in plan.pos));
-        const pool = binding[pos] ? un.filter((r) => r.elig.includes(pos)) : un;
-        repl[pos] = binding[pos] ? meanTop(pool) : repl._any;
-        if (withCats) replCat[pos] = binding[pos] ? meanTopCats(pool) : replCat._any;
+        repl[pos] = binding[pos] ? meanTop(sets[pos]) : repl._any;
+        if (withCats) replCat[pos] = binding[pos] ? meanTopCats(sets[pos]) : replCat._any;
       }
       repl._binding = binding;
       const levelFor = (r) => {
@@ -206,24 +220,38 @@
         for (const e of r.elig) if (e in plan.pos && repl[e] < base) { base = repl[e]; at = e; }
         return { base, at };
       };
-      return { repl, replCat, levelFor };
+      return { repl, replCat, levelFor, sets, binding };
     };
 
     // 1. anchor pool: fixed point of slot assignment on counting-category SGP above replacement (playing
-    //    time when there are no counting categories). A rare 2-cycle at the margin stops at the cap.
-    for (const r of rows) r.vc = vol(r.s);
-    let anchor = new Map(), anchorList = [], prev = "";
-    for (let it = 0; it < 12; it++) {
-      rows.sort((a, b) => b.vc - a.vc);
-      anchor = assign(rows, plan);
-      anchorList = rows.filter((r) => anchor.has(r.key));
-      const sig = sigOf(anchor);
-      if (!countCats.length || sig === prev) break;
-      prev = sig;
-      const Dc = spread(anchorList, countCats);
-      for (const r of rows) r.sc = countCats.reduce((a, c) => a + r.x[c] / Dc[c], 0);
-      const { levelFor } = replacement(anchor, benchOf(anchor, (r) => r.vc), (r) => r.sc, false);
-      for (const r of rows) r.vc = r.sc - levelFor(r).base;
+    //    time when there are no counting categories). It can end in a 2-cycle at the margin (2026: two pairs
+    //    of hitters and of pitchers trade places), which left the result to the iteration cap; then the two
+    //    states' denominators are averaged and the slots assigned once.
+    let anchorList = [];
+    if (fixed) anchorList = pick(fixed.anchor);
+    else {
+      for (const r of rows) r.vc = vol(r.s);
+      const hist = [];
+      for (let it = 0; it < 12; it++) {
+        rows.sort((a, b) => b.vc - a.vc);
+        let anchor = assign(rows, plan);
+        anchorList = rows.filter((r) => anchor.has(r.key));
+        const sig = sigOf(anchor);
+        if (!countCats.length || (hist.length && sig === hist[hist.length - 1].sig)) break;
+        let Dc = spread(anchorList, countCats);
+        const cycle = hist.length >= 2 && sig === hist[hist.length - 2].sig;
+        if (cycle) { const o = hist[hist.length - 1].Dc; Dc = Object.fromEntries(countCats.map((c) => [c, (Dc[c] + o[c]) / 2])); }
+        hist.push({ sig, Dc });
+        for (const r of rows) r.sc = countCats.reduce((a, c) => a + r.x[c] / Dc[c], 0);
+        const { levelFor } = replacement(anchor, benchOf(anchor, (r) => r.vc), (r) => r.sc, false);
+        for (const r of rows) r.vc = r.sc - levelFor(r).base;
+        if (cycle) {
+          rows.sort((a, b) => b.vc - a.vc);
+          anchor = assign(rows, plan);
+          anchorList = rows.filter((r) => anchor.has(r.key));
+          break;
+        }
+      }
     }
 
     // 2-3. frozen baselines: the anchor's rates and team denominators, and D_k from its draft tiers. The tier
@@ -254,53 +282,138 @@
     }
 
     // 5. rostered pool on all-category value; only the replacement levels move, so it settles in a few passes
-    for (const r of rows) r.v = r.sgp;
-    let rostered = new Map(), bench = new Set(), rep = null;
-    prev = "";
-    for (let it = 0; it < 10; it++) {
-      rows.sort((a, b) => b.v - a.v);
-      rostered = assign(rows, plan);
-      bench = benchOf(rostered, (r) => r.v);
-      const sig = sigOf(rostered, bench);
-      if (sig === prev) break;
-      prev = sig;
-      rep = replacement(rostered, bench, (r) => r.sgp, true);
+    const setRepl = (rep) => {
       for (const r of rows) {
         const { base, at } = rep.levelFor(r);
         r.repl = base; r.sgpar = r.sgp - base; r.v = r.sgpar; r.replCat = rep.replCat[at];
+      }
+    };
+    let rostered = new Map(), bench = new Set(), rep = null;
+    if (fixed) {
+      for (const [k, slot] of fixed.rostered) if (byKey.has(k)) rostered.set(k, slot);
+      bench = new Set(fixed.bench.filter((k) => byKey.has(k)));
+      const sets = {};
+      for (const [pos, s] of Object.entries(fixed.sets)) sets[pos] = { top: pick(s.top), wide: pick(s.wide) };
+      rep = replacement(rostered, bench, (r) => r.sgp, true, { sets, binding: fixed.binding });
+      setRepl(rep);
+    } else {
+      for (const r of rows) r.v = r.sgp;
+      let prev = "";
+      for (let it = 0; it < 10; it++) {
+        rows.sort((a, b) => b.v - a.v);
+        rostered = assign(rows, plan);
+        bench = benchOf(rostered, (r) => r.v);
+        const sig = sigOf(rostered, bench);
+        if (sig === prev) break;
+        prev = sig;
+        rep = replacement(rostered, bench, (r) => r.sgp, true);
+        setRepl(rep);
       }
     }
 
     // 6. dollars: min bid per roster spot, the rest of the pool split by positive SGP above replacement
     const pool = settings.budget * T * (g === "h" ? settings.hitterShare : 1 - settings.hitterShare);
     const above = rows.reduce((a, r) => a + (rostered.has(r.key) || bench.has(r.key) ? Math.max(r.sgpar, 0) : 0), 0);
-    const perSgp = above > 0 ? (pool - rosterN * settings.minBid) / above : 0;
+    const perSgp = opt.perSgp != null ? opt.perSgp : above > 0 ? (pool - rosterN * settings.minBid) / above : 0;
     for (const r of rows) {
       r.dollars = settings.minBid + r.sgpar * perSgp;
       r.slot = rostered.get(r.key) || (bench.has(r.key) ? "BN" : null);
     }
-    return { rows, D, rates, repl: rep.repl, perSgp, rosterN, startN, pool, anchorN: anchorList.length };
+    const keys = (arr) => arr.map((r) => r.key);
+    const members = {
+      anchor: keys(anchorList), rostered: [...rostered], bench: [...bench], binding: rep.binding,
+      sets: Object.fromEntries(Object.entries(rep.sets).map(([pos, s]) => [pos, { top: keys(s.top), wide: keys(s.wide) }])),
+    };
+    return { rows, D, rates, repl: rep.repl, perSgp, rosterN, startN, pool, anchorN: anchorList.length, members };
   }
 
-  function valuate(db, settings, a, b) {
+  // opt.stats(p): each player's line (a bootstrap replicate's) in place of days a..b;
+  // opt.fixed[g], opt.perSgp[g]: as in valuePool
+  function valuate(db, settings, a, b, opt = {}) {
     const out = {};
     for (const g of ["h", "p"]) {
       const cats = g === "h" ? settings.hitCats : settings.pitCats;
       const rows = [];
       for (const p of db.players) {
         if (p.g !== g) continue;
-        const s = rangeStats(p, a, b);
+        const s = opt.stats ? opt.stats(p) : rangeStats(p, a, b);
         if (!s) continue;
         if (g === "h" && s[HI.PA] <= 0) continue;
         if (g === "p" && s[PI.G] <= 0) continue;
         rows.push({ key: p.key, id: p.id, name: p.name, team: p.team, elig: p.elig.length ? p.elig : [], g, s });
       }
-      out[g] = cats.length ? valuePool(rows, settings, g, cats) : { rows: [], D: {}, rates: {}, repl: {}, perSgp: 0 };
+      out[g] = cats.length
+        ? valuePool(rows, settings, g, cats, { fixed: opt.fixed && opt.fixed[g], perSgp: opt.perSgp && opt.perSgp[g] })
+        : { rows: [], D: {}, rates: {}, repl: {}, perSgp: 0 };
     }
     return out;
   }
 
-  const api = { HK, PK, HI, PI, CATS, YAHOO_DEFAULT, prepare, rangeStats, valuate, tb };
+  // ---------- uncertainty: which players "should" have been rostered (retrospective, Mode R) ----------
+  // In hindsight the only uncertainty in the rostered pool is the season record itself. Each replicate
+  // resamples the frame's days in blocks (one draw shared by every player, so a week of games stays together)
+  // and runs the full valuation on those lines to get its pools: the anchor, the rostered players and bench,
+  // and the replacement players. Each player's ACTUAL line is then valued against that replicate's pools, with
+  // the actual lines of the players in them. So the interval is the range of defensible pools, not of what
+  // the player did. Two choices keep it from drifting off the point estimate: dollars use the point price
+  // per point (a replicate's own price inflates stars), and the interval is centred on the point value
+  // (point + replicate quantile - replicate median).
+  function mulberry32(seed) {
+    return () => {
+      seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  // blocks of L days with uniform starts inside a..b, enough to cover the frame's n days (the last cut short)
+  function drawBlocks(a, b, L, rand) {
+    const n = b - a + 1, Lx = Math.min(L, n), out = [];
+    for (let left = n; left > 0; left -= Lx) {
+      const s = a + Math.floor(rand() * (n - Lx + 1));
+      out.push([s, s + Math.min(Lx, left) - 1]);
+    }
+    return out;
+  }
+  // opt: reps (200), conf (0.95), block (7 days, 3 under six weeks), seed, keys (players to report; all by
+  // default), point (a valuate() of a..b already made). Returns Map key -> { lo, hi }.
+  function bootstrap(db, settings, a, b, opt = {}) {
+    const R = opt.reps || 200, conf = opt.conf || 0.95, n = b - a + 1;
+    const L = opt.block || (n >= 42 ? 7 : 3);
+    const rand = mulberry32(opt.seed == null ? 20260 + a * 1000 + b : opt.seed);
+    const point = opt.point || valuate(db, settings, a, b);
+    const pointOf = new Map();
+    for (const g of ["h", "p"]) for (const r of point[g].rows) pointOf.set(r.key, r.dollars);
+    const keys = opt.keys ? opt.keys.filter((k) => pointOf.has(k)) : [...pointOf.keys()];
+    const draws = new Map(keys.map((k) => [k, new Float64Array(R).fill(NaN)]));
+    const perSgp = { h: point.h.perSgp, p: point.p.perSgp };
+    for (let i = 0; i < R; i++) {
+      const blocks = drawBlocks(a, b, L, rand);
+      const stats = (p) => {
+        let s = null;
+        for (const [x, y] of blocks) {
+          const t = rangeStats(p, x, y);
+          if (!t) continue;
+          if (!s) s = t; else for (let q = 0; q < s.length; q++) s[q] += t[q];
+        }
+        return s;
+      };
+      const rep = valuate(db, settings, a, b, { stats });
+      const act = valuate(db, settings, a, b, { fixed: { h: rep.h.members, p: rep.p.members }, perSgp });
+      for (const g of ["h", "p"]) for (const r of act[g].rows) { const d = draws.get(r.key); if (d) d[i] = r.dollars; }
+    }
+    const q = (arr, f) => { const k = (arr.length - 1) * f, lo = Math.floor(k); return arr[lo] + (arr[Math.min(lo + 1, arr.length - 1)] - arr[lo]) * (k - lo); };
+    const out = new Map();
+    for (const k of keys) {
+      const d = Array.from(draws.get(k)).filter((x) => !Number.isNaN(x)).sort((x, y) => x - y);
+      if (!d.length) continue;
+      const med = q(d, 0.5), pt = pointOf.get(k);
+      out.set(k, { lo: pt + q(d, (1 - conf) / 2) - med, hi: pt + q(d, (1 + conf) / 2) - med });
+    }
+    return out;
+  }
+
+  const api = { HK, PK, HI, PI, CATS, YAHOO_DEFAULT, prepare, rangeStats, valuate, bootstrap, tb };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.RaterEngine = api;
 })(typeof window !== "undefined" ? window : globalThis);
