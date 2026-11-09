@@ -645,7 +645,7 @@
 
   // ---------- share image: the chart as a 1600 x 1600 PNG with the Pitcher List Stats wordmark ----------
   const HEX = ["#55e8ff", "#ff839b", "#ce66ff", "#2a98ff"]; // brand-cyan, pitch-four-seamer, pitch-slider, pitch-curveball
-  const IMG = { W: 1600, H: 1600, P: 64, bg: "#292c42", title: "#73efff", text: "#f0f1f5", axis: "#cbd7fd",
+  const IMG = { W: 1600, H: 1600, P: 64, bg: "#292c42", title: "#73efff", text: "#f0f1f5", white: "#ffffff", axis: "#cbd7fd",
     grid: "rgba(255,255,255,0.07)", zero: "rgba(255,255,255,0.26)", base: "rgba(196,205,236,0.85)", foot: "#c0c6dc", band: "rgba(85,232,255,0.07)",
     neg: "#ff839b", /* pitch-four-seamer */ pos: "#7ddf9a", /* green-300 */ frame: "rgba(85,232,255,0.667)" /* brand-brand-cyan at the season cards' 2/3 */ };
   let markImg = null;
@@ -679,14 +679,36 @@
   // one player's full-season dollars by category: his points in the category less the replacement
   // player's, at the pool's price per point. They sum to his dollars less the minimum bid.
   let fullCache = null;
-  function categoryDollars(key) {
+  function fullSeason() {
     const sig = state.season + JSON.stringify(settings);
     if (!fullCache || fullCache.sig !== sig) fullCache = { sig, v: E.valuate(state.db, settings, 0, state.N - 1) };
+    return fullCache.v;
+  }
+  function categoryDollars(key) {
+    const v = fullSeason();
     for (const g of ["h", "p"]) {
-      const r = fullCache.v[g].rows.find((x) => x.key === key);
-      if (r) return (g === "h" ? settings.hitCats : settings.pitCats).map((c) => ({ c, v: (r.sgpCat[c] - r.replCat[c]) * fullCache.v[g].perSgp }));
+      const r = v[g].rows.find((x) => x.key === key);
+      if (r) return (g === "h" ? settings.hitCats : settings.pitCats).map((c) => ({ c, v: (r.sgpCat[c] - r.replCat[c]) * v[g].perSgp }));
     }
     return [];
+  }
+  // one player's full-season rank at a position, e.g. "SP6". The data has no primary position, so a
+  // player eligible at several is ranked where he ranks best (ties: the first listed). A hitter with
+  // no field position (DH only) is ranked among all hitters as Util.
+  function positionRank(key) {
+    const v = fullSeason();
+    for (const g of ["h", "p"]) {
+      const r = v[g].rows.find((x) => x.key === key);
+      if (!r) continue;
+      const poss = r.elig.length ? r.elig : ["Util"];
+      let best = null;
+      for (const pos of poss) {
+        const n = 1 + v[g].rows.filter((x) => x.dollars > r.dollars && (pos === "Util" || x.elig.includes(pos))).length;
+        if (!best || n < best.n) best = { pos, n };
+      }
+      return best.pos + best.n;
+    }
+    return "";
   }
 
   async function shareBlob() {
@@ -719,7 +741,8 @@
     g.font = '500 45px "DM Sans"';
     if (one) {
       const v = valueAt(ser[0].raw, state.N - 1);
-      runs([["Fantasy Value Through the Season: ", IMG.text], [money1(v), tone(v)]], P, 186);
+      const pr = positionRank(ser[0].key);
+      runs([["Fantasy Value Through the Season: ", IMG.text], [money1(v), tone(v)], [pr ? ` (${pr})` : "", IMG.white]], P, 186);
     } else { g.fillStyle = IMG.text; g.fillText(fit(g, ser.map((s) => nameTag(s.r)).join(", "), W - 2 * P), P, 186); }
     // the key, for two or more players, onto another row when the next one would run past the edge
     let ky = 252;
