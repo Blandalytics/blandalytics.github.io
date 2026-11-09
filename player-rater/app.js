@@ -7,7 +7,7 @@
   const DATA = "https://data.blandalytics.com/player-rater/";
   const TREND_START = 6; // the first week is too thin to value
   const MAX_SERIES = 4;
-  const COLORS = ["var(--brand-brand-cyan)", "var(--pitch-four-seamer)", "var(--pitch-slider)", "var(--pitch-curveball)"];
+  const COLORS = ["var(--brand-brand-cyan)", "var(--pitch-four-seamer)", "var(--pitch-slider)", "var(--pitch-sinker)"];
   const GAP_DAYS = 30; // a longer break between games (or before the season's end) fades the line
   const QUIET_OPACITY = 0.25; // the faded stretch: 75% transparent
   const BAND_OPACITY = 0.16; // a 95% interval's shading, in its line's colour
@@ -740,13 +740,15 @@
         el("text", { x, y: m.t - 16, "text-anchor": "middle", class: "val" }, isNaN(v) ? "" : money1(v));
       });
     }
-    // the 95% bands under all the lines, then the lines: faded through each long break and after an early last game
-    for (const s of ser) {
+    // the 95% bands under all the lines, then the lines: faded through each long break and after an early last game.
+    // Each drawn last player first, so the first player's band and line sit on top.
+    const back = [...ser].reverse();
+    for (const s of back) {
       if (!s.band) continue;
       el("path", { d: bandPts(s.band).map(([d, v], i) => (i ? "L" : "M") + X(d).toFixed(1) + " " + Y(v).toFixed(1)).join("") + "Z",
         fill: s.color, "fill-opacity": BAND_OPACITY, stroke: "none" });
     }
-    for (const s of ser) {
+    for (const s of back) {
       if (!s.arr) continue;
       for (const run of lineRuns(s.key, s.arr)) {
         el("path", { d: run.pts.map(([d, v], i) => (i ? "L" : "M") + X(d).toFixed(1) + " " + Y(v).toFixed(1)).join(""), fill: "none", stroke: s.color,
@@ -802,7 +804,7 @@
   let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(renderChart, 120); });
 
   // ---------- share image: the chart as a 1600 x 1600 PNG with the Pitcher List Stats wordmark ----------
-  const HEX = ["#55e8ff", "#ff839b", "#ce66ff", "#2a98ff"]; // brand-cyan, pitch-four-seamer, pitch-slider, pitch-curveball
+  const HEX = ["#55e8ff", "#ff839b", "#ce66ff", "#ffc277"]; // brand-cyan, pitch-four-seamer, pitch-slider, pitch-sinker
   const IMG = { W: 1600, H: 1600, P: 64, bg: "#292c42", title: "#73efff", text: "#f0f1f5", white: "#ffffff", axis: "#cbd7fd",
     grid: "rgba(255,255,255,0.07)", zero: "rgba(255,255,255,0.26)", base: "rgba(196,205,236,0.85)", foot: "#c0c6dc", band: "rgba(85,232,255,0.07)",
     neg: "#ff839b", /* pitch-four-seamer */ pos: "#7ddf9a", /* green-300 */ frame: "rgba(85,232,255,0.667)" /* brand-brand-cyan at the season cards' 2/3 */ };
@@ -888,7 +890,7 @@
     // text in pieces, each [text, colour], from x (left aligned)
     const runs = (parts, x, y) => { for (const [t, c] of parts) { g.fillStyle = c; g.fillText(t, x, y); x += g.measureText(t).width; } return x; };
     // header, the wordmark top right. One player: their name over "Fantasy Value Through the Season: $X";
-    // more: that title over their names
+    // more: that title over the key
     const mw = 330;
     if (mark) g.drawImage(mark, W - P - mw, 44, mw, (mw * mark.naturalHeight) / mark.naturalWidth);
     const title = one ? nameTag(ser[0].r) : "Fantasy Value Through the Season";
@@ -904,21 +906,23 @@
       g.fillText("Shaded: 95% interval", W - P, 186);
       noteW = g.measureText("Shaded: 95% interval").width + 40; g.textAlign = "left";
     }
-    g.font = '500 45px "DM Sans"';
     if (one) {
+      g.font = '500 45px "DM Sans"';
       const v = valueAt(ser[0].raw, state.N - 1);
       const pr = positionRank(ser[0].key);
       runs([["Fantasy Value Through the Season: ", IMG.text], [money1(v), tone(v)], [pr ? ` (${pr})` : "", IMG.white]], P, 186);
-    } else { g.fillStyle = IMG.text; g.fillText(fit(g, ser.map((s) => nameTag(s.r)).join(", "), W - 2 * P - noteW), P, 186); }
-    // the key, for two or more players, onto another row when the next one would run past the edge
-    let ky = 252;
+    }
+    // the key, for two or more players, in the subtitle's row (clear of the note), onto another row when the
+    // next one would run past the edge
+    const ky0 = 173;
+    let ky = ky0;
     if (!one) {
       let kx = P;
       g.font = '500 36px "DM Sans"'; g.textBaseline = "middle";
       for (const s of ser) {
         const v = valueAt(s.raw, state.N - 1), name = nameTag(s.r) + " ";
         const w = 60 + g.measureText(name).width + g.measureText(money1(v)).width;
-        if (kx > P && kx + w > W - P) { kx = P; ky += 54; }
+        if (kx > P && kx + w > W - P - (ky === ky0 ? noteW : 0)) { kx = P; ky += 54; }
         g.fillStyle = s.color; g.fillRect(kx, ky - 4, 44, 8); kx += 60;
         kx = runs([[name, IMG.text], [money1(v), tone(v)]], kx, ky) + 48;
       }
@@ -977,8 +981,10 @@
         g.font = '600 42px "Work Sans"'; g.fillStyle = tone(v); g.fillText(money1(v), x, top + 112);
       });
     }
-    // the 95% bands, around the filtered lines, under all of them
-    for (const s of ser) {
+    // the 95% bands, around the filtered lines, under all of them; each drawn last player first, so the first
+    // player's band and line sit on top
+    const back = [...ser].reverse();
+    for (const s of back) {
       if (!s.band) continue;
       g.globalAlpha = BAND_OPACITY; g.fillStyle = s.color; g.beginPath();
       bandPts(s.band).forEach(([d, v], i) => (i ? g.lineTo(X(d), Y(v)) : g.moveTo(X(d), Y(v))));
@@ -986,7 +992,7 @@
     }
     g.globalAlpha = 1;
     g.lineJoin = "round"; g.lineCap = "round"; g.lineWidth = 5;
-    for (const s of ser) {
+    for (const s of back) {
       if (!s.arr) continue;
       for (const run of lineRuns(s.key, s.arr)) {
         g.globalAlpha = run.q ? QUIET_OPACITY : 1; g.strokeStyle = s.color;
@@ -997,7 +1003,7 @@
     // footer: the season, the league size and its categories
     g.textAlign = "left"; g.font = '400 36px "Work Sans"'; g.fillStyle = IMG.foot;
     const cats = settings.hitCats.map((c) => E.CATS[c].label).join(",") + " / " + settings.pitCats.map((c) => E.CATS[c].label).join(",");
-    g.fillText(fit(g, `${state.season} regular season  |  ${settings.teams} teams  |  ${cats}`, W - 2 * P), P, H - 36);
+    g.fillText(fit(g, `${state.season}  |  ${settings.teams} teams  |  ${cats}`, W - 2 * P), P, H - 36);
     return new Promise((res) => cv.toBlob(res, "image/png"));
   }
   ShareImage.image($("share"), shareBlob, imageName);
