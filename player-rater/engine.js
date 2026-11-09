@@ -450,8 +450,14 @@
   //    replacement set. Every player is still valued. A shallower list (3 rosters) missed a pitcher in 2026.
   // Like the reference, each replicate's anchor loop starts from playing time: starting from the point solution
   // is faster but can settle on a different fixed point.
+  //
+  // Splitting across workers: opt.part = [i0, i1) values only replicates i0..i1-1 and returns their draws
+  // ({ pools: [{ g, keys, pointDollars, dollars }] }) instead of intervals. Every part replays the one random
+  // stream from the start (drawing days is cheap), so the parts' draws are exactly the single run's, and
+  // bootstrapSummary(parts) gives exactly what bootstrap() gives.
   function bootstrapFast(db, settings, a, b, opt = {}) {
     const R = opt.reps || 1000, conf = opt.conf || 0.95, n = b - a + 1, lam = opt.lam || 1;
+    const [i0, i1] = opt.part || [0, R];
     const L = opt.block || (n <= 60 ? 3 : 7);
     const rand = mulberry32(opt.seed == null ? 20260 + a * 1000 + b : opt.seed);
     const point = opt.point || valuate(db, settings, a, b);
@@ -459,23 +465,51 @@
     const pools = [];
     for (const g of ["h", "p"]) {
       const cats = g === "h" ? settings.hitCats : settings.pitCats;
-      if (cats.length && point[g].rows.length) pools.push(fastPool(dbByKey, settings, g, cats, point[g], a, b, R, opt.prune !== false, opt.depth || 4));
+      if (cats.length && point[g].rows.length) pools.push(fastPool(dbByKey, settings, g, cats, point[g], a, b, i1 - i0, opt.prune !== false, opt.depth || 4));
     }
-    for (let i = 0; i < R; i++) {
+    for (let i = 0; i < i1; i++) {
       const { runs, w } = stationaryRuns(a, b, L, lam, rand);
-      for (const pl of pools) pl.replicate(runs, w, i);
+      if (i < i0) continue;
+      for (const pl of pools) pl.replicate(runs, w, i - i0);
       if (opt.onReplicate) opt.onReplicate(i, Object.fromEntries(pools.map((pl) => [pl.g, pl.diag])));
     }
-    const out = new Map(), col = new Float32Array(R);
-    const q = (f) => { const k = (R - 1) * f, lo = Math.floor(k); return col[lo] + (col[Math.min(lo + 1, R - 1)] - col[lo]) * (k - lo); };
-    for (const pl of pools) {
-      for (let p = 0; p < pl.P; p++) {
-        for (let i = 0; i < R; i++) col[i] = pl.dollars[i * pl.P + p];
-        col.sort();
-        const med = q(0.5), pt = pl.pointDollars[p];
-        out.set(pl.keys[p], { lo: pt + q((1 - conf) / 2) - med, hi: pt + q((1 + conf) / 2) - med });
+    const parts = [{ pools: pools.map((pl) => ({ g: pl.g, keys: pl.keys, pointDollars: pl.pointDollars, dollars: pl.dollars })) }];
+    return opt.part ? parts[0] : bootstrapSummary(parts, conf);
+  }
+  // intervals from the draws of one or more parts (in replicate order): point + quantile - median. The three
+  // quantiles come from selection (the two order statistics each interpolates between), not a full sort.
+  function bootstrapSummary(parts, conf = 0.95) {
+    const out = new Map();
+    parts[0].pools.forEach((pool0, k) => {
+      const P = pool0.keys.length, R = parts.reduce((s, pt) => s + pt.pools[k].dollars.length / P, 0), col = new Float32Array(R);
+      // value at fraction f: col[lo] + (col[lo + 1] - col[lo]) * t over the sorted column, by selection
+      const select = (r) => {
+        let lo = 0, hi = R - 1;
+        while (hi > lo) {
+          const pv = col[(lo + hi) >> 1];
+          let i = lo, j = hi;
+          while (i <= j) {
+            while (col[i] < pv) i++;
+            while (col[j] > pv) j--;
+            if (i <= j) { const t = col[i]; col[i] = col[j]; col[j] = t; i++; j--; }
+          }
+          if (r <= j) hi = j; else if (r >= i) lo = i; else return col[r];
+        }
+        return col[r];
+      };
+      const q = (f) => {
+        const x = (R - 1) * f, lo = Math.floor(x), a = select(lo);
+        if (lo + 1 >= R || x === lo) return a;
+        let b = Infinity; for (let i = lo + 1; i < R; i++) if (col[i] < b) b = col[i]; // everything past lo is >= a
+        return a + (b - a) * (x - lo);
+      };
+      for (let p = 0; p < P; p++) {
+        let u = 0;
+        for (const pt of parts) { const d = pt.pools[k].dollars, r = d.length / P; for (let i = 0; i < r; i++) col[u++] = d[i * P + p]; }
+        const med = q(0.5), lo = q((1 - conf) / 2), hi = q((1 + conf) / 2), v = pool0.pointDollars[p];
+        out.set(pool0.keys[p], { lo: v + lo - med, hi: v + hi - med });
       }
-    }
+    });
     return out;
   }
 
@@ -800,7 +834,7 @@
     return { g, P, keys, pointDollars, dollars, diag, replicate, candidates: C, players: P, U };
   }
 
-  const api = { HK, PK, HI, PI, CATS, YAHOO_DEFAULT, prepare, rangeStats, valuate, bootstrap: bootstrapFast, bootstrapRef: bootstrap, tb };
+  const api = { HK, PK, HI, PI, CATS, YAHOO_DEFAULT, prepare, rangeStats, valuate, bootstrap: bootstrapFast, bootstrapSummary, bootstrapRef: bootstrap, tb };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.RaterEngine = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -463,7 +463,7 @@
     trend = null;
     const segs = state.segs.map((s) => [s.a, s.b]);
     if (state.halves) segs.push([0, state.halves.h1], [state.halves.h2, state.N - 1]);
-    const mine = new Worker("trend-worker.js?v=6");
+    const mine = new Worker("trend-worker.js?v=7");
     worker = mine;
     mine.onmessage = (e) => {
       if (worker !== mine) return;
@@ -515,22 +515,41 @@
       } catch (e) { /* not published for this season: compute them */ }
       if (ci !== mine) return;
     }
-    const queue = days.slice();
-    const n = Math.max(1, Math.min(CI.maxWorkers, (navigator.hardwareConcurrency || 2) - 1, days.length));
+    // every worker takes a share of each date's replicates, so each date finishes about n times sooner; the
+    // shares are merged in replicate order, which gives exactly the single-run (and precomputed) result
+    const n = Math.max(1, Math.min(CI.maxWorkers, (navigator.hardwareConcurrency || 2) - 1));
+    const queue = [], parts = new Map();
+    for (const day of days) for (let c = 0; c < n; c++) queue.push({ day, chunk: c, part: [Math.round((c * CI.reps) / n), Math.round(((c + 1) * CI.reps) / n)] });
     let paint = 0;
     const next = (w) => {
-      if (queue.length) { w.postMessage({ type: "day", day: queue.shift(), reps: CI.reps }); return; }
+      if (queue.length) { w.postMessage(Object.assign({ type: "part", reps: CI.reps }, queue.shift())); return; }
       w.terminate(); mine.workers = mine.workers.filter((x) => x !== w);
       if (!mine.workers.length) { mine.done = true; renderChart(); }
     };
     for (let i = 0; i < n; i++) {
-      const w = new Worker("ci-worker.js?v=2");
+      const w = new Worker("ci-worker.js?v=3");
       mine.workers.push(w);
       w.onmessage = (e) => {
         if (ci !== mine) return;
-        mine.got.set(e.data.day, { lo: e.data.lo, hi: e.data.hi });
-        // repaint at most every 300 ms while dates come in
-        if (Date.now() - paint > 300) { paint = Date.now(); renderChart(); }
+        const m = e.data;
+        if (m.type === "summary") {
+          const nk = trend.keys.size, lo = new Float32Array(nk).fill(NaN), hi = new Float32Array(nk).fill(NaN);
+          m.keys.forEach((k, u) => { const ix = trend.keys.get(k); if (ix != null) { lo[ix] = m.lo[u]; hi[ix] = m.hi[u]; } });
+          mine.got.set(m.day, { lo, hi });
+          // repaint at most every 300 ms while dates come in
+          if (Date.now() - paint > 300) { paint = Date.now(); renderChart(); }
+          next(w);
+          return;
+        }
+        if (!parts.has(m.day)) parts.set(m.day, []);
+        const got = parts.get(m.day);
+        got[m.chunk] = { pools: m.pools };
+        if (got.filter(Boolean).length === n) {
+          // the worker that brought the last share merges the date before taking more work
+          parts.delete(m.day);
+          w.postMessage({ type: "summary", day: m.day, parts: got }, got.flatMap((p) => p.pools.flatMap((x) => [x.pointDollars.buffer, x.dollars.buffer])));
+          return;
+        }
         next(w);
       };
       w.onerror = () => {
