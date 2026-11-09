@@ -548,11 +548,17 @@
     const svg = $("chart"); svg.replaceChildren();
     const phone = matchMedia("(max-width: 700px)").matches;
     const one = state.chart.length === 1;
-    const W = Math.max(300, $("chart-box").clientWidth), H = (phone ? 220 : 300) + (one ? 84 : 0);
-    svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("height", H);
-    const m = { l: phone ? 40 : 48, r: phone ? 8 : 16, t: one ? 50 : 10, b: one ? 52 : 28 };
+    const W = Math.max(300, $("chart-box").clientWidth);
+    const m = { l: phone ? 64 : 72, r: phone ? 8 : 16, t: one ? 74 : 14 };
     const x0 = 0, x1 = state.N - 1;
     const X = (d) => m.l + ((d - x0) / (x1 - x0)) * (W - m.l - m.r);
+    // the month text: every other month drops a row when neighbours would touch (a phone's width)
+    const monthX = state.segs.map((s) => X(one ? s.mid : s.tick));
+    const stagger = monthX.some((x, i) => i && x - monthX[i - 1] < (one ? 66 : 50));
+    const row = one ? 58 : 28, drop = (i) => (stagger && i % 2 ? row : 0);
+    m.b = (one ? 78 : 42) + (stagger ? row : 0);
+    const H = (phone ? 238 : 318) + (one ? 134 : 0) + (stagger ? row : 0);
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("height", H);
     const ser = state.chart.map((k, i) => ({ key: k, color: COLORS[i], arr: series(k), r: player(k) }));
     const { lo, hi, st } = yScale(ser);
     const Y = (v) => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
@@ -562,7 +568,7 @@
     if (state.preset !== "season") el("rect", { x: X(state.a), y: m.t, width: Math.max(2, X(state.b) - X(state.a)), height: base - m.t, fill: "var(--brand-cyan-soft)" });
     for (let v = lo; v <= hi + 1e-9; v += st) {
       el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: Math.abs(v) < 1e-9 ? "var(--chart-center-line)" : "var(--chart-grid)" });
-      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, money(v));
+      el("text", { x: m.l - 8, y: Y(v) + 7, "text-anchor": "end" }, money(v));
     }
     el("line", { x1: m.l, x2: W - m.r, y1: base, y2: base, stroke: "var(--chart-muted)" });
     // a tick and label on the first of each month (the season's first month at its first day);
@@ -570,10 +576,15 @@
     // and last game days
     if (one) state.firsts.forEach((d) => { const x = X(d); el("line", { x1: x, x2: x, y1: base, y2: base + 6, stroke: "var(--chart-muted)" }); });
     state.segs.forEach((s, i) => {
-      const x = X(one ? s.mid : s.tick);
+      const x = monthX[i], y = base + drop(i);
       if (!one) el("line", { x1: x, x2: x, y1: base, y2: base + 6, stroke: "var(--chart-muted)" });
-      el("text", { x, y: base + 21, "text-anchor": "middle" }, s.short);
-      if (one) { const v = segValue(state.chart[0], i); el("text", { x, y: base + 40, "text-anchor": "middle", class: "val" }, isNaN(v) ? "" : money1(v)); }
+      const txt = [el("text", { x, y: y + 34, "text-anchor": "middle" }, s.short)];
+      if (one) { const v = segValue(state.chart[0], i); txt.push(el("text", { x, y: y + 62, "text-anchor": "middle", class: "val" }, isNaN(v) ? "" : money1(v))); }
+      // kept inside the chart's edges (the last month's value on a phone)
+      let lo = Infinity, hi = -Infinity;
+      try { for (const t of txt) { const b = t.getBBox(); if (b.width) { lo = Math.min(lo, b.x); hi = Math.max(hi, b.x + b.width); } } } catch (e) { /* not laid out */ }
+      const dx = hi > W ? W - hi : lo < 0 ? -lo : 0;
+      if (dx) for (const t of txt) t.setAttribute("x", x + dx);
     });
     // one player: the All-Star break and each half's value above the chart
     if (one && state.halves) {
@@ -581,8 +592,8 @@
       el("line", { x1: xs, x2: xs, y1: m.t - 4, y2: base, stroke: "var(--chart-muted)", "stroke-dasharray": "4 4" });
       const k = state.segs.length;
       [["1st Half", X(state.halves.h1 / 2), segValue(state.chart[0], k)], ["2nd Half", X((state.halves.h2 + x1) / 2), segValue(state.chart[0], k + 1)]].forEach(([label, x, v]) => {
-        el("text", { x, y: m.t - 30, "text-anchor": "middle", class: "half" }, label);
-        el("text", { x, y: m.t - 12, "text-anchor": "middle", class: "val" }, isNaN(v) ? "" : money1(v));
+        el("text", { x, y: m.t - 44, "text-anchor": "middle", class: "half" }, label);
+        el("text", { x, y: m.t - 16, "text-anchor": "middle", class: "val" }, isNaN(v) ? "" : money1(v));
       });
     }
     // the lines: faded through each long break and after an early last game
