@@ -3,7 +3,7 @@
 // values its share (engine.js bootstrap, `part`) and sends the draws back. When a date's shares are all in,
 // one worker merges them (bootstrapSummary), which gives exactly the single-run result, so the page's main
 // thread never does the sorting. Terminated when done or when the season or settings change.
-importScripts("engine.js?v=7");
+importScripts("engine.js?v=10");
 const E = self.RaterEngine;
 let db = null, settings = null;
 const points = new Map(); // day -> the point valuation, shared by that date's parts in this worker

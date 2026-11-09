@@ -1,9 +1,10 @@
 // Precomputes the Value Through the Season chart's 95% intervals at the default league settings, one file per
-// season for R2 at player-rater/ci/<season>.json. It runs the page's own engine (player-rater/engine.js,
+// season for R2 at player-rater/ci/<method>/<season>.json (a new method gets its own folder, so the live page
+// keeps its files until the new one ships). It runs the page's own engine (player-rater/engine.js,
 // bootstrap) with the page's dates, replicates and seeds, so the file holds exactly what a browser would
 // compute; the page loads it when its settings are the defaults and computes in workers otherwise.
 //
-//   node bootstrap_ci.js --data out --out out/ci 2026 2025 ...   (seasons default to every out/<season>.json)
+//   node bootstrap_ci.js --data out 2026 2025 ...   (seasons default to every out/<season>.json; files go to out/ci/<method>/)
 //
 // The page uses a file only when its `method` matches app.js CI.method and its `built` matches the season
 // file's: rebuild these after any engine change or season rebuild, and bump CI.method when the engine's
@@ -13,7 +14,7 @@ const fs = require("fs"), path = require("path"), os = require("os");
 const { Worker, isMainThread, parentPort, workerData } = require("worker_threads");
 const E = require(path.join(__dirname, "../../player-rater/engine.js"));
 
-const METHOD = "retro-mode-r-1"; // = app.js CI.method
+const METHOD = "retro-mode-r-4"; // = app.js CI.method (r-4: missing time filled at the season's replacement production; under a fifth of the frame present can't be rostered)
 const CI = { reps: 1000, conf: 0.95, first: 13, step: 14 }; // = app.js CI (reps, first, step)
 
 // the dates the page bootstraps: day 13, every 14 days after, and the season's last day
@@ -35,7 +36,7 @@ if (!isMainThread) {
   const args = process.argv.slice(2);
   const opt = (k, d) => { const i = args.indexOf(k); if (i < 0) return d; const v = args[i + 1]; args.splice(i, 2); return v; };
   const dataDir = path.resolve(opt("--data", path.join(__dirname, "out")));
-  const outDir = path.resolve(opt("--out", path.join(dataDir, "ci")));
+  const outDir = path.resolve(opt("--out", path.join(dataDir, "ci", METHOD)));
   const threads = +opt("--threads", Math.max(1, os.cpus().length - 1));
   const seasons = args.length ? args : fs.readdirSync(dataDir).filter((f) => /^\d{4}\.json$/.test(f)).map((f) => f.slice(0, 4));
   fs.mkdirSync(outDir, { recursive: true });

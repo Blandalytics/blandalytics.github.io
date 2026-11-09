@@ -8,7 +8,6 @@
   const TREND_START = 6; // the first week is too thin to value
   const MAX_SERIES = 4;
   const COLORS = ["var(--brand-brand-cyan)", "var(--pitch-four-seamer)", "var(--pitch-slider)", "var(--pitch-sinker)"];
-  const GAP_DAYS = 30; // a longer break between games (or before the season's end) fades the line
   const QUIET_OPACITY = 0.25; // the faded stretch: 75% transparent
   const BAND_OPACITY = 0.16; // a 95% interval's shading, in its line's colour
   const PAGE = 25;
@@ -78,7 +77,7 @@
   // default settings they come precomputed from R2 (tools/player_rater/bootstrap_ci.js, the same engine and
   // seeds); `method` names the engine's numbers, and a file with another method or season build is not used.
   // Computed in the browser: a quick pass, then 1,000 replicates if that fits the budget, else 500.
-  const CI = { reps: 1000, quick: 250, minReps: 500, budgetMs: 20000, first: 13, step: 14, maxWorkers: 6, method: "retro-mode-r-1" };
+  const CI = { reps: 1000, quick: 250, minReps: 500, budgetMs: 20000, first: 13, step: 14, maxWorkers: 6, method: "retro-mode-r-4" };
   let ci = null; // { days: [day], got: Map(day -> { lo, hi } by trend index), done, failed, workers }
 
   // ---------- dates ----------
@@ -464,7 +463,7 @@
     trend = null;
     const segs = state.segs.map((s) => [s.a, s.b]);
     if (state.halves) segs.push([0, state.halves.h1], [state.halves.h2, state.N - 1]);
-    const mine = new Worker("trend-worker.js?v=7");
+    const mine = new Worker("trend-worker.js?v=10");
     worker = mine;
     mine.onmessage = (e) => {
       if (worker !== mine) return;
@@ -501,7 +500,7 @@
     ci = mine;
     if (canon(settings) === canon(E.YAHOO_DEFAULT)) {
       try {
-        const f = await getJSON(`${DATA}ci/${state.season}.json?v=${encodeURIComponent(state.raw.built + "-" + CI.method)}`);
+        const f = await getJSON(`${DATA}ci/${CI.method}/${state.season}.json?v=${encodeURIComponent(state.raw.built)}`);
         if (ci !== mine) return;
         if (f.method === CI.method && f.built === state.raw.built) {
           const n = trend.keys.size;
@@ -550,7 +549,7 @@
       renderChart();
     };
     for (let i = 0; i < n; i++) {
-      const w = new Worker("ci-worker.js?v=3");
+      const w = new Worker("ci-worker.js?v=6");
       mine.workers.push(w);
       w.onmessage = (e) => {
         if (ci !== mine) return;
@@ -627,16 +626,13 @@
     const k = trend.keys.get(key);
     return k == null ? NaN : trend.seg[i][k];
   }
-  // stretches to fade: a break of more than GAP_DAYS between games, and the end of the season when the
-  // player's last game came more than GAP_DAYS before it
+  // stretches to fade: the player's missing time, the same stretches the engine fills with replacement-level
+  // production (more than the injured-list minimum without a game: 10 days for hitters, 15 for pitchers), from
+  // his last game before to his next one, or to the season's end
   function quietSpans(key) {
     const p = state.db.players.find((x) => x.key === key);
     if (!p || !p.days.length) return [];
-    const out = [], d = p.days;
-    for (let i = 1; i < d.length; i++) if (d[i] - d[i - 1] > GAP_DAYS) out.push([d[i - 1], d[i]]);
-    const last = d[d.length - 1];
-    if (state.N - 1 - last > GAP_DAYS) out.push([last, state.N - 1]);
-    return out;
+    return E.missingStretches(p, 0, state.N - 1).map(([s, e]) => [s - 1, Math.min(e + 1, state.N - 1)]);
   }
 
   // a player's line as runs of points, each run solid or faded (q) for a quiet span

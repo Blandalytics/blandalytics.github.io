@@ -1,7 +1,7 @@
 // Values the season to date at every date (for the Value Through the Season chart) and each
 // period in `segs` (the halves and months the one-player chart labels), off the main thread.
 // One job per worker: the page terminates it and starts a new one when the season or settings change.
-importScripts("engine.js?v=7");
+importScripts("engine.js?v=10");
 const E = self.RaterEngine;
 
 onmessage = (e) => {

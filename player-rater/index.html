@@ -320,6 +320,7 @@ input.date:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offs
       <div><h3>Standings Points</h3><p>One point in a category is how far apart team totals sit when every team takes one player from each tier of a baseline pool: the players the counting categories alone would roster.</p></div>
       <div><h3>Rate Stats</h3><p>AVG, ERA and WHIP count as gains over the baseline pool's rate, weighted by at-bats or innings, so a great rate in a small sample is worth less. Picking that pool on counting stats keeps low-inning relievers with tiny ERAs from setting the bar.</p></div>
       <div><h3>Replacement Level</h3><p>The average of the best three players left once every starting and bench spot is filled. A position gets its own lower level only when no one eligible there is starting elsewhere.</p></div>
+      <div><h3>Missing Time</h3><p>When a player goes more than 10 days without a game (15 for pitchers, the injured-list minimums), including before his first game or after his last, a replacement-level player at his position fills in for those days. That keeps injuries, demotions and late call-ups from costing a player more than his roster spot was worth. A player has to be present for at least a fifth of the period to take a roster spot, so a few games on top of a replacement-level line can't win one. Faded stretches on the chart are that missing time.</p></div>
       <div><h3>Dollars</h3><p>Hitters and pitchers each keep the minimum bid for every roster spot and split the rest by points above replacement. Every period sums to the full budget.</p></div>
       <div><h3>95% Intervals</h3><p>After the fact, the only doubt about who should have been rostered is the season record itself. So the season's days are resampled 1,000 times, in runs of a week on average, the rostered pool and replacement players are rebuilt from each resample, and the player's actual line is valued against each one. The band covers 95% of those values. With other league settings, your browser computes the bands: a quick first band, then 1,000 resamples, or 500 on a slower device.</p></div>
       <div><h3>Eligibility</h3><p>10 games or 5 starts at a position that season. SP takes 3 starts, RP 5 relief outings. Ohtani's hitting and pitching are two players, as Yahoo lists them.</p></div>
@@ -328,7 +329,7 @@ input.date:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offs
   </section>
 </main>
 <script src="/shared/share-image.js?v=2"></script>
-<script src="engine.js?v=7"></script>
-<script src="app.js?v=13"></script>
+<script src="engine.js?v=10"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>

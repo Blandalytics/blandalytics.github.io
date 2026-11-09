@@ -57,6 +57,7 @@
     hitCats: ["R", "HR", "RBI", "SB", "AVG"],
     pitCats: ["W", "SV", "K", "ERA", "WHIP"],
     replW: 3,
+    fillMissing: true, // a player's missing time is filled with a replacement-level player's production
   };
 
   // ---------- data prep: per-player cumulative sums over their game lines ----------
@@ -139,8 +140,15 @@
   // and on the bench, and which players set replacement). Baselines, SGP and replacement are then computed from
   // these rows' lines for exactly those players, with no selection. opt.perSgp: a fixed price per point.
   function valuePool(rows, settings, g, cats, opt = {}) {
+    // every ordering breaks ties by key, so equal values (common among players whose lines are mostly filled
+    // missing time) never depend on the order a list happened to be in
+    const byKeyOrder = (a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
     const T = settings.teams, fixed = opt.fixed;
     const byKey = fixed ? new Map(rows.map((r) => [r.key, r])) : null;
+    // the players who can be chosen (anchor, rostered pool, bench, replacement): all of them, except that with
+    // missing time filled, a player present for less than MIN_PRESENT of the frame is valued but never chosen
+    // (a few games plus a replacement-level line is mostly a lucky sample, not a roster spot)
+    const selectable = rows.filter((r) => r.rosterable !== false);
     const pick = (keys) => keys.map((k) => byKey.get(k)).filter(Boolean);
     const plan = slotPlan(settings, g);
     const startN = Object.values(plan.pos).reduce((a, b) => a + b, 0) + plan.flex.reduce((a, f) => a + f[1], 0);
@@ -174,7 +182,7 @@
     };
     // bench = next best non-starters; they take roster spots but not team totals
     const benchOf = (starting, val) =>
-      new Set(rows.filter((r) => !starting.has(r.key)).sort((a, b) => val(b) - val(a)).slice(0, plan.bench).map((r) => r.key));
+      new Set(selectable.filter((r) => !starting.has(r.key)).sort((a, b) => val(b) - val(a) || byKeyOrder(a, b)).slice(0, plan.bench).map((r) => r.key));
     const sigOf = (starting, bench) => [...starting.keys()].sort().join() + "|" + (bench ? [...bench].sort().join() : "");
 
     // replacement players: the best W outside the full roster (starters + bench) by sc, and the best T for the
@@ -185,7 +193,7 @@
       let sets, binding;
       if (given) ({ sets, binding } = given);
       else {
-        const un = rows.filter((r) => !starting.has(r.key) && !bench.has(r.key)).sort((a, b) => sc(b) - sc(a));
+        const un = selectable.filter((r) => !starting.has(r.key) && !bench.has(r.key)).sort((a, b) => sc(b) - sc(a) || byKeyOrder(a, b));
         const choose = (arr) => ({ top: arr.slice(0, W), wide: arr.slice(0, T) });
         sets = { _any: choose(un) }; binding = {};
         // a position has its own (lower) replacement level only when it binds: no player eligible there
@@ -233,9 +241,9 @@
       for (const r of rows) r.vc = vol(r.s);
       const hist = [];
       for (let it = 0; it < 12; it++) {
-        rows.sort((a, b) => b.vc - a.vc);
-        anchor = assign(rows, plan);
-        anchorList = rows.filter((r) => anchor.has(r.key));
+        selectable.sort((a, b) => b.vc - a.vc || byKeyOrder(a, b));
+        anchor = assign(selectable, plan);
+        anchorList = selectable.filter((r) => anchor.has(r.key));
         const sig = sigOf(anchor);
         if (!countCats.length || (hist.length && sig === hist[hist.length - 1].sig)) break;
         let Dc = spread(anchorList, countCats);
@@ -246,8 +254,8 @@
         const { levelFor } = replacement(anchor, benchOf(anchor, (r) => r.vc), (r) => r.sc, false);
         for (const r of rows) r.vc = r.sc - levelFor(r).base;
         if (cycle) {
-          rows.sort((a, b) => b.vc - a.vc);
-          anchor = assign(rows, plan);
+          selectable.sort((a, b) => b.vc - a.vc || byKeyOrder(a, b));
+          anchor = assign(selectable, plan);
           break;
         }
       }
@@ -274,7 +282,6 @@
     // the tiers: the anchor in counting-value order (from playing time, by counting SGP with the counting
     // denominators of the current tiers, until the order holds), then one all-category pass against the anchor's
     // rates sets the tiers of N (ties by key)
-    const byKeyOrder = (a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
     const sgpWith = (r, Dk, cs = cats) => cs.reduce((a, c) => a + r.x[c] / Dk[c], 0);
     anchorList.sort((a, b) => vol(b.s) - vol(a.s) || byKeyOrder(a, b));
     if (countCats.length) {
@@ -299,7 +306,7 @@
     const setRepl = (rep) => {
       for (const r of rows) {
         const { base, at } = rep.levelFor(r);
-        r.repl = base; r.sgpar = r.sgp - base; r.v = r.sgpar; r.replCat = rep.replCat[at];
+        r.repl = base; r.sgpar = r.sgp - base; r.v = r.sgpar; r.replCat = rep.replCat[at]; r.replAt = at;
       }
     };
     let rostered = new Map(), bench = new Set(), rep = null;
@@ -314,8 +321,8 @@
       for (const r of rows) r.v = r.sgp;
       let prev = "";
       for (let it = 0; it < 10; it++) {
-        rows.sort((a, b) => b.v - a.v);
-        rostered = assign(rows, plan);
+        selectable.sort((a, b) => b.v - a.v || byKeyOrder(a, b));
+        rostered = assign(selectable, plan);
         bench = benchOf(rostered, (r) => r.v);
         const sig = sigOf(rostered, bench);
         if (sig === prev) break;
@@ -341,10 +348,71 @@
     return { rows, D, rates, repl: rep.repl, perSgp, rosterN, startN, pool, anchorN: anchorList.length, members };
   }
 
-  // opt.stats(p): each player's line (a bootstrap replicate's) in place of days a..b;
-  // opt.fixed[g], opt.perSgp[g]: as in valuePool
+  // ---------- missing time ----------
+  // Days without a game that count as missing time: the injured-list minimums (10 days for hitters, 15 for
+  // pitchers), so ordinary rest never counts. A roster spot left empty by an injury, a demotion, a late call-up
+  // or an early end is filled by a replacement-level player at the position, so the player's line gets that
+  // player's production for those days.
+  const MISSING_DAYS = { h: 10, p: 15 };
+  // the share of the frame's days a player must be present for (not missing) to be chosen for a roster spot
+  const MIN_PRESENT = 0.2;
+  // a player's missing stretches in a..b, [from, to] day pairs: gaps between games longer than the limit, and
+  // the stretch before his first game or after his last when longer than it
+  function missingStretches(p, a, b) {
+    const G = MISSING_DAYS[p.g], out = [];
+    const j0 = lowerBound(p.days, a), j1 = lowerBound(p.days, b + 1);
+    if (j1 <= j0) return out;
+    let prev = a - 1;
+    for (let j = j0; j < j1; j++) { const d = p.days[j]; if (d - prev - 1 > G) out.push([prev + 1, d - 1]); prev = d; }
+    if (b - prev > G) out.push([prev + 1, b]);
+    return out;
+  }
+  // the days of runs (a replicate's [from, to] runs of days, each counting w) that fall in those stretches
+  function missingIn(stretches, runs, w) {
+    let m = 0;
+    for (const [x, y] of runs) for (const [s, e] of stretches) { const lo = Math.max(x, s), hi = Math.min(y, e); if (hi >= lo) m += hi - lo + 1; }
+    return m * w;
+  }
+
+  // The production missing time is filled with: the season's replacement players at every position (a valuation
+  // of the whole season's actual lines) and their production per day present, with the position each player is
+  // replaced at. Found once per season and settings and kept on db, so every period valued (each date of the
+  // chart, the halves and months, the table's range, the bootstraps) fills at the same rates, and each is valued
+  // once rather than twice.
+  function seasonFill(db, settings, g, cats) {
+    const key = g + JSON.stringify(settings), cache = db.fillCache || (db.fillCache = new Map());
+    if (cache.has(key)) return cache.get(key);
+    const a = 0, b = db.ndays - 1, n = b - a + 1, rows = [];
+    for (const p of db.players) {
+      if (p.g !== g) continue;
+      const s = rangeStats(p, a, b);
+      if (!s || (g === "h" ? s[HI.PA] : s[PI.G]) <= 0) continue;
+      const miss = missingStretches(p, a, b).reduce((m, [x, y]) => m + y - x + 1, 0);
+      rows.push({ key: p.key, elig: p.elig.length ? p.elig : [], g, s, miss, rosterable: n - miss >= MIN_PRESENT * n });
+    }
+    let fill = null;
+    if (rows.length) {
+      const first = valuePool(rows, settings, g, cats, {});
+      const byKey = new Map(rows.map((r) => [r.key, r])), rate = {};
+      for (const [pos, set] of Object.entries(first.members.sets)) {
+        const v = new Float64Array(rows[0].s.length); let days = 0;
+        for (const k of set.top) { const r = byKey.get(k); for (let q = 0; q < v.length; q++) v[q] += r.s[q]; days += n - r.miss; }
+        if (days > 0) { for (let q = 0; q < v.length; q++) v[q] /= days; rate[pos] = v; }
+      }
+      fill = { rate, at: new Map(first.rows.map((r) => [r.key, r.replAt])) };
+    }
+    cache.set(key, fill);
+    return fill;
+  }
+
+  // opt.stats(p): each player's line (a bootstrap replicate's) in place of days a..b, and opt.missing(p) his
+  // missing days among them; opt.fill[g]: the replacement production to fill them with (a point valuation's
+  // .fill), instead of the season's; opt.fixed[g], opt.perSgp[g]: as in valuePool.
+  // With settings.fillMissing, each player's missing days are filled at the season's replacement production at
+  // the position he is replaced at (seasonFill). Rows keep the actual line in .s (what the table shows); the
+  // filled one is .sFill.
   function valuate(db, settings, a, b, opt = {}) {
-    const out = {};
+    const out = {}, n = b - a + 1;
     for (const g of ["h", "p"]) {
       const cats = g === "h" ? settings.hitCats : settings.pitCats;
       const rows = [];
@@ -354,11 +422,25 @@
         if (!s) continue;
         if (g === "h" && s[HI.PA] <= 0) continue;
         if (g === "p" && s[PI.G] <= 0) continue;
-        rows.push({ key: p.key, id: p.id, name: p.name, team: p.team, elig: p.elig.length ? p.elig : [], g, s });
+        rows.push({ key: p.key, id: p.id, name: p.name, team: p.team, elig: p.elig.length ? p.elig : [], g, s, p });
       }
-      out[g] = cats.length
-        ? valuePool(rows, settings, g, cats, { fixed: opt.fixed && opt.fixed[g], perSgp: opt.perSgp && opt.perSgp[g] })
-        : { rows: [], D: {}, rates: {}, repl: {}, perSgp: 0 };
+      const vopt = { fixed: opt.fixed && opt.fixed[g], perSgp: opt.perSgp && opt.perSgp[g] };
+      if (!cats.length) { out[g] = { rows: [], D: {}, rates: {}, repl: {}, perSgp: 0 }; continue; }
+      if (settings.fillMissing === false) { out[g] = valuePool(rows, settings, g, cats, vopt); continue; }
+      for (const r of rows) {
+        const frameMiss = missingStretches(r.p, a, b).reduce((m, [s, e]) => m + e - s + 1, 0);
+        r.miss = opt.missing ? opt.missing(r.p) : frameMiss; // a replicate's drawn missing days, else the frame's
+        r.rosterable = n - frameMiss >= MIN_PRESENT * n; // from the actual record, the same in every replicate
+      }
+      const fill = (opt.fill && opt.fill[g]) || seasonFill(db, settings, g, cats) || { rate: {}, at: new Map() };
+      for (const r of rows) {
+        r.sAct = r.s;
+        const v = fill.rate[fill.at.get(r.key) || "_any"] || fill.rate._any;
+        if (r.miss > 0 && v) { const s = Float64Array.from(r.s); for (let q = 0; q < s.length; q++) s[q] += v[q] * r.miss; r.s = s; }
+      }
+      out[g] = valuePool(rows, settings, g, cats, vopt);
+      for (const r of out[g].rows) { r.sFill = r.s; r.s = r.sAct; delete r.sAct; delete r.p; }
+      out[g].fill = fill;
     }
     return out;
   }
@@ -410,6 +492,7 @@
     const keys = opt.keys ? opt.keys.filter((k) => pointOf.has(k)) : [...pointOf.keys()];
     const draws = new Map(keys.map((k) => [k, new Float64Array(R).fill(NaN)]));
     const perSgp = { h: point.h.perSgp, p: point.p.perSgp };
+    const fill = { h: point.h.fill, p: point.p.fill }, stretches = new Map(db.players.map((p) => [p.key, missingStretches(p, a, b)]));
     for (let i = 0; i < R; i++) {
       const { runs, w } = stationaryRuns(a, b, L, lam, rand);
       const stats = (p) => {
@@ -422,8 +505,9 @@
         if (s && w !== 1) for (let q = 0; q < s.length; q++) s[q] *= w;
         return s;
       };
-      const rep = valuate(db, settings, a, b, { stats });
-      const act = valuate(db, settings, a, b, { fixed: { h: rep.h.members, p: rep.p.members }, perSgp });
+      const missing = (p) => missingIn(stretches.get(p.key), runs, w);
+      const rep = valuate(db, settings, a, b, { stats, missing, fill });
+      const act = valuate(db, settings, a, b, { fixed: { h: rep.h.members, p: rep.p.members }, perSgp, fill });
       for (const g of ["h", "p"]) for (const r of act[g].rows) { const d = draws.get(r.key); if (d) d[i] = r.dollars; }
       if (opt.onReplicate) opt.onReplicate(i, rep, act); // diagnostics (validation checks)
     }
@@ -446,8 +530,9 @@
   //    only for the stats the categories read;
   //  - partial sorts: slot assignment and the bench read the top of a list, replacement only its best W;
   //  - candidates: selection (anchor, rostered pool, bench, replacement players) only considers players near the
-  //    point pool by value, counting value or playing time (4 rosters deep), or deep enough at a position for its
-  //    replacement set. Every player is still valued. A shallower list (3 rosters) missed a pitcher in 2026.
+  //    point pool by value, counting value or playing time (6 rosters deep), or deep enough at a position for its
+  //    replacement set. Every player is still valued. With missing time filled, many part-timers sit near the
+  //    replacement level, and 4 rosters missed some of them in 2026 (3 already did without filling).
   // Like the reference, each replicate's anchor loop starts from playing time: starting from the point solution
   // is faster but can settle on a different fixed point.
   //
@@ -465,7 +550,7 @@
     const pools = [];
     for (const g of ["h", "p"]) {
       const cats = g === "h" ? settings.hitCats : settings.pitCats;
-      if (cats.length && point[g].rows.length) pools.push(fastPool(dbByKey, settings, g, cats, point[g], a, b, i1 - i0, opt.prune !== false, opt.depth || 4));
+      if (cats.length && point[g].rows.length) pools.push(fastPool(dbByKey, settings, g, cats, point[g], a, b, i1 - i0, opt.prune !== false, opt.depth || 6));
     }
     for (let i = 0; i < i1; i++) {
       const { runs, w } = stationaryRuns(a, b, L, lam, rand);
@@ -547,14 +632,15 @@
     rows.forEach((r, i) => plan.flex.forEach(([, , allowed], f) => { flexOK[i * nflex + f] = !allowed || r.elig.some((e) => allowed.includes(e)) ? 1 : 0; }));
     const XA0 = new Float64Array(P * nc), RNA = new Float64Array(P * nr), RDA = new Float64Array(P * nr);
     rows.forEach((r, i) => {
-      for (const pp of cntParts) XA0[i * nc + pp.c] += pp.sign * pp.f(r.s);
-      rateParts.forEach((rp, q) => { RNA[i * nr + q] = rp.num(r.s); RDA[i * nr + q] = rp.den(r.s); });
+      const s = r.sFill || r.s; // the line valued: filled for missing time
+      for (const pp of cntParts) XA0[i * nc + pp.c] += pp.sign * pp.f(s);
+      rateParts.forEach((rp, q) => { RNA[i * nr + q] = rp.num(s); RDA[i * nr + q] = rp.den(s); });
     });
     const pointDollars = Float64Array.from(rows, (r) => r.dollars);
 
     // candidates for selection
     let cand;
-    if (!prune) cand = rows.map((_, i) => i);
+    if (!prune) cand = rows.map((_, i) => i).filter((i) => rows[i].rosterable !== false);
     else {
       const M = depth * rosterN + 3 * T, keep = new Uint8Array(P);
       const top = (val, m, ok) => rows.map((_, i) => i).filter((i) => !ok || ok(i)).sort((x, y) => val(y) - val(x)).slice(0, m).forEach((i) => { keep[i] = 1; });
@@ -565,11 +651,12 @@
         top((i) => rows[i].sgp, m, ok); top((i) => rows[i].vc, m, ok);
       });
       rows.forEach((r, i) => { if (r.slot) keep[i] = 1; });
-      cand = rows.map((_, i) => i).filter((i) => keep[i]);
+      cand = rows.map((_, i) => i).filter((i) => keep[i] && rows[i].rosterable !== false);
     }
     const C = cand.length, isCand = new Int32Array(P).fill(-1);
     cand.forEach((i, j) => { isCand[i] = j; });
-    const nonCand = rows.map((_, i) => i).filter((i) => isCand[i] < 0);
+    // the other players who can be chosen: their playing time still counts in the slots' slack
+    const nonCand = rows.map((_, i) => i).filter((i) => isCand[i] < 0 && rows[i].rosterable !== false);
 
     // running totals over the frame by day, laid out day by day (all candidates' used stats for a day sit
     // together), so a run of days reads two contiguous blocks; the other players only the activity stat
@@ -582,6 +669,20 @@
     cand.forEach((i, j) => fill(dbByKey.get(keys[i]), (t, v) => { const o = t * CU + j * U; for (let u = 0; u < U; u++) cum[o + u] = v(usedK[u]); }));
     nonCand.forEach((i, m) => fill(dbByKey.get(keys[i]), (t, v) => { cumAct[t * NC + m] = v(actIdx); }));
     const acc = new Float32Array(CU), accN = new Float32Array(NC); // whole-number sums: exact in single precision
+    // missing time: each candidate's missing days by day (running totals, day by day like cum), and the
+    // replacement production per day he is filled with (the point valuation's, as the reference uses)
+    const fillPt = pt.fill, cumMiss = fillPt ? new Float32Array((n + 1) * C) : null, accM = fillPt ? new Float32Array(C) : null;
+    const rateC = fillPt ? cand.map((i) => fillPt.rate[fillPt.at.get(keys[i]) || "_any"] || fillPt.rate._any || null) : null;
+    if (fillPt) cand.forEach((i, j) => {
+      const st = missingStretches(dbByKey.get(keys[i]), a, b);
+      let m = 0, u = 0;
+      for (let t = 0; t <= n; t++) {
+        cumMiss[t * C + j] = m;
+        const d = a + t;
+        while (u < st.length && st[u][1] < d) u++;
+        if (t < n && u < st.length && st[u][0] <= d) m++;
+      }
+    });
 
     const cposOf = cand.map((i) => posOf[i]), cflex = new Uint8Array(C * nflex);
     cand.forEach((i, j) => { for (let f = 0; f < nflex; f++) cflex[j * nflex + f] = flexOK[i * nflex + f]; });
@@ -598,13 +699,12 @@
     const perSgp = pt.perSgp, minBid = settings.minBid;
     let prevMem = new Uint8Array(C), prev2Mem = new Uint8Array(C), curMem = new Uint8Array(C);
 
-    // ties broken as the reference breaks them: by the season file's player order (its stable sorts start from
-    // it), or by key where the reference sorts by key
+    // ties broken by key, as the reference breaks them
     const dbIdx = new Map(); { let u = 0; for (const k of dbByKey.keys()) dbIdx.set(k, u++); }
     const dbOrdC = Int32Array.from(cand, (i) => dbIdx.get(keys[i]));
     const keyRankP = new Int32Array(P); keys.map((k, i) => [k, i]).sort((x, y) => (x[0] < y[0] ? -1 : 1)).forEach(([, i], r) => { keyRankP[i] = r; });
     const keyRankC = Int32Array.from(cand, (i) => keyRankP[i]);
-    const byDesc = (key) => (x, y) => key[y] - key[x] || dbOrdC[x] - dbOrdC[y];
+    const byDesc = (key) => (x, y) => key[y] - key[x] || keyRankC[x] - keyRankC[y];
     const byKeyC = (key) => (x, y) => key[y] - key[x] || keyRankC[x] - keyRankC[y];
     const byKeyP = (key) => (x, y) => key[y] - key[x] || keyRankP[x] - keyRankP[y];
     // the r-th smallest of the first m values of arr (quickselect; reorders arr)
@@ -728,21 +828,23 @@
       for (const j of order) { let s = 0; for (const c of allC) s += X[j * nc + c] / D[c]; sgpT[j] = s; }
       spread(order.slice().sort(cmp), X, allC, D);
     }
-    const volC = new Float64Array(C), volP = Float64Array.from(rows, (r) => (g === "h" ? r.s[HI.PA] : r.s[PI.OUTS] + 3 * r.s[PI.SV] + 3 * r.s[PI.HLD]));
+    const volC = new Float64Array(C), volP = Float64Array.from(rows, (r) => { const s = r.sFill || r.s; return g === "h" ? s[HI.PA] : s[PI.OUTS] + 3 * s[PI.SV] + 3 * s[PI.HLD]; });
 
     function replicate(runs, w, i) {
       // replicate lines
-      acc.fill(0); accN.fill(0);
+      acc.fill(0); accN.fill(0); if (fillPt) accM.fill(0);
       for (const [x, y] of runs) {
         const o0 = (x - a) * CU, o1 = (y - a + 1) * CU;
         for (let z = 0; z < CU; z++) acc[z] += cum[o1 + z] - cum[o0 + z];
         const p0 = (x - a) * NC, p1 = (y - a + 1) * NC;
         for (let z = 0; z < NC; z++) accN[z] += cumAct[p1 + z] - cumAct[p0 + z];
+        if (fillPt) { const m0 = (x - a) * C, m1 = (y - a + 1) * C; for (let z = 0; z < C; z++) accM[z] += cumMiss[m1 + z] - cumMiss[m0 + z]; }
       }
       for (let j = 0; j < C; j++) {
         const o = j * K, oa = j * U;
         for (let u = 0; u < U; u++) S[o + usedK[u]] = acc[oa + u] * w;
         act[j] = S[o + actIdx] > 0 ? 1 : 0;
+        if (fillPt && act[j] && rateC[j] && accM[j] > 0) { const v = rateC[j], m = accM[j] * w; for (const q of usedK) S[o + q] += v[q] * m; }
       }
       offs.fill(0);
       for (let m = 0; m < NC; m++) if (accN[m] > 0) for (const p of posOf[nonCand[m]]) offs[p]++;
@@ -834,7 +936,7 @@
     return { g, P, keys, pointDollars, dollars, diag, replicate, candidates: C, players: P, U };
   }
 
-  const api = { HK, PK, HI, PI, CATS, YAHOO_DEFAULT, prepare, rangeStats, valuate, bootstrap: bootstrapFast, bootstrapSummary, bootstrapRef: bootstrap, tb };
+  const api = { HK, PK, HI, PI, CATS, YAHOO_DEFAULT, MISSING_DAYS, MIN_PRESENT, prepare, rangeStats, missingStretches, valuate, bootstrap: bootstrapFast, bootstrapSummary, bootstrapRef: bootstrap, tb };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.RaterEngine = api;
 })(typeof window !== "undefined" ? window : globalThis);
