@@ -647,7 +647,7 @@
   const HEX = ["#55e8ff", "#ff839b", "#ce66ff", "#2a98ff"]; // brand-cyan, pitch-four-seamer, pitch-slider, pitch-curveball
   const IMG = { W: 1600, H: 1600, P: 64, bg: "#292c42", title: "#73efff", text: "#f0f1f5", axis: "#cbd7fd",
     grid: "rgba(255,255,255,0.07)", zero: "rgba(255,255,255,0.26)", base: "rgba(196,205,236,0.85)", foot: "#c0c6dc", band: "rgba(85,232,255,0.07)",
-    neg: "#ff839b", /* pitch-four-seamer */ pos: "#7ddf9a", /* green-300 */ row: "#404460" /* navy-500 */ };
+    neg: "#ff839b", /* pitch-four-seamer */ pos: "#7ddf9a", /* green-300 */ frame: "rgba(85,232,255,0.667)" /* brand-brand-cyan at the season cards' 2/3 */ };
   let markImg = null;
   const loadMark = () => markImg || (markImg = new Promise((res, rej) => {
     const im = new Image(); im.onload = () => res(im); im.onerror = rej;
@@ -770,12 +770,18 @@
         g.font = '600 36px "Work Sans"'; g.fillStyle = tone(v); if (!isNaN(v)) g.fillText(money1(v), x, T - 22);
       });
     }
-    // one player: a one-row table of the season's dollars from each category, spread evenly across
+    // one player: a one-row table of the season's dollars from each category, spread evenly across,
+    // framed like a season card's stat line: a rounded cyan border, cyan rules between
     if (one) {
       const cats = categoryDollars(state.chart[0]), top = B + 136, h = 140, w = W - 2 * P;
-      g.fillStyle = IMG.row; g.beginPath();
-      if (g.roundRect) g.roundRect(P, top, w, h, 12); else g.rect(P, top, w, h);
-      g.fill();
+      g.strokeStyle = IMG.frame; g.lineWidth = 4; g.beginPath();
+      if (g.roundRect) g.roundRect(P + 2, top + 2, w - 4, h - 4, 15); else g.rect(P + 2, top + 2, w - 4, h - 4);
+      g.stroke();
+      g.lineWidth = 3; g.lineCap = "butt";
+      for (let i = 1; i < cats.length; i++) {
+        const x = Math.round(P + (i * w) / cats.length);
+        g.beginPath(); g.moveTo(x, top + 22); g.lineTo(x, top + h - 22); g.stroke();
+      }
       cats.forEach(({ c, v }, i) => {
         const x = P + ((i + 0.5) * w) / cats.length;
         g.font = '600 36px "DM Sans"'; g.fillStyle = IMG.title; g.fillText(E.CATS[c].label, x, top + 54);
