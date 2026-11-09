@@ -68,6 +68,9 @@ APPS = [
     # the 2026 ALCS Game 3, Rays at Guardians: the simulated scores, the final outlined
     ("game-sim", "https://blandalytics.com/game-sim/#gp=849818",
      "/amber/.test(document.getElementById('sg_note').textContent) && !document.getElementById('sg_share').hidden", "sg_share_download"),
+    # Pete Crow-Armstrong's 2026 value through the season, his halves and months labeled
+    ("player-rater", "https://blandalytics.com/player-rater/#2026&c=691718h",
+     "!document.getElementById('share').disabled && document.getElementById('meta').textContent.includes('2026')", "share_download"),
     # Shai Gilgeous-Alexander's 2025-26 season (#season/playerId/season)
     ("nba-shot-charts", "https://blandalytics.com/nba-shot-charts/#2025-26/1628983/season",
      "!document.getElementById('share_png').hidden && document.getElementById('player').value.includes('Gilgeous')", "share_png_download"),

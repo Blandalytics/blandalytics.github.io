@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Player Rater</title>
+<meta name="description" content="Auction dollar values for what MLB players actually did, 2015–2026, for any date range and your league's settings, priced in standings gain points.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://data.blandalytics.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/shared/plpd.css?v=3">
+<style>
+/* Player Rater on the PLPD design system (/shared/plpd.css), laid out as the approved mockup:
+   header, season switch, the period and league bar (league settings open under it), what a
+   standings point costs, value through the season, the player table, how it works */
+:root{
+  /* PLPD tokens this page needs that plpd.css v3 does not carry (values from the system's tokens.json) */
+  --body-text:#ebeae7; /* paper-100 */
+  --font-body:-apple-system,BlinkMacSystemFont,"Instrument Sans",system-ui,sans-serif;
+  --pitch-four-seamer:#ff839b; --pitch-slider:#ce66ff; --pitch-curveball:#2a98ff;
+  --brand-cyan-soft:#55e8ff12; --navy-200:#cbd7fd;
+  --table-row-hover:#293461;
+  --data-table-row-bg-stripe-light:#303a6175; --data-table-row-bg-stripe-dark:#2a335561;
+  --data-table-section-divider:#323c59;
+}
+main{max-width:var(--layout-pl-site-max); margin:0 auto; padding:32px var(--layout-page-content-gutter) 48px; box-sizing:border-box;
+  display:flex; flex-direction:column; gap:var(--space-600)}
+@media (max-width:700px){main{padding:24px 16px 40px; gap:20px}}
+p{margin:0}
+[hidden]{display:none !important}
+.num{font-variant-numeric:tabular-nums}
+.card{background:var(--card-card-bg); border-radius:var(--radius-xl); padding:16px 20px}
+.section{display:flex; flex-direction:column; gap:var(--space-300)}
+.section__title{margin:0; font-family:var(--font-display); font-size:24px; font-weight:900; line-height:1.2; color:var(--brand-brand-cyan-header); text-wrap:balance}
+.section__desc{font-family:var(--font-body); font-size:16px; line-height:1.5; color:var(--body-text); text-wrap:pretty}
+@media (max-width:700px){.section__title{font-size:22px}}
+
+/* season switch (PlYearSwitch): cyan chips oldest to newest; a dropdown on phones */
+#seasons{display:flex; flex-wrap:wrap; gap:var(--space-200)}
+.season-field{display:none}
+@media (max-width:700px){#seasons{display:none} .season-field{display:flex}}
+
+/* the period and league bar */
+.bar{display:flex; flex-wrap:wrap; gap:var(--space-400); align-items:flex-end}
+.bar .grow{flex:1 1 24px}
+.league{display:flex; flex-direction:column; gap:2px; align-items:flex-end; text-align:right; min-width:0}
+.league b{font-family:var(--font-display); font-size:16px; font-weight:600; color:var(--text-text-cell)}
+.league span{font-family:var(--font-body); font-size:14px; color:var(--text-text-nav)}
+/* PlFilterDate on a native date field */
+input.date{box-sizing:border-box; height:40px; padding:0 12px; border:1px solid var(--borders-border-tab); border-radius:var(--radius-lg);
+  background:var(--surfaces-surface-3); box-shadow:var(--shadow-pl-filter-search-input-inset); color-scheme:dark;
+  font-family:var(--font-text); font-size:14px; color:var(--text-text-nav)}
+input.date:hover{border-color:rgba(255,255,255,.2)}
+input.date:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:2px}
+@media (max-width:700px){
+  .bar{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px}
+  .bar .plpd-filter-field, .bar select.plpd-filter-dropdown, .bar input.date{width:100%}
+  .bar .grow{display:none}
+  .bar .league-row{grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:12px;
+    border-top:1px solid var(--data-table-pl-data-table-row-border); padding-top:12px}
+  .league{align-items:flex-start; text-align:left}
+}
+.league-row{display:contents}
+@media (max-width:700px){.league-row{display:flex}}
+
+/* league settings, open under the bar */
+#settings{border-top:1px solid var(--data-table-pl-data-table-row-border); margin-top:20px; padding-top:20px; display:flex; flex-direction:column; gap:20px}
+.settings-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr)); gap:28px 40px}
+.settings-group{display:flex; flex-direction:column; gap:var(--space-300); min-width:0}
+.settings-group h3{margin:0; font-family:var(--font-display); font-size:18px; font-weight:600; line-height:22px; color:var(--brand-brand-amber)}
+.fields{display:flex; flex-wrap:wrap; gap:var(--space-400)}
+/* PlNumberInput / PlMoneyInput / PlPercentInput */
+.numfield{box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:4px; height:40px; padding:0 12px;
+  border:1px solid var(--input-field-border); border-radius:var(--radius-lg); background:var(--input-field-bg)}
+.numfield:hover{border-color:var(--input-field-border-hover)}
+.numfield:focus-within{border-color:rgba(85,232,255,.4)}
+.numfield input{width:3.2em; padding:0; border:0; background:transparent; outline:none; text-align:center; font-family:var(--font-text); font-size:16px;
+  color:var(--text-text-cell); -moz-appearance:textfield}
+.numfield input::-webkit-inner-spin-button,.numfield input::-webkit-outer-spin-button{-webkit-appearance:none; margin:0}
+.numfield i{font-style:normal; font-family:var(--font-display); font-size:16px; font-weight:600; color:var(--base-white)}
+/* PlNumberStepper: cyan position label, then minus, value, plus */
+.steppers{display:grid; grid-template-columns:repeat(auto-fill,minmax(154px,1fr)); gap:12px 16px}
+.stepper{display:flex; align-items:center; gap:14px}
+.stepper label{width:40px; text-align:right; font-family:var(--font-display); font-size:16px; font-weight:600; color:var(--brand-brand-cyan)}
+.stepper .ctl{box-sizing:border-box; display:flex; align-items:center; width:90px; height:40px; border:1px solid var(--input-field-border);
+  border-radius:var(--radius-lg); background:var(--input-field-bg); box-shadow:var(--shadow-pl-filter-search-input-inset)}
+.stepper button{width:28px; height:38px; flex:none; display:grid; place-items:center; padding:0; border:0; border-radius:var(--radius-lg); background:transparent;
+  color:var(--text-text-nav); cursor:pointer}
+.stepper button:hover:not(:disabled){background:var(--overlay-overlay-white-08); color:var(--base-white)}
+.stepper button:disabled{opacity:.35; cursor:default}
+.stepper output{flex:1; text-align:center; font-family:var(--font-text); font-size:14px; font-weight:500; color:var(--base-white)}
+.settings-actions{display:flex; flex-wrap:wrap; gap:12px; align-items:center; border-top:1px solid var(--data-table-pl-data-table-row-border); padding-top:16px}
+.settings-actions span{font-family:var(--font-body); font-size:16px; color:var(--text-text-nav)}
+.settings-actions span.err{color:var(--status-message-error)}
+
+/* what a standings point costs */
+.prices{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr)); gap:var(--space-400)}
+.price{display:flex; flex-direction:column; gap:14px}
+.price h3{margin:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; font-family:var(--font-display); font-size:20px; font-weight:700; color:var(--text-text-cell)}
+.price h3 span{font-family:var(--font-text); font-weight:500; font-variant-numeric:tabular-nums; color:var(--text-text-nav)}
+.price dl{margin:0; display:flex; flex-wrap:wrap; gap:12px 28px}
+.price dl div{display:flex; flex-direction:column; gap:2px; min-width:64px}
+.price dt{font-family:var(--font-display); font-size:14px; font-weight:600; color:var(--brand-brand-cyan-header)}
+.price dd{margin:0; font-family:var(--font-text); font-size:22px; font-weight:500; font-variant-numeric:tabular-nums; color:var(--text-text-cell)}
+@media (max-width:700px){.price dl{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px} .price dd{font-size:16px} .price h3{font-size:18px}}
+
+/* value through the season */
+.chart-card{display:flex; flex-direction:column; gap:12px; padding:16px 20px 12px}
+.chart-head{display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; justify-content:space-between}
+.legend{display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; min-height:32px; flex:1 1 auto}
+@media (max-width:700px){.legend{justify-content:flex-start}}
+.legend .empty{font-family:var(--font-body); font-size:16px; color:var(--text-text-nav)}
+.legend-item{display:inline-flex; align-items:center; gap:8px; height:32px; padding:0 4px 0 12px; border:1px solid var(--borders-border-tab);
+  border-radius:6px; font-family:var(--font-display); font-size:14px; font-weight:500; color:var(--text-text-cell)}
+.legend-item .key{width:16px; height:3px; border-radius:2px}
+.legend-item .v{font-family:var(--font-text); font-variant-numeric:tabular-nums; color:var(--text-text-nav)}
+.legend-item button{display:inline-grid; place-items:center; width:28px; height:28px; padding:0; border:0; border-radius:4px; background:transparent;
+  color:var(--text-text-nav); cursor:pointer}
+.legend-item button:hover{background:var(--white-alpha-200); color:var(--base-white)}
+#chart-box{position:relative}
+#chart{display:block; width:100%; overflow:visible; touch-action:pan-y}
+#chart text{font-family:var(--font-text); font-size:14px; fill:var(--navy-200)}
+#chart text.half{font-family:var(--font-display); font-size:14px; font-weight:600; fill:var(--text-text-cell)}
+#chart text.val{font-size:14px; font-weight:600; fill:var(--text-text-cell)}
+#chart-status{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; font-family:var(--font-body); font-size:16px; color:var(--text-text-nav)}
+#tip{position:absolute; pointer-events:none; z-index:3; min-width:180px}
+#tip .d{margin-bottom:6px; color:var(--text-text-nav)}
+#tip .row{display:flex; align-items:center; gap:8px}
+#tip .row i{width:12px; height:3px; border-radius:2px; flex:none}
+#tip .row span{flex:1}
+#tip .row b{font-weight:600; font-variant-numeric:tabular-nums}
+
+/* the player table */
+.tools{display:flex; flex-wrap:wrap; gap:12px 24px; align-items:center}
+.tools .grow{flex:1 1 0}
+/* TabNavMain */
+.tabs{display:flex; gap:40px; padding:0 24px; border-bottom:1px solid var(--overlay-overlay-white-13)}
+.tabs button{position:relative; padding:14px 0 16px; border:0; background:transparent; font-family:var(--font-display); font-size:17px; font-weight:600;
+  letter-spacing:.34px; color:#d9ddeedb; cursor:pointer}
+.tabs button:hover{color:var(--brand-brand-amber); text-shadow:0 0 14px rgba(255,194,119,.42)}
+.tabs button[aria-selected=true]{color:var(--brand-brand-amber)}
+.tabs button[aria-selected=true]::after{content:""; position:absolute; left:-5px; right:-5px; bottom:-1px; height:6px; border-radius:999px 999px 0 0; background:var(--brand-brand-amber)}
+@media (max-width:700px){.tabs{margin:0 -16px; padding:0 16px}}
+/* PlFilterSearch */
+.search{box-sizing:border-box; width:240px; max-width:100%; height:40px; padding:0 12px 0 38px; border:1px solid var(--input-field-border); border-radius:var(--radius-lg);
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 48 48' fill='none' stroke='%23a9b0cc' stroke-width='4' stroke-linejoin='round'%3E%3Cpath d='M21 38C30.3888 38 38 30.3888 38 21C38 11.6112 30.3888 4 21 4C11.6112 4 4 11.6112 4 21C4 30.3888 11.6112 38 21 38Z'/%3E%3Cpath d='M33.2218 33.2218L41.7071 41.7071' stroke-linecap='round'/%3E%3C/svg%3E") 12px center / 18px 18px no-repeat, var(--input-field-bg);
+  font-family:var(--font-text); font-size:16px; color:var(--text-text-cell); outline:none}
+.search::placeholder{color:#a9b0cc; opacity:1}
+.search:hover{border-color:var(--input-field-border-hover)}
+.search:focus{border-color:rgba(85,232,255,.4)}
+@media (max-width:700px){.search{width:100%} .tools .grow{display:none}}
+/* table: rank and player locked, both opaque; stripes, hover and charted rows #293461 */
+.plpd-table-wrap{max-height:none}
+#tbl{width:100%; font-size:16px}
+#tbl th,#tbl td{padding:8px 12px; text-align:right; height:36px; box-sizing:border-box}
+#tbl th{cursor:pointer; user-select:none; height:34px}
+#tbl th.l,#tbl td.l{text-align:left}
+#tbl th.c,#tbl td.c{text-align:center}
+#tbl td{isolation:isolate}
+#tbl tbody tr:nth-child(odd) td{background:var(--data-table-row-bg-stripe-light)}
+#tbl tbody tr:nth-child(even) td{background:var(--data-table-row-bg-stripe-dark)}
+#tbl tbody tr{cursor:pointer}
+#tbl tbody tr:hover td,#tbl tbody tr.on td{background:var(--table-row-hover)}
+#tbl .pin{position:sticky; z-index:10; isolation:auto; overflow:hidden; text-overflow:ellipsis}
+#tbl thead .pin{z-index:12}
+#tbl .pin0{left:0; width:56px; min-width:56px; max-width:56px}
+#tbl .pin1{left:56px; width:240px; min-width:240px; max-width:240px; box-shadow:6px 0 8px -6px rgba(0,0,0,.5)}
+/* a locked cell is opaque: its stripe over the table base */
+#tbl tbody tr:nth-child(odd) td.pin{background:linear-gradient(var(--data-table-row-bg-stripe-light),var(--data-table-row-bg-stripe-light)),var(--data-table-pl-data-table-scroll-base-bg)}
+#tbl tbody tr:nth-child(even) td.pin{background:linear-gradient(var(--data-table-row-bg-stripe-dark),var(--data-table-row-bg-stripe-dark)),var(--data-table-pl-data-table-scroll-base-bg)}
+#tbl tbody tr:hover td.pin,#tbl tbody tr.on td.pin{background:var(--table-row-hover)}
+#tbl thead th.pin{background:var(--gradient-pl-data-table-header-bg),#3a415e}
+#tbl td.rk{color:var(--data-table-pl-data-table-cell-zero); text-align:left}
+#tbl td.player{padding-top:7px; padding-bottom:7px}
+#tbl td.player b{display:block; font-weight:500; color:#f6f8fff5; overflow:hidden; text-overflow:ellipsis}
+#tbl td.player span{display:block; margin-top:2px; font-size:14px; font-weight:500; letter-spacing:.12px; color:var(--text-text-team); overflow:hidden; text-overflow:ellipsis}
+#tbl td.usd{font-weight:600}
+#tbl td.zero{color:var(--data-table-pl-data-table-cell-zero)}
+#tbl .div{border-left:2px solid var(--data-table-section-divider)}
+@media (max-width:700px){
+  #tbl{font-size:14px}
+  #tbl .pin0{width:44px; min-width:44px; max-width:44px; padding-left:10px; padding-right:6px}
+  #tbl .pin1{left:44px; width:176px; min-width:176px; max-width:176px; padding-left:10px; padding-right:10px}
+  #tbl td.player span{font-size:14px}
+}
+/* PlDataTablePagination */
+.pager{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 16px}
+.pager .sum{font-family:var(--font-text); font-size:14px; color:var(--text-text-nav)}
+.pager .sum b{font-family:var(--font-display); font-weight:700; color:var(--base-white)}
+.pager .nav{display:flex; gap:8px; align-items:center}
+
+/* how it works */
+.how{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr)); gap:24px 32px; padding:20px}
+.how div{display:flex; flex-direction:column; gap:6px}
+.how h3{margin:0; font-family:var(--font-display); font-size:18px; font-weight:600; color:var(--brand-brand-amber)}
+.how p{font-family:var(--font-body); font-size:16px; line-height:1.5; color:var(--body-text); text-wrap:pretty}
+</style>
+</head>
+<body class="plpd">
+<main>
+  <header class="plpd-page-header">
+    <h1 class="plpd-page-header__title">Player Rater</h1>
+    <p class="plpd-page-header__meta" id="meta">Loading seasons</p>
+  </header>
+
+  <div id="seasons" role="group" aria-label="Season"></div>
+
+  <section class="card" aria-label="Period and league">
+    <div class="bar">
+      <label class="plpd-filter-field season-field"><span class="plpd-filter-field__label">Season</span>
+        <select class="plpd-filter-dropdown" id="season"></select></label>
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">Period</span>
+        <select class="plpd-filter-dropdown" id="preset"></select></label>
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">From</span>
+        <input class="date" type="date" id="d-start"></label>
+      <label class="plpd-filter-field"><span class="plpd-filter-field__label">To</span>
+        <input class="date" type="date" id="d-end"></label>
+      <div class="grow"></div>
+      <div class="league-row">
+        <div class="league"><b id="league-line"></b><span id="league-cats"></span></div>
+        <button class="plpd-btn" id="toggle-settings" type="button" aria-expanded="false" aria-controls="settings">League Settings</button>
+      </div>
+    </div>
+    <div id="settings" hidden>
+      <div class="settings-grid">
+        <div class="settings-group">
+          <h3>League</h3>
+          <div class="fields">
+            <label class="plpd-filter-field"><span class="plpd-filter-field__label">Teams</span>
+              <span class="numfield"><input type="number" id="s-teams" min="4" max="20" step="1" inputmode="numeric"></span></label>
+            <label class="plpd-filter-field"><span class="plpd-filter-field__label">Budget</span>
+              <span class="numfield"><i>$</i><input type="number" id="s-budget" min="50" max="1000" step="1" inputmode="numeric"></span></label>
+            <label class="plpd-filter-field"><span class="plpd-filter-field__label">To Hitters</span>
+              <span class="numfield"><input type="number" id="s-hshare" min="10" max="90" step="1" inputmode="numeric" aria-label="Share of budget to hitters"><i>%</i></span></label>
+            <label class="plpd-filter-field"><span class="plpd-filter-field__label">Min Bid</span>
+              <span class="numfield"><i>$</i><input type="number" id="s-minbid" min="0" max="5" step="1" inputmode="numeric" aria-label="Minimum bid"></span></label>
+          </div>
+        </div>
+        <div class="settings-group">
+          <h3>Roster Spots</h3>
+          <div class="steppers" id="slots"></div>
+        </div>
+        <div class="settings-group">
+          <h3>Hitting Categories</h3>
+          <div class="plpd-chips" id="cats-h" role="group" aria-label="Hitting categories"></div>
+        </div>
+        <div class="settings-group">
+          <h3>Pitching Categories</h3>
+          <div class="plpd-chips" id="cats-p" role="group" aria-label="Pitching categories"></div>
+        </div>
+      </div>
+      <div class="settings-actions">
+        <button class="plpd-btn plpd-btn--primary" id="apply-settings" type="button">Apply Settings</button>
+        <button class="plpd-btn" id="reset-settings" type="button">Reset To Yahoo Default</button>
+        <span id="settings-msg" role="status"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="h-prices">
+    <h2 class="section__title" id="h-prices">What a Standings Point Costs</h2>
+    <div class="prices" id="prices"></div>
+  </section>
+
+  <section class="section" aria-labelledby="h-trend">
+    <h2 class="section__title" id="h-trend">Value Through the Season</h2>
+    <p class="section__desc">Each line is a player's dollar value for the season up to that date. Pick players in the table to add them, up to four.</p>
+    <div class="card chart-card">
+      <div class="chart-head">
+        <button class="plpd-btn" id="share" type="button">Share image ▾</button>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div id="chart-box">
+        <svg id="chart" role="img" aria-label="Season-to-date dollar value of the charted players" tabindex="0"></svg>
+        <div id="chart-status" role="status"></div>
+        <div class="plpd-tooltip" id="tip" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="h-values">
+    <h2 class="section__title" id="h-values">Player Values</h2>
+    <div class="tabs" role="tablist" aria-label="Player group">
+      <button role="tab" type="button" data-group="h" aria-selected="true">Hitters</button>
+      <button role="tab" type="button" data-group="p" aria-selected="false">Pitchers</button>
+      <button role="tab" type="button" data-group="all" aria-selected="false">All</button>
+    </div>
+    <div class="tools">
+      <div class="plpd-chips" id="pos-chips" role="group" aria-label="Position"></div>
+      <div class="grow"></div>
+      <div class="plpd-chips" role="group" aria-label="Columns">
+        <button class="plpd-chip" type="button" data-mode="stats" aria-pressed="true">Stats</button>
+        <button class="plpd-chip" type="button" data-mode="sgp" aria-pressed="false">Points by Category</button>
+      </div>
+      <input class="search" id="search" type="search" placeholder="Search players" aria-label="Search players">
+    </div>
+    <div class="plpd-table-wrap">
+      <table class="plpd-table" id="tbl" aria-label="Player values">
+        <thead id="thead"></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <span class="sum" id="pager-sum"></span>
+      <div class="nav">
+        <button class="plpd-btn" type="button" id="prev">Previous</button>
+        <button class="plpd-btn" type="button" id="next">Next</button>
+        <button class="plpd-btn" type="button" id="export">Export CSV</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="h-how">
+    <h2 class="section__title" id="h-how">How It Works</h2>
+    <div class="card how">
+      <div><h3>Standings Points</h3><p>One point in a category is how far apart team totals sit when every team takes one player from each tier of the rostered pool.</p></div>
+      <div><h3>Rate Stats</h3><p>AVG, ERA and WHIP count as gains over the rostered-player rate, weighted by at-bats or innings, so a great rate in a small sample is worth less.</p></div>
+      <div><h3>Replacement Level</h3><p>The average of the best three players left once every starting and bench spot is filled. A position gets its own lower level only when no one eligible there is starting elsewhere.</p></div>
+      <div><h3>Dollars</h3><p>Hitters and pitchers each keep the minimum bid for every roster spot and split the rest by points above replacement. Every period sums to the full budget.</p></div>
+      <div><h3>Eligibility</h3><p>10 games or 5 starts at a position that season. SP takes 3 starts, RP 5 relief outings. Ohtani's hitting and pitching are two players, as Yahoo lists them.</p></div>
+      <div><h3>Head-to-Head Leagues</h3><p>Values use roto standings. Players' values relative to each other change little under head-to-head.</p></div>
+    </div>
+  </section>
+</main>
+<script src="/shared/share-image.js?v=2"></script>
+<script src="engine.js?v=2"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>
