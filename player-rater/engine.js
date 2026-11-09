@@ -5,7 +5,8 @@
 //  - roto SGP denominator D_k = 2*sqrt(pi)*sigma_k/(N-1)
 //  - starting slots by greedy assignment; bench = next best players (roster spots, no team totals)
 //  - replacement = mean SGP of the best W players outside starters+bench; a position gets its own
-//    replacement level only when it binds (no player eligible there is starting in a flex slot)
+//    replacement level only when it binds (no player eligible there is starting in a flex slot).
+//    Its split by category comes from the best `teams` such players, shifted to the same total.
 //  - dollars: min bid per rostered spot, the rest of each pool (hitter/pitcher split) by SGP above replacement
 (function (root) {
   "use strict";
@@ -184,11 +185,16 @@
       const W = settings.replW;
       const repl = {};
       const meanTop = (arr) => arr.length ? arr.slice(0, W).reduce((a, r) => a + r.sgp, 0) / Math.min(W, arr.length) : 0;
-      // the same players' SGP in each category: it sums to meanTop, so (player - replacement) by category
-      // sums to the player's SGP above replacement
+      // the category baseline averages a wider group (one player per team), because the best W players'
+      // category mix is a few small samples (e.g. two relievers with tiny ERAs). It is shifted by the same
+      // amount in every category so it sums to meanTop, so (player - replacement) by category still sums
+      // to the player's SGP above replacement.
       const meanTopCats = (arr) => {
-        const top = arr.slice(0, W), o = {};
-        for (const cat of cats) o[cat] = top.length ? top.reduce((a, r) => a + r.sgpCat[cat], 0) / top.length : 0;
+        const top = arr.slice(0, settings.teams), o = {};
+        let sum = 0;
+        for (const cat of cats) { o[cat] = top.length ? top.reduce((a, r) => a + r.sgpCat[cat], 0) / top.length : 0; sum += o[cat]; }
+        const shift = (meanTop(arr) - sum) / cats.length;
+        for (const cat of cats) o[cat] += shift;
         return o;
       };
       repl._any = meanTop(un);
