@@ -1,8 +1,9 @@
 // SGP player-rater engine. Pure functions; no DOM.
 // Method (project doc claude/generalized-sgp-procedure-ste.md):
-//  - rate stats become volume-weighted marginals vs the rostered-pool rate, in team-rate units; that pool
-//    is the one the counting categories alone would roster, so it isn't picked for its rates
-//  - team-total spread from draft tiers of N players: sigma^2 = sum of within-tier variances
+//  - an anchor pool (who the counting categories alone would roster) sets the rate baselines and the
+//    denominators below, which are then frozen; the rostered pool is picked on every category against them
+//  - rate stats become volume-weighted marginals vs the anchor-pool rate, in team-rate units
+//  - team-total spread from the anchor's draft tiers of N players: sigma^2 = sum of within-tier variances
 //  - roto SGP denominator D_k = 2*sqrt(pi)*sigma_k/(N-1)
 //  - starting slots by greedy assignment; bench = next best players (roster spots, no team totals)
 //  - replacement = mean SGP of the best W players outside starters+bench; a position gets its own
@@ -127,54 +128,33 @@
   }
 
   // ---------- one valuation for one pool ----------
+  // Two pools, two jobs. The anchor pool (who the counting categories alone would roster) sets the rate
+  // baselines and the standings-point denominators, which are then frozen. The rostered pool (picked on
+  // every category against those frozen baselines) sets replacement and dollars. Letting the rostered pool
+  // set its own baselines feeds back on itself: low-innings relievers with tiny ERAs pull the pool ERA
+  // down, good 200-inning starters then grade out as ratio negatives and drop out, and the loop settles on
+  // a reliever-heavy pool no real league rosters (2026: a 2.81 ERA, 47 of 96 starters relievers).
   function valuePool(rows, settings, g, cats) {
     const T = settings.teams;
     const plan = slotPlan(settings, g);
     const startN = Object.values(plan.pos).reduce((a, b) => a + b, 0) + plan.flex.reduce((a, f) => a + f[1], 0);
     const rosterN = startN + plan.bench;
     const vol = g === "h" ? (s) => s[HI.PA] : (s) => s[PI.OUTS] + 3 * s[PI.SV] + 3 * s[PI.HLD];
-    for (const r of rows) { r.v = vol(r.s); r.vc = r.v; }
-    // counting categories: they alone pick the pool that sets the rate-stat baselines (see below)
-    const countCats = cats.filter((c) => CATS[c].kind !== "rate" && CATS[c].kind !== "sum");
+    const countCats = cats.filter((c) => CATS[c].kind === "count");
     const flatCats = [];
     for (const c of cats) { const d = CATS[c]; if (d.kind === "sum") d.parts.forEach((p) => flatCats.push([c, p])); else flatCats.push([c, c]); }
-    let rostered = new Map(), D = {}, rates = {};
-    const iters = 6;
-    for (let it = 0; it < iters; it++) {
-      rows.sort((a, b) => b.v - a.v);
-      rostered = assign(rows, plan);
-      const ros = rows.filter((r) => rostered.has(r.key));
-      // bench = next best non-starters (by current value); they take roster spots but not team totals
-      const bench = new Set(rows.filter((r) => !rostered.has(r.key)).slice(0, plan.bench).map((r) => r.key));
-      // pool rates and team denominators. The baseline rate comes from the players who would be rostered on
-      // counting categories alone: the full-value pool is picked partly for its rates, so after the season
-      // it is full of low-innings relievers with tiny ERAs (2026: a 2.88 ERA when MLB was 4.15), and an
-      // excellent 200-inning starter scores as average or worse.
-      const rateRos = [...rows].sort((a, b) => b.vc - a.vc);
-      const rateMap = assign(rateRos, plan);
-      const ratePool = rateRos.filter((r) => rateMap.has(r.key));
-      for (const [, c] of flatCats) {
-        const d = CATS[c];
-        if (d.kind !== "rate") continue;
-        let num = 0, den = 0;
-        for (const r of ratePool) { num += d.num(r.s); den += d.den(r.s); }
-        rates[c] = { r: den > 0 ? num / den : 0, teamDen: den / T };
-      }
-      // marginal x per player per (sub)category
-      for (const r of rows) {
-        r.x = {};
-        for (const [cat, c] of flatCats) {
-          const d = CATS[c], sign = d.sign || 1;
-          let x;
-          if (d.kind === "rate") { const rt = rates[c]; x = rt.teamDen > 0 ? (d.num(r.s) - rt.r * d.den(r.s)) / rt.teamDen : 0; }
-          else x = d.f(r.s);
-          r.x[cat] = (r.x[cat] || 0) + sign * x;
-        }
-      }
-      // tier-stratified team-total spread -> D_k
-      const tiers = [];
-      for (let i = 0; i + T <= ros.length; i += T) tiers.push(ros.slice(i, i + T));
-      for (const cat of cats) {
+
+    // counting marginals don't depend on any pool; rate marginals are added once the anchor fixes the rates
+    for (const r of rows) {
+      r.x = {};
+      for (const cat of cats) r.x[cat] = 0;
+      for (const [cat, c] of flatCats) { const d = CATS[c]; if (d.kind !== "rate") r.x[cat] += (d.sign || 1) * d.f(r.s); }
+    }
+    // tier-stratified team-total spread -> D_k; `ordered` is a starting pool in draft order
+    const spread = (ordered, cs) => {
+      const D = {}, tiers = [];
+      for (let i = 0; i + T <= ordered.length; i += T) tiers.push(ordered.slice(i, i + T));
+      for (const cat of cs) {
         let v = 0;
         for (const t of tiers) {
           let m = 0; for (const r of t) m += r.x[cat]; m /= t.length;
@@ -184,63 +164,122 @@
         const sigma = Math.sqrt(v);
         D[cat] = sigma > 0 ? 2 * Math.sqrt(Math.PI) * sigma / (T - 1) : Infinity;
       }
-      for (const r of rows) {
-        r.sgpCat = {}; let tot = 0;
-        for (const cat of cats) { const q = r.x[cat] / D[cat]; r.sgpCat[cat] = q; tot += q; }
-        r.sgp = tot;
-        if (countCats.length) r.vc = countCats.reduce((a, c) => a + r.sgpCat[c], 0);
-      }
-      // replacement levels: mean SGP of the best W players outside the full roster (starters + bench)
-      const un = rows.filter((r) => !rostered.has(r.key) && !bench.has(r.key)).sort((a, b) => b.sgp - a.sgp);
+      return D;
+    };
+    // bench = next best non-starters; they take roster spots but not team totals
+    const benchOf = (starting, val) =>
+      new Set(rows.filter((r) => !starting.has(r.key)).sort((a, b) => val(b) - val(a)).slice(0, plan.bench).map((r) => r.key));
+    const sigOf = (starting, bench) => [...starting.keys()].sort().join() + "|" + (bench ? [...bench].sort().join() : "");
+
+    // replacement levels: mean SGP (sc) of the best W players outside the full roster (starters + bench).
+    // With withCats, also each level's split by category.
+    const replacement = (starting, bench, sc, withCats) => {
       const W = settings.replW;
-      const repl = {};
-      const meanTop = (arr) => arr.length ? arr.slice(0, W).reduce((a, r) => a + r.sgp, 0) / Math.min(W, arr.length) : 0;
+      const un = rows.filter((r) => !starting.has(r.key) && !bench.has(r.key)).sort((a, b) => sc(b) - sc(a));
+      const meanTop = (arr) => arr.length ? arr.slice(0, W).reduce((a, r) => a + sc(r), 0) / Math.min(W, arr.length) : 0;
       // the category baseline averages a wider group (one player per team), because the best W players'
       // category mix is a few small samples (e.g. two relievers with tiny ERAs). It is shifted by the same
       // amount in every category so it sums to meanTop, so (player - replacement) by category still sums
       // to the player's SGP above replacement.
       const meanTopCats = (arr) => {
-        const top = arr.slice(0, settings.teams), o = {};
+        const top = arr.slice(0, T), o = {};
         let sum = 0;
         for (const cat of cats) { o[cat] = top.length ? top.reduce((a, r) => a + r.sgpCat[cat], 0) / top.length : 0; sum += o[cat]; }
         const shift = (meanTop(arr) - sum) / cats.length;
         for (const cat of cats) o[cat] += shift;
         return o;
       };
-      repl._any = meanTop(un);
-      const replCat = { _any: meanTopCats(un) };
+      const repl = { _any: meanTop(un) };
+      const replCat = withCats ? { _any: meanTopCats(un) } : null;
       // a position has its own (lower) replacement level only when it binds: no player eligible there
-      // sits in a flex/bench slot. Otherwise removing him chains to the best unrostered player overall.
+      // sits in a flex slot. Otherwise removing him chains to the best unrostered player overall.
       const binding = {};
       for (const pos of Object.keys(plan.pos)) {
-        binding[pos] = !ros.some((r) => r.elig.includes(pos) && !(rostered.get(r.key) in plan.pos));
+        binding[pos] = !rows.some((r) => starting.has(r.key) && r.elig.includes(pos) && !(starting.get(r.key) in plan.pos));
         const pool = binding[pos] ? un.filter((r) => r.elig.includes(pos)) : un;
         repl[pos] = binding[pos] ? meanTop(pool) : repl._any;
-        replCat[pos] = binding[pos] ? meanTopCats(pool) : replCat._any;
+        if (withCats) replCat[pos] = binding[pos] ? meanTopCats(pool) : replCat._any;
       }
       repl._binding = binding;
-      for (const r of rows) {
+      const levelFor = (r) => {
         let base = repl._any, at = "_any";
         for (const e of r.elig) if (e in plan.pos && repl[e] < base) { base = repl[e]; at = e; }
-        r.repl = base; r.sgpar = r.sgp - base; r.v = r.sgpar;
-        r.replCat = replCat[at];
-      }
-      if (it === iters - 1) {
-        // dollars
-        const pool = settings.budget * T * (g === "h" ? settings.hitterShare : 1 - settings.hitterShare);
-        // final bench by final value (the in-loop bench used the previous iteration's ranking)
-        bench.clear();
-        rows.filter((r) => !rostered.has(r.key)).sort((a, b) => b.sgpar - a.sgpar).slice(0, plan.bench).forEach((r) => bench.add(r.key));
-        const ros2 = rows.filter((r) => rostered.has(r.key) || bench.has(r.key));
-        const above = ros2.reduce((a, r) => a + Math.max(r.sgpar, 0), 0);
-        const perSgp = above > 0 ? (pool - rosterN * settings.minBid) / above : 0;
-        for (const r of rows) {
-          r.dollars = settings.minBid + r.sgpar * perSgp;
-          r.slot = rostered.get(r.key) || (bench.has(r.key) ? "BN" : null);
-        }
-        return { rows, D, rates, repl, perSgp, rosterN, startN, pool };
+        return { base, at };
+      };
+      return { repl, replCat, levelFor };
+    };
+
+    // 1. anchor pool: fixed point of slot assignment on counting-category SGP above replacement (playing
+    //    time when there are no counting categories). A rare 2-cycle at the margin stops at the cap.
+    for (const r of rows) r.vc = vol(r.s);
+    let anchor = new Map(), anchorList = [], prev = "";
+    for (let it = 0; it < 12; it++) {
+      rows.sort((a, b) => b.vc - a.vc);
+      anchor = assign(rows, plan);
+      anchorList = rows.filter((r) => anchor.has(r.key));
+      const sig = sigOf(anchor);
+      if (!countCats.length || sig === prev) break;
+      prev = sig;
+      const Dc = spread(anchorList, countCats);
+      for (const r of rows) r.sc = countCats.reduce((a, c) => a + r.x[c] / Dc[c], 0);
+      const { levelFor } = replacement(anchor, benchOf(anchor, (r) => r.vc), (r) => r.sc, false);
+      for (const r of rows) r.vc = r.sc - levelFor(r).base;
+    }
+
+    // 2-3. frozen baselines: the anchor's rates and team denominators, and D_k from its draft tiers. The tier
+    //      order comes from one all-category valuation of the anchor against its own rates.
+    const rates = {};
+    for (const [, c] of flatCats) {
+      const d = CATS[c];
+      if (d.kind !== "rate") continue;
+      let num = 0, den = 0;
+      for (const r of anchorList) { num += d.num(r.s); den += d.den(r.s); }
+      rates[c] = { r: den > 0 ? num / den : 0, teamDen: den / T };
+    }
+    for (const r of rows) {
+      for (const [cat, c] of flatCats) {
+        const d = CATS[c], rt = rates[c];
+        if (d.kind === "rate" && rt.teamDen > 0) r.x[cat] += (d.sign || 1) * (d.num(r.s) - rt.r * d.den(r.s)) / rt.teamDen;
       }
     }
+    const D0 = spread(anchorList, cats);
+    const sgpWith = (r, Dk) => cats.reduce((a, c) => a + r.x[c] / Dk[c], 0);
+    const D = spread([...anchorList].sort((a, b) => sgpWith(b, D0) - sgpWith(a, D0)), cats);
+
+    // 4. everyone's SGP against the frozen baselines; it no longer depends on who is rostered
+    for (const r of rows) {
+      r.sgpCat = {}; let tot = 0;
+      for (const cat of cats) { const q = r.x[cat] / D[cat]; r.sgpCat[cat] = q; tot += q; }
+      r.sgp = tot;
+    }
+
+    // 5. rostered pool on all-category value; only the replacement levels move, so it settles in a few passes
+    for (const r of rows) r.v = r.sgp;
+    let rostered = new Map(), bench = new Set(), rep = null;
+    prev = "";
+    for (let it = 0; it < 10; it++) {
+      rows.sort((a, b) => b.v - a.v);
+      rostered = assign(rows, plan);
+      bench = benchOf(rostered, (r) => r.v);
+      const sig = sigOf(rostered, bench);
+      if (sig === prev) break;
+      prev = sig;
+      rep = replacement(rostered, bench, (r) => r.sgp, true);
+      for (const r of rows) {
+        const { base, at } = rep.levelFor(r);
+        r.repl = base; r.sgpar = r.sgp - base; r.v = r.sgpar; r.replCat = rep.replCat[at];
+      }
+    }
+
+    // 6. dollars: min bid per roster spot, the rest of the pool split by positive SGP above replacement
+    const pool = settings.budget * T * (g === "h" ? settings.hitterShare : 1 - settings.hitterShare);
+    const above = rows.reduce((a, r) => a + (rostered.has(r.key) || bench.has(r.key) ? Math.max(r.sgpar, 0) : 0), 0);
+    const perSgp = above > 0 ? (pool - rosterN * settings.minBid) / above : 0;
+    for (const r of rows) {
+      r.dollars = settings.minBid + r.sgpar * perSgp;
+      r.slot = rostered.get(r.key) || (bench.has(r.key) ? "BN" : null);
+    }
+    return { rows, D, rates, repl: rep.repl, perSgp, rosterN, startN, pool, anchorN: anchorList.length };
   }
 
   function valuate(db, settings, a, b) {
