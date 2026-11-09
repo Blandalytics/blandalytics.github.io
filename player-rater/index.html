@@ -129,8 +129,10 @@ input.date:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offs
 #tip .d{margin-bottom:6px; color:var(--text-text-nav)}
 #tip .row{display:flex; align-items:center; gap:8px}
 #tip .row i{width:12px; height:3px; border-radius:2px; flex:none}
-#tip .row span{flex:1}
+#tip .row span{flex:1; white-space:nowrap}
 #tip .row b{font-weight:600; font-variant-numeric:tabular-nums}
+#tip .row .ci{flex:none; color:var(--text-text-nav); font-variant-numeric:tabular-nums}
+#tip .note{margin-top:6px; color:var(--text-text-nav)}
 
 /* the player table */
 .tools{display:flex; flex-wrap:wrap; gap:12px 24px; align-items:center}
@@ -266,7 +268,7 @@ input.date:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offs
 
   <section class="section" aria-labelledby="h-trend">
     <h2 class="section__title" id="h-trend">Value Through the Season</h2>
-    <p class="section__desc">Each line is a player's dollar value for the season up to that date. Pick players in the table to add them, up to four.</p>
+    <p class="section__desc">Each line is a player's dollar value for the season up to that date, and the shading around it is a 95% interval. Pick players in the table to add them, up to four.</p>
     <div class="card chart-card">
       <div class="chart-head">
         <button class="plpd-btn" id="share" type="button" disabled>Share image ▾</button>
@@ -319,13 +321,14 @@ input.date:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offs
       <div><h3>Rate Stats</h3><p>AVG, ERA and WHIP count as gains over the baseline pool's rate, weighted by at-bats or innings, so a great rate in a small sample is worth less. Picking that pool on counting stats keeps low-inning relievers with tiny ERAs from setting the bar.</p></div>
       <div><h3>Replacement Level</h3><p>The average of the best three players left once every starting and bench spot is filled. A position gets its own lower level only when no one eligible there is starting elsewhere.</p></div>
       <div><h3>Dollars</h3><p>Hitters and pitchers each keep the minimum bid for every roster spot and split the rest by points above replacement. Every period sums to the full budget.</p></div>
+      <div><h3>95% Intervals</h3><p>After the fact, the only doubt about who should have been rostered is the season record itself. So the season's days are resampled 1,000 times, in runs of a week on average, the rostered pool and replacement players are rebuilt from each resample, and the player's actual line is valued against each one. The band covers 95% of those values.</p></div>
       <div><h3>Eligibility</h3><p>10 games or 5 starts at a position that season. SP takes 3 starts, RP 5 relief outings. Ohtani's hitting and pitching are two players, as Yahoo lists them.</p></div>
       <div><h3>Head-to-Head Leagues</h3><p>Values use roto standings. Players' values relative to each other change little under head-to-head.</p></div>
     </div>
   </section>
 </main>
 <script src="/shared/share-image.js?v=2"></script>
-<script src="engine.js?v=4"></script>
-<script src="app.js?v=9"></script>
+<script src="engine.js?v=6"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
