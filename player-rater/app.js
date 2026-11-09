@@ -647,7 +647,7 @@
   const HEX = ["#55e8ff", "#ff839b", "#ce66ff", "#2a98ff"]; // brand-cyan, pitch-four-seamer, pitch-slider, pitch-curveball
   const IMG = { W: 1600, H: 1600, P: 64, bg: "#292c42", title: "#73efff", text: "#f0f1f5", axis: "#cbd7fd",
     grid: "rgba(255,255,255,0.07)", zero: "rgba(255,255,255,0.26)", base: "rgba(196,205,236,0.85)", foot: "#c0c6dc", band: "rgba(85,232,255,0.07)",
-    neg: "#ff839b", /* pitch-four-seamer */ pos: "#7ddf9a", /* green-300 */ row: "rgba(48,58,97,0.46)" /* data-table-row-bg-stripe-light */ };
+    neg: "#ff839b", /* pitch-four-seamer */ pos: "#7ddf9a", /* green-300 */ row: "#404460" /* navy-500 */ };
   let markImg = null;
   const loadMark = () => markImg || (markImg = new Promise((res, rej) => {
     const im = new Image(); im.onload = () => res(im); im.onerror = rej;
