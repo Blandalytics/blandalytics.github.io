@@ -74,8 +74,10 @@
   let trend = null; // { keys: Map(key -> index), vals: Float32Array (index * N + day), done, upto, seg: [Float32Array] }
   let worker = null;
   // 95% intervals: bootstraps of the season to date, every CI.step days and at the season's last day; the band
-  // between those dates is interpolated as an offset from the line, so it follows the line's shape
-  const CI = { reps: 200, first: 13, step: 14, maxWorkers: 6 };
+  // between those dates is interpolated as an offset from the line, so it follows the line's shape. At the
+  // default settings they come precomputed from R2 (tools/player_rater/bootstrap_ci.js, the same engine and
+  // seeds); `method` names the engine's numbers, and a file with another method or season build is not used.
+  const CI = { reps: 1000, first: 13, step: 14, maxWorkers: 6, method: "retro-mode-r-1" };
   let ci = null; // { days: [day], got: Map(day -> { lo, hi } by trend index), done, failed, workers }
 
   // ---------- dates ----------
@@ -461,7 +463,7 @@
     trend = null;
     const segs = state.segs.map((s) => [s.a, s.b]);
     if (state.halves) segs.push([0, state.halves.h1], [state.halves.h2, state.N - 1]);
-    const mine = new Worker("trend-worker.js?v=5");
+    const mine = new Worker("trend-worker.js?v=6");
     worker = mine;
     mine.onmessage = (e) => {
       if (worker !== mine) return;
@@ -481,18 +483,38 @@
     renderChart();
   }
 
-  // ---------- 95% intervals: a few workers, each taking the next date when it finishes one ----------
+  // ---------- 95% intervals: precomputed at the defaults, else a few workers taking the next date in turn ----------
   function stopCI() {
     if (ci) for (const w of ci.workers) w.terminate();
     ci = null;
   }
-  function startCI() {
+  // the same settings, whatever order their keys were saved in
+  const canon = (o) => (Array.isArray(o) ? "[" + o.map(canon).join() + "]" : o && typeof o === "object"
+    ? "{" + Object.keys(o).sort().map((k) => JSON.stringify(k) + ":" + canon(o[k])).join() + "}" : JSON.stringify(o));
+  async function startCI() {
     stopCI();
     const last = state.N - 1, days = [last];
     for (let d = CI.first; d < last; d += CI.step) days.push(d);
     days.sort((a, b) => (a === last ? -1 : b === last ? 1 : b - a)); // the season total first, then back from the end
     const mine = { days, got: new Map(), done: false, failed: false, workers: [] };
     ci = mine;
+    if (canon(settings) === canon(E.YAHOO_DEFAULT)) {
+      try {
+        const f = await getJSON(`${DATA}ci/${state.season}.json?v=${encodeURIComponent(state.raw.built + "-" + CI.method)}`);
+        if (ci !== mine) return;
+        if (f.method === CI.method && f.built === state.raw.built) {
+          const n = trend.keys.size;
+          f.days.forEach((d, u) => {
+            const lo = new Float32Array(n).fill(NaN), hi = new Float32Array(n).fill(NaN);
+            f.keys.forEach((k, p) => { const i = trend.keys.get(k); if (i != null && f.lo[u][p] != null) { lo[i] = f.lo[u][p] / 10; hi[i] = f.hi[u][p] / 10; } });
+            mine.got.set(d, { lo, hi });
+          });
+          mine.days = f.days; mine.done = true; renderChart();
+          return;
+        }
+      } catch (e) { /* not published for this season: compute them */ }
+      if (ci !== mine) return;
+    }
     const queue = days.slice();
     const n = Math.max(1, Math.min(CI.maxWorkers, (navigator.hardwareConcurrency || 2) - 1, days.length));
     let paint = 0;
@@ -502,7 +524,7 @@
       if (!mine.workers.length) { mine.done = true; renderChart(); }
     };
     for (let i = 0; i < n; i++) {
-      const w = new Worker("ci-worker.js?v=1");
+      const w = new Worker("ci-worker.js?v=2");
       mine.workers.push(w);
       w.onmessage = (e) => {
         if (ci !== mine) return;
@@ -694,6 +716,7 @@
     const st2 = $("chart-status");
     if (!trend || !trend.done) st2.textContent = `Valuing every date of the ${state.season} season${trend && trend.vals ? ", " + Math.round(((trend.upto - TREND_START + 1) / (state.N - TREND_START)) * 100) + "%" : ""}`;
     else if (ci && ci.failed) st2.textContent = "The 95% intervals could not be computed in this browser.";
+    else if (ci && !ci.done && !ci.workers.length) st2.textContent = "Loading 95% intervals";
     else if (ci && !ci.done) st2.textContent = `Estimating 95% intervals, ${Math.round((ci.got.size / ci.days.length) * 100)}%`;
     else st2.textContent = "";
   }

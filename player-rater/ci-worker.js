@@ -2,7 +2,7 @@
 // to that date (engine.js bootstrap, retrospective Mode R) gives every player's interval. The page runs a few
 // of these side by side and hands out the dates; one job set per worker, terminated when it is done or the
 // season or settings change.
-importScripts("engine.js?v=5");
+importScripts("engine.js?v=6");
 const E = self.RaterEngine;
 let db = null, settings = null;
 
