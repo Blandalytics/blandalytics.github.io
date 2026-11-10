@@ -132,6 +132,8 @@ input.date:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offs
 #tip .row span{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 #tip .row b{font-weight:600; font-variant-numeric:tabular-nums}
 #tip .row .ci{flex:none; color:var(--text-text-nav); font-variant-numeric:tabular-nums}
+/* phones: the interval drops to its own line under the value, so the name and value keep the row's full width */
+@media (max-width:700px){#tip .row{flex-wrap:wrap; row-gap:0} #tip .row .ci{flex:0 0 100%; text-align:right; margin-bottom:4px}}
 
 /* the player table */
 .tools{display:flex; flex-wrap:wrap; gap:12px 24px; align-items:center}
