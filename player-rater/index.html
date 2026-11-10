@@ -125,14 +125,15 @@ input.date:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offs
 #chart text.half{font-family:var(--font-display); font-size:21px; font-weight:600; fill:var(--text-text-cell)}
 #chart text.val{font-size:21px; font-weight:600; fill:var(--text-text-cell)}
 #chart-status{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; font-family:var(--font-body); font-size:24px; color:var(--text-text-nav)}
-#tip{position:absolute; pointer-events:none; z-index:3; min-width:180px}
+#tip{position:absolute; pointer-events:none; z-index:3; min-width:180px; max-width:min(100%, 400px)}
 #tip .d{margin-bottom:6px; color:var(--text-text-nav)}
 #tip .row{display:flex; align-items:center; gap:8px}
 #tip .row i{width:12px; height:3px; border-radius:2px; flex:none}
-#tip .row span{flex:1; white-space:nowrap}
+#tip .row span{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 #tip .row b{font-weight:600; font-variant-numeric:tabular-nums}
 #tip .row .ci{flex:none; color:var(--text-text-nav); font-variant-numeric:tabular-nums}
-#tip .note{margin-top:6px; color:var(--text-text-nav)}
+/* phones: the interval drops to its own line under the value, so the name and value keep the row's full width */
+@media (max-width:700px){#tip .row{flex-wrap:wrap; row-gap:0} #tip .row .ci{flex:0 0 100%; text-align:right; margin-bottom:4px}}
 
 /* the player table */
 .tools{display:flex; flex-wrap:wrap; gap:12px 24px; align-items:center}
@@ -330,6 +331,6 @@ input.date:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offs
 </main>
 <script src="/shared/share-image.js?v=2"></script>
 <script src="engine.js?v=10"></script>
-<script src="app.js?v=16"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>
