@@ -41,7 +41,7 @@ OUTCOMES = ("ball", "called_strike", "swinging_strike", "foul", "field_out", "si
             "double", "triple", "home_run")  # fmt: skip
 # sha256 of the pitch-modeling sources tools/live/src/cards/ is a port of
 PORTED = {
-    "score_pitches.py": "b0d60687607c9f9b59b9de1765bce273e211658ced2c74186da1de15aa25b7f3",
+    "score_pitches.py": "00d7e87e151ae0e6b90f7e270a792d7d93c78192f9bf1284c60942b573b29420",
     "pitch_groups.py": "95920fa0fd153ba1aa3308c4aff64631da1c63a5e35d4a3b3095a525840a661a",
     "pitch_l1.py": "5237b6e9a954c700e889767edd4c230e66a2b0de6f25ca3fde81313687a07099",
     "abs_2026.py": "07551cda50e16778d15039f3f3ab943a95b9bd7bd7eb005a5fa20755390a115c",
@@ -65,7 +65,7 @@ def drifted(root: str) -> list[str]:
 def _stage(arrays: dict, meta: dict, root: str, name: str) -> dict:
     """One chained model: per group its thetas, its location draws (concatenated, with an
     index of (offset, rows) per cell) and its boosters, location and residual models."""
-    blob = pickle.loads(_read(os.path.join(root, "models", f"{name}_logit_2325.pkl")))
+    blob = pickle.loads(_read(os.path.join(root, "models", f"{name}_logit_2326.pkl")))
     groups = {}
     for group, gm in blob["groups"].items():
         prefix = f"{name}/{group}"

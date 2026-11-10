@@ -342,13 +342,14 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 
 Stuff, Locations and PLV come from the
 [pitch-modeling](https://github.com/Blandalytics/pitch-modeling) repo. It is published to
-the bucket under `pitch-modeling/` (60 MB, downloaded once and cached beside the data files)
-and contains:
+the bucket under `pitch-modeling/` (72 MB, downloaded once and cached beside the data files,
+and downloaded again when a file's ETag changes) and contains:
 
 * `score_pitches.py`, the scorer, with `pitch_groups.py` and `pitch_l1.py` (the Level 1
   pitch classifier that assigns each pitch type its Fastball / Breaking / Offspeed group)
   and `abs_2026.py` (2026's ABS zone and calls);
-* `models/`, the four chained logit models and the classifier (`pitch_l1_v1.npz`);
+* `models/`, the four chained logit models (`<stage>_logit_2326.pkl`, trained on 2023–26)
+  and the classifier (`pitch_l1_v1.npz`);
 * `constants/`, the run-value tables, the plus scale and the 2026 ABS adjustment.
 
 Each file is fetched past the CDN's 4-hour cache, so a new publish reaches the next build.

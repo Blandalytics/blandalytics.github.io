@@ -39,7 +39,7 @@ ABS = "abs_2026.json"  # 2026 reference zones and recalibrated stages
 ARTIFACTS = (
     SCORER,
     *SOURCES,
-    *(f"models/{n}_logit_2325.pkl" for n in CHAIN),
+    *(f"models/{n}_logit_2326.pkl" for n in CHAIN),  # trained on 2023-26
     "models/pitch_l1_v1.npz",  # the Level 1 pitch classifier behind the pitch groups
     *(f"constants/{t}" for t in (*TABLES, SCALE, ABS)),
 )
@@ -77,20 +77,32 @@ class PitchModel:
 
     # -- the artifacts --
     def _fetch(self, name: str) -> None:
-        """Download one artifact unless the cached copy is already that size."""
+        """Download one artifact unless the cached copy is the published one: the same
+        ETag as when it was downloaded (kept beside it), or with no ETag the same size.
+        A republish under the same name can keep its size (new numbers in the same JSON
+        or pickle layout), and the Actions cache carries this folder from run to run."""
         path = os.path.join(self.dir, name)
         # past the CDN's 4-hour edge cache, so a new publish reaches the card at once
         fresh = {"v": int(time.time() // 60)}
         head = self.s.head(f"{MODELS_URL}/{name}", params=fresh, timeout=60, allow_redirects=True)
         head.raise_for_status()
         size = int(head.headers.get("content-length", -1))
+        etag = head.headers.get("etag", "")
+        tag = path + ".etag"
         if os.path.exists(path) and os.path.getsize(path) == size:
-            return
+            if not etag:
+                return
+            if os.path.exists(tag):
+                with open(tag, encoding="utf-8") as fh:
+                    if fh.read() == etag:
+                        return
         r = self.s.get(f"{MODELS_URL}/{name}", params=fresh, timeout=600)
         r.raise_for_status()
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as fh:
             fh.write(r.content)
+        with open(tag, "w", encoding="utf-8") as fh:
+            fh.write(r.headers.get("etag", etag))
         print(f"  pitch model {name}: {len(r.content) / 1e6:.1f} MB", file=sys.stderr)
 
     def ensure(self) -> None:

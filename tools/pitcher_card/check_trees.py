@@ -185,7 +185,7 @@ def run_parity(*args: str) -> int:
 def pitch_models(models_dir: str) -> Iterator[tuple[str, str, str, int, str]]:
     """(chain model, group, kind, index, LightGBM model text) for every model in the pickles."""
     for chain in CHAIN:
-        with open(os.path.join(models_dir, f"{chain}_logit_2325.pkl"), "rb") as fh:
+        with open(os.path.join(models_dir, f"{chain}_logit_2326.pkl"), "rb") as fh:
             blob = pickle.load(fh)
         for group, gm in blob["groups"].items():
             for kind in KINDS:

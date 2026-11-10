@@ -2,7 +2,7 @@
  * pitch-modeling's 2026 adjustment (abs_2026.py) for the location-aware values.
  *
  * statfast's 2026 sz_top / sz_bot are the fixed ABS zone, shorter than the pose-tracked
- * zones the 2023-25 models learned, so each 2026 pitch is scored against its batter's
+ * zones the models learned, so each 2026 pitch is scored against its batter's
  * reference zone (the ABS zone is kept as sz_top_abs / sz_bot_abs). The swing,
  * called-strike and whiff stages are recalibrated on 2026's calls with restricted cubic
  * splines in the zone heights and the distance off the plate, and their as-used
