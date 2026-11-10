@@ -324,7 +324,8 @@
       const den = cats.map((c) => {
         const D = pr.D[c], kind = E.CATS[c].kind;
         let t = !isFinite(D) ? "—" : kind === "count" ? D.toFixed(1) : D.toFixed(D < 0.01 ? 4 : 3).replace(/^0(?=\.)/, "");
-        return `<div><dt>${esc(E.CATS[c].label)}</dt><dd>${esc(t)}</dd></div>`;
+        // a rate's point is a gap between team rates, not player rates
+        return `<div><dt>${kind === "count" ? "" : "Team "}${esc(E.CATS[c].label)}</dt><dd>${esc(t)}</dd></div>`;
       }).join("");
       card.innerHTML = `<h3>${g === "h" ? "Hitters" : "Pitchers"}<span>$${pr.perSgp.toFixed(2)} per point</span></h3><dl>${den}</dl>`;
       box.appendChild(card);
@@ -772,10 +773,9 @@
     const tip = $("tip");
     const rows = geo.ser.map((s) => ({ s, v: s.arr ? s.arr[day] : NaN })).sort((a, b) => (isNaN(b.v) ? -1e9 : b.v) - (isNaN(a.v) ? -1e9 : a.v));
     const range = (s) => (s.band && day >= s.band.from && day <= s.band.to && !isNaN(s.band.lo[day])
-      ? `<span class="ci">${money1(s.band.lo[day])} to ${money1(s.band.hi[day])}</span>` : "");
+      ? `<span class="ci">(${money1(s.band.lo[day])} - ${money1(s.band.hi[day])})</span>` : "");
     tip.innerHTML = `<div class="d">Season to date through ${fmtDay(day)}</div>` + rows.map(({ s, v }) =>
-      `<div class="row"><i style="background:${s.color}"></i><span>${esc(nameTag(s.r))}</span><b>${isNaN(v) ? "—" : money1(v)}</b>${range(s)}</div>`).join("") +
-      (geo.ser.some((s) => s.band) ? `<div class="note">95% interval after each value</div>` : "");
+      `<div class="row"><i style="background:${s.color}"></i><span>${esc(nameTag(s.r))}</span><b>${isNaN(v) ? "—" : money1(v)}</b>${range(s)}</div>`).join("");
     tip.hidden = false;
     const scale = $("chart-box").clientWidth / geo.W;
     let left = x * scale + 14;
