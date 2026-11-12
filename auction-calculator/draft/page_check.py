@@ -21,7 +21,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "py"))
 
-from dry_run import HIT_DIR, PIT_DIR, RISK_FILES  # noqa: E402
+from dry_run import ELIG_ARGS, HIT_DIR, PIT_DIR, RISK_FILES  # noqa: E402
 from web_api import Session, objective_of  # noqa: E402
 
 # the keys app.js reads
@@ -122,7 +122,7 @@ def run(name, form, choices, priced, sims, tmp, rh, rp, out=print):
     with open(form_path, "w", encoding="utf-8") as f:
         json.dump(form, f)
     cmd = ["node", os.path.join(HERE, "export_players.mjs"), os.path.join(HIT_DIR, "hitters_auction_ev.csv"), os.path.join(PIT_DIR, "pitchers_auction_ev.csv"),
-           table_path, "--risk", *RISK_FILES, "--form", form_path, "--cfg", json.dumps({**choices, "sims": sims, "seed": 7}), cfg_path]  # fmt: skip
+           table_path, "--risk", *RISK_FILES, *ELIG_ARGS, "--form", form_path, "--cfg", json.dumps({**choices, "sims": sims, "seed": 7}), cfg_path]  # fmt: skip
     subprocess.run(cmd, check=True, capture_output=True)
     with open(cfg_path, encoding="utf-8") as f:
         cfg = json.load(f)

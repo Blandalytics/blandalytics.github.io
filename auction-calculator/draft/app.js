@@ -1,10 +1,10 @@
 // The draft mode's page (the risk plan's R8): the calculator's league, the draft's settings, then a
 // console driven by the worker (worker.js -> py/web_api.py). The league and the payout come from the
-// calculator's saved settings (setup.js); the projections and the risk files load as the calculator
-// loads them (?data=<base>, ?riskdata=<base>).
+// calculator's saved settings (setup.js); the projections, the position eligibility file and the
+// risk files load as the calculator loads them (?data=<base>, ?riskdata=<base>).
 import * as C from "../calc.js?v=24";
 import * as R from "../risk.js?v=3";
-import { STORE, buildTable, draftRisk, riskSettingsFrom, sessionConfig, settingsFrom, unsupported } from "./setup.js?v=5";
+import { STORE, buildTable, draftRisk, eligibilityFrom, riskSettingsFrom, sessionConfig, settingsFrom, unsupported } from "./setup.js?v=6";
 
 const VERSION = "3";   // bump with every deploy: it busts the cache on the worker and the Python files
 const $ = (id) => document.getElementById(id);
@@ -29,12 +29,16 @@ const DATA = slash(new URL(params.get("data") || "https://data.blandalytics.com/
 const RISK_DATA = slash(new URL(params.get("riskdata") || DATA, location.href).href);
 const FILES = { h: "hitters_auction_ev.csv", p: "pitchers_auction_ev.csv" };
 const RISK_FILES = { h: "hitters_risk_ev.bin", p: "pitchers_risk_ev.bin" };
+const ELIG_FILE = "position_eligibility.csv";   // last season's games by position, as on the calculator
 
 let form = null;
 try { form = JSON.parse(localStorage.getItem(STORE)); } catch { form = null; }
 const S = settingsFrom(C, form);
 const RS = riskSettingsFrom(form);
-const data = { h: null, p: null, risk: null, buf: null, error: null, riskError: null, loaded: false };
+const ELIG = eligibilityFrom(C, form);
+const data = { h: null, p: null, elig: null, risk: null, buf: null, error: null, eligError: null, riskError: null, loaded: false };
+// the positions as the calculator gives them: last season's games at its thresholds, else the projections'
+const eligOf = () => (data.elig ? { table: data.elig, rules: ELIG } : null);
 
 const worker = new Worker("worker.js?v=" + VERSION);
 let engineReady = false;
@@ -61,12 +65,24 @@ const lastLine = (t) => String(t).trim().split("\n").filter(Boolean).pop() || St
 function slotText(slots) {
   return Object.entries(slots).filter(([, n]) => n > 0).map(([k, n]) => (n > 1 ? `${k}×${n}` : k)).join(" ");
 }
-function renderLeague() {
+// where the positions come from, once the files have loaded
+function positionsText() {
+  if (!data.loaded) return "";
+  if (!data.elig) return " · positions from the projections";
+  const season = data.elig.data.Season ? data.elig.data.Season.find(Number.isFinite) : null;
+  const t = [ELIG.gs && `${ELIG.gs} GS`, ELIG.g && `${ELIG.g} G`].filter(Boolean).join(" or ");
+  const rules = [t, ELIG.sp && `SP ${ELIG.sp} GS`, ELIG.rp && `RP ${ELIG.rp} G`].filter(Boolean).join(", ");
+  return ` · positions from ${season ?? "last season's"} games${rules ? ` (${esc(rules)})` : ""}`;
+}
+function leagueHtml() {
   const fmt = { roto: "roto", h2h: "head-to-head", allplay: "head-to-head all-play (played as head-to-head)" }[S.format] || S.format;
   const cats = S.style === "Points" ? "points" : `${S.hitterCats.join(" ")} / ${S.pitcherCats.join(" ")}`;
-  $("league").innerHTML = `<b>Your league</b> (the calculator's settings${form ? "" : ": none saved, so its default"}; <a href="../">change them there</a>): `
+  return `<b>Your league</b> (the calculator's settings${form ? "" : ": none saved, so its default"}; <a href="../">change them there</a>): `
     + `<b>${S.teams}</b> teams, ${esc(fmt)}, ${esc(cats)} · ${esc(slotText(S.slots))} · ${esc(slotText(S.pitcherSlots))} · bench ${S.bench} · $${S.budget} budget, $${S.minBid} min bid`
-    + (S.pool !== "All" ? ` · ${esc(S.pool)}` : "");
+    + (S.pool !== "All" ? ` · ${esc(S.pool)}` : "") + positionsText();
+}
+function renderLeague() {
+  $("league").innerHTML = leagueHtml();
   $("slot").max = S.teams;
   $("playoffs").max = Math.max(1, S.teams - 1);
   $("payout").value = RS.payout;
@@ -87,9 +103,15 @@ for (const id of ["payout", "mode", "mock"]) $(id).addEventListener("change", sh
 
 async function loadData() {
   const blocked = unsupported(S);
+  // revalidated every load (a 304 when unchanged), as on the calculator, so a new upload shows on the next one
+  const elig = (async () => {
+    const r = await fetch(DATA + ELIG_FILE, { cache: "no-cache" });
+    if (!r.ok) throw new Error(`${ELIG_FILE}: HTTP ${r.status}`);
+    return C.readProjections(await r.text());
+  })().then((e) => { data.elig = e; }, (e) => { data.eligError = e.message || String(e); });
   try {
     const [h, p] = await Promise.all(["h", "p"].map(async (k) => {
-      const r = await fetch(DATA + FILES[k], { cache: "default" });
+      const r = await fetch(DATA + FILES[k], { cache: "no-cache" });
       if (!r.ok) throw new Error(`${FILES[k]}: HTTP ${r.status}`);
       return C.readProjections(await r.text());
     }));
@@ -97,7 +119,7 @@ async function loadData() {
   } catch (e) { data.error = e.message || String(e); }
   try {
     const bufs = await Promise.all(["h", "p"].map(async (k) => {
-      const r = await fetch(RISK_DATA + RISK_FILES[k], { cache: "default" });
+      const r = await fetch(RISK_DATA + RISK_FILES[k], { cache: "no-cache" });
       if (!r.ok) throw new Error(`${RISK_FILES[k]}: HTTP ${r.status}`);
       return r.arrayBuffer();
     }));
@@ -105,7 +127,9 @@ async function loadData() {
     for (const k of ["h", "p"]) if (files[k].side !== k || files[k].head.basis !== "ev") throw new Error(`${RISK_FILES[k]} is for ${files[k].side}, basis ${files[k].head.basis}`);
     data.risk = files; data.buf = { h: bufs[0], p: bufs[1] };
   } catch (e) { data.riskError = e.message || String(e); }
+  await elig;
   data.loaded = true;
+  $("league").innerHTML = leagueHtml();   // with where the positions come from
   if (blocked) return setStatus(blocked, "err");
   if (data.error) return setStatus(`The projections didn't load (${data.error}).`, "err");
   ready();
@@ -140,9 +164,10 @@ $("start").onclick = () => {
   setStatus("pricing the players (the calculator and the risk-aware $)…");
   setTimeout(() => {   // let the status paint first
     try {
-      const H = C.prepHitters(data.h, S.pool, S.includeFa), P = C.prepPitchers(data.p, S.pool, S.includeFa);
+      const H = C.prepHitters(data.h, S.pool, S.includeFa, eligOf()), P = C.prepPitchers(data.p, S.pool, S.includeFa, eligOf());
       const rs = draftRisk(RS, ch);
       const { table, warnings } = buildTable(C, R, H, P, S, data.risk, rs);
+      if (data.eligError) warnings.unshift(`The position eligibility file didn't load (${data.eligError}), so positions are the projections' own.`);
       riskObjective = table.risk ? table.risk.objective : null;
       if (warnings.length) msg(warnings.join(" "));
       setStatus("building the player pool and the outcome draws…");
