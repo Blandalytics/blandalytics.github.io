@@ -186,6 +186,11 @@ PAGES = [
     ("created-runs", "https://blandalytics.com/created-runs/",
      "document.querySelector('#rows tr') && document.fonts.status === 'loaded'",
      "[document.querySelector('.plpd-page-header'), document.getElementById('wrap')]", 1100),
+    # Tarik Skubal's 2026 comps: his card over his 2027 K% forecast from them
+    ("player-comps", "https://blandalytics.com/player-comps/#pitcher/669373/2026",
+     "document.querySelector('#comps tbody tr') && document.getElementById('target_card').textContent.includes('Skubal')"
+     " && document.fonts.status === 'loaded'",
+     "[document.getElementById('target_card'), document.getElementById('forecast_card')]", 600),
 ]
 
 
