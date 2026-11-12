@@ -30,6 +30,10 @@ HIT_DIR, PIT_DIR = os.path.join(PROJ, "B1_b4_sim_risk"), os.path.join(PROJ, "B2s
 
 
 RISK_FILES = (os.path.join(HIT_DIR, "hitters_risk_ev.bin"), os.path.join(PIT_DIR, "pitchers_risk_ev.bin"))
+# last season's games by position, which the page applies as the calculator does; a test set without it keeps
+# the projections' own positions
+ELIG_FILE = os.path.join(HIT_DIR, "position_eligibility.csv")
+ELIG_ARGS = ["--elig", ELIG_FILE] if os.path.exists(ELIG_FILE) else []
 
 
 def export_table(out, extra=(), settings=None):

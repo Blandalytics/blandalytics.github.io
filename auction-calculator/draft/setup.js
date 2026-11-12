@@ -4,6 +4,7 @@
 //   settingsFrom(C, form)        the calculator's settings from its saved form (localStorage
 //                                "auction-calculator:v1", written by ../app.js), as its readSettings
 //                                builds them; the default league when there is no form
+//   eligibilityFrom(C, form)     the calculator's position eligibility thresholds (Yahoo's by default)
 //   riskSettingsFrom(form)       the calculator's Risk (beta) settings (payout, playoff teams, ...)
 //   buildTable(C, R, H, P, s, files, rs)   the engine's table (table.js) from one calc.js run, with
 //                                the risk-aware fields when the risk files are there (risk.js)
@@ -53,6 +54,23 @@ export function settingsFrom(C, form) {
     hitterCats: cats ? cats.h : [...C.DEFAULT_HITTER_CATS], pitcherCats: cats ? cats.p : [...C.DEFAULT_PITCHER_CATS],
     hitterPoints: pts ? pts.h : C.DEFAULT_HITTER_POINTS.map((r) => r.slice()), pitcherPoints: pts ? pts.p : C.DEFAULT_PITCHER_POINTS.map((r) => r.slice()),
   };
+}
+
+/**
+ * The calculator's position eligibility thresholds (calc.js withEligibility's rules) from its saved
+ * form: Yahoo's by default; a blank box skips its test, as on the calculator. A value the
+ * calculator's input would refuse (it stops pricing there) falls back to Yahoo's.
+ */
+export function eligibilityFrom(C, form) {
+  const MAX = { elig_gs: 162, elig_g: 162, elig_sp: 40, elig_rp: 100 };
+  const v = (id, d) => {
+    const x = form ? form[id] : undefined;
+    if (x === "") return null;
+    const n = Number(x);
+    return x !== undefined && x !== null && Number.isInteger(n) && n >= 1 && n <= MAX[id] ? n : d;
+  };
+  const Y = C.YAHOO_ELIGIBILITY;
+  return { gs: v("elig_gs", Y.gs), g: v("elig_g", Y.g), sp: v("elig_sp", Y.sp), rp: v("elig_rp", Y.rp) };
 }
 
 /** The calculator's risk settings (risk.js applyRisk's rs) from its saved form */
