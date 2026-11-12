@@ -451,6 +451,21 @@
   document.addEventListener('mouseover', (e) => { const s = e.target.closest('[data-tip]'); if (!s) { tip.hidden = true; return; } tip.textContent = s.dataset.tip; tip.hidden = false; });
   document.addEventListener('mousemove', (e) => { if (!tip.hidden) { tip.style.left = Math.min(e.clientX + 14, innerWidth - 330) + 'px'; tip.style.top = e.clientY + 14 + 'px'; } });
 
+  // A link that changes only the hash (the page already open) re-targets the page. writeHash() uses replaceState, which
+  // fires no hashchange, so this runs only for navigations the reader makes: a pasted link, back/forward.
+  window.addEventListener('hashchange', () => {
+    const want = readHash();
+    if (!want) return;
+    if (want.role !== S.role) { switchRole(want.role, want).catch((e) => setStatus(e.message, true)); return; }
+    const R = roles[S.role];
+    if (!R || !R.byPlayer.has(want.pid)) return;
+    const p = R.manifest.presets.find((x) => x.id === want.preset);
+    if (p && p.id !== S.preset) applyPreset(R, p);
+    setTargetPlayer(R, want.pid, want.season, want.pt);
+    renderControls(R);
+    run();
+  });
+
   setupSearch();
   const h = readHash();
   switchRole(h ? h.role : 'pitcher', h).catch((e) => setStatus(e.message, true));
