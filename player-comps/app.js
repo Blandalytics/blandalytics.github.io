@@ -49,6 +49,7 @@
   function fmt(f, v) {
     if (v === undefined || v === null || Number.isNaN(v)) return '–';
     if (f.id === 'sb_rate') return Math.exp(v).toFixed(1);
+    if (f.id === 'age') return v.toFixed(1);
     if (f.unit === 'logit') return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2);
     if (f.unit === 'wOBA') return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(3).replace(/^0/, '');
     if (['iso', 'babip', 'woba'].includes(f.id)) return v.toFixed(3).replace(/^0/, '');
