@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Find the most similar MLB pitchers, pitches and hitters by Stuff+, PLV and Statcast, with similarity-weighted next-season forecasts.">
+<title>Player Comps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://data.blandalytics.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/plpd.css?v=3">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body class="plpd">
+<main class="page">
+  <header class="plpd-page-header">
+    <h1 class="plpd-page-header__title">Player Comps</h1>
+    <p class="plpd-page-header__meta" id="meta">Similar pitchers, pitches and hitters, from Stuff+, PLV and Statcast</p>
+  </header>
+
+  <section class="plpd-pane controls" aria-label="Query">
+    <div class="row">
+      <div class="plpd-chips" role="group" aria-label="Dataset">
+        <button class="plpd-chip plpd-chip--amber" data-role="pitcher" aria-pressed="true">Pitchers</button>
+        <button class="plpd-chip plpd-chip--amber" data-role="pitch" aria-pressed="false">Pitches</button>
+        <button class="plpd-chip plpd-chip--amber" data-role="hitter" aria-pressed="false">Hitters</button>
+      </div>
+    </div>
+    <div class="row fields">
+      <div class="plpd-filter-field grow">
+        <label class="plpd-filter-field__label" for="search">Player</label>
+        <div class="plpd-autocomplete">
+          <input id="search" class="plpd-autocomplete__input" placeholder="Search players" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="search_menu">
+          <ul id="search_menu" class="plpd-autocomplete__menu" role="listbox" hidden></ul>
+        </div>
+      </div>
+      <div class="plpd-filter-field">
+        <label class="plpd-filter-field__label" for="season">Season</label>
+        <select id="season" class="plpd-filter-dropdown"></select>
+      </div>
+      <div class="plpd-filter-field" id="pitch_field" hidden>
+        <label class="plpd-filter-field__label" for="pitch">Pitch</label>
+        <select id="pitch" class="plpd-filter-dropdown"></select>
+      </div>
+      <div class="plpd-filter-field">
+        <label class="plpd-filter-field__label" for="stat">Forecast stat</label>
+        <select id="stat" class="plpd-filter-dropdown"></select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="plpd-chips" role="group" aria-label="Preset" id="presets"></div>
+      <label class="plpd-check" title="Mahalanobis on the shrunk correlation of the selected features, so correlated stats don't count the same skill twice"><input type="checkbox" id="corr"> Correct for correlated stats</label>
+    </div>
+    <details class="advanced" id="advanced">
+      <summary>Features and weights</summary>
+      <div class="adv-body">
+        <div id="families" class="families"></div>
+        <div class="adv-grid">
+          <div class="plpd-mini">
+            <h3 class="plpd-mini__title">Other inputs</h3>
+            <div id="other_inputs" class="checks"></div>
+          </div>
+          <div class="plpd-mini">
+            <h3 class="plpd-mini__title">Comps must match the target on</h3>
+            <div id="filters" class="checks"></div>
+          </div>
+          <div class="plpd-mini">
+            <h3 class="plpd-mini__title">Group weights</h3>
+            <div id="group_weights" class="sliders"></div>
+          </div>
+          <div class="plpd-mini">
+            <h3 class="plpd-mini__title">Mode and kernel</h3>
+            <div class="checks">
+              <div class="plpd-chips" role="group" aria-label="Mode" id="modes">
+                <button class="plpd-chip" data-mode="forecast" aria-pressed="true">Forecast</button>
+                <button class="plpd-chip" data-mode="style" aria-pressed="false">Style</button>
+              </div>
+              <div class="nums" id="nums"></div>
+            </div>
+          </div>
+        </div>
+        <button class="plpd-text-btn" id="reset">Reset to preset</button>
+      </div>
+    </details>
+    <p class="plpd-status" id="status" aria-live="polite"></p>
+  </section>
+
+  <section class="results" id="results" hidden>
+    <div class="top-cards">
+      <div class="plpd-pane target" id="target_card"></div>
+      <div class="plpd-pane forecast" id="forecast_card"></div>
+    </div>
+    <p class="plpd-status warnings" id="warnings"></p>
+    <div class="plpd-pane">
+      <div class="comps-head">
+        <h2 class="plpd-pane__title">Comps</h2>
+        <div class="legend" id="legend"></div>
+      </div>
+      <p class="plpd-pane__desc" id="comps_desc"></p>
+      <div class="plpd-table-wrap comps-wrap">
+        <table class="plpd-table comps" id="comps"></table>
+      </div>
+      <button class="plpd-btn more" id="more">Show more</button>
+    </div>
+    <div class="plpd-pane how">
+      <h2 class="plpd-pane__title">How it works</h2>
+      <div class="plpd-prose" id="how"></div>
+    </div>
+  </section>
+</main>
+<div class="plpd-tooltip floating" id="tip" hidden></div>
+<script src="app.js?v=1"></script>
+</body>
+</html>
