@@ -123,30 +123,38 @@
       // wrapped within the margins, each row centred)
       text(`Whole Mix xMiss: ${p.xmiss.toFixed(2)}"${p.pct == null ? "" : `  (${ordinal(p.pct)} pct)`}`, 500, 172,
         { size: 22, weight: 700, align: "center" });
-      const GAP = 26, DOT = 24;                       // between items; the dot and its space
-      const rows = [[]];
-      let rowW = 0;
-      Object.entries(p.pitches).forEach(([pt, e]) => {
-        const s = `${pitchName(pt)} ${e.xmiss.toFixed(2)}"`;
-        const w = DOT + width(s, 20);
-        const add = (rows[rows.length - 1].length ? GAP : 0) + w;
-        if (rows[rows.length - 1].length && rowW + add > 900) { rows.push([]); rowW = 0; }
-        rowW += (rows[rows.length - 1].length ? GAP : 0) + w;
-        rows[rows.length - 1].push({ pt, s, w });
-      });
+      // the pitch types in usage order over as few rows as fit within the margins, split evenly
+      // (5 + 1 becomes 3 + 3), so every row holds at least two. A pitcher with too few pitch
+      // types for that (three long names that won't share a row) gets fewer rows in smaller type.
+      const GAP = 26, DOT = 24, MAXW = 900;           // at size 20: between items; the dot and its space
+      const items = Object.entries(p.pitches).map(([pt, e]) => ({ pt, s: `${pitchName(pt)} ${e.xmiss.toFixed(2)}"` }));
+      items.forEach((it) => { it.w = DOT + width(it.s, 20); });
+      const n = items.length;
+      const split = (R) => {                          // R rows, the larger ones first
+        const out = [];
+        for (let r = 0, i = 0; r < R; r++) { const c = Math.floor(n / R) + (r < n % R ? 1 : 0); out.push(items.slice(i, i + c)); i += c; }
+        return out;
+      };
+      const rowW = (row) => row.reduce((t, it) => t + it.w, 0) + GAP * (row.length - 1);   // at size 20
+      let rows = split(1);
+      for (let R = 2; R <= n && rows.some((row) => rowW(row) > MAXW); R++) rows = split(R);
+      const most = Math.max(1, Math.floor(n / 2));
+      if (rows.length > most) rows = split(most);
+      const size = Math.min(20, ...rows.map((row) => 20 * MAXW / rowW(row)));
+      const f = size / 20;
       keyBottom = 208 + (rows.length - 1) * 30;
       rows.forEach((row, r) => {
         const y = 208 + r * 30;
-        let x = 500 - (row.reduce((t, it) => t + it.w, 0) + GAP * (row.length - 1)) / 2;
+        let x = 500 - rowW(row) * f / 2;
         row.forEach(({ pt, s, w }) => {
           ctx.save();
           ctx.fillStyle = color(pt);
           ctx.beginPath();
-          ctx.arc((x + 8) * u, (y - 7) * u, 8 * u, 0, Math.PI * 2);
+          ctx.arc((x + 8 * f) * u, (y - 7 * f) * u, 8 * f * u, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
-          text(s, x + DOT, y, { size: 20 });
-          x += w + GAP;
+          text(s, x + DOT * f, y, { size });
+          x += (w + GAP) * f;
         });
       });
     }
