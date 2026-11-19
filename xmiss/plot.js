@@ -87,9 +87,10 @@
     const one = view !== "mix" ? p.pitches[view] : null;
     const dotted = one && dots && dots.x && dots.x.length;
     text(p.name, 50, 76, { size: 36, weight: 700, fill: C.header });
-    const what = one ? pitchName(view) : "Whole Mix";
-    text(what, 50, 106, { size: 22.6, weight: 700, fill: one ? color(view) : C.text });
-    text(" xMiss Distance", 50 + width(what, 22.6, 700), 106, { size: 22.6, weight: 700, fill: C.text });
+    // a pitch type: its name in its colour before "xMiss Distance"; the whole mix says so in its key
+    const what = one ? pitchName(view) + " " : "";
+    if (one) text(what, 50, 106, { size: 22.6, weight: 700, fill: color(view) });
+    text("xMiss Distance", 50 + width(what, 22.6, 700), 106, { size: 22.6, weight: 700, fill: C.text });
     text(`${season} - ${(one ? one.n : p.n).toLocaleString("en-US")} pitches`, 50, 128, { size: 13.3, fill: C.subheader });
     if (mark) {
       const w = 230, h = w * (mark.height / mark.width);
@@ -117,20 +118,34 @@
         x += width(s, size, weight);
       });
     } else {
-      text(`xMiss ${p.xmiss.toFixed(2)}"${p.pct == null ? "" : `  (${ordinal(p.pct)} pct)`}`, 50, 172, { size: 22, weight: 700 });
-      let x = 50, y = 208;
+      // both lines centred on the canvas: the whole mix's number, then the pitch types (rows
+      // wrapped within the margins, each row centred)
+      text(`Whole Mix xMiss ${p.xmiss.toFixed(2)}"${p.pct == null ? "" : `  (${ordinal(p.pct)} pct)`}`, 500, 172,
+        { size: 22, weight: 700, align: "center" });
+      const GAP = 26, DOT = 24;                       // between items; the dot and its space
+      const rows = [[]];
+      let rowW = 0;
       Object.entries(p.pitches).forEach(([pt, e]) => {
         const s = `${pitchName(pt)} ${e.xmiss.toFixed(2)}"`;
-        const w = 26 + width(s, 20) + 26;
-        if (x + w > 960) { x = 50; y += 30; }
-        ctx.save();
-        ctx.fillStyle = color(pt);
-        ctx.beginPath();
-        ctx.arc((x + 8) * u, (y - 7) * u, 8 * u, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-        text(s, x + 24, y, { size: 20 });
-        x += w;
+        const w = DOT + width(s, 20);
+        const add = (rows[rows.length - 1].length ? GAP : 0) + w;
+        if (rows[rows.length - 1].length && rowW + add > 900) { rows.push([]); rowW = 0; }
+        rowW += (rows[rows.length - 1].length ? GAP : 0) + w;
+        rows[rows.length - 1].push({ pt, s, w });
+      });
+      rows.forEach((row, r) => {
+        const y = 208 + r * 30;
+        let x = 500 - (row.reduce((t, it) => t + it.w, 0) + GAP * (row.length - 1)) / 2;
+        row.forEach(({ pt, s, w }) => {
+          ctx.save();
+          ctx.fillStyle = color(pt);
+          ctx.beginPath();
+          ctx.arc((x + 8) * u, (y - 7) * u, 8 * u, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+          text(s, x + DOT, y, { size: 20 });
+          x += w + GAP;
+        });
       });
     }
 
