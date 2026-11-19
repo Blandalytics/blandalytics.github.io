@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://data.blandalytics.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/shared/plpd.css?v=3">
-<link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body class="plpd">
 <main class="page">
@@ -62,6 +62,20 @@
     </div>
   </section>
 
+  <section class="plpd-pane board" id="board" hidden>
+    <div class="board-head">
+      <div>
+        <h2 class="plpd-pane__title">Leaderboard</h2>
+        <p class="plpd-pane__desc small" id="boardSum"></p>
+      </div>
+      <div class="plpd-filter-field">
+        <label class="plpd-filter-field__label" for="boardMin">Min pitches</label>
+        <input id="boardMin" class="num" type="number" min="0" step="50" inputmode="numeric">
+      </div>
+    </div>
+    <div class="plpd-table-wrap board-wrap"><table class="plpd-table" id="boardTable"></table></div>
+  </section>
+
   <section class="plpd-pane how">
     <h2 class="plpd-pane__title">How it works</h2>
     <div class="plpd-prose">
@@ -74,6 +88,6 @@
 </main>
 <script src="/shared/share-image.js?v=2"></script>
 <script src="plot.js?v=8"></script>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>
