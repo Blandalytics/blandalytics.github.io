@@ -71,6 +71,10 @@ APPS = [
     # Pete Crow-Armstrong's 2026 value through the season, his halves and months labeled
     ("player-rater", "https://blandalytics.com/player-rater/#2026&c=691718h",
      "!document.getElementById('share').disabled && document.getElementById('meta').textContent.includes('2026')", "share_download"),
+    # Jacob deGrom's 2026 miss ellipses, his whole mix
+    ("xmiss", "https://blandalytics.com/xmiss/#mlb/2026/594798/mix",
+     "!document.getElementById('png').disabled && document.getElementById('pitcherQ').value.includes('deGrom')"
+     " && document.fonts.status === 'loaded'", "png_download"),
     # Shai Gilgeous-Alexander's 2025-26 season (#season/playerId/season)
     ("nba-shot-charts", "https://blandalytics.com/nba-shot-charts/#2025-26/1628983/season",
      "!document.getElementById('share_png').hidden && document.getElementById('player').value.includes('Gilgeous')", "share_png_download"),
