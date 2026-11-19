@@ -173,6 +173,7 @@
         ? `${lv.name}: provisional. The model was trained on MLB catchers, zones and parks.` : "");
       results.hidden = false;
       png.disabled = false;
+      showBoard(doc);
       const want = canDots && state.dots;
       return (want ? dotsFile(state.level, state.season, state.pitcher) : Promise.resolve(null)).catch((err) => {
         console.error(err);
@@ -190,6 +191,153 @@
     });
   }
   function seasonLabel() { return state.level === "mlb" ? String(state.season) : `${state.season} ${levelName(state.level)}`; }
+
+  // ---- the leaderboard: pitcher-cards/season.html's grades table for this level-season. Every
+  // pitcher with the minimum pitches, sorted by his whole-mix xMiss (best first) with each pitch
+  // type's beside it; each cell coloured by its percentile within its column against MLB that
+  // season (the pools the percentiles use: pitchers with 500+ pitches, pitch types thrown 100+
+  // times), on the pitcher card's scale (cyan worst, white average, red best). Pitch types thrown
+  // under 100 times are shown muted, uncoloured. A row opens that pitcher above.
+  const board = $("board"), boardTable = $("boardTable"), boardMin = $("boardMin"), boardSum = $("boardSum");
+  const BOARD_MIN = { mlb: 500 };                  // other levels: 200
+  const QUAL_P = 500, QUAL_PT = 100;
+  const ORDER = ["FF", "SI", "FC", "SL", "ST", "SV", "CU", "KC", "CS", "CH", "FS", "FO", "SC", "KN", "EP"];
+  const SCALE = ["#55e8ff", "#adf6ff", "#FFFFFF", "#f7b8b9", "#f4707c"];   // card.js SCALE, worst -> best
+  let boardKey = null, boardDoc = null, pools = null, refSeason = null, sortBy = "mix", sortAsc = true, rowShown = null;
+  const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  function scaleColor(pct) {                       // 0..100, 100 = best command
+    const t = Math.max(0, Math.min(1, pct / 100)) * (SCALE.length - 1), k = Math.min(Math.floor(t), SCALE.length - 2);
+    const a = hex(SCALE[k]), b = hex(SCALE[k + 1]), f = t - k;
+    return "#" + a.map((x, i) => Math.round(x + (b[i] - x) * f).toString(16).padStart(2, "0")).join("");
+  }
+  function poolsOf(ref) {                          // each column's MLB pool, ascending
+    const out = { mix: [] };
+    Object.values(ref.pitchers).forEach((p) => {
+      if (p.n >= QUAL_P) out.mix.push(p.xmiss);
+      Object.entries(p.pitches).forEach(([pt, e]) => { if (e.n >= QUAL_PT) (out[pt] = out[pt] || []).push(e.xmiss); });
+    });
+    Object.values(out).forEach((a) => a.sort((x, y) => x - y));
+    return out;
+  }
+  function pctIn(pool, v) {                        // build.py's: the share of the pool with a larger xMiss
+    if (!pool || !pool.length) return null;
+    let lo = 0, hi = pool.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (pool[m] <= v) lo = m + 1; else hi = m; }
+    return 100 * (1 - lo / pool.length);
+  }
+  const defaultMin = () => BOARD_MIN[state.level] || 200;
+  function minPitches() {
+    const v = parseInt(boardMin.value, 10);
+    return isFinite(v) && v >= 0 ? v : defaultMin();
+  }
+  function showBoard(doc) {
+    const key = lsKey(state.level, state.season);
+    if (key === boardKey) { markBoardRow(); return; }
+    const levelChanged = !boardKey || boardKey.split("/")[0] !== state.level;
+    boardKey = key;
+    boardDoc = doc;
+    if (levelChanged) { boardMin.value = ""; boardMin.placeholder = String(defaultMin()); }
+    const mlb = levelSeasons("mlb");
+    refSeason = mlb.indexOf(state.season) >= 0 ? state.season : mlb[0];
+    (state.level === "mlb" ? Promise.resolve(doc) : seasonFile("mlb", refSeason)).then((ref) => {
+      if (boardKey !== key) return;
+      pools = poolsOf(ref);
+      drawBoard();
+    }).catch((err) => { console.error(err); pools = {}; if (boardKey === key) drawBoard(); });
+  }
+  const lastName = (name) => name.split(" ").slice(-1)[0].toLowerCase();
+  function sortKey(r, col) {                       // null sorts last either way
+    if (col === "who") return lastName(r.p.name) + " " + r.p.name;
+    if (col === "n") return r.p.n;
+    if (col === "mix") return r.p.xmiss;
+    const e = r.p.pitches[col];
+    return e ? e.xmiss : null;
+  }
+  function cell(v, n, pool, qual, cls) {
+    if (v == null) return `<td class="${cls}"></td>`;
+    const thin = n < qual, pct = thin ? null : pctIn(pool, v);
+    const title = `${thousands(n)} pitches` + (thin ? `, under ${qual}: not ranked`
+      : pct == null ? "" : `; ${P.ordinal(Math.round(pct))} percentile among MLB ${refSeason}`);
+    const style = pct == null ? "" : ` style="color:${scaleColor(pct)}"`;
+    return `<td class="${cls} x${thin ? " thin" : ""}"${style} title="${esc(title)}">${v.toFixed(2)}</td>`;
+  }
+  function drawBoard() {
+    if (!boardDoc || !pools) return;
+    const min = minPitches();
+    const rows = Object.entries(boardDoc.pitchers).map(([id, p]) => ({ id: +id, p })).filter((r) => r.p.n >= min);
+    if (!rows.length) {
+      boardTable.innerHTML = "";
+      boardSum.textContent = `No ${levelName(state.level)} ${state.season} pitchers with ${thousands(min)}+ pitches.`;
+      board.hidden = false;
+      return;
+    }
+    const thrown = {};
+    rows.forEach((r) => Object.entries(r.p.pitches).forEach(([pt, e]) => { thrown[pt] = (thrown[pt] || 0) + e.n; }));
+    const rank = (c) => (ORDER.indexOf(c) < 0 ? ORDER.length : ORDER.indexOf(c));
+    const codes = Object.keys(thrown).sort((a, b) => rank(a) - rank(b) || thrown[b] - thrown[a]);
+    const list = rows.map((r, i) => ({ r, i, k: sortKey(r, sortBy) })).sort((a, b) => {
+      if (a.k === null || b.k === null) return (a.k === null) - (b.k === null) || a.i - b.i;
+      const c = typeof a.k === "string" ? a.k.localeCompare(b.k) : a.k - b.k;
+      return (sortAsc ? c : -c) || a.i - b.i;
+    }).map((x) => x.r);
+    const head = (col, label, cls, title) => {
+      const sort = sortBy === col ? (sortAsc ? "ascending" : "descending") : "none";
+      return `<th scope="col" class="${cls || ""}" aria-sort="${sort}"${title ? ` title="${esc(title)}"` : ""}>`
+        + `<button type="button" data-sort="${col}">${label}</button></th>`;
+    };
+    const thead = "<thead><tr>" + head("who", "Pitcher", "who") + head("n", "#", "", "Pitches")
+      + head("mix", "Whole mix", "first", "Whole-mix xMiss, inches")
+      + codes.map((c, i) => head(c, `<span style="color:${P.color(c)}">${esc(c)}</span>`, i ? "" : "first", `${P.pitchName(c)} xMiss, inches`)).join("")
+      + "</tr></thead>";
+    const body = list.map(({ id, p }) =>
+      `<tr data-id="${id}"${id === state.pitcher ? ' class="on"' : ""}>`
+      + `<td class="who"><a href="#${state.level}/${state.season}/${id}/mix" data-id="${id}">${esc(p.name)}</a>`
+      + `<span class="meta">${esc(p.hand)}HP</span></td>`
+      + `<td>${thousands(p.n)}</td>`
+      + cell(p.xmiss, p.n, pools.mix, QUAL_P, "first")
+      + codes.map((c, i) => { const e = p.pitches[c]; return e ? cell(e.xmiss, e.n, pools[c], QUAL_PT, i ? "" : "first") : `<td${i ? "" : ' class="first"'}></td>`; }).join("")
+      + "</tr>").join("");
+    const wrap = boardTable.parentNode, top = wrap.scrollTop, left = wrap.scrollLeft;
+    boardTable.innerHTML = thead + "<tbody>" + body + "</tbody>";
+    wrap.scrollTop = top; wrap.scrollLeft = left;
+    boardSum.textContent = `${levelName(state.level)} ${state.season}: ${thousands(rows.length)} pitcher${rows.length === 1 ? "" : "s"} with `
+      + `${thousands(min)}+ pitches. xMiss in inches, smaller is better. Colours rank each column against MLB ${refSeason}`
+      + ` (pitchers with ${QUAL_P}+ pitches, pitch types thrown ${QUAL_PT}+ times): red is best, white average, blue worst.`;
+    board.hidden = false;
+    rowShown = null;
+    markBoardRow();
+  }
+  // the pitcher on show: his row marked, and scrolled into the table's own box (never the page)
+  function markBoardRow() {
+    [].forEach.call(boardTable.querySelectorAll("tbody tr"), (tr) => tr.classList.toggle("on", +tr.getAttribute("data-id") === state.pitcher));
+    const tr = boardTable.querySelector("tbody tr.on"), wrap = boardTable.parentNode;
+    if (!tr || rowShown === state.pitcher) return;
+    rowShown = state.pitcher;
+    const headH = boardTable.tHead.offsetHeight, top = tr.offsetTop, bottom = top + tr.offsetHeight;
+    if (top - headH < wrap.scrollTop) wrap.scrollTop = top - headH;
+    else if (bottom > wrap.scrollTop + wrap.clientHeight) wrap.scrollTop = bottom - wrap.clientHeight;
+  }
+  boardTable.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-sort]");
+    if (b) {
+      const col = b.getAttribute("data-sort");
+      if (sortBy === col) sortAsc = !sortAsc;
+      else { sortBy = col; sortAsc = col !== "n"; }   // names A-Z, xMiss smallest first, pitches most first
+      drawBoard();
+      return;
+    }
+    // a plain click anywhere in a row opens that pitcher above; with a modifier the name's link
+    // opens a new tab as usual, and a drag that selects text isn't a click
+    const tr = ev.target.closest("tbody tr[data-id]");
+    if (!tr || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    if (!ev.target.closest("a[data-id]") && String(window.getSelection && window.getSelection()).trim()) return;
+    ev.preventDefault();
+    go({ pitcher: +tr.getAttribute("data-id"), view: "mix" });
+    const r = results.getBoundingClientRect();
+    if (Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0) < r.height / 2) results.scrollIntoView({ behavior: "smooth" });
+  });
+  let minTimer = null;
+  boardMin.addEventListener("input", () => { clearTimeout(minTimer); minTimer = setTimeout(drawBoard, 250); });
 
   // ---- the Pitcher box: season.html's name entry. Typing ranks full-name starts, then last-name
   // starts, then anything containing it or an MLBAM id starting with it, most pitches first

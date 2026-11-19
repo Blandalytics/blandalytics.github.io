@@ -40,6 +40,39 @@
 .mix td.pitch{font-family:var(--font-display); font-weight:700}
 .mix td.pitch .dot{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:8px}
 .small{font-size:13px; color:var(--text-text-nav)}
+
+/* the leaderboard: pitcher-cards/season.html's grades table -- sortable, sticky head and names,
+   a row opens that pitcher above */
+.board{display:flex; flex-direction:column; gap:var(--space-300)}
+.board-head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px var(--space-400)}
+.board-head .plpd-pane__title{margin-bottom:4px}
+.board-head .plpd-pane__desc{margin:0}
+input.num{box-sizing:border-box; height:40px; width:110px; padding:0 12px; border:1px solid var(--borders-border-tab);
+  border-radius:var(--radius-lg); background:var(--surfaces-surface-3); box-shadow:var(--shadow-pl-filter-search-input-inset);
+  font-family:var(--font-text); font-size:14px; font-weight:500; line-height:1.2; color:var(--text-text-cell); font-variant-numeric:tabular-nums}
+input.num:hover{background-color:#262940}
+input.num:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:2px}
+.board-wrap{max-height:min(60vh, 560px)}
+#boardTable{width:100%}
+#boardTable th,#boardTable td{padding:6px 10px; text-align:center; white-space:nowrap}
+#boardTable thead th{position:sticky; top:0; z-index:2; font-size:13px}
+#boardTable th button{all:unset; cursor:pointer}
+#boardTable th button:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:2px}
+#boardTable thead th:hover{color:var(--data-table-pl-data-table-cell-text)}
+#boardTable td{font-size:14px; font-variant-numeric:tabular-nums; background:var(--data-table-pl-data-table-scroll-base-bg)}
+#boardTable .who{position:sticky; left:0; z-index:1; text-align:left}
+#boardTable thead .who{z-index:3}
+#boardTable td.who{max-width:260px; overflow:hidden; text-overflow:ellipsis}
+#boardTable td.who a{color:var(--brand-brand-cyan); text-decoration:none; font-family:var(--font-display); font-weight:600}
+#boardTable td.who a:hover,#boardTable td.who a:focus-visible{text-decoration:underline}
+#boardTable td.who .meta{margin-left:8px; color:var(--text-text-nav); font-size:13px}
+#boardTable td.x{font-family:var(--font-display); font-weight:700}
+#boardTable td.thin{font-weight:500; color:var(--text-text-nav)}
+#boardTable .first{border-left:1px solid var(--data-table-pl-data-table-header-border)}
+#boardTable tbody tr{cursor:pointer}
+#boardTable tbody tr:hover td{background:var(--data-table-pl-data-table-row-hover-bg)}
+#boardTable tbody tr.on td{background:var(--data-table-pl-data-table-row-open-bg)}
+#boardTable tbody tr:last-child td{border-bottom:0}
 .how .plpd-prose p{margin:0 0 10px}
 .how .plpd-prose p:last-child{margin-bottom:0}
 .how .plpd-pane__title{margin-bottom:10px}
@@ -53,6 +86,10 @@
   #png{flex:1 1 40%; align-self:flex-end}
   .vals{grid-template-columns:repeat(2, minmax(0, 1fr))}
   .mix th,.mix td{padding:8px 7px; font-size:13px}
+  .board-wrap{max-height:65vh}
+  #boardTable th,#boardTable td{padding:6px 8px}
+  #boardTable td.who{max-width:150px}
+  #boardTable td.who .meta{display:none}
 }
 h1,h2,h3{text-wrap:balance}
 p{text-wrap:pretty}
