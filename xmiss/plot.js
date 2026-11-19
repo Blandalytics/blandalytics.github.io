@@ -120,7 +120,7 @@
     } else {
       // both lines centred on the canvas: the whole mix's number, then the pitch types (rows
       // wrapped within the margins, each row centred)
-      text(`Whole Mix xMiss ${p.xmiss.toFixed(2)}"${p.pct == null ? "" : `  (${ordinal(p.pct)} pct)`}`, 500, 172,
+      text(`Whole Mix xMiss: ${p.xmiss.toFixed(2)}"${p.pct == null ? "" : `  (${ordinal(p.pct)} pct)`}`, 500, 172,
         { size: 22, weight: 700, align: "center" });
       const GAP = 26, DOT = 24;                       // between items; the dot and its space
       const rows = [[]];
