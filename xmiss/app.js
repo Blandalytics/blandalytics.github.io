@@ -198,7 +198,7 @@
   // season (the pools the percentiles use: pitchers with 500+ pitches, pitch types thrown 100+
   // times), on the pitcher card's scale (cyan worst, white average, red best). Pitch types thrown
   // under 100 times are shown muted, uncoloured. A row opens that pitcher above.
-  const board = $("board"), boardTable = $("boardTable"), boardMin = $("boardMin"), boardSum = $("boardSum");
+  const board = $("board"), boardTable = $("boardTable"), boardMin = $("boardMin");
   const BOARD_MIN = { mlb: 500 };                  // other levels: 200
   const QUAL_P = 500, QUAL_PT = 100;
   const ORDER = ["FF", "SI", "FC", "SL", "ST", "SV", "CU", "KC", "CS", "CH", "FS", "FO", "SC", "KN", "EP"];
@@ -266,8 +266,8 @@
     const min = minPitches();
     const rows = Object.entries(boardDoc.pitchers).map(([id, p]) => ({ id: +id, p })).filter((r) => r.p.n >= min);
     if (!rows.length) {
-      boardTable.innerHTML = "";
-      boardSum.textContent = `No ${levelName(state.level)} ${state.season} pitchers with ${thousands(min)}+ pitches.`;
+      // no subtitle: the empty table says so itself
+      boardTable.innerHTML = `<tbody><tr><td class="none">No ${esc(levelName(state.level))} ${state.season} pitchers with ${thousands(min)}+ pitches.</td></tr></tbody>`;
       board.hidden = false;
       return;
     }
@@ -300,9 +300,6 @@
     const wrap = boardTable.parentNode, top = wrap.scrollTop, left = wrap.scrollLeft;
     boardTable.innerHTML = thead + "<tbody>" + body + "</tbody>";
     wrap.scrollTop = top; wrap.scrollLeft = left;
-    boardSum.textContent = `${levelName(state.level)} ${state.season}: ${thousands(rows.length)} pitcher${rows.length === 1 ? "" : "s"} with `
-      + `${thousands(min)}+ pitches. xMiss in inches, smaller is better. Colours rank each column against MLB ${refSeason}`
-      + ` (pitchers with ${QUAL_P}+ pitches, pitch types thrown ${QUAL_PT}+ times): red is best, white average, blue worst.`;
     board.hidden = false;
     rowShown = null;
     markBoardRow();
