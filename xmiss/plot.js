@@ -57,8 +57,10 @@
   }
 
   // Draw the chart. `p` is a pitcher from the season file, `view` "mix" or a pitch code,
-  // `league` the season file's league averages. Returns the canvas.
-  async function draw(canvas, { p, season, view, league }) {
+  // `league` the season file's league averages, `dots` (a pitch-type view only) that pitch type's
+  // pitches from the pitcher file, {x, z} in tenths of an inch: where each pitch landed relative
+  // to the pitcher's count-group spot, the spread the ellipse summarizes. Returns the canvas.
+  async function draw(canvas, { p, season, view, league, dots = null }) {
     await ensureFonts();
     const mark = await loadWordmark();
     canvas.width = SIZE;
@@ -83,7 +85,9 @@
     // ---- header ----
     const one = view !== "mix" ? p.pitches[view] : null;
     text(p.name, 50, 82, { size: 44, weight: 700, fill: C.header });
-    text(`${season} Miss Ellipses  ·  ${one ? pitchName(view) : "Whole mix"}`, 50, 124, { size: 24, fill: C.subheader });
+    const dotted = one && dots && dots.x && dots.x.length;
+    text(`${season} Miss Ellipses  ·  ${one ? pitchName(view) : "Whole mix"}${dotted ? `  ·  ${dots.x.length.toLocaleString("en-US")} pitches shown` : ""}`,
+      50, 124, { size: 24, fill: C.subheader });
     if (mark) {
       const w = 230, h = w * (mark.height / mark.width);
       ctx.drawImage(mark, (950 - w) * u, 46 * u, w * u, h * u);
@@ -167,6 +171,21 @@
       .sort((a, b) => b[1].major * b[1].minor - a[1].major * a[1].minor);   // largest first, small ones on top
     ctx.save();
     ctx.beginPath(); ctx.arc(X(0), Y(0), RING * k * u, 0, Math.PI * 2); ctx.clip();
+    if (one && dots && dots.x && dots.x.length) {
+      // the pitches: small, muted and see-through, under the ellipse
+      ctx.save();
+      ctx.globalAlpha = 0.2;
+      ctx.fillStyle = color(view);
+      const r = 3.2 * u, flip = lefty ? -1 : 1;
+      ctx.beginPath();
+      for (let i = 0; i < dots.x.length; i++) {
+        const x = X(flip * dots.x[i] / 10), y = Y(dots.z[i] / 10);
+        ctx.moveTo(x + r, y);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+      }
+      ctx.fill();
+      ctx.restore();
+    }
     for (const [pt, e] of shown) {
       const ex = lefty ? -e.cx : e.cx, ang = lefty ? 180 - e.angle : e.angle;
       const rot = -ang * Math.PI / 180;                  // counter-clockwise on screen (y runs down)
@@ -192,7 +211,9 @@
     // ---- footer ----
     text("xMiss: expected miss from the catcher's target, from a Statcast-only model trained on Open Command data.",
       50, 958, { size: 15, fill: C.chrome });
-    text("1-SD miss ellipses from the pitcher's view, centred on the average miss.  blandalytics.com/xmiss",
+    text(dotted
+      ? "1-SD miss ellipse from the pitcher's view. Dots: each pitch's landing spot relative to his usual spot.  blandalytics.com/xmiss"
+      : "1-SD miss ellipses from the pitcher's view, centred on the average miss.  blandalytics.com/xmiss",
       50, 982, { size: 15, fill: C.chrome });
     return canvas;
   }

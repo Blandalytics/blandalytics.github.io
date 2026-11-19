@@ -21,9 +21,13 @@ those levels provisional.
 Keys (bucket blandalytics-live, https://data.blandalytics.com/):
     xmiss/<built>/<level>/<season>.json   one level-season; a new build folder whenever its
                                           source files or the model change, never overwritten
+    xmiss/<built>/<level>/<season>/p/<id>.json
+                                          one pitcher's pitches as dots, read by the page only when
+                                          its per-pitch-type "Show pitches" toggle is on
     xmiss/index.json                      uploaded last: {built, model, levels, files, default,
-                                          pitchers}; files maps "<level>/<season>" to its key and
-                                          the source fingerprint it was built from
+                                          pitchers}; files maps "<level>/<season>" to its key, the
+                                          prefix of its pitcher files (dots) and the source
+                                          fingerprint it was built from
     xmiss/models/<sha8>/xmiss.py          the model (uploaded by hand from open_command)
 
 A level-season file:
@@ -36,6 +40,14 @@ angle the long axis in degrees counter-clockwise from the arm-side horizontal (0
 the command percentile (100 = smallest xMiss) among pitchers with 500+ pitches, or among pitch
 types thrown 100+ times, at that level-season; null outside those pools. Pitch types under 20
 pitches are left out.
+
+A pitcher file: {"pitches": {<pitch>: {"x": [...], "z": [...]}}}, one entry per pitch type in the
+season file, x and z in tenths of an inch (integers). Each point is where a pitch landed
+relative to the pitcher's trailing count-group spot for that pitch type, batter side and count
+group (the reference behind the model's main feature, dist_cc), arm side +x, as the ellipse.
+The 1-SD ellipse summarizes the spread of these points: across MLB 2026 pitch types with 300+
+pitches, 37% of them fall inside it (39% would for a bivariate normal). Pitches with no history
+for the spot have no point.
 """
 from __future__ import annotations
 
@@ -49,6 +61,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,16 +72,16 @@ import requests
 BASE = "https://data.blandalytics.com/"
 BUCKET = "blandalytics-live"
 PREFIX = "xmiss"
-MODEL_KEY = "xmiss/models/77559bee/xmiss.py"
-MODEL_SHA256 = "77559beecf4e9053a25f22c4dc2944024a476bb200078673a25208e45fe04a5a"
+MODEL_KEY = "xmiss/models/5bda1298/xmiss.py"
+MODEL_SHA256 = "5bda1298ff5049d69b6539c6f2bc3fbe3b7ed3cbd8e9440e2640de3d4e9da86d"
 MODEL_NAME = "xMiss 9-feature model + miss-moment models (open_command xctrl_oc, 2026-11-19)"
 LEVELS = {"mlb": "MLB", "aaa": "Triple-A", "afx": "Single-A", "rok": "Rookie", "win": "Winter",
           "int": "WBC", "bbc": "College", "hsb": "High school"}
 DEFAULT = {"level": "mlb", "season": 2026, "pitcher": 594798}   # Jacob deGrom
 MIN_PT, QUAL_P, QUAL_PT = 20, 500, 100
 # bump when what this script writes changes, so every level-season rebuilds on the next run
-# (2: percentiles null outside their pools)
-FORMAT = 2
+# (2: percentiles null outside their pools; 3: per-pitcher dot files)
+FORMAT = 3
 EXTRA = ["pitcher_name", "game_type"]
 UA = {"User-Agent": "Mozilla/5.0 blandalytics-xmiss-build"}
 CACHE = Path(__file__).resolve().parent / "cache"
@@ -172,16 +185,19 @@ def intpct(v) -> int | None:
     return None if v is None or np.isnan(v) else int(round(v))
 
 
-def season_doc(xm, level: str, season: int, cur: pd.DataFrame, hist: pd.DataFrame | None, built: str) -> dict:
+def season_doc(xm, level: str, season: int, cur: pd.DataFrame, hist: pd.DataFrame | None,
+               built: str) -> tuple[dict, dict]:
+    """The level-season file, and each pitcher's dots ({pid: {pitch: {"x", "z"}}})."""
     game_types = ("R",) if level == "mlb" else None
-    d = xm.add_xmiss(cur, history=hist if hist is not None and len(hist) else None, game_types=game_types)
+    d = xm.add_xmiss(cur, history=hist if hist is not None and len(hist) else None, game_types=game_types,
+                     offsets=True)
     d = d[d["xmiss"].notna()].copy()
     d["pitch_type"] = d["pitch_type"].astype(str)
     doc = dict(level=level, season=season, built=built,
                units="inches; pitcher's view; x + toward arm side, z + high; angle deg CCW from arm-side horizontal",
                league={}, pitchers={})
     if d.empty:
-        return doc
+        return doc, {}
     whole = xm.miss_ellipses(d, by=["pitcher"])
     whole["pct"] = pct(whole["xmiss"], whole["n"] >= QUAL_P)
     by_pt = xm.miss_ellipses(d, by=["pitcher", "pitch_type"])
@@ -205,7 +221,16 @@ def season_doc(xm, level: str, season: int, cur: pd.DataFrame, hist: pd.DataFram
         doc["pitchers"][str(pid)] = dict(name=str(meta.at[pid, "name"]), hand=str(meta.at[pid, "hand"]),
                                          n=int(r["n"]), xmiss=round(float(r["xmiss"]), 2), pct=intpct(r["pct"]),
                                          all=ell(r), pitches=rows)
-    return doc
+    # dots: every pitch of the pitch types listed, as offsets from the count-group spot in tenths
+    pts = d[d["xmiss_dx"].notna() & d["xmiss_dz"].notna()]
+    dots: dict[str, dict] = {}
+    for (pid, pt), g in pts.groupby(["pitcher", "pitch_type"], sort=False):
+        if pt not in doc["pitchers"].get(str(int(pid)), {}).get("pitches", {}):
+            continue
+        dots.setdefault(str(int(pid)), {})[pt] = {
+            "x": np.rint(g["xmiss_dx"].to_numpy() * 10).astype(int).tolist(),
+            "z": np.rint(g["xmiss_dz"].to_numpy() * 10).astype(int).tolist()}
+    return doc, dots
 
 
 # ---------------------------------------------------------------------------------- upload
@@ -241,6 +266,28 @@ class Sink:
                 raise SystemExit(f"upload failed for {key}:\n{r.stdout}\n{r.stderr}")
         else:
             self.s3.put_object(Bucket=BUCKET, Key=key, Body=data, ContentType="application/json")
+
+    def put_many(self, items: list[tuple[str, bytes]]) -> None:
+        """Many small files: 16 at a time to R2 by boto3; one by one for a folder or wrangler
+        (slow: about a second a file, so a big by-hand upload wants the R2 keys in the environment)."""
+        total = sum(len(b) for _, b in items)
+        print(("DRY " if self.dry else "") + f"put {len(items):,} files ({total:,} B), e.g. {items[0][0]}"
+              if items else "put 0 files", flush=True)
+        if self.dry or not items:
+            return
+        if self.s3 is not None:
+            def one(kv):
+                self.s3.put_object(Bucket=BUCKET, Key=kv[0], Body=kv[1], ContentType="application/json")
+            with ThreadPoolExecutor(16) as pool:
+                list(pool.map(one, items))
+            return
+        for key, data in items:
+            if self.out:
+                p = self.out / key
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(data)
+            else:
+                self.put(key, data)
 
 
 def current_index() -> dict:
@@ -283,10 +330,16 @@ def main() -> None:
         cur = load(keys, units, cols)
         prev = grp.get((level, season - 1))
         hist = load(prev, units, cols) if prev else None
-        doc = season_doc(xm, level, season, cur, hist, built)
+        doc, dots = season_doc(xm, level, season, cur, hist, built)
+        # pitcher files first, then the season file, then (below) the index that points at both
+        prefix = f"{PREFIX}/{built}/{level}/{season}/p/"
+        items = [(f"{prefix}{pid}.json", json.dumps({"pitches": v}, separators=(",", ":")).encode("utf-8"))
+                 for pid, v in dots.items()]
+        sink.put_many(items)
         key = f"{PREFIX}/{built}/{level}/{season}.json"
         sink.put(key, json.dumps(doc, separators=(",", ":")).encode("utf-8"))
-        files[name] = {"key": key, "source": fp, "pitchers": len(doc["pitchers"])}
+        files[name] = {"key": key, "dots": prefix, "source": fp, "pitchers": len(doc["pitchers"]),
+                       "dot_files": len(items), "dot_bytes": sum(len(b) for _, b in items)}
         docs[name] = doc
         print(f"{name}: {len(doc['pitchers'])} pitchers from {len(cur):,} rows ({time.time() - t:.0f}s)", flush=True)
     files = {k: v for k, v in files.items() if tuple([k.split("/")[0], int(k.split("/")[1])]) in grp and v["pitchers"]}

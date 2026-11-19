@@ -1,21 +1,25 @@
 // xMiss page: a pitcher's miss ellipses for a level and season, as the whole mix or one pitch type.
 // Data: the bucket's xmiss/index.json (levels, seasons, the file for each level-season, every
 // pitcher's pitch counts), read at an hourly ?v=, and one xmiss/<built>/<level>/<season>.json per
-// level-season, read at the key the index names (a build folder is never overwritten).
-// tools/xmiss/build.py writes both. The URL hash holds the state: #<level>/<season>/<pitcher>/<view>,
-// view "mix" or a pitch code (e.g. #mlb/2026/594798/SL); #2026/594798/SL means MLB.
+// level-season, read at the key the index names (a build folder is never overwritten), and, only
+// while "Show pitches" is on, one pitcher file of dots under the prefix the index names.
+// tools/xmiss/build.py writes them all. The URL hash holds the state:
+// #<level>/<season>/<pitcher>/<view>[/dots], view "mix" or a pitch code (e.g. #mlb/2026/594798/SL/dots);
+// #2026/594798/SL means MLB.
 (function () {
   "use strict";
-  const BASE = "https://data.blandalytics.com/";
+  // ?data=<url> swaps the bucket for a local build, on localhost only (testing a build before it ships)
+  const LOCAL_DATA = location.hostname === "localhost" && new URLSearchParams(location.search).get("data");
+  const BASE = LOCAL_DATA || "https://data.blandalytics.com/";
   const $ = (id) => document.getElementById(id);
   const pitcherQ = $("pitcherQ"), pitcherList = $("pitcherList"), seasonSel = $("season");
   const views = $("views"), status = $("status"), results = $("results"), fig = $("fig");
-  const vals = $("vals"), mixTable = $("mix"), png = $("png");
+  const vals = $("vals"), mixTable = $("mix"), png = $("png"), dotsBox = $("dots"), dotsField = $("dotsField");
   const P = window.XmissPlot;
 
   let index = null, levelSel = null;
   const fileCache = {};
-  let state = { level: null, season: null, pitcher: null, view: "mix" };
+  let state = { level: null, season: null, pitcher: null, view: "mix", dots: false };
   let shown = null;          // {p, season, view, league, level} on the chart now
   let drawSeq = 0;
 
@@ -28,6 +32,14 @@
   const byId = {};
   function getJson(url) {
     return fetch(url).then((r) => { if (!r.ok) throw new Error(`${r.status} ${url}`); return r.json(); });
+  }
+  // one pitcher's dots for a level-season, or null where the build has none
+  function dotsFile(level, season, pitcher) {
+    const entry = index.files[`${level}/${season}`];
+    if (!entry || !entry.dots) return Promise.resolve(null);
+    const url = `${BASE}${entry.dots}${pitcher}.json`;
+    if (!(url in fileCache)) fileCache[url] = getJson(url).catch((e) => { delete fileCache[url]; throw e; });
+    return fileCache[url];
   }
   function seasonFile(level, season) {
     const entry = index.files[`${level}/${season}`];
@@ -49,15 +61,15 @@
 
   // ---- URL state --------------------------------------------------------------------------------
   function writeHash() {
-    const h = `#${state.level}/${state.season}/${state.pitcher}/${state.view}`;
+    const h = `#${state.level}/${state.season}/${state.pitcher}/${state.view}` + (state.dots && state.view !== "mix" ? "/dots" : "");
     if (location.hash !== h) history.replaceState(null, "", location.pathname + location.search + h);
   }
   function readHash() {
     const parts = decodeURIComponent(location.hash.slice(1)).split("/").filter(Boolean);
     if (!parts.length) return null;
     if (/^\d{4}$/.test(parts[0])) parts.unshift("mlb");       // #2026/594798/FF
-    const [level, season, pitcher, view] = parts;
-    return { level, season: +season || null, pitcher: +pitcher || null, view: view || "mix" };
+    const [level, season, pitcher, view, extra] = parts;
+    return { level, season: +season || null, pitcher: +pitcher || null, view: view || "mix", dots: extra === "dots" };
   }
 
   // ---- controls -----------------------------------------------------------------------------------
@@ -96,6 +108,8 @@
       `<button type="button" class="plpd-chip" data-view="${v}" aria-pressed="${v === state.view}">`
       + (col ? `<i class="dot" style="background:${col}"></i>` : "") + `${esc(label)}</button>`).join("");
   }
+  // "Show pitches": off by default, per-pitch-type views only; it stays on across pitch types
+  dotsBox.addEventListener("change", () => go({ dots: dotsBox.checked }));
   views.addEventListener("click", (ev) => {
     const b = ev.target.closest("button[data-view]");
     if (b) go({ view: b.getAttribute("data-view") });
@@ -158,6 +172,10 @@
       const p = doc.pitchers[String(state.pitcher)];
       if (!p) { setStatus(`No ${levelName(state.level)} ${state.season} pitches for ${e.name}.`); results.hidden = true; return; }
       if (state.view !== "mix" && !p.pitches[state.view]) state.view = "mix";
+      const entry = index.files[`${state.level}/${state.season}`] || {};
+      const canDots = state.view !== "mix" && !!entry.dots;
+      dotsField.hidden = !canDots;
+      dotsBox.checked = canDots && state.dots;
       writeHash();
       fillViews(p);
       fillVals(p, state.view, doc.league);
@@ -167,8 +185,17 @@
         ? `${lv.name}: provisional. The model was trained on MLB catchers, zones and parks.` : "");
       results.hidden = false;
       png.disabled = false;
-      shown = { p, season: state.season, view: state.view, league: doc.league, level: state.level };
-      return P.draw(fig, { p, season: seasonLabel(), view: state.view, league: doc.league });
+      const want = canDots && state.dots;
+      return (want ? dotsFile(state.level, state.season, state.pitcher) : Promise.resolve(null)).catch((err) => {
+        console.error(err);
+        setStatus("Couldn't load this pitcher's pitches.");
+        return null;
+      }).then((dfile) => {
+        if (seq !== drawSeq) return;
+        const dots = want && dfile && dfile.pitches ? dfile.pitches[state.view] || null : null;
+        shown = { p, season: state.season, view: state.view, league: doc.league, level: state.level, dots };
+        return P.draw(fig, { p, season: seasonLabel(), view: state.view, league: doc.league, dots });
+      });
     }).catch((err) => {
       console.error(err);
       if (seq === drawSeq) setStatus("Couldn't load that season. Try again in a moment.");
@@ -277,17 +304,18 @@
   ShareImage.image(png, () => {
     if (!shown) throw new Error("no chart");
     const s = shown;
-    sharedName = `${s.p.name.replace(/[^A-Za-z0-9]+/g, "_")}_xMiss_${s.level}_${s.season}_${s.view}.png`;
+    sharedName = `${s.p.name.replace(/[^A-Za-z0-9]+/g, "_")}_xMiss_${s.level}_${s.season}_${s.view}${s.dots ? "_pitches" : ""}.png`;
     const c = document.createElement("canvas");
-    return P.draw(c, { p: s.p, season: seasonLabel(), view: s.view, league: s.league })
+    return P.draw(c, { p: s.p, season: seasonLabel(), view: s.view, league: s.league, dots: s.dots })
       .then((cv) => new Promise((res, rej) => cv.toBlob((b) => (b ? res(b) : rej(new Error("no image"))), "image/png")));
   }, () => sharedName);
 
   // ---- start --------------------------------------------------------------------------------------------
   window.addEventListener("hashchange", () => {
     const h = readHash();
-    if (h && index && (h.level !== state.level || h.season !== state.season || h.pitcher !== state.pitcher || h.view !== state.view)) {
-      go({ level: h.level, season: h.season || state.season, pitcher: h.pitcher || state.pitcher, view: h.view });
+    if (h && index && (h.level !== state.level || h.season !== state.season || h.pitcher !== state.pitcher
+        || h.view !== state.view || h.dots !== (state.dots && state.view !== "mix"))) {
+      go({ level: h.level, season: h.season || state.season, pitcher: h.pitcher || state.pitcher, view: h.view, dots: h.dots });
     }
   });
   const hour = Math.floor(Date.now() / 3.6e6);
@@ -303,7 +331,7 @@
     const h = readHash() || {};
     const d = ix.default;
     const pitcher = byId[h.pitcher] ? h.pitcher : d.pitcher;
-    go({ level: h.level || d.level, season: h.season || d.season, pitcher, view: h.view || "mix" });
+    go({ level: h.level || d.level, season: h.season || d.season, pitcher, view: h.view || "mix", dots: !!h.dots });
   }).catch((err) => {
     console.error(err);
     setStatus("Couldn't load the xMiss data. Try reloading the page.");

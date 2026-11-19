@@ -14,6 +14,7 @@
 .suggest-list li span{white-space:nowrap}
 .suggest-list li small{min-width:0; overflow:hidden; text-overflow:ellipsis}
 .suggest-list li.active{background:var(--dropdown-dd-item-hover-bg)}
+.views-row{align-items:center; justify-content:space-between; gap:var(--space-300) var(--space-400)}
 .plpd-chip .dot{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:7px; flex:none}
 
 /* chart and table side by side; stacked on narrow screens */

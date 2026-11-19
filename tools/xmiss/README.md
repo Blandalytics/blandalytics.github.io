@@ -14,6 +14,13 @@ bucket at `xmiss/models/<sha8>/xmiss.py` and pinned by `MODEL_KEY` and `MODEL_SH
 `build.py`. To change the model, upload the new file under its own hash prefix, update both
 constants, and run the workflow with `force`.
 
+Each level-season also gets one small file per pitcher (`<level>/<season>/p/<id>.json`, the
+dots behind the page's "Show pitches" toggle): about 800 files per MLB season. The workflow
+uploads them 16 at a time with boto3. Wrangler uploads one at a time (about a second each), so a
+by-hand rebuild of everything is faster with the R2 keys in the environment
+(`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, no `--wrangler`), or by
+dispatching the workflow.
+
 By hand (wrangler's login in `website\site_logistics\tools\live`):
 
     python tools/xmiss/build.py --out out_dir                 # build to a folder
