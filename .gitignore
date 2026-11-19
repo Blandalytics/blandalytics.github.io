@@ -36,3 +36,5 @@ tools/lineup_sims/cache/
 tools/nba_shot_charts/cache/
 # wrangler's local cache, from running the NBA build (or any wrangler command) at the repo root
 .wrangler/
+# xmiss: the data files (from the bucket) and the model file it downloads
+tools/xmiss/cache/

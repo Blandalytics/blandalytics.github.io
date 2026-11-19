@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="xMiss miss ellipses: how far, and which way, an MLB pitcher misses the catcher's target, from a Statcast-only model of Open Command miss distance.">
+<title>xMiss</title>
+<link rel="icon" href="https://res.cloudinary.com/dduabusaf/image/upload/v1772839606/teal_letter_logo_owufaj.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://data.blandalytics.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/plpd.css?v=3">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body class="plpd">
+<main class="page">
+  <header class="plpd-page-header">
+    <h1 class="plpd-page-header__title">xMiss</h1>
+    <p class="plpd-page-header__meta">How far, and which way, a pitcher misses the catcher's target</p>
+  </header>
+
+  <section class="plpd-pane controls" aria-label="Pitcher">
+    <div class="row fields">
+      <div class="plpd-filter-field grow">
+        <label class="plpd-filter-field__label" for="pitcherQ">Pitcher</label>
+        <div class="plpd-autocomplete">
+          <input id="pitcherQ" class="plpd-autocomplete__input" type="text" placeholder="Name or MLBAM ID"
+            autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false"
+            aria-controls="pitcherList" disabled>
+          <ul id="pitcherList" class="plpd-autocomplete__menu suggest-list" role="listbox" hidden></ul>
+        </div>
+      </div>
+      <div class="plpd-filter-field">
+        <label class="plpd-filter-field__label" for="season">Season</label>
+        <select id="season" class="plpd-filter-dropdown" disabled></select>
+      </div>
+      <button class="plpd-btn" id="png" type="button" disabled>Share image ▾</button>
+    </div>
+    <div class="plpd-chips" role="group" aria-label="Pitches shown" id="views"></div>
+    <p class="plpd-status" id="status" aria-live="polite">Loading pitchers…</p>
+  </section>
+
+  <section class="results" id="results" hidden>
+    <figure class="figure">
+      <canvas id="fig" width="1600" height="1600" role="img" aria-label="Miss ellipses"></canvas>
+    </figure>
+    <div class="side">
+      <div class="vals" id="vals"></div>
+      <div class="plpd-table-wrap">
+        <table class="plpd-table mix" id="mix"></table>
+      </div>
+      <p class="plpd-pane__desc small">Tap a row to show that pitch alone. Percentiles rank command among pitchers with 500+ pitches, or pitch types thrown 100+ times; 100 is the smallest xMiss.</p>
+    </div>
+  </section>
+
+  <section class="plpd-pane how">
+    <h2 class="plpd-pane__title">How it works</h2>
+    <div class="plpd-prose">
+      <p><b>xMiss</b> is the expected distance, in inches, between where a pitch crossed the plate and where the catcher's glove said it was meant to go. It is a gradient-boosted model trained on Open Command's catcher-target misses (2024–2026), and it needs only Statcast fields: how far the pitch landed from the pitcher's recent average spot for that pitch type, batter side and count, where it crossed the plate and the zone edge, the batter's side, and the pitch group.</p>
+      <p><b>Miss ellipses</b> come from five companion models that predict each pitch's average miss and the spread of its miss in each direction. Averaged over a pitcher's pitches, they give the 1-SD ellipse: about two in three misses fall inside it. The ellipse is centred on the average miss, so an ellipse pulled toward the arm side means the pitch tends to miss there.</p>
+      <p>Checked on pitchers held out of training: per-pitch r = 0.90 and pitcher-season r = 0.94 against Open Command's mean miss; ellipse size r = 0.98. The chart is drawn from the pitcher's view, with the arm side on the right for a right-hander and on the left for a left-hander.</p>
+    </div>
+  </section>
+</main>
+<script src="/shared/share-image.js?v=2"></script>
+<script src="plot.js?v=2"></script>
+<script src="app.js?v=2"></script>
+</body>
+</html>

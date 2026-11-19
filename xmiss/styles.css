@@ -1,0 +1,57 @@
+/* xmiss page layout on top of PLPD (shared/plpd.css): the Player Comps frame, with the chart on the
+   card's own ground (#292C42, as the Swing Profile figure) beside its pitch table */
+[hidden]{display:none !important}
+*{box-sizing:border-box}
+.page{max-width:1280px; margin:0 auto; padding:32px var(--layout-page-content-gutter) 64px; display:flex; flex-direction:column; gap:var(--space-600)}
+.controls{display:flex; flex-direction:column; gap:var(--space-400)}
+.row{display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-400)}
+.fields .grow{flex:1 1 280px}
+.fields .plpd-autocomplete{width:100%}
+.field select.plpd-filter-dropdown,#season{min-width:110px; font-variant-numeric:tabular-nums}
+/* the Pitcher box's suggestions: season.html's list, ten rows tall before it scrolls */
+.suggest-list{--rows:10; max-height:calc(var(--rows) * 34px + 14px); overflow-y:auto; overscroll-behavior:contain;
+  scrollbar-width:thin; scrollbar-color:var(--navy-500) transparent}
+.suggest-list li span{white-space:nowrap}
+.suggest-list li small{min-width:0; overflow:hidden; text-overflow:ellipsis}
+.suggest-list li.active{background:var(--dropdown-dd-item-hover-bg)}
+.plpd-chip .dot{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:7px; flex:none}
+
+/* chart and table side by side; stacked on narrow screens */
+.results{display:grid; grid-template-columns:minmax(0, 640px) minmax(0, 1fr); gap:var(--space-600); align-items:start}
+@media (max-width:1000px){.results{grid-template-columns:minmax(0, 1fr)}}
+.figure{margin:0; border-radius:var(--radius-xl); overflow:hidden; background:#292C42; box-shadow:var(--shadow-pl-data-table-wrap-shadow); aspect-ratio:1/1; max-width:720px; width:100%; justify-self:center}
+.figure canvas{display:block; width:100%; height:100%}
+.side{display:flex; flex-direction:column; gap:var(--space-400); min-width:0}
+.vals{display:grid; grid-template-columns:repeat(auto-fill, minmax(118px, 1fr)); gap:8px}
+.val{display:flex; flex-direction:column; gap:2px; padding:10px 12px; border-radius:var(--radius-md); background:var(--surfaces-surface-2); border:1px solid var(--surface-border-card); min-width:0}
+.val span{font-family:var(--font-display); font-size:12px; color:var(--text-text-meta)}
+.val b{font-family:var(--font-display); font-size:20px; font-weight:700; color:var(--base-white); font-variant-numeric:tabular-nums}
+.val i{font-style:normal; font-size:12px; color:var(--text-text-nav)}
+.mix{width:100%}
+.mix th,.mix td{padding:9px 8px; text-align:right; font-size:14px}
+.mix th:first-child,.mix td:first-child{padding-left:12px}
+.mix th:last-child,.mix td:last-child{padding-right:12px}
+.mix th:first-child,.mix td:first-child{text-align:left}
+.mix tbody tr{cursor:pointer}
+.mix tbody tr:hover td{background:var(--data-table-pl-data-table-row-hover-bg)}
+.mix tbody tr.on td{background:var(--data-table-pl-data-table-row-open-bg)}
+.mix tbody tr.whole td{font-weight:600}
+.mix td.pitch{font-family:var(--font-display); font-weight:700}
+.mix td.pitch .dot{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:8px}
+.small{font-size:13px; color:var(--text-text-nav)}
+.how .plpd-prose p{margin:0 0 10px}
+.how .plpd-prose p:last-child{margin-bottom:0}
+.how .plpd-pane__title{margin-bottom:10px}
+
+@media (max-width:600px){
+  .page{padding-top:20px; gap:var(--space-400)}
+  .row{gap:12px}
+  .fields .plpd-filter-field{flex:1 1 40%}
+  .fields .grow{flex-basis:100%}
+  #season{width:100%}
+  #png{flex:1 1 40%; align-self:flex-end}
+  .vals{grid-template-columns:repeat(2, minmax(0, 1fr))}
+  .mix th,.mix td{padding:8px 7px; font-size:13px}
+}
+h1,h2,h3{text-wrap:balance}
+p{text-wrap:pretty}
