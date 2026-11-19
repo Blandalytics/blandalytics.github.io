@@ -45,8 +45,8 @@
    a row opens that pitcher above */
 .board{display:flex; flex-direction:column; gap:var(--space-300)}
 .board-head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px var(--space-400)}
-.board-head .plpd-pane__title{margin-bottom:4px}
-.board-head .plpd-pane__desc{margin:0}
+.board-head .plpd-pane__title{margin:0}
+#boardTable td.none{text-align:left; color:var(--text-text-nav); cursor:default}
 input.num{box-sizing:border-box; height:40px; width:110px; padding:0 12px; border:1px solid var(--borders-border-tab);
   border-radius:var(--radius-lg); background:var(--surfaces-surface-3); box-shadow:var(--shadow-pl-filter-search-input-inset);
   font-family:var(--font-text); font-size:14px; font-weight:500; line-height:1.2; color:var(--text-text-cell); font-variant-numeric:tabular-nums}
