@@ -1,0 +1,56 @@
+name: Build xMiss data
+
+# The xMiss page's data (tools/xmiss/build.py): every pitcher's miss ellipses for every level and
+# season in the bucket's pitch data (data/), scored with the xMiss model (a file in the bucket,
+# pinned by hash in build.py), written back to the bucket under xmiss/. Only level-seasons whose
+# source files changed are rebuilt, so in season that is the current season at each level, and a
+# day with nothing new downloads nothing. Build folders the new index no longer references are pruned
+# once they are more than 24 hours old.
+on:
+  # right after the data files roll, whenever GitHub gets to that run (its 10:30 UTC cron often
+  # starts hours late), so the build sees the day that has just settled
+  workflow_run:
+    workflows: ["Build data files"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Level-seasons to consider, comma-separated (e.g. mlb/2026,aaa/2026). Default: all."
+        required: false
+      force:
+        description: "Rebuild them even if their source files haven't changed"
+        type: boolean
+        default: false
+
+concurrency:
+  group: xmiss
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/xmiss/requirements.txt
+
+      - name: Install
+        run: pip install -r tools/xmiss/requirements.txt
+
+      # no Actions cache for the data files: a run downloads only what it rebuilds (the changed
+      # level-seasons and the season before each), and R2 egress is free
+      - name: Build
+        run: >-
+          python tools/xmiss/build.py
+          ${{ inputs.only && format('--only {0}', inputs.only) || '' }}
+          ${{ inputs.force && '--force' || '' }}
