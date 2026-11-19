@@ -102,22 +102,19 @@
       const parts = [
         [`xMiss ${one.xmiss.toFixed(2)}"`, C.text, 700],
         [one.pct == null ? "no percentile" : `${ordinal(one.pct)} percentile`, C.text, 400],
-        [`1 SD ${one.major.toFixed(1)}" × ${one.minor.toFixed(1)}", ${Math.round(one.angle)}°`, C.text, 400],
+        [`1 SD ${one.major.toFixed(1)}" × ${one.minor.toFixed(1)}", Tilt: ${Math.round(one.angle)}°`, C.text, 400],
       ];
       if (lg) parts.splice(1, 0, [`(lg: ${lg.xmiss.toFixed(2)}")`, C.subheader, 400]);   // right after the xMiss
-      let x = 50;
-      ctx.save();
-      ctx.fillStyle = color(view);
-      ctx.beginPath();
-      ctx.arc((x + 9) * u, 172 * u, 9 * u, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      x += 28;
+      // one line, centred on the canvas; shrunk to fit the margins if it ever runs long
+      const sepOf = (s, i) => (!i ? "" : s.startsWith("(lg") ? " " : " - ");   // "xMiss 8.85" (lg: 11.37") - ..."
+      const lineW = (size) => parts.reduce((w, [s, , weight], i) => w + width(sepOf(s, i), size) + width(s, size, weight), 0);
+      const size = Math.min(22, 22 * 900 / lineW(22));
+      let x = 500 - lineW(size) / 2;
       parts.forEach(([s, fill, weight], i) => {
-        const sep = !i ? "" : s.startsWith("(lg") ? " " : " - ";   // "xMiss 8.85" (lg: 11.37") - ..."
-        if (sep) { text(sep, x, 180, { size: 22, fill: C.subheader }); x += width(sep, 22); }
-        text(s, x, 180, { size: 22, fill, weight });
-        x += width(s, 22, weight);
+        const sep = sepOf(s, i);
+        if (sep) { text(sep, x, 180, { size, fill: C.subheader }); x += width(sep, size); }
+        text(s, x, 180, { size, fill, weight });
+        x += width(s, size, weight);
       });
     } else {
       text(`xMiss ${p.xmiss.toFixed(2)}"${p.pct == null ? "" : `  (${ordinal(p.pct)} pct)`}`, 50, 172, { size: 22, weight: 700 });
