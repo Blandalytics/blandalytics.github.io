@@ -98,6 +98,7 @@
     }
 
     // ---- key: every pitch's xMiss (whole mix) or the pitch's numbers ----
+    let keyBottom = 208;                           // the key's last baseline: one legend row
     if (one) {
       const lg = league[view];
       const parts = [
@@ -133,6 +134,7 @@
         rowW += (rows[rows.length - 1].length ? GAP : 0) + w;
         rows[rows.length - 1].push({ pt, s, w });
       });
+      keyBottom = 208 + (rows.length - 1) * 30;
       rows.forEach((row, r) => {
         const y = 208 + r * 30;
         let x = 500 - (row.reduce((t, it) => t + it.w, 0) + GAP * (row.length - 1)) / 2;
@@ -150,7 +152,17 @@
     }
 
     // ---- frame ----
-    const cx = 500, cy = 585, k = 12.6;           // k: layout units per inch
+    // one scale for every chart, so pitchers compare: the frame sits under room for a two-row
+    // key (the High label 37 units below its last line) with its foot, the Low label, just above
+    // the footer. A rarer three-row key shrinks it further.
+    const cx = 500;
+    let cy = 585, k = 12.6;
+    const FOOT = cy + AXIS * k + 6, topMin = Math.max(keyBottom, 238) + 37;
+    if (cy - AXIS * k - 6 < topMin) {
+      const half = (FOOT - topMin) / 2;
+      cy = topMin + half;
+      k = (half - 6) / AXIS;
+    }
     const X = (v) => (cx + v * k) * u, Y = (v) => (cy - v * k) * u;
     ctx.save();
     ctx.lineWidth = 3 * u;
@@ -176,8 +188,8 @@
     }
     const lefty = p.hand === "L";
     const side = { size: 20, weight: 700, base: "middle" };
-    text(lefty ? "Glove side" : "Arm side", cx + AXIS * k + 12, cy, { ...side, align: "left" });
-    text(lefty ? "Arm side" : "Glove side", cx - AXIS * k - 12, cy, { ...side, align: "right" });
+    text(lefty ? "Glove Side" : "Arm Side", cx + AXIS * k + 12, cy, { ...side, align: "left" });
+    text(lefty ? "Arm Side" : "Glove Side", cx - AXIS * k - 12, cy, { ...side, align: "right" });
     // beside the axis ends, so a two-row key above never meets them
     text("High", cx + 12, cy - AXIS * k + 4, { ...side, align: "left" });
     text("Low", cx + 12, cy + AXIS * k - 4, { ...side, align: "left" });
