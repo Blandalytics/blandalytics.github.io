@@ -109,13 +109,14 @@
     const e = view === "mix" ? p.all : p.pitches[view];
     const pctv = view === "mix" ? p.pct : e.pct;
     const lg = view === "mix" ? null : league[view];
+    // four tiles in both views: a pitch's league average rides in its xMiss tile
+    const note = `${thousands(e.n)} pitches` + (lg ? ` · league ${f2(lg.xmiss)}"` : "");
     const out = [
-      tile("xMiss", `${f2(e.xmiss)}"`, `${thousands(e.n)} pitches`),
+      tile("xMiss", `${f2(e.xmiss)}"`, note),
       tile("Percentile", pctText(pctv), pctv == null ? (view === "mix" ? "under 500 pitches" : "under 100 thrown") : "100 = best command"),
       tile("1-SD ellipse", `${e.major.toFixed(1)}" × ${e.minor.toFixed(1)}"`, "long × short"),
       tile("Tilt", `${Math.round(e.angle)}°`, "from the arm side"),
     ];
-    if (view !== "mix") out.splice(2, 0, tile("League", lg ? `${f2(lg.xmiss)}"` : "–", `all ${P.pitchName(view)}s`));
     vals.innerHTML = out.join("");
   }
   function fillTable(p, view) {

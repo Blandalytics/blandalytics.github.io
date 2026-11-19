@@ -66,6 +66,9 @@ LEVELS = {"mlb": "MLB", "aaa": "Triple-A", "afx": "Single-A", "rok": "Rookie", "
           "int": "WBC", "bbc": "College", "hsb": "High school"}
 DEFAULT = {"level": "mlb", "season": 2026, "pitcher": 594798}   # Jacob deGrom
 MIN_PT, QUAL_P, QUAL_PT = 20, 500, 100
+# bump when what this script writes changes, so every level-season rebuilds on the next run
+# (2: percentiles null outside their pools)
+FORMAT = 2
 EXTRA = ["pitcher_name", "game_type"]
 UA = {"User-Agent": "Mozilla/5.0 blandalytics-xmiss-build"}
 CACHE = Path(__file__).resolve().parent / "cache"
@@ -103,8 +106,9 @@ def groups(units: dict) -> dict[tuple[str, int], list[str]]:
 
 
 def fingerprint(keys: list[str], units: dict) -> str:
-    """Changes when a level-season's files change (a day settles, a month closes) or the model does."""
-    h = hashlib.sha256(MODEL_SHA256.encode())
+    """Changes when a level-season's files change (a day settles, a month closes), the model does,
+    or FORMAT does (a change to what this script writes)."""
+    h = hashlib.sha256(f"{MODEL_SHA256}|format {FORMAT}".encode())
     for k in keys:
         h.update(f"{k}|{units[k].get('built', '')}|{units[k].get('pitches', '')}".encode())
     return h.hexdigest()[:16]
@@ -147,11 +151,14 @@ def model():
 
 # ---------------------------------------------------------------------------------- build
 def pct(values: pd.Series, qualified: pd.Series) -> pd.Series:
-    """Command percentile: share of the qualified pool with a larger xMiss (100 = best)."""
+    """Command percentile within the qualified pool: the share of it with a larger xMiss (100 = best).
+    Units outside the pool (too few pitches) get NaN, published as null."""
     pool = np.sort(values[qualified].to_numpy())
-    if not len(pool):
-        return pd.Series(np.nan, index=values.index)
-    return pd.Series(100 * (1 - np.searchsorted(pool, values.to_numpy(), side="right") / len(pool)), index=values.index)
+    out = pd.Series(np.nan, index=values.index)
+    if len(pool):
+        q = qualified.to_numpy()
+        out[q] = 100 * (1 - np.searchsorted(pool, values[q].to_numpy(), side="right") / len(pool))
+    return out
 
 
 def ell(r) -> dict:

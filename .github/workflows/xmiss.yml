@@ -3,19 +3,21 @@ name: Build xMiss data
 # The xMiss page's data (tools/xmiss/build.py): every pitcher's miss ellipses for every level and
 # season in the bucket's pitch data (data/), scored with the xMiss model (a file in the bucket,
 # pinned by hash in build.py), written back to the bucket under xmiss/. Only level-seasons whose
-# source files changed are rebuilt, so in season that is the current season at each level.
+# source files changed are rebuilt, so in season that is the current season at each level, and a
+# day with nothing new downloads nothing.
 on:
-  schedule:
-    # 11:45 UTC: after the data files roll at 10:30, so the season holds the day that has
-    # just settled
-    - cron: "45 11 * * *"
+  # right after the data files roll, whenever GitHub gets to that run (its 10:30 UTC cron often
+  # starts hours late), so the build sees the day that has just settled
+  workflow_run:
+    workflows: ["Build data files"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       only:
         description: "Level-seasons to consider, comma-separated (e.g. mlb/2026,aaa/2026). Default: all."
         required: false
       force:
-        description: "Rebuild them even if their source files haven't changed (after a model change)"
+        description: "Rebuild them even if their source files haven't changed"
         type: boolean
         default: false
 
@@ -25,6 +27,7 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -43,23 +46,10 @@ jobs:
       - name: Install
         run: pip install -r tools/xmiss/requirements.txt
 
-      # last season's file is the current season's history: keep the downloads between runs
-      - name: Restore the data cache
-        uses: actions/cache/restore@v4
-        with:
-          path: tools/xmiss/cache
-          key: xmiss-data-${{ github.run_id }}
-          restore-keys: xmiss-data-
-
+      # no Actions cache for the data files: a run downloads only what it rebuilds (the changed
+      # level-seasons and the season before each), and R2 egress is free
       - name: Build
         run: >-
           python tools/xmiss/build.py
           ${{ inputs.only && format('--only {0}', inputs.only) || '' }}
           ${{ inputs.force && '--force' || '' }}
-
-      - name: Save the data cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: tools/xmiss/cache
-          key: xmiss-data-${{ github.run_id }}

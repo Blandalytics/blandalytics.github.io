@@ -2,8 +2,9 @@
 
 `build.py` writes the data behind `/xmiss/`: every pitcher's 1-SD miss ellipses (the whole
 mix and each pitch type) for every level and season in the bucket's pitch data (`data/`,
-see `tools/data/README.md`). The workflow `xmiss.yml` runs it daily at 11:45 UTC and
-rebuilds only the level-seasons whose source files changed. Its docstring has the keys and
+see `tools/data/README.md`). The workflow `xmiss.yml` runs it after each successful run of the data
+workflow ("Build data files") and rebuilds only the level-seasons whose source files
+changed (or all of them when `FORMAT` in `build.py` is bumped). Its docstring has the keys and
 the file format.
 
 The model is xMiss from the `open_command` project (`xctrl_oc/`): a 9-feature XGBoost model
