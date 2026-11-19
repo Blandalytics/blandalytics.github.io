@@ -8,7 +8,8 @@ changed (or all of them when `FORMAT` in `build.py` is bumped). Its docstring ha
 the file format.
 
 Old builds are pruned automatically: after each successful run, objects in build folders more
-than 24 hours old that the new index doesn't reference are deleted (`index.json` and
+than 24 hours old that neither the new index nor the one it replaced references are deleted
+(a superseded file lasts one more run) (`index.json` and
 `models/` are never touched; nothing is pruned if the new index lists fewer level-seasons than
 the old one). Only boto3 runs delete; `--out`, `--dry-run` and `--wrangler` print what would go.
 

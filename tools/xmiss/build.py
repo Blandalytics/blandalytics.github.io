@@ -31,8 +31,8 @@ Keys (bucket blandalytics-live, https://data.blandalytics.com/):
     xmiss/models/<sha8>/xmiss.py          the model (uploaded by hand from open_command)
 
 Old builds are pruned: after a successful index upload (and on days with nothing to rebuild), any
-object under xmiss/<YYYYMMDD-HHMM>/ that the index doesn't reference, in a build folder more than
-PRUNE_AFTER old, is deleted (boto3 runs only; --out, --dry-run and --wrangler print the plan when
+object under xmiss/<YYYYMMDD-HHMM>/ that neither the new index nor the one it replaced references,
+in a build folder more than PRUNE_AFTER old, is deleted (so a superseded file lasts one more run) (boto3 runs only; --out, --dry-run and --wrangler print the plan when
 the R2 keys are in the environment). The grace period keeps a page that loaded the previous
 index from finding its files gone. index.json and models/ are never touched, and nothing is
 pruned when the new index lists fewer level-seasons than the old one.
@@ -309,8 +309,11 @@ class Sink:
 
 
 def prune(sink: Sink, index: dict, previous: dict, now: datetime) -> None:
-    """Delete objects in build folders older than PRUNE_AFTER that `index` (just uploaded) doesn't
-    reference. Deletes only through the boto3 sink; otherwise prints the plan if it can list."""
+    """Delete objects in build folders older than PRUNE_AFTER that neither `index` (just uploaded)
+    nor `previous` (the one it replaced) references. A file a run supersedes stays until the next
+    run, so a page still holding the previous index (the hourly ?v= copy at the edge) never finds
+    its season or pitcher file gone. Deletes only through the boto3 sink; otherwise prints the plan
+    if it can list."""
     files, before = index.get("files", {}), previous.get("files", {})
     if not files or len(files) < len(before):
         print(f"prune: skipped, the new index lists {len(files)} level-seasons and the previous {len(before)}")
@@ -319,8 +322,9 @@ def prune(sink: Sink, index: dict, previous: dict, now: datetime) -> None:
     if s3 is None:
         print("prune: skipped, no R2 keys to list the bucket with")
         return
-    keep = {v["key"] for v in files.values()}
-    prefixes = tuple(v["dots"] for v in files.values() if v.get("dots"))
+    referenced = list(files.values()) + list(before.values())
+    keep = {v["key"] for v in referenced if v.get("key")}
+    prefixes = tuple({v["dots"] for v in referenced if v.get("dots")})
     cutoff = now - PRUNE_AFTER
     gone: dict[str, list[tuple[str, int]]] = {}
     pages = s3.get_paginator("list_objects_v2").paginate(Bucket=BUCKET, Prefix=f"{PREFIX}/")
