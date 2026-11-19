@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://data.blandalytics.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/shared/plpd.css?v=3">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body class="plpd">
 <main class="page">
@@ -77,13 +77,15 @@
   </section>
 
   <section class="plpd-pane how">
-    <h2 class="plpd-pane__title">How it works</h2>
+    <details>
+    <summary><h2 class="plpd-pane__title">How it works</h2></summary>
     <div class="plpd-prose">
       <p><b>xMiss</b> is the expected miss, in inches, from a predicted target: how far a pitch crossed the plate from where it was meant to go. It is a Statcast-feature model trained on Open Command miss distance data (2024–2026), whose targets come from the catcher's glove, and it needs only Statcast fields: how far the pitch landed from the pitcher's recent average spot for that pitch type, batter side and count, where it crossed the plate and the zone edge, the batter's side, and the pitch group.</p>
       <p><b>Miss ellipses</b> come from five companion models that predict each pitch's average miss and the spread of its miss in each direction. Averaged over a pitcher's pitches, they give the 1-SD ellipse, which holds about four in ten misses (a 1-SD ellipse in two dimensions is smaller than the one-dimensional "two in three"). The ellipse is centred on the average miss, so an ellipse pulled toward the arm side means the pitch tends to miss there.</p>
       <p><b>Show pitches</b> (one pitch type at a time) adds a dot for each pitch: where it crossed the plate relative to the pitcher's usual spot for that pitch type, batter side and count (the average of his previous 50 such pitches, the reference the model leans on most). The ellipse summarizes the spread of these dots; across MLB pitch types thrown 300+ times, 37% of them fall inside it. Pitches with no earlier pitches of that type have no dot.</p>
       <p>Checked on pitchers held out of training: per-pitch r = 0.90 and pitcher-season r = 0.94 against Open Command's mean miss; ellipse size r = 0.98. The chart is drawn from the pitcher's view, with the arm side on the right for a right-hander and on the left for a left-hander.</p>
     </div>
+    </details>
   </section>
 </main>
 <script src="/shared/share-image.js?v=2"></script>

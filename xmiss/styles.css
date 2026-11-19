@@ -75,7 +75,15 @@ input.num:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offse
 #boardTable tbody tr:last-child td{border-bottom:0}
 .how .plpd-prose p{margin:0 0 10px}
 .how .plpd-prose p:last-child{margin-bottom:0}
-.how .plpd-pane__title{margin-bottom:10px}
+/* How it works: collapsed until opened; the title is the toggle, with a chevron that turns */
+.how summary{display:flex; align-items:center; gap:10px; cursor:pointer; list-style:none; width:max-content}
+.how summary::-webkit-details-marker{display:none}
+.how summary::before{content:""; width:8px; height:8px; border-right:2px solid var(--brand-brand-cyan);
+  border-bottom:2px solid var(--brand-brand-cyan); transform:rotate(-45deg); transition:transform .15s}
+.how details[open] summary::before{transform:rotate(45deg)}
+.how summary:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:4px; border-radius:4px}
+.how .plpd-pane__title{margin:0}
+.how details[open] summary{margin-bottom:10px}
 
 @media (max-width:600px){
   .page{padding-top:20px; gap:var(--space-400)}
