@@ -1,4 +1,4 @@
-// Miss-ellipse chart for /xmiss/: a pitcher's 1-SD miss ellipses around the catcher's target,
+// Miss-ellipse chart for /xmiss/: a pitcher's 1-SD miss ellipses around the predicted target,
 // drawn on a square canvas in the Swing Profile figure style (the Pitcher List theme, DM Sans,
 // the wordmark top right). The frame is the pitcher-card Movement chart's: rings every 6",
 // solid at 12" and 24", axes running past the outer ring, side labels outside it. The scale is
