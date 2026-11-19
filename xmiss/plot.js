@@ -82,12 +82,15 @@
     };
     const width = (s, size, weight = 400) => { ctx.font = `${weight} ${size * u}px ${FONT}`; return ctx.measureText(s).width / u; };
 
-    // ---- header ----
+    // ---- header: Model Drilldown's card header (pitcher; pitch in its colour; season), its
+    // 46 / 29 / 17 px on a 1280-wide card scaled to this one's width ----
     const one = view !== "mix" ? p.pitches[view] : null;
-    text(p.name, 50, 82, { size: 44, weight: 700, fill: C.header });
     const dotted = one && dots && dots.x && dots.x.length;
-    text(`${season} Miss Ellipses  ·  ${one ? pitchName(view) : "Whole mix"}${dotted ? `  ·  ${dots.x.length.toLocaleString("en-US")} pitches shown` : ""}`,
-      50, 124, { size: 24, fill: C.subheader });
+    text(p.name, 50, 76, { size: 36, weight: 700, fill: C.header });
+    const what = one ? pitchName(view) : "Whole Mix";
+    text(what, 50, 106, { size: 22.6, weight: 700, fill: one ? color(view) : C.text });
+    text(" xMiss Distance", 50 + width(what, 22.6, 700), 106, { size: 22.6, weight: 700, fill: C.text });
+    text(`${season} - ${(one ? one.n : p.n).toLocaleString("en-US")} pitches`, 50, 128, { size: 13.3, fill: C.subheader });
     if (mark) {
       const w = 230, h = w * (mark.height / mark.width);
       ctx.drawImage(mark, (950 - w) * u, 46 * u, w * u, h * u);
@@ -101,7 +104,7 @@
         [one.pct == null ? "no percentile" : `${ordinal(one.pct)} percentile`, C.text, 400],
         [`1 SD ${one.major.toFixed(1)}" × ${one.minor.toFixed(1)}", ${Math.round(one.angle)}°`, C.text, 400],
       ];
-      if (lg) parts.push([`League ${lg.xmiss.toFixed(2)}"`, C.subheader, 400]);
+      if (lg) parts.splice(1, 0, [`(lg: ${lg.xmiss.toFixed(2)}")`, C.subheader, 400]);   // right after the xMiss
       let x = 50;
       ctx.save();
       ctx.fillStyle = color(view);
@@ -111,7 +114,8 @@
       ctx.restore();
       x += 28;
       parts.forEach(([s, fill, weight], i) => {
-        if (i) { text("·", x + 10, 180, { size: 22, fill: C.subheader }); x += 28; }
+        const sep = !i ? "" : s.startsWith("(lg") ? " " : " - ";   // "xMiss 8.85" (lg: 11.37") - ..."
+        if (sep) { text(sep, x, 180, { size: 22, fill: C.subheader }); x += width(sep, 22); }
         text(s, x, 180, { size: 22, fill, weight });
         x += width(s, 22, weight);
       });
@@ -209,11 +213,11 @@
     ctx.restore();
 
     // ---- footer ----
-    text("xMiss: expected miss from the catcher's target, from a Statcast-only model trained on Open Command data.",
+    text("xMiss: expected miss from a predicted target. Statcast-feature model trained on Open Command miss distance data",
       50, 958, { size: 15, fill: C.chrome });
     text(dotted
-      ? "1-SD miss ellipse from the pitcher's view. Dots: each pitch's landing spot relative to his usual spot.  blandalytics.com/xmiss"
-      : "1-SD miss ellipses from the pitcher's view, centred on the average miss.  blandalytics.com/xmiss",
+      ? "1-SD miss ellipse from the pitcher's view. Dots: each pitch's landing spot relative to his usual spot."
+      : `1-SD miss ${one ? "ellipse" : "ellipses"} from the pitcher's view.`,
       50, 982, { size: 15, fill: C.chrome });
     return canvas;
   }

@@ -7,6 +7,11 @@ workflow ("Build data files") and rebuilds only the level-seasons whose source f
 changed (or all of them when `FORMAT` in `build.py` is bumped). Its docstring has the keys and
 the file format.
 
+Old builds are pruned automatically: after each successful run, objects in build folders more
+than 24 hours old that the new index doesn't reference are deleted (`index.json` and
+`models/` are never touched; nothing is pruned if the new index lists fewer level-seasons than
+the old one). Only boto3 runs delete; `--out`, `--dry-run` and `--wrangler` print what would go.
+
 The model is xMiss from the `open_command` project (`xctrl_oc/`): a 9-feature XGBoost model
 of Open Command's catcher-target miss distance that needs only Statcast fields, with five
 companion models of the miss vector's moments. It ships as one file, `xmiss.py`, kept in the

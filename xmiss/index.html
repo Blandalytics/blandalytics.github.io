@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="xMiss miss ellipses: how far, and which way, an MLB pitcher misses the catcher's target, from a Statcast-only model of Open Command miss distance.">
+<meta name="description" content="xMiss miss ellipses: how far, and which way, an MLB pitcher misses the catcher's target. xMiss: expected miss from a predicted target, from a Statcast-feature model trained on Open Command miss distance data.">
 <title>xMiss</title>
 <link rel="icon" href="https://res.cloudinary.com/dduabusaf/image/upload/v1772839606/teal_letter_logo_owufaj.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -61,7 +61,7 @@
   <section class="plpd-pane how">
     <h2 class="plpd-pane__title">How it works</h2>
     <div class="plpd-prose">
-      <p><b>xMiss</b> is the expected distance, in inches, between where a pitch crossed the plate and where the catcher's glove said it was meant to go. It is a gradient-boosted model trained on Open Command's catcher-target misses (2024–2026), and it needs only Statcast fields: how far the pitch landed from the pitcher's recent average spot for that pitch type, batter side and count, where it crossed the plate and the zone edge, the batter's side, and the pitch group.</p>
+      <p><b>xMiss</b> is the expected miss, in inches, from a predicted target: how far a pitch crossed the plate from where it was meant to go. It is a Statcast-feature model trained on Open Command miss distance data (2024–2026), whose targets come from the catcher's glove, and it needs only Statcast fields: how far the pitch landed from the pitcher's recent average spot for that pitch type, batter side and count, where it crossed the plate and the zone edge, the batter's side, and the pitch group.</p>
       <p><b>Miss ellipses</b> come from five companion models that predict each pitch's average miss and the spread of its miss in each direction. Averaged over a pitcher's pitches, they give the 1-SD ellipse, which holds about four in ten misses (a 1-SD ellipse in two dimensions is smaller than the one-dimensional "two in three"). The ellipse is centred on the average miss, so an ellipse pulled toward the arm side means the pitch tends to miss there.</p>
       <p><b>Show pitches</b> (one pitch type at a time) adds a dot for each pitch: where it crossed the plate relative to the pitcher's usual spot for that pitch type, batter side and count (the average of his previous 50 such pitches, the reference the model leans on most). The ellipse summarizes the spread of these dots; across MLB pitch types thrown 300+ times, 37% of them fall inside it. Pitches with no earlier pitches of that type have no dot.</p>
       <p>Checked on pitchers held out of training: per-pitch r = 0.90 and pitcher-season r = 0.94 against Open Command's mean miss; ellipse size r = 0.98. The chart is drawn from the pitcher's view, with the arm side on the right for a right-hander and on the left for a left-hander.</p>
@@ -69,7 +69,7 @@
   </section>
 </main>
 <script src="/shared/share-image.js?v=2"></script>
-<script src="plot.js?v=3"></script>
-<script src="app.js?v=4"></script>
+<script src="plot.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

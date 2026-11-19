@@ -30,6 +30,13 @@ Keys (bucket blandalytics-live, https://data.blandalytics.com/):
                                           fingerprint it was built from
     xmiss/models/<sha8>/xmiss.py          the model (uploaded by hand from open_command)
 
+Old builds are pruned: after a successful index upload (and on days with nothing to rebuild), any
+object under xmiss/<YYYYMMDD-HHMM>/ that the index doesn't reference, in a build folder more than
+PRUNE_AFTER old, is deleted (boto3 runs only; --out, --dry-run and --wrangler print the plan when
+the R2 keys are in the environment). The grace period keeps a page that loaded the previous
+index from finding its files gone. index.json and models/ are never touched, and nothing is
+pruned when the new index lists fewer level-seasons than the old one.
+
 A level-season file:
     {level, season, built, units, league: {<pitch>: {n, xmiss, major, minor}},
      pitchers: {"<id>": {name, hand, n, xmiss, pct, all: <E>, pitches: {<pitch>: <E + usage>}}}}
@@ -53,6 +60,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 import importlib.util
 import io
 import json
@@ -62,7 +70,7 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -84,6 +92,8 @@ MIN_PT, QUAL_P, QUAL_PT = 20, 500, 100
 FORMAT = 3
 EXTRA = ["pitcher_name", "game_type"]
 UA = {"User-Agent": "Mozilla/5.0 blandalytics-xmiss-build"}
+PRUNE_AFTER = timedelta(hours=24)
+BUILD_KEY = re.compile(r"^xmiss/(\d{8}-\d{4})/")
 CACHE = Path(__file__).resolve().parent / "cache"
 
 
@@ -234,17 +244,25 @@ def season_doc(xm, level: str, season: int, cur: pd.DataFrame, hist: pd.DataFram
 
 
 # ---------------------------------------------------------------------------------- upload
+def r2_client():
+    """boto3 on R2 from the environment's keys (the workflow's secrets), or None without them."""
+    if not all(os.environ.get(k) for k in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")):
+        return None
+    import boto3
+    return boto3.client("s3", endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
+                        region_name="auto", aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+                        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"])
+
+
 class Sink:
     """Where the files go: R2 by boto3 (GitHub Actions), wrangler (a local login), or a folder."""
 
     def __init__(self, out: str | None, wrangler: str | None, dry: bool):
         self.out, self.wrangler, self.dry, self.s3 = Path(out) if out else None, wrangler, dry, None
         if not (self.out or self.wrangler or dry):
-            import boto3
-            acct = os.environ["R2_ACCOUNT_ID"]
-            self.s3 = boto3.client("s3", endpoint_url=f"https://{acct}.r2.cloudflarestorage.com", region_name="auto",
-                                   aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
-                                   aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"])
+            self.s3 = r2_client()
+            if self.s3 is None:
+                raise SystemExit("no R2 keys in the environment: pass --out, --wrangler or --dry-run")
 
     def put(self, key: str, data: bytes) -> None:
         print(("DRY " if self.dry else "") + f"put {key} ({len(data):,} B)", flush=True)
@@ -288,6 +306,47 @@ class Sink:
                 p.write_bytes(data)
             else:
                 self.put(key, data)
+
+
+def prune(sink: Sink, index: dict, previous: dict, now: datetime) -> None:
+    """Delete objects in build folders older than PRUNE_AFTER that `index` (just uploaded) doesn't
+    reference. Deletes only through the boto3 sink; otherwise prints the plan if it can list."""
+    files, before = index.get("files", {}), previous.get("files", {})
+    if not files or len(files) < len(before):
+        print(f"prune: skipped, the new index lists {len(files)} level-seasons and the previous {len(before)}")
+        return
+    s3 = sink.s3 or r2_client()
+    if s3 is None:
+        print("prune: skipped, no R2 keys to list the bucket with")
+        return
+    keep = {v["key"] for v in files.values()}
+    prefixes = tuple(v["dots"] for v in files.values() if v.get("dots"))
+    cutoff = now - PRUNE_AFTER
+    gone: dict[str, list[tuple[str, int]]] = {}
+    pages = s3.get_paginator("list_objects_v2").paginate(Bucket=BUCKET, Prefix=f"{PREFIX}/")
+    for page in pages:
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            m = BUILD_KEY.match(key)
+            if not m or key in keep or (prefixes and key.startswith(prefixes)):
+                continue
+            stamp = datetime.strptime(m.group(1), "%Y%m%d-%H%M").replace(tzinfo=timezone.utc)
+            if stamp < cutoff:
+                gone.setdefault(m.group(1), []).append((key, obj["Size"]))
+    if not gone:
+        print("prune: nothing to delete")
+        return
+    act = sink.s3 is not None and not sink.dry
+    for build, objs in sorted(gone.items()):
+        print(f"prune: {'deleting' if act else 'would delete'} {len(objs):,} objects "
+              f"({sum(b for _, b in objs):,} B) from {PREFIX}/{build}/", flush=True)
+        if not act:
+            continue
+        for i in range(0, len(objs), 1000):
+            r = s3.delete_objects(Bucket=BUCKET, Delete={"Objects": [{"Key": k} for k, _ in objs[i:i + 1000]],
+                                                         "Quiet": True})
+            if r.get("Errors"):
+                raise SystemExit(f"prune: {len(r['Errors'])} deletes failed in {build}, e.g. {r['Errors'][0]}")
 
 
 def current_index() -> dict:
@@ -345,6 +404,7 @@ def main() -> None:
     files = {k: v for k, v in files.items() if tuple([k.split("/")[0], int(k.split("/")[1])]) in grp and v["pitchers"]}
     if not docs and old:
         print("nothing changed")
+        prune(sink, old, old, datetime.now(timezone.utc))     # older builds still expire on quiet days
         return
 
     # the pitcher list across every level-season: names and pitch counts, from each file
@@ -364,6 +424,7 @@ def main() -> None:
                  pitchers=sorted(pitchers.values(), key=lambda e: e["name"]))
     sink.put(f"{PREFIX}/index.json", json.dumps(index, separators=(",", ":")).encode("utf-8"))   # last
     print(f"index: {len(levels)} levels, {len(files)} level-seasons, {len(pitchers)} pitchers")
+    prune(sink, index, old, datetime.now(timezone.utc))
 
 
 if __name__ == "__main__":

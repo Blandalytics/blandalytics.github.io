@@ -4,7 +4,8 @@ name: Build xMiss data
 # season in the bucket's pitch data (data/), scored with the xMiss model (a file in the bucket,
 # pinned by hash in build.py), written back to the bucket under xmiss/. Only level-seasons whose
 # source files changed are rebuilt, so in season that is the current season at each level, and a
-# day with nothing new downloads nothing.
+# day with nothing new downloads nothing. Build folders the new index no longer references are pruned
+# once they are more than 24 hours old.
 on:
   # right after the data files roll, whenever GitHub gets to that run (its 10:30 UTC cron often
   # starts hours late), so the build sees the day that has just settled

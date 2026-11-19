@@ -124,7 +124,7 @@
     const pctv = view === "mix" ? p.pct : e.pct;
     const lg = view === "mix" ? null : league[view];
     // four tiles in both views: a pitch's league average rides in its xMiss tile
-    const note = `${thousands(e.n)} pitches` + (lg ? ` · league ${f2(lg.xmiss)}"` : "");
+    const note = `${thousands(e.n)} pitches` + (lg ? ` (lg: ${f2(lg.xmiss)}")` : "");   // the chart's wording
     const out = [
       tile("xMiss", `${f2(e.xmiss)}"`, note),
       tile("Percentile", pctText(pctv), pctv == null ? (view === "mix" ? "under 500 pitches" : "under 100 thrown") : "100 = best command"),
