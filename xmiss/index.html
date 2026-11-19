@@ -23,6 +23,14 @@
 
   <section class="plpd-pane controls" aria-label="Pitcher">
     <div class="row fields">
+      <div class="plpd-filter-field">
+        <label class="plpd-filter-field__label" for="level">Level</label>
+        <select id="level" class="plpd-filter-dropdown" disabled></select>
+      </div>
+      <div class="plpd-filter-field">
+        <label class="plpd-filter-field__label" for="season">Season</label>
+        <select id="season" class="plpd-filter-dropdown" disabled></select>
+      </div>
       <div class="plpd-filter-field grow">
         <label class="plpd-filter-field__label" for="pitcherQ">Pitcher</label>
         <div class="plpd-autocomplete">
@@ -31,10 +39,6 @@
             aria-controls="pitcherList" disabled>
           <ul id="pitcherList" class="plpd-autocomplete__menu suggest-list" role="listbox" hidden></ul>
         </div>
-      </div>
-      <div class="plpd-filter-field">
-        <label class="plpd-filter-field__label" for="season">Season</label>
-        <select id="season" class="plpd-filter-dropdown" disabled></select>
       </div>
       <button class="plpd-btn" id="png" type="button" disabled>Share image ▾</button>
     </div>
@@ -70,6 +74,6 @@
 </main>
 <script src="/shared/share-image.js?v=2"></script>
 <script src="plot.js?v=8"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

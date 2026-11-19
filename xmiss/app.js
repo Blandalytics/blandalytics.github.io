@@ -12,12 +12,12 @@
   const LOCAL_DATA = location.hostname === "localhost" && new URLSearchParams(location.search).get("data");
   const BASE = LOCAL_DATA || "https://data.blandalytics.com/";
   const $ = (id) => document.getElementById(id);
-  const pitcherQ = $("pitcherQ"), pitcherList = $("pitcherList"), seasonSel = $("season");
+  const pitcherQ = $("pitcherQ"), pitcherList = $("pitcherList"), seasonSel = $("season"), levelSel = $("level");
   const views = $("views"), status = $("status"), results = $("results"), fig = $("fig");
   const vals = $("vals"), mixTable = $("mix"), png = $("png"), dotsBox = $("dots"), dotsField = $("dotsField");
   const P = window.XmissPlot;
 
-  let index = null, levelSel = null;
+  let index = null;
   const fileCache = {};
   let state = { level: null, season: null, pitcher: null, view: "mix", dots: false };
   let shown = null;          // {p, season, view, league, level} on the chart now
@@ -47,16 +47,16 @@
     if (!(entry.key in fileCache)) fileCache[entry.key] = getJson(BASE + entry.key).catch((e) => { delete fileCache[entry.key]; throw e; });
     return fileCache[entry.key];
   }
-  // the level-seasons a pitcher has, newest first, MLB before the rest within a season
-  function hisSeasons(e) {
-    const order = index.levels.map((l) => l.code);
-    return Object.keys(e.n).map((k) => { const [level, s] = k.split("/"); return { level, season: +s, n: e.n[k] }; })
-      .sort((a, b) => b.season - a.season || order.indexOf(a.level) - order.indexOf(b.level));
+  // as on pitcher-cards/season.html: pick a level, then one of its seasons, then a pitcher from
+  // those who pitched at that level that season
+  const lsKey = (level, season) => `${level}/${season}`;
+  function levelSeasons(code) {
+    const lv = index.levels.find((l) => l.code === code);
+    return lv ? lv.seasons.slice().sort((a, b) => b - a) : [];
   }
-  function bestFor(e, level, season) {
-    const his = hisSeasons(e);
-    return his.find((x) => x.level === level && x.season === season) || his.find((x) => x.level === level)
-      || his.find((x) => x.level === "mlb") || his[0];
+  function pitchersIn(level, season) {            // most pitches first
+    const k = lsKey(level, season);
+    return index.pitchers.filter((e) => e.n[k]).sort((a, b) => b.n[k] - a.n[k]);
   }
 
   // ---- URL state --------------------------------------------------------------------------------
@@ -73,33 +73,19 @@
   }
 
   // ---- controls -----------------------------------------------------------------------------------
-  function buildLevelSelect() {
-    // a Level field beside Season, only when the data has more than one level
-    if (index.levels.length < 2) return;
-    const field = document.createElement("div");
-    field.className = "plpd-filter-field";
-    field.innerHTML = '<label class="plpd-filter-field__label" for="level">Level</label><select id="level" class="plpd-filter-dropdown"></select>';
-    seasonSel.parentElement.before(field);
-    levelSel = $("level");
-    levelSel.addEventListener("change", () => {
-      const e = byId[state.pitcher];
-      const pick = bestFor(e, levelSel.value, state.season);
-      go({ level: pick.level, season: pick.season, view: state.view });
-    });
-  }
-  function fillSelects(e) {
-    const his = hisSeasons(e);
-    if (levelSel) {
-      const levels = index.levels.filter((l) => his.some((x) => x.level === l.code));
-      levelSel.innerHTML = levels.map((l) => `<option value="${l.code}">${esc(l.name)}</option>`).join("");
-      levelSel.value = state.level;
-      levelSel.disabled = levels.length < 2;
-    }
-    const seasons = his.filter((x) => x.level === state.level).map((x) => x.season);
+  // Level lists every level with data; Season, that level's seasons. Changing either keeps the
+  // pitcher when he pitched there too (else the one with the most pitches), and another level
+  // keeps the season when it has it (else its latest)
+  function fillSelects() {
+    levelSel.innerHTML = index.levels.map((l) => `<option value="${l.code}">${esc(l.name)}</option>`).join("");
+    levelSel.value = state.level;
+    levelSel.disabled = index.levels.length < 2;
+    const seasons = levelSeasons(state.level);
     seasonSel.innerHTML = seasons.map((s) => `<option value="${s}">${s}</option>`).join("");
     seasonSel.value = String(state.season);
     seasonSel.disabled = seasons.length < 2;
   }
+  levelSel.addEventListener("change", () => go({ level: levelSel.value }));
   seasonSel.addEventListener("change", () => go({ season: +seasonSel.value }));
 
   function fillViews(p) {
@@ -159,13 +145,15 @@
   // go(): merge a change into the state, settle it against what the pitcher has, then draw
   function go(change) {
     state = Object.assign({}, state, change);
+    if (!index.levels.some((l) => l.code === state.level)) state.level = index.levels[0].code;
+    const seasons = levelSeasons(state.level);
+    if (seasons.indexOf(state.season) < 0) state.season = seasons[0];
+    listed = pitchersIn(state.level, state.season);
+    if (!listed.some((x) => x.id === state.pitcher)) state.pitcher = listed.length ? listed[0].id : null;
     const e = byId[state.pitcher];
-    if (!e) { setStatus("No xMiss data for that pitcher."); return; }
-    const pick = bestFor(e, state.level, state.season);   // a season he lacks -> his nearest one
-    state.level = pick.level;
-    state.season = pick.season;
+    fillSelects();
+    if (!e) { setStatus(`No ${levelName(state.level)} ${state.season} pitchers.`); results.hidden = true; return; }
     showPicked(e);
-    fillSelects(e);
     const seq = ++drawSeq;
     seasonFile(state.level, state.season).then((doc) => {
       if (seq !== drawSeq) return;
@@ -230,17 +218,18 @@
       else return;
       scored.push([score, e]);
     });
-    scored.sort((a, b) => a[0] - b[0] || b[1].total - a[1].total);
+    const k = lsKey(state.level, state.season);
+    scored.sort((a, b) => a[0] - b[0] || b[1].n[k] - a[1].n[k]);
     return scored.map((x) => x[1]);
   }
   function showSuggestions() {
     suggested = suggestions(pitcherQ.value).slice(0, 400);
     active = -1;
+    const k = lsKey(state.level, state.season);
     pitcherList.innerHTML = suggested.map((e, i) => {
       const on = e.id === state.pitcher ? ' aria-selected="true"' : "";
-      const latest = hisSeasons(e)[0];
       return `<li role="option" data-index="${i}"${on}><span>${esc(e.name)}</span><small>`
-        + `${esc((e.hand ? e.hand + "HP · " : "") + (latest.level === "mlb" ? "" : levelName(latest.level) + " ") + latest.season)}</small></li>`;
+        + `${esc((e.hand ? e.hand + "HP - " : "") + thousands(e.n[k]) + " pitches")}</small></li>`;
     }).join("");
     pitcherList.hidden = !suggested.length;
     pitcherQ.setAttribute("aria-expanded", suggested.length ? "true" : "false");
@@ -321,17 +310,13 @@
   const hour = Math.floor(Date.now() / 3.6e6);
   getJson(`${BASE}xmiss/index.json?v=${hour}`).then((ix) => {
     index = ix;
-    ix.pitchers.forEach((e) => {
-      e.total = Object.values(e.n).reduce((a, b) => a + b, 0);
-      byId[e.id] = e;
-    });
-    listed = ix.pitchers.slice();
-    buildLevelSelect();
+    ix.pitchers.forEach((e) => { byId[e.id] = e; });
     pitcherQ.disabled = false;
     const h = readHash() || {};
     const d = ix.default;
-    const pitcher = byId[h.pitcher] ? h.pitcher : d.pitcher;
-    go({ level: h.level || d.level, season: h.season || d.season, pitcher, view: h.view || "mix", dots: !!h.dots });
+    // a link names its level, season and pitcher; with none, the default (deGrom, MLB 2026)
+    go({ level: h.level || d.level, season: h.season || d.season, pitcher: h.pitcher || d.pitcher,
+         view: h.view || "mix", dots: !!h.dots });
   }).catch((err) => {
     console.error(err);
     setStatus("Couldn't load the xMiss data. Try reloading the page.");
