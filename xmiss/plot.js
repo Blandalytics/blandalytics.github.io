@@ -89,7 +89,6 @@
     // ---- header: Model Drilldown's card header (pitcher; pitch in its colour; season), its
     // 46 / 29 / 17 px on a 1280-wide card scaled to this one's width ----
     const one = view !== "mix" ? p.pitches[view] : null;
-    const dotted = one && dots && dots.x && dots.x.length;
     text(p.name, 50, 76, { size: 36, weight: 700, fill: C.header });
     // a pitch type: its name in its colour before "xMiss Distance"; the whole mix says so in its key
     const what = one ? pitchName(view) + " " : "";
@@ -171,8 +170,8 @@
     // one scale for every chart, so pitchers compare: the frame sits under room for a two-row
     // key (the High label 37 units below its last line) with its foot, the Low label, just above
     // the footer. A rarer three-row key shrinks it further.
-    // The footer, wrapped at the text floor, also has a fixed reserve: its longest version's
-    // lines, so every chart keeps the same scale.
+    // The footer, the same two lines on every chart (each sentence on its own, wrapped only if
+    // one ever outgrows the margins), sets the frame's foot, so every chart keeps one scale.
     const FS = atLeast(15), LH = FS * 1.3;
     const wrapAt = (para, maxW) => para.split(" ").reduce((lines, w) => {
       const last = lines[lines.length - 1], t = last ? last + " " + w : w;
@@ -185,11 +184,9 @@
       while (n > 1 && hi - lo > 1) { const mid = (lo + hi) / 2; if (wrapAt(para, mid).length > n) lo = mid; else hi = mid; }
       return wrapAt(para, hi);
     };
-    const FOOT1 = "xMiss: expected miss from a predicted target. Statcast-feature model trained on Open Command miss distance data";
-    const FOOT_DOTS = "1-SD miss ellipse from the pitcher's view. Dots: each pitch's landing spot relative to his usual spot.";
-    const footer = wrap(FOOT1).concat(wrap(dotted ? FOOT_DOTS : `1-SD miss ${one ? "ellipse" : "ellipses"} from the pitcher's view.`));
-    const reserve = wrap(FOOT1).length + wrap(FOOT_DOTS).length;
-    const footLimit = 982 - (reserve - 1) * LH - FS * 0.75 - 22;
+    const footer = ["xMiss: expected miss from a predicted target.",
+      "Statcast-feature model trained on Open Command miss distance data"].flatMap(wrap);
+    const footLimit = 982 - (footer.length - 1) * LH - FS * 0.75 - 22;
     const cx = 500;
     let cy = 585, k = 12.6;
     const top = Math.max(cy - AXIS * k - 6, Math.max(keyBottom, 208 + LG) + 37);
