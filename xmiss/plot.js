@@ -108,7 +108,7 @@
       const parts = [
         [`xMiss ${one.xmiss.toFixed(2)}"`, C.text, 700],
         [one.pct == null ? "no percentile" : `${ordinal(one.pct)} percentile`, C.text, 400],
-        [`1 SD ${one.major.toFixed(1)}" × ${one.minor.toFixed(1)}", Tilt: ${Math.round(one.angle)}°`, C.text, 400],
+        [`1 SD: ${one.major.toFixed(1)}" × ${one.minor.toFixed(1)}", Tilt: ${Math.round(one.angle)}°`, C.text, 400],
       ];
       if (lg) parts.splice(1, 0, [`(lg: ${lg.xmiss.toFixed(2)}")`, C.subheader, 400]);   // right after the xMiss
       // one line, centred on the canvas; shrunk to fit the margins if it ever runs long
