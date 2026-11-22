@@ -19,6 +19,10 @@
   const WORDMARK_URL = "https://res.cloudinary.com/dduabusaf/image/upload/v1772839288/PitcherList_Stats_watermark_with_logo_k9e3xa.webp";
   const SIZE = 1600;            // canvas px, square; shown at up to 720 CSS px, so sharp to 2.2x
   const RING = 24, AXIS = 26.5; // inches: outer ring, axis length
+  // the text floor: the chart's 1000 layout units show at SHOWN CSS px on a laptop-width page, so
+  // no text is drawn smaller than MIN_PX there (or in the shared image viewed at that size)
+  const SHOWN = 640, MIN_PX = 12, MIN = MIN_PX * 1000 / SHOWN;   // the site minimum: 12px
+  const atLeast = (size) => Math.max(size, MIN);
 
   // the site's pitch palette: pitcher-cards/card.js MARKER_COLORS (the PLPD pitch-* colours); the
   // variants it doesn't list take their family's colour
@@ -91,7 +95,7 @@
     const what = one ? pitchName(view) + " " : "";
     if (one) text(what, 50, 106, { size: 22.6, weight: 700, fill: color(view) });
     text("xMiss Distance", 50 + width(what, 22.6, 700), 106, { size: 22.6, weight: 700, fill: C.text });
-    text(`${season} - ${(one ? one.n : p.n).toLocaleString("en-US")} pitches`, 50, 128, { size: 13.3, fill: C.subheader });
+    text(`${season} - ${(one ? one.n : p.n).toLocaleString("en-US")} pitches`, 50, 132, { size: atLeast(13.3), fill: C.subheader });
     if (mark) {
       const w = 230, h = w * (mark.height / mark.width);
       ctx.drawImage(mark, (950 - w) * u, 46 * u, w * u, h * u);
@@ -99,6 +103,7 @@
 
     // ---- key: every pitch's xMiss (whole mix) or the pitch's numbers ----
     let keyBottom = 208;                           // the key's last baseline: one legend row
+    const LG = Math.max(30, atLeast(20) * 1.4);    // between legend rows
     if (one) {
       const lg = league[view];
       const parts = [
@@ -110,7 +115,7 @@
       // one line, centred on the canvas; shrunk to fit the margins if it ever runs long
       const sepOf = (s, i) => (!i ? "" : s.startsWith("(lg") ? " " : " - ");   // "xMiss 8.85" (lg: 11.37") - ..."
       const lineW = (size) => parts.reduce((w, [s, , weight], i) => w + width(sepOf(s, i), size) + width(s, size, weight), 0);
-      const size = Math.min(22, 22 * 900 / lineW(22));
+      const size = atLeast(Math.min(22, 22 * 900 / lineW(22)));
       let x = 500 - lineW(size) / 2;
       parts.forEach(([s, fill, weight], i) => {
         const sep = sepOf(s, i);
@@ -126,26 +131,29 @@
       // the pitch types in usage order over as few rows as fit within the margins, split evenly
       // (5 + 1 becomes 3 + 3), so every row holds at least two. A pitcher with too few pitch
       // types for that (three long names that won't share a row) gets fewer rows in smaller type.
-      const GAP = 26, DOT = 24, MAXW = 900;           // at size 20: between items; the dot and its space
+      const B = atLeast(20), MAXW = 900;              // the key's size, unless a row must shrink to fit
+      const GAP = 26 / 20, DOT = 24 / 20;             // per unit of size: between items; the dot and its space
       const items = Object.entries(p.pitches).map(([pt, e]) => ({ pt, s: `${pitchName(pt)} ${e.xmiss.toFixed(2)}"` }));
-      items.forEach((it) => { it.w = DOT + width(it.s, 20); });
+      items.forEach((it) => { it.w = width(it.s, 20) / 20; });   // text width per unit of size
       const n = items.length;
       const split = (R) => {                          // R rows, the larger ones first
         const out = [];
         for (let r = 0, i = 0; r < R; r++) { const c = Math.floor(n / R) + (r < n % R ? 1 : 0); out.push(items.slice(i, i + c)); i += c; }
         return out;
       };
-      const rowW = (row) => row.reduce((t, it) => t + it.w, 0) + GAP * (row.length - 1);   // at size 20
+      const rowW = (row, size) => size * (row.reduce((t, it) => t + DOT + it.w, 0) + GAP * (row.length - 1));
       let rows = split(1);
-      for (let R = 2; R <= n && rows.some((row) => rowW(row) > MAXW); R++) rows = split(R);
+      for (let R = 2; R <= n && rows.some((row) => rowW(row, B) > MAXW); R++) rows = split(R);
       const most = Math.max(1, Math.floor(n / 2));
       if (rows.length > most) rows = split(most);
-      const size = Math.min(20, ...rows.map((row) => 20 * MAXW / rowW(row)));
-      const f = size / 20;
-      keyBottom = 208 + (rows.length - 1) * 30;
+      const fits = () => Math.min(B, ...rows.map((row) => B * MAXW / rowW(row, B)));
+      // never under the text floor: a key that would need it takes another row instead
+      for (let R = rows.length + 1; R <= n && fits() < MIN; R++) rows = split(R);
+      const size = atLeast(fits()), f = size / 20;
+      keyBottom = 208 + (rows.length - 1) * LG;
       rows.forEach((row, r) => {
-        const y = 208 + r * 30;
-        let x = 500 - rowW(row) * f / 2;
+        const y = 208 + r * LG;
+        let x = 500 - rowW(row, size) / 2;
         row.forEach(({ pt, s, w }) => {
           ctx.save();
           ctx.fillStyle = color(pt);
@@ -153,8 +161,8 @@
           ctx.arc((x + 8 * f) * u, (y - 7 * f) * u, 8 * f * u, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
-          text(s, x + DOT * f, y, { size });
-          x += (w + GAP) * f;
+          text(s, x + DOT * size, y, { size });
+          x += (DOT + w + GAP) * size;
         });
       });
     }
@@ -163,12 +171,32 @@
     // one scale for every chart, so pitchers compare: the frame sits under room for a two-row
     // key (the High label 37 units below its last line) with its foot, the Low label, just above
     // the footer. A rarer three-row key shrinks it further.
+    // The footer, wrapped at the text floor, also has a fixed reserve: its longest version's
+    // lines, so every chart keeps the same scale.
+    const FS = atLeast(15), LH = FS * 1.3;
+    const wrapAt = (para, maxW) => para.split(" ").reduce((lines, w) => {
+      const last = lines[lines.length - 1], t = last ? last + " " + w : w;
+      if (last && width(t, FS) > maxW) lines.push(w); else lines[lines.length - 1] = t;
+      return lines;
+    }, [""]);
+    const wrap = (para) => {                       // as few lines as fit, balanced: no lone last word
+      const n = wrapAt(para, 900).length;
+      let lo = 0, hi = 900;
+      while (n > 1 && hi - lo > 1) { const mid = (lo + hi) / 2; if (wrapAt(para, mid).length > n) lo = mid; else hi = mid; }
+      return wrapAt(para, hi);
+    };
+    const FOOT1 = "xMiss: expected miss from a predicted target. Statcast-feature model trained on Open Command miss distance data";
+    const FOOT_DOTS = "1-SD miss ellipse from the pitcher's view. Dots: each pitch's landing spot relative to his usual spot.";
+    const footer = wrap(FOOT1).concat(wrap(dotted ? FOOT_DOTS : `1-SD miss ${one ? "ellipse" : "ellipses"} from the pitcher's view.`));
+    const reserve = wrap(FOOT1).length + wrap(FOOT_DOTS).length;
+    const footLimit = 982 - (reserve - 1) * LH - FS * 0.75 - 22;
     const cx = 500;
     let cy = 585, k = 12.6;
-    const FOOT = cy + AXIS * k + 6, topMin = Math.max(keyBottom, 238) + 37;
-    if (cy - AXIS * k - 6 < topMin) {
-      const half = (FOOT - topMin) / 2;
-      cy = topMin + half;
+    const top = Math.max(cy - AXIS * k - 6, Math.max(keyBottom, 208 + LG) + 37);
+    const foot = Math.min(cy + AXIS * k + 6, footLimit);
+    if (top > cy - AXIS * k - 6 || foot < cy + AXIS * k + 6) {
+      const half = (foot - top) / 2;
+      cy = top + half;
       k = (half - 6) / AXIS;
     }
     const X = (v) => (cx + v * k) * u, Y = (v) => (cy - v * k) * u;
@@ -189,13 +217,13 @@
     ctx.stroke();
     ctx.restore();
     for (const r of [12, 24]) {
-      text(`${r}"`, cx + r * k - 6, cy + 22, { size: 16, align: "right", alpha: 0.75 });
-      text(`${r}"`, cx - r * k + 6, cy + 22, { size: 16, align: "left", alpha: 0.75 });
-      text(`${r}"`, cx + 8, cy - r * k + 22, { size: 16, alpha: 0.75 });
-      text(`${r}"`, cx + 8, cy + r * k - 8, { size: 16, alpha: 0.75 });
+      text(`${r}"`, cx + r * k - 6, cy + 22, { size: atLeast(16), align: "right", alpha: 0.75 });
+      text(`${r}"`, cx - r * k + 6, cy + 22, { size: atLeast(16), align: "left", alpha: 0.75 });
+      text(`${r}"`, cx + 8, cy - r * k + 22, { size: atLeast(16), alpha: 0.75 });
+      text(`${r}"`, cx + 8, cy + r * k - 8, { size: atLeast(16), alpha: 0.75 });
     }
     const lefty = p.hand === "L";
-    const side = { size: 20, weight: 700, base: "middle" };
+    const side = { size: atLeast(20), weight: 700, base: "middle" };
     text(lefty ? "Glove Side" : "Arm Side", cx + AXIS * k + 12, cy, { ...side, align: "left" });
     text(lefty ? "Arm Side" : "Glove Side", cx - AXIS * k - 12, cy, { ...side, align: "right" });
     // beside the axis ends, so a two-row key above never meets them
@@ -244,13 +272,8 @@
     }
     ctx.restore();
 
-    // ---- footer ----
-    text("xMiss: expected miss from a predicted target. Statcast-feature model trained on Open Command miss distance data",
-      50, 958, { size: 15, fill: C.chrome });
-    text(dotted
-      ? "1-SD miss ellipse from the pitcher's view. Dots: each pitch's landing spot relative to his usual spot."
-      : `1-SD miss ${one ? "ellipse" : "ellipses"} from the pitcher's view.`,
-      50, 982, { size: 15, fill: C.chrome });
+    // ---- footer: wrapped within the margins, its last line on the same baseline as ever ----
+    footer.forEach((line, i) => text(line, 50, 982 - (footer.length - 1 - i) * LH, { size: FS, fill: C.chrome }));
     return canvas;
   }
 
