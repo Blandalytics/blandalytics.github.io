@@ -68,7 +68,8 @@ function draw(){if(!res)return;const vw=V();const W=svg.clientWidth,H=svg.client
  let h='';
  for(let v=ymin;v<=ymax;v+=step)h+=`<line x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v===0?'var(--center)':'var(--grid)'}"/><text x="${ml-8}" y="${Y(v)+5}" text-anchor="end" fill="${v<0?'var(--red)':'var(--nav)'}" font-size="${small?12:15}">${v<0?'−'+(-v):v}</text>`;
  const band=(a,b)=>{const xs=vw.rows.map((_,t)=>X(t));if(n===1){const x=xs[0];return`M${x-14},${Y(vw.rows[0][a])}H${x+14}V${Y(vw.rows[0][b])}H${x-14}Z`}return'M'+vw.rows.map((r,t)=>`${xs[t]},${Y(r[a])}`).join('L')+'L'+vw.rows.map((r,t)=>`${xs[t]},${Y(r[b])}`).reverse().join('L')+'Z'};
- h+=`<path d="${band('p10','p90')}" fill="var(--cyan)" fill-opacity=".2"/>`;   // the 10th-90th percentile
+ {const bw=Math.min(iw/n*.5,28);   // the 10th-90th percentile: a bar for each season
+  vw.rows.forEach((r,t)=>{const y1=Y(r.p90),y0=Y(r.p10);h+=`<rect x="${X(t)-bw/2}" y="${y1}" width="${bw}" height="${Math.max(y0-y1,1)}" rx="${Math.min(4,bw/4)}" fill="var(--cyan)" fill-opacity=".24"/>`})}
  const line=(vals,col,w)=>`<path d="M${vals.map((v,t)=>`${X(t)},${Y(v)}`).join('L')}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"/>`+vals.map((v,t)=>`<circle cx="${X(t)}" cy="${Y(v)}" r="${small?3:4}" fill="${col}" stroke="var(--card)" stroke-width="2"/>`).join('');
  h+=line(vw.implied,'var(--amber)',2.5)+line(vw.rows.map(r=>r.mean),'var(--cyan)',2.5);
  h+=`<line x1="${ml}" x2="${W-mr}" y1="${mt+ih}" y2="${mt+ih}" stroke="var(--muted)"/>`;
@@ -132,7 +133,8 @@ async function renderPNG(){
  const X=t=>ml+(n===1?iw/2:iw*(t+.5)/n),Y=v=>mt+ih*(1-(Math.max(v,ymin)-ymin)/(ymax-ymin));
  for(let v=ymin;v<=ymax;v+=step){g.strokeStyle=v===0?C.center:C.grid;g.lineWidth=2;g.beginPath();g.moveTo(ml,Y(v));g.lineTo(mr,Y(v));g.stroke();T(v<0?'−'+(-v):String(v),ml-18,Y(v)+11,WS(400,32),v<0?C.red:C.nav,'right')}
  const band=(a,b,op)=>{g.beginPath();if(n===1){const x=X(0);g.rect(x-30,Y(vw.rows[0][b]),60,Y(vw.rows[0][a])-Y(vw.rows[0][b]))}else{vw.rows.forEach((r,t)=>t?g.lineTo(X(t),Y(r[a])):g.moveTo(X(t),Y(r[a])));for(let t=n-1;t>=0;t--)g.lineTo(X(t),Y(vw.rows[t][b]));g.closePath()}g.fillStyle=`rgba(85,232,255,${op})`;g.fill()};
- band('p10','p90',.2);   // the 10th-90th percentile
+ {const bw=Math.min(iw/n*.5,60);g.fillStyle='rgba(85,232,255,.24)';   // the 10th-90th percentile: a bar for each season
+  vw.rows.forEach((r,t)=>{const y1=Y(r.p90),y0=Y(r.p10);g.beginPath();g.roundRect(X(t)-bw/2,y1,bw,Math.max(y0-y1,2),Math.min(8,bw/4));g.fill()})}
  const line=(vals,col)=>{g.strokeStyle=col;g.lineWidth=5;g.lineJoin='round';g.lineCap='round';g.beginPath();vals.forEach((v,t)=>t?g.lineTo(X(t),Y(v)):g.moveTo(X(t),Y(v)));g.stroke();
   vals.forEach((v,t)=>{g.beginPath();g.arc(X(t),Y(v),9,0,7);g.fillStyle=col;g.fill();g.lineWidth=4;g.strokeStyle=C.bg;g.stroke()})};
  line(vw.implied,C.amber);line(vw.rows.map(r=>r.mean),C.cyan);
