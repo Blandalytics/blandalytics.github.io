@@ -95,7 +95,7 @@ function run(){const age=Math.round(clamp($('age').value,20,40,30)),yrs=Math.rou
  res=compute(age,yrs,aav,w1);cur={age,yrs,aav,w1};
  const tot=aav*yrs;
  $('sh-title').textContent=`${yrs} Year${yrs>1?'s':''}, $${tot>=100?tot.toFixed(0):tot.toFixed(1)}M`;
- $('sh-sub').textContent=`${role==='sp'?'Starting Pitcher':'Hitter'}, Age ${res.ages[0]}${yrs>1?'–'+res.ages[res.ages.length-1]:''} - $${aav.toFixed(1)}M AAV`;
+ $('sh-sub').textContent=`${role==='sp'?'Starting Pitcher':'Hitter'}, Age ${res.ages[0]}${yrs>1?'–'+res.ages[res.ages.length-1]:''} | $${aav.toFixed(1)}M AAV`;
  const o=res.odds,k=$('k-odds');k.textContent=Math.round(o*100)+'%';k.className='n '+(o>.75?'g':o<.25?'rd':'');
  const f0=v=>{const r=Math.round(v);return r<0?'−'+(-r):String(r)};$('k-range').textContent=`${f0(res.c5)}–${f0(res.c95)}`;
  let ann=0;for(let t=0;t<yrs;t++)ann+=D**t;const sur=(res.fair-aav)*ann;$('k-surp').textContent=(sur>=0?'+':'−')+'$'+Math.abs(sur).toFixed(0)+'M';$('k-fair').textContent='$'+res.fair.toFixed(1)+'M';$('k-star').textContent=res.Wstar.toFixed(1);
