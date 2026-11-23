@@ -91,7 +91,7 @@ function draw(){if(!res)return;const vw=V();const W=svg.clientWidth,H=svg.client
 }
 const ro=new ResizeObserver(draw);ro.observe(fig);
 function clamp(v,a,b,d){v=parseFloat(v);return isFinite(v)?Math.min(b,Math.max(a,v)):d}
-function run(){const age=Math.round(clamp($('age').value,20,40,30)),yrs=Math.round(clamp($('yrs').value,1,12,9)),aav=clamp($('aav').value,.8,80,50),w1=clamp($('w1').value,-1,10,5.5);
+function run(){const age=Math.round(clamp($('age').value,20,40,30)),yrs=Math.round(clamp($('yrs').value,1,15,9)),aav=clamp($('aav').value,.8,80,50),w1=clamp($('w1').value,-1,10,5.5);
  res=compute(age,yrs,aav,w1);cur={age,yrs,aav,w1};
  const tot=aav*yrs;
  $('sh-title').textContent=`${yrs} Year${yrs>1?'s':''}, $${tot>=100?tot.toFixed(0):tot.toFixed(1)}M`;
