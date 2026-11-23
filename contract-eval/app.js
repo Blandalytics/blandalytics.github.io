@@ -1,6 +1,6 @@
 // Contract vs. Projection: what a free-agent deal pays for in fWAR against where the player projects.
 // Ported from the approved reference (contract_calc.html); the model, chart and share image are its,
-// with the site's Share image menu (/shared/share-image.js) and the Pitcher List Stats wordmark top left.
+// with the site's Share image menu (/shared/share-image.js) and the Pitcher List Stats wordmark top right.
 (function () {
 const AGE=[20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40];
 const CUR={
@@ -120,14 +120,14 @@ async function renderPNG(){
  const DM=(w,px)=>`${w} ${px}px "DM Sans", system-ui, sans-serif`,WS=(w,px)=>`${w} ${px}px "Work Sans", system-ui, sans-serif`;
  const T=(t,x,y,font,col,al='left')=>{g.font=font;g.fillStyle=col;g.textAlign=al;g.fillText(t,x,y)};
  g.fillStyle=C.bg;g.fillRect(0,0,S,S);
- // the Pitcher List Stats wordmark top left, the title under it
- if(logo){const lw=300;g.drawImage(logo,P,56,lw,lw*logo.naturalHeight/logo.naturalWidth)}
- T($('sh-title').textContent,P,196,DM(700,76),C.cyanh);
- T($('sh-sub').textContent,P,254,WS(500,34),C.ink);
- const n=res.ages.length,ml=P+52,mr=S-P,mt=500,mb=1210,iw=mr-ml,ih=mb-mt;
+ // the Pitcher List Stats wordmark top right, level with the title
+ if(logo){const lw=300;g.drawImage(logo,S-P-lw,84,lw,lw*logo.naturalHeight/logo.naturalWidth)}
+ T($('sh-title').textContent,P,140,DM(700,76),C.cyanh);
+ T($('sh-sub').textContent,P,200,WS(500,34),C.ink);
+ const n=res.ages.length,ml=P+52,mr=S-P,mt=470,mb=1210,iw=mr-ml,ih=mb-mt;
  const hx1=ml+iw*.25,hx2=ml+iw*.75;
- T('Projected',hx1,360,DM(600,38),C.ink,'center');T(res.proj.toFixed(1)+' fWAR',hx1,414,WS(600,40),C.cyan,'center');
- T('Contract Needs',hx2,360,DM(600,38),C.ink,'center');T(res.need.toFixed(1)+' fWAR',hx2,414,WS(600,40),C.amber,'center');
+ T('Projected',hx1,322,DM(600,38),C.ink,'center');T(res.proj.toFixed(1)+' fWAR',hx1,378,WS(600,40),C.cyan,'center');
+ T('Contract Needs',hx2,322,DM(600,38),C.ink,'center');T(res.need.toFixed(1)+' fWAR',hx2,378,WS(600,40),C.amber,'center');
  const [ymin,ymax,step]=yscale(vw);
  const X=t=>ml+(n===1?iw/2:iw*(t+.5)/n),Y=v=>mt+ih*(1-(Math.max(v,ymin)-ymin)/(ymax-ymin));
  for(let v=ymin;v<=ymax;v+=step){g.strokeStyle=v===0?C.center:C.grid;g.lineWidth=2;g.beginPath();g.moveTo(ml,Y(v));g.lineTo(mr,Y(v));g.stroke();T(v<0?'−'+(-v):String(v),ml-18,Y(v)+11,WS(400,32),v<0?C.red:C.nav,'right')}
