@@ -55,10 +55,16 @@ function compute(age,yrs,aav,w1){
  const crows=cs.map(s=>{let m=0;for(const v of s)m+=v;return{mean:m/N,p10:q(s,.1),p90:q(s,.9)}});
  let ia=0;const cimplied=implied.map(w=>ia+=w);
  let fair=0;for(let t=0;t<yrs;t++)fair+=(minS(t)+price(w1)*idx(t)*Math.max(rows[t].mean,0))*D**t;
+ // each season's $ value, in that season's dollars: the minimum plus the price per win at the year-1
+ // projection the wins come from (his for the projection, the deal's for the contract line), the
+ // pricing behind Fair AAV and Contract Needs; the cumulative view's running totals
+ const worth=(W,ws)=>ws.map((w,t)=>minS(t)+price(W)*idx(t)*Math.max(w,0));
+ const pD=worth(w1,rows.map(r=>r.mean)),iD=worth(Wstar,implied);let s1=0,s2=0;const cpD=pD.map(v=>s1+=v),ciD=iD.map(v=>s2+=v);
  const expected=rate.map((r,t)=>r*ret[t]);
- return{ages,rows,crows,cimplied,rate,ret,expected,implied,Wstar,need:implied.reduce((a,b)=>a+b,0),proj:rows.reduce((a,r)=>a+r.mean,0),c10:q(cum,.1),c90:q(cum,.9),odds:ok/N,fair:fair/ann,p1:price(Wstar)*idx(0)};
+ return{pD,iD,cpD,ciD,ages,rows,crows,cimplied,rate,ret,expected,implied,Wstar,need:implied.reduce((a,b)=>a+b,0),proj:rows.reduce((a,r)=>a+r.mean,0),c10:q(cum,.1),c90:q(cum,.9),odds:ok/N,fair:fair/ann,p1:price(Wstar)*idx(0)};
 }
-let view='season';const V=()=>view==='cum'?{rows:res.crows,implied:res.cimplied}:{rows:res.rows,implied:res.implied};
+let view='season';const V=()=>view==='cum'?{rows:res.crows,implied:res.cimplied,pD:res.cpD,iD:res.ciD}:{rows:res.rows,implied:res.implied,pD:res.pD,iD:res.iD};
+const money=v=>`<span class="d">$${v.toFixed(1)}M</span>`;
 function yscale(vw){const top=Math.max(...vw.rows.map(r=>r.p90),...vw.implied)+0.05;const st=[1,2,5,10,20,50].find(x=>Math.ceil(top/x)<=8)||100;const hi=Math.max(4,Math.ceil(top/st)*st);return[0,hi,st]}
 let res=null;const svg=$('chart'),fig=$('fig'),tip=$('tip');
 function draw(){if(!res)return;const vw=V();const W=svg.clientWidth,H=svg.clientHeight;if(!W)return;
@@ -88,7 +94,7 @@ function draw(){if(!res)return;const vw=V();const W=svg.clientWidth,H=svg.client
  const hit=$('hit'),hov=$('hov');
  const move=e=>{const r=svg.getBoundingClientRect(),px=(e.touches?e.touches[0].clientX:e.clientX)-r.left;const t=Math.max(0,Math.min(n-1,Math.round((px-ml)/iw*n-.5)));const x=X(t),rw=vw.rows[t];
   hov.setAttribute('x1',x);hov.setAttribute('x2',x);hov.setAttribute('visibility','visible');
-  tip.innerHTML=view==='cum'?`<b>Through ${2027+t} - Age ${res.ages[t]}</b><div class="r"><span class="c">Projected</span><span>${rw.mean.toFixed(1)}</span></div><div class="r"><span>80% range</span><span>${rw.p10.toFixed(1)} – ${rw.p90.toFixed(1)}</span></div><div class="r"><span class="a">Contract-implied</span><span>${vw.implied[t].toFixed(1)}</span></div>`:`<b>${2027+t} - Age ${res.ages[t]}</b><div class="r"><span class="c">Projected</span><span>${rw.mean.toFixed(1)}</span></div><div class="r"><span>80% range</span><span>${rw.p10.toFixed(1)} – ${rw.p90.toFixed(1)}</span></div><div class="r"><span class="a">Contract-implied</span><span>${vw.implied[t].toFixed(1)}</span></div>`;
+  tip.innerHTML=view==='cum'?`<b>Through ${2027+t} - Age ${res.ages[t]}</b><div class="r"><span class="c">Projected</span><span>${rw.mean.toFixed(1)}${money(vw.pD[t])}</span></div><div class="r"><span>80% range</span><span>${rw.p10.toFixed(1)} – ${rw.p90.toFixed(1)}<span class="d"></span></span></div><div class="r"><span class="a">Contract-implied</span><span>${vw.implied[t].toFixed(1)}${money(vw.iD[t])}</span></div>`:`<b>${2027+t} - Age ${res.ages[t]}</b><div class="r"><span class="c">Projected</span><span>${rw.mean.toFixed(1)}${money(vw.pD[t])}</span></div><div class="r"><span>80% range</span><span>${rw.p10.toFixed(1)} – ${rw.p90.toFixed(1)}<span class="d"></span></span></div><div class="r"><span class="a">Contract-implied</span><span>${vw.implied[t].toFixed(1)}${money(vw.iD[t])}</span></div>`;
   tip.style.opacity=1;const tw=tip.offsetWidth;let lx=x+14+tw>W?x-14-tw:x+14;lx=Math.max(0,Math.min(lx,W-tw));tip.style.left=lx+'px';tip.style.top=(mt+8)+'px'};
  hit.addEventListener('mousemove',move);hit.addEventListener('touchstart',move,{passive:true});hit.addEventListener('touchmove',move,{passive:true});
  hit.addEventListener('mouseleave',()=>{tip.style.opacity=0;hov.setAttribute('visibility','hidden')});
