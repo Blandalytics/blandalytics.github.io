@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Contract vs. Projection</title>
+<meta name="description" content="What a free-agent contract pays for in fWAR against where the player projects, season by season, with the chance the deal returns positive value.">
+<link rel="icon" href="https://res.cloudinary.com/dduabusaf/image/upload/v1772839606/teal_letter_logo_owufaj.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/shared/plpd.css?v=3">
+<style>
+/* Contract vs. Projection: the approved reference's own layout and styles, on the site's PLPD page
+   (plpd.css: the atmosphere background and base type) */
+:root{color-scheme:dark;--s1:#13152a;--s3:#21243a;--card:#292c42;--cyan:#55e8ff;--cyanh:#73efff;--amber:#ffc277;--ink:#f0f1f5;--nav:#cbd7fd;--meta:#c0c4d8b8;--dim:#8a8eb0;--grid:#ffffff0f;--center:#ffffff3d;--muted:#c4cdecd9;--line:#ffffff21;--field:#4748a212;--fieldb:#81ace440;--fieldh:#81ace46b;--green:#7edc9d;--red:#fb849c;--kpib:#40a8c0}
+*{box-sizing:border-box;min-width:0}
+body.plpd{color:var(--ink);font:15px/1.55 "Work Sans",system-ui,sans-serif;overflow-x:clip}
+main{max-width:920px;margin:0 auto;padding:clamp(20px,4vw,44px) max(4vw,14px) 48px}
+h1{font:700 clamp(30px,5vw,40px)/1.05 "DM Sans",system-ui,sans-serif;color:var(--cyan);margin:0 0 6px;letter-spacing:-.01em}
+.sub{color:var(--meta);margin:0 0 22px}
+h2{font:900 22px/1.15 "DM Sans",system-ui,sans-serif;color:var(--cyanh);margin:30px 0 12px}
+.card{background:var(--card);border-radius:10px;padding:clamp(16px,3vw,26px)}
+.inputs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px 16px}
+.inputs>div:not(.wide){display:flex;flex-direction:column;justify-content:flex-end}  /* a label that wraps keeps the inputs in line */
+.inputs .wide{grid-column:span 4;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding-top:12px;border-top:1px solid var(--line)}
+label{display:block;color:var(--meta);font-size:14px;margin-bottom:6px}
+input[type=number]{width:100%;height:46px;padding:0 14px;border-radius:10px;border:1px solid var(--fieldb);background:var(--field);color:var(--ink);font:500 16px "Work Sans",system-ui,sans-serif}
+input[type=number]:hover{border-color:var(--fieldh)}
+input:focus-visible,button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.seg{display:inline-flex;border:1px solid var(--fieldb);border-radius:10px;overflow:hidden}
+.seg button{height:44px;padding:0 16px;border:0;background:transparent;color:var(--nav);font:600 14px "Work Sans",system-ui,sans-serif;cursor:pointer}
+.seg button[aria-pressed=true]{background:#55e8ff1f;color:var(--cyan)}
+.chip{height:44px;padding:0 16px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);font:700 14px "DM Sans",system-ui,sans-serif;cursor:pointer}
+.chip:hover{background:#ffffff0d}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+.li{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:6px;padding:6px 12px;font-size:14px}
+.key{width:16px;height:3px;border-radius:2px}
+.li .v{color:var(--nav);font-variant-numeric:tabular-nums}
+.band{width:16px;height:10px;border-radius:2px;background:linear-gradient(90deg,#55e8ff29 50%,#55e8ff4d 50%)}
+.fig{position:relative;height:clamp(410px,56vw,510px);margin-top:0}
+.fig>svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+svg text{font-family:"Work Sans",system-ui,sans-serif}
+.tip{position:absolute;pointer-events:none;background:#1b1f38f2;border:1px solid #73efff38;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.45;min-width:180px;opacity:0;transition:opacity .12s}
+.tip b{font:600 14px "DM Sans",system-ui,sans-serif}
+.tip .r{display:flex;justify-content:space-between;gap:14px;font-variant-numeric:tabular-nums}
+.share{max-width:820px;margin:10px auto 0;background:var(--card);border-radius:10px;padding:clamp(16px,3.4vw,30px) clamp(14px,3.4vw,30px) clamp(14px,2.6vw,22px)}
+.sh-logo{display:block;height:30px;width:auto;margin:0 0 14px}
+.sh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.sh-title{font:700 clamp(26px,4.4vw,36px)/1.05 "DM Sans",system-ui,sans-serif;color:var(--cyanh);margin:0;letter-spacing:-.01em}
+.sh-sub{font:500 clamp(15px,2.2vw,18px)/1.3 "DM Sans",system-ui,sans-serif;margin:6px 0 0;color:var(--ink)}
+.sh-note{color:var(--meta);font-size:14px;text-align:right;line-height:1.5}
+.sh-note span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1.5px solid var(--kpib);border-radius:10px;margin-top:14px}
+.kpi{padding:10px 8px 12px;text-align:center;border-left:1.5px solid #40a8c066}
+.kpi:first-child{border-left:0}
+.kpi .l{font:600 clamp(12px,1.7vw,15px)/1.25 "DM Sans",system-ui,sans-serif;color:var(--cyanh)}
+.kpi .n{font:700 clamp(19px,3vw,26px)/1.15 "DM Sans",system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap;margin-top:4px}
+.kpi .s{color:var(--meta);font-size:12px}
+.shbtn{flex:none;height:44px;padding:0 16px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);font:700 15px "DM Sans",system-ui,sans-serif;cursor:pointer}
+.shbtn:hover{background:#ffffff0d}.shbtn:disabled{opacity:.7;cursor:default}
+.share-bar{max-width:820px;margin:26px auto 0;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.sh-foot{color:#c0c4d8;font-size:14px;margin-top:14px}
+.c{color:var(--cyan)}.a{color:var(--amber)}.g{color:var(--green)}.rd{color:var(--red)}
+details{margin-top:24px;color:var(--meta);font-size:14px}
+details summary{cursor:pointer;color:var(--nav);font-weight:600;min-height:44px;display:flex;align-items:center}
+details ul{padding-left:18px;margin:6px 0 0}details li{margin:4px 0}
+.note{color:var(--dim);font-size:13px;margin-top:10px}
+@media(max-width:700px){.sh-logo{height:24px;margin-bottom:12px}.share-bar{flex-wrap:nowrap}.share-bar .seg button{padding:0 11px;font-size:13px}.shbtn{padding:0 11px;font-size:14px}.inputs{grid-template-columns:repeat(2,minmax(0,1fr))}.inputs .wide{grid-column:span 2}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi{border-left:0;border-top:1.5px solid #40a8c066}.kpi:first-child{grid-column:span 2;border-top:0}.kpi:nth-child(3),.kpi:nth-child(5){border-left:1.5px solid #40a8c066}.sh-note{text-align:left}}
+@media(prefers-reduced-motion:reduce){.tip{transition:none}}
+</style>
+</head>
+<body class="plpd">
+<main>
+<h1>Contract vs. Projection</h1>
+<p class="sub">What a Free-Agent Deal Pays For in fWAR, Against Where the Player Projects, Season by Season</p>
+
+<section class="card" aria-label="Contract inputs">
+  <div class="inputs">
+    <div><label for="age">Age in First Season</label><input id="age" type="number" min="20" max="40" step="1" value="30"></div>
+    <div><label for="yrs">Contract Length (Years)</label><input id="yrs" type="number" min="1" max="12" step="1" value="9"></div>
+    <div><label for="aav">AAV ($M)</label><input id="aav" type="number" min="0.8" max="80" step="0.5" value="50"></div>
+    <div><label for="w1">Projected fWAR (Year 1)</label><input id="w1" type="number" min="-1" max="10" step="0.1" value="5.5"></div>
+    <div class="wide">
+      <div class="seg" role="group" aria-label="Aging curve"><button id="r-sp" type="button" aria-pressed="true">Starting Pitcher</button><button id="r-h" type="button" aria-pressed="false">Hitter</button></div>
+      <button class="chip" id="preset" type="button">Load Skubal (9 / $450M)</button>
+    </div>
+  </div>
+</section>
+
+<div class="share-bar">
+  <div class="seg" role="group" aria-label="Chart view"><button id="v-season" type="button" aria-pressed="true">By Season</button><button id="v-cum" type="button" aria-pressed="false">Cumulative</button></div>
+  <button class="shbtn" id="share" type="button">Share image ▾</button>
+</div>
+<section class="share" aria-label="Projection vs. contract">
+  <img class="sh-logo" src="/pitcher-cards/PitcherList_Stats_watermark_with_logo.webp" alt="Pitcher List Stats" width="928" height="178">
+  <div class="sh-top">
+    <div><h2 class="sh-title" id="sh-title"></h2><p class="sh-sub" id="sh-sub"></p></div>
+  </div>
+  <div class="fig" id="fig"><svg id="chart" role="img" aria-label="Projected fWAR by season with 50% and 90% ranges, and the fWAR the contract pays for"></svg><div class="tip" id="tip" role="status"></div></div>
+  <div class="kpis">
+    <div class="kpi"><div class="l">Chance of Positive Value</div><div class="n" id="k-odds"></div></div>
+    <div class="kpi"><div class="l">Projected Range</div><div class="n c" id="k-range"></div><div class="s">total fWAR, 90%</div></div>
+    <div class="kpi"><div class="l">Expected Surplus</div><div class="n" id="k-surp"></div><div class="s">present value</div></div>
+    <div class="kpi"><div class="l">Fair AAV</div><div class="n" id="k-fair"></div><div class="s">at his projection</div></div>
+    <div class="kpi"><div class="l">Priced As</div><div class="n" id="k-star"></div><div class="s">fWAR in year 1</div></div>
+  </div>
+</section>
+
+<details>
+  <summary>How It Works</summary>
+  <ul>
+    <li><b>Projection (cyan)</b> follows the three steps in the 2006–2026 fWAR aging-curve write-up: (1) the year-1 projection is his full-season rate; (2) age the rate with the group's smoothed curve, the same number of wins for every player (starters per 180 IP, hitters per 600 PA); (3) multiply by playing-time retention, the share of base-age playing time established players still delivered k years later, counting a season out of the majors as zero. Retention uses the nearest base-age row (odd ages average the two neighbours) and is extended past eight years at its last rate of decline.</li>
+    <li><b>Ranges:</b> 20,000 simulated careers around that path: projection error at signing (SD 0.6), talent drift (SD 0.5/yr), aging-curve uncertainty from the curve's 90% bootstrap interval, leaving the majors (about 70% of the retention drop, sooner for players who come in below projection), injury-shortened seasons, and season noise. Bad seasons are floored at −0.5, which lifts the mean about 0.05 fWAR a season above the write-up's table.</li>
+    <li><b>Contract-implied fWAR (amber):</b> the year-1 projection the 2024–26 free-agent market would pay exactly this deal for, aged −0.4/yr as in the price fit. Price per win: $2.47M + $3.33M × min(projected fWAR, 3) above the minimum, in 2025 payroll dollars; ×1.065 for 2027, +3%/yr after; 5% discount; AAV paid evenly; minimum ~$0.8M rising 2.5%/yr.</li>
+    <li><b>Chance of positive value:</b> share of simulated careers whose discounted fWAR beats the contract's discounted implied fWAR. Green above 75%, red below 25%. <b>Fair AAV</b> and <b>expected surplus</b> price the projected path at the same curve.</li>
+    <li><b>Caveats from the write-up:</b> the fixed-win curve probably runs slightly optimistic for stars; retention comes from 1990–2017 cohorts, when starters threw more innings; retention partly overlaps the rate decline. Relievers aren't offered (no reliever contracts in the price fit). Signing bonuses, deferrals and opt-outs aren't modelled. The first season is 2027.</li>
+  </ul>
+</details>
+</main>
+<script src="/shared/share-image.js?v=2"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>
