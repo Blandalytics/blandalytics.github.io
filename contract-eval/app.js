@@ -40,7 +40,7 @@ function compute(age,yrs,aav,w1){
    if(U<S[t]){const share=(R()<PINJ?.1+.7*R():1)/HN*M[t];w=(rate[t]+z*csd[t]+walk)*share+nrm()*.8*Math.sqrt(Math.min(share,1));if(w<-.5)w=-.5}
    sims[t][i]=w;dw+=w*D**t}disc[i]=dw}
  const q=(arr,p)=>{const s=Float64Array.from(arr).sort();return s[Math.floor(p*(s.length-1))]};
- const rows=sims.map(s=>{let m=0;for(const v of s)m+=v;return{mean:m/N,p5:q(s,.05),p25:q(s,.25),p75:q(s,.75),p95:q(s,.95)}});
+ const rows=sims.map(s=>{let m=0;for(const v of s)m+=v;return{mean:m/N,p10:q(s,.1),p90:q(s,.9)}});
  const minS=t=>.8*1.025**t, idx=t=>I0*G**t;
  let pv=0,ann=0;for(let t=0;t<yrs;t++){pv+=aav*D**t;ann+=D**t}
  // contract-implied fWAR: the year-1 projection the market prices this deal at, aged the way the price curve was fit (-0.4/yr)
@@ -52,14 +52,14 @@ function compute(age,yrs,aav,w1){
  let ok=0;for(let i=0;i<N;i++)if(disc[i]>=needD)ok++;
  const cs=ages.map(()=>new Float64Array(N));for(let i=0;i<N;i++){let a=0;for(let t=0;t<yrs;t++){a+=sims[t][i];cs[t][i]=a}}
  const cum=cs[yrs-1];
- const crows=cs.map(s=>{let m=0;for(const v of s)m+=v;return{mean:m/N,p5:q(s,.05),p25:q(s,.25),p75:q(s,.75),p95:q(s,.95)}});
+ const crows=cs.map(s=>{let m=0;for(const v of s)m+=v;return{mean:m/N,p10:q(s,.1),p90:q(s,.9)}});
  let ia=0;const cimplied=implied.map(w=>ia+=w);
  let fair=0;for(let t=0;t<yrs;t++)fair+=(minS(t)+price(w1)*idx(t)*Math.max(rows[t].mean,0))*D**t;
  const expected=rate.map((r,t)=>r*ret[t]);
  return{ages,rows,crows,cimplied,rate,ret,expected,implied,Wstar,need:implied.reduce((a,b)=>a+b,0),proj:rows.reduce((a,r)=>a+r.mean,0),c5:q(cum,.05),c95:q(cum,.95),odds:ok/N,fair:fair/ann,p1:price(Wstar)*idx(0)};
 }
 let view='season';const V=()=>view==='cum'?{rows:res.crows,implied:res.cimplied}:{rows:res.rows,implied:res.implied};
-function yscale(vw){const top=Math.max(...vw.rows.map(r=>r.p95),...vw.implied)+0.05;const st=[1,2,5,10,20,50].find(x=>Math.ceil(top/x)<=8)||100;const hi=Math.max(4,Math.ceil(top/st)*st);return[0,hi,st]}
+function yscale(vw){const top=Math.max(...vw.rows.map(r=>r.p90),...vw.implied)+0.05;const st=[1,2,5,10,20,50].find(x=>Math.ceil(top/x)<=8)||100;const hi=Math.max(4,Math.ceil(top/st)*st);return[0,hi,st]}
 let res=null;const svg=$('chart'),fig=$('fig'),tip=$('tip');
 function draw(){if(!res)return;const vw=V();const W=svg.clientWidth,H=svg.clientHeight;if(!W)return;
  const n=res.ages.length,small=W<520,ml=small?34:46,mr=10,mt=small?92:112,stag=n*(small?36:48)>(W-ml-mr),mb=small?(stag?56:34):(stag?72:40),iw=W-ml-mr,ih=H-mt-mb;
@@ -68,7 +68,7 @@ function draw(){if(!res)return;const vw=V();const W=svg.clientWidth,H=svg.client
  let h='';
  for(let v=ymin;v<=ymax;v+=step)h+=`<line x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v===0?'var(--center)':'var(--grid)'}"/><text x="${ml-8}" y="${Y(v)+5}" text-anchor="end" fill="${v<0?'var(--red)':'var(--nav)'}" font-size="${small?12:15}">${v<0?'−'+(-v):v}</text>`;
  const band=(a,b)=>{const xs=vw.rows.map((_,t)=>X(t));if(n===1){const x=xs[0];return`M${x-14},${Y(vw.rows[0][a])}H${x+14}V${Y(vw.rows[0][b])}H${x-14}Z`}return'M'+vw.rows.map((r,t)=>`${xs[t]},${Y(r[a])}`).join('L')+'L'+vw.rows.map((r,t)=>`${xs[t]},${Y(r[b])}`).reverse().join('L')+'Z'};
- h+=`<path d="${band('p5','p95')}" fill="var(--cyan)" fill-opacity=".12"/><path d="${band('p25','p75')}" fill="var(--cyan)" fill-opacity=".24"/>`;
+ h+=`<path d="${band('p10','p90')}" fill="var(--cyan)" fill-opacity=".2"/>`;   // the 10th-90th percentile
  const line=(vals,col,w)=>`<path d="M${vals.map((v,t)=>`${X(t)},${Y(v)}`).join('L')}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"/>`+vals.map((v,t)=>`<circle cx="${X(t)}" cy="${Y(v)}" r="${small?3:4}" fill="${col}" stroke="var(--card)" stroke-width="2"/>`).join('');
  h+=line(vw.implied,'var(--amber)',2.5)+line(vw.rows.map(r=>r.mean),'var(--cyan)',2.5);
  h+=`<line x1="${ml}" x2="${W-mr}" y1="${mt+ih}" y2="${mt+ih}" stroke="var(--muted)"/>`;
@@ -84,7 +84,7 @@ function draw(){if(!res)return;const vw=V();const W=svg.clientWidth,H=svg.client
  const hit=$('hit'),hov=$('hov');
  const move=e=>{const r=svg.getBoundingClientRect(),px=(e.touches?e.touches[0].clientX:e.clientX)-r.left;const t=Math.max(0,Math.min(n-1,Math.round((px-ml)/iw*n-.5)));const x=X(t),rw=vw.rows[t];
   hov.setAttribute('x1',x);hov.setAttribute('x2',x);hov.setAttribute('visibility','visible');
-  tip.innerHTML=view==='cum'?`<b>Through ${2027+t} - Age ${res.ages[t]}</b><div class="r"><span class="c">Projected</span><span>${rw.mean.toFixed(1)}</span></div><div class="r"><span>50% range</span><span>${rw.p25.toFixed(1)} – ${rw.p75.toFixed(1)}</span></div><div class="r"><span>90% range</span><span>${rw.p5.toFixed(1)} – ${rw.p95.toFixed(1)}</span></div><div class="r"><span class="a">Contract-implied</span><span>${vw.implied[t].toFixed(1)}</span></div>`:`<b>${2027+t} - Age ${res.ages[t]}</b><div class="r"><span class="c">Projected</span><span>${rw.mean.toFixed(1)}</span></div><div class="r"><span>50% range</span><span>${rw.p25.toFixed(1)} – ${rw.p75.toFixed(1)}</span></div><div class="r"><span>90% range</span><span>${rw.p5.toFixed(1)} – ${rw.p95.toFixed(1)}</span></div><div class="r"><span class="a">Contract-implied</span><span>${vw.implied[t].toFixed(1)}</span></div><div class="r"><span>Full-season rate</span><span>${res.rate[t].toFixed(2)}</span></div><div class="r"><span>Playing-time retention</span><span>${Math.round(res.ret[t]*100)}%</span></div>`;
+  tip.innerHTML=view==='cum'?`<b>Through ${2027+t} - Age ${res.ages[t]}</b><div class="r"><span class="c">Projected</span><span>${rw.mean.toFixed(1)}</span></div><div class="r"><span>80% range</span><span>${rw.p10.toFixed(1)} – ${rw.p90.toFixed(1)}</span></div><div class="r"><span class="a">Contract-implied</span><span>${vw.implied[t].toFixed(1)}</span></div>`:`<b>${2027+t} - Age ${res.ages[t]}</b><div class="r"><span class="c">Projected</span><span>${rw.mean.toFixed(1)}</span></div><div class="r"><span>80% range</span><span>${rw.p10.toFixed(1)} – ${rw.p90.toFixed(1)}</span></div><div class="r"><span class="a">Contract-implied</span><span>${vw.implied[t].toFixed(1)}</span></div><div class="r"><span>Full-season rate</span><span>${res.rate[t].toFixed(2)}</span></div><div class="r"><span>Playing-time retention</span><span>${Math.round(res.ret[t]*100)}%</span></div>`;
   tip.style.opacity=1;const tw=tip.offsetWidth;let lx=x+14+tw>W?x-14-tw:x+14;lx=Math.max(0,Math.min(lx,W-tw));tip.style.left=lx+'px';tip.style.top=(mt+8)+'px'};
  hit.addEventListener('mousemove',move);hit.addEventListener('touchstart',move,{passive:true});hit.addEventListener('touchmove',move,{passive:true});
  hit.addEventListener('mouseleave',()=>{tip.style.opacity=0;hov.setAttribute('visibility','hidden')});
@@ -132,7 +132,7 @@ async function renderPNG(){
  const X=t=>ml+(n===1?iw/2:iw*(t+.5)/n),Y=v=>mt+ih*(1-(Math.max(v,ymin)-ymin)/(ymax-ymin));
  for(let v=ymin;v<=ymax;v+=step){g.strokeStyle=v===0?C.center:C.grid;g.lineWidth=2;g.beginPath();g.moveTo(ml,Y(v));g.lineTo(mr,Y(v));g.stroke();T(v<0?'−'+(-v):String(v),ml-18,Y(v)+11,WS(400,32),v<0?C.red:C.nav,'right')}
  const band=(a,b,op)=>{g.beginPath();if(n===1){const x=X(0);g.rect(x-30,Y(vw.rows[0][b]),60,Y(vw.rows[0][a])-Y(vw.rows[0][b]))}else{vw.rows.forEach((r,t)=>t?g.lineTo(X(t),Y(r[a])):g.moveTo(X(t),Y(r[a])));for(let t=n-1;t>=0;t--)g.lineTo(X(t),Y(vw.rows[t][b]));g.closePath()}g.fillStyle=`rgba(85,232,255,${op})`;g.fill()};
- band('p5','p95',.12);band('p25','p75',.24);
+ band('p10','p90',.2);   // the 10th-90th percentile
  const line=(vals,col)=>{g.strokeStyle=col;g.lineWidth=5;g.lineJoin='round';g.lineCap='round';g.beginPath();vals.forEach((v,t)=>t?g.lineTo(X(t),Y(v)):g.moveTo(X(t),Y(v)));g.stroke();
   vals.forEach((v,t)=>{g.beginPath();g.arc(X(t),Y(v),9,0,7);g.fillStyle=col;g.fill();g.lineWidth=4;g.strokeStyle=C.bg;g.stroke()})};
  line(vw.implied,C.amber);line(vw.rows.map(r=>r.mean),C.cyan);
