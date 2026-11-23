@@ -95,22 +95,30 @@ function draw(){if(!res)return;const vw=V();const W=svg.clientWidth,H=svg.client
 }
 const ro=new ResizeObserver(draw);ro.observe(fig);
 function clamp(v,a,b,d){v=parseFloat(v);return isFinite(v)?Math.min(b,Math.max(a,v)):d}
-function run(){const age=Math.round(clamp($('age').value,20,40,30)),yrs=Math.round(clamp($('yrs').value,1,15,9)),aav=clamp($('aav').value,.8,80,50),w1=clamp($('w1').value,-1,10,5.5);
- res=compute(age,yrs,aav,w1);cur={age,yrs,aav,w1};
+const PLAYERS=new Set(window.CVP_PLAYERS||[]);
+{const dl=$('players'),f=document.createDocumentFragment();PLAYERS.forEach(n=>{const o=document.createElement('option');o.value=n;f.appendChild(o)});dl.appendChild(f)}
+function playerName(){const raw=$('pname').value.replace(/\s+/g,' ').trim().slice(0,40);
+ const ok=!raw||PLAYERS.has(raw)||!window.CVPNameOK||window.CVPNameOK(raw);
+ $('pname').setAttribute('aria-invalid',String(!ok));$('pname-msg').textContent=ok?'':'That name can\'t be shown';
+ return ok?raw:''}
+function run(){const age=Math.round(clamp($('age').value,20,40,30)),yrs=Math.round(clamp($('yrs').value,1,15,9)),aav=clamp($('aav').value,.8,80,50),w1=clamp($('w1').value,-1,10,5.6);
+ res=compute(age,yrs,aav,w1);const name=playerName(),team=$('team').value;cur={age,yrs,aav,w1,name,team};
+ $('sh-name').textContent=`${name||'Free Agent'} - ${team}`;
  const tot=aav*yrs;
  $('sh-title').textContent=`${yrs} Year${yrs>1?'s':''}, $${tot>=100?tot.toFixed(0):tot.toFixed(1)}M`;
  $('sh-sub').textContent=`${role==='sp'?'Starting Pitcher':'Hitter'}, Age ${res.ages[0]}${yrs>1?'–'+res.ages[res.ages.length-1]:''} | $${aav.toFixed(1)}M AAV`;
  const o=res.odds,k=$('k-odds');k.textContent=Math.round(o*100)+'%';k.className='n '+(o>.75?'g':o<.25?'rd':'');
  const f0=v=>{const r=Math.round(v);return r<0?'−'+(-r):String(r)};$('k-range').textContent=`${f0(res.c10)}–${f0(res.c90)}`;
  let ann=0;for(let t=0;t<yrs;t++)ann+=D**t;const sur=(res.fair-aav)*ann;$('k-surp').textContent=(sur>=0?'+':'−')+'$'+Math.abs(sur).toFixed(0)+'M';$('k-fair').textContent='$'+res.fair.toFixed(1)+'M';$('k-star').textContent=res.Wstar.toFixed(1);
- draw();try{localStorage.setItem('cvp',JSON.stringify({age,yrs,aav,w1,role}))}catch(e){}}
+ draw();try{localStorage.setItem('cvp',JSON.stringify({age,yrs,aav,w1,role,name:$('pname').value,team}))}catch(e){}}
 function setRole(r){role=r;$('r-sp').setAttribute('aria-pressed',r==='sp');$('r-h').setAttribute('aria-pressed',r==='h');run()}
 function setView(v){view=v;$('v-season').setAttribute('aria-pressed',v==='season');$('v-cum').setAttribute('aria-pressed',v==='cum');draw()}
 $('v-season').addEventListener('click',()=>setView('season'));$('v-cum').addEventListener('click',()=>setView('cum'));
 $('r-sp').addEventListener('click',()=>setRole('sp'));$('r-h').addEventListener('click',()=>setRole('h'));
-$('preset').addEventListener('click',()=>{$('age').value=30;$('yrs').value=9;$('aav').value=50;$('w1').value=5.5;setRole('sp')});
-let tmr;['age','yrs','aav','w1'].forEach(id=>$(id).addEventListener('input',()=>{clearTimeout(tmr);tmr=setTimeout(run,120)}));
-try{const s=JSON.parse(localStorage.getItem('cvp')||'null');if(s){$('age').value=s.age;$('yrs').value=s.yrs;$('aav').value=s.aav;$('w1').value=s.w1;role=s.role==='h'?'h':'sp';$('r-sp').setAttribute('aria-pressed',role==='sp');$('r-h').setAttribute('aria-pressed',role==='h')}}catch(e){}
+$('preset').addEventListener('click',()=>{$('pname').value='Tarik Skubal';$('team').value='NYM';$('age').value=30;$('yrs').value=9;$('aav').value=50;$('w1').value=5.6;setRole('sp')});
+let tmr;['pname','age','yrs','aav','w1'].forEach(id=>$(id).addEventListener('input',()=>{clearTimeout(tmr);tmr=setTimeout(run,120)}));
+$('team').addEventListener('change',run);
+try{const s=JSON.parse(localStorage.getItem('cvp')||'null');if(s){if(typeof s.name==='string')$('pname').value=s.name;if(s.team&&[...$('team').options].some(o=>o.value===s.team))$('team').value=s.team;$('age').value=s.age;$('yrs').value=s.yrs;$('aav').value=s.aav;$('w1').value=s.w1;role=s.role==='h'?'h':'sp';$('r-sp').setAttribute('aria-pressed',role==='sp');$('r-h').setAttribute('aria-pressed',role==='h')}}catch(e){}
 
 // ---- Share Image: draw the card to a 1600x1600 PNG with the page's fonts ----
 let cur={};
@@ -125,9 +133,13 @@ async function renderPNG(){
  const T=(t,x,y,font,col,al='left')=>{g.font=font;g.fillStyle=col;g.textAlign=al;g.fillText(t,x,y)};
  g.fillStyle=C.bg;g.fillRect(0,0,S,S);
  // the Pitcher List Stats wordmark top right, level with the title
- if(logo){const lw=300;g.drawImage(logo,S-P-lw,84,lw,lw*logo.naturalHeight/logo.naturalWidth)}
- T($('sh-title').textContent,P,140,DM(700,76),C.cyanh);
- T($('sh-sub').textContent,P,200,WS(500,34),C.ink);
+ // xMiss's header at 1.6x (its 1000 layout units on this 1600 canvas): the wordmark 368 wide top right;
+ // name - team (shrunk only to clear the wordmark), the deal, then position, ages and AAV
+ const lw=368;if(logo)g.drawImage(logo,S-P-lw,74,lw,lw*logo.naturalHeight/logo.naturalWidth);
+ {let ns=57.6;g.font=DM(700,ns);while(ns>40&&g.measureText($('sh-name').textContent).width>S-2*P-lw-40)g.font=DM(700,ns-=1);
+  T($('sh-name').textContent,P,122,DM(700,ns),C.cyanh)}
+ T($('sh-title').textContent,P,170,DM(700,36),C.ink);
+ T($('sh-sub').textContent,P,211,DM(400,30),'#8d96b3');
  const n=res.ages.length,ml=P+100,mr=S-P,mt=470,mb=1210,iw=mr-ml,ih=mb-mt;
  g.save();g.translate(P+30,(mt+mb)/2);g.rotate(-Math.PI/2);T(view==='cum'?'Cumulative fWAR':'fWAR, per Year',0,0,DM(600,32),C.nav,'center');g.restore();
  const hx1=ml+iw*.25,hx2=ml+iw*.75;
@@ -153,7 +165,8 @@ async function renderPNG(){
   lines.forEach((ln,j)=>T(ln,cx,ky+(lines.length>1?46:60)+j*34,DM(600,30),C.cyanh,'center'));T(v,cx,ky+(sub?140:150),DM(700,50),col,'center');if(sub)T(sub,cx,ky+184,WS(400,30),C.meta,'center')});
  return await new Promise(r=>cv.toBlob(r,'image/png'));
 }
-const fname=()=>`contract-${cur.yrs}yr-${String(cur.aav).replace('.','_')}m-${cur.w1}fwar${view==='cum'?'-cumulative':''}.png`;
+const slug=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+const fname=()=>`${slug(cur.name||'free_agent')}_${cur.team.toLowerCase()}-contract-${cur.yrs}yr-${String(cur.aav).replace('.','_')}m-${cur.w1}fwar${view==='cum'?'-cumulative':''}.png`;
 ShareImage.image($('share'), () => renderPNG(), () => fname());
 run();
 })();

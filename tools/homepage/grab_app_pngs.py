@@ -75,7 +75,7 @@ APPS = [
     ("xmiss", "https://blandalytics.com/xmiss/#mlb/2026/594798/mix",
      "!document.getElementById('png').disabled && document.getElementById('pitcherQ').value.includes('deGrom')"
      " && document.fonts.status === 'loaded'", "png_download"),
-    # Contract vs. Projection at its defaults: 9 years, $450M for a 30-year-old starter at 5.5 fWAR
+    # Contract vs. Projection at its defaults: Tarik Skubal - NYM, 9 years, $450M, a 30-year-old starter at 5.6 fWAR
     ("contract-eval", "https://blandalytics.com/contract-eval/",
      "document.getElementById('k-odds').textContent && document.fonts.status === 'loaded'", "share_download"),
     # Shai Gilgeous-Alexander's 2025-26 season (#season/playerId/season)
