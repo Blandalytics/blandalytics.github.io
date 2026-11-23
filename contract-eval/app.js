@@ -56,13 +56,13 @@ function compute(age,yrs,aav,w1){
  let ia=0;const cimplied=implied.map(w=>ia+=w);
  let fair=0;for(let t=0;t<yrs;t++)fair+=(minS(t)+price(w1)*idx(t)*Math.max(rows[t].mean,0))*D**t;
  const expected=rate.map((r,t)=>r*ret[t]);
- return{ages,rows,crows,cimplied,rate,ret,expected,implied,Wstar,need:implied.reduce((a,b)=>a+b,0),proj:rows.reduce((a,r)=>a+r.mean,0),c5:q(cum,.05),c95:q(cum,.95),odds:ok/N,fair:fair/ann,p1:price(Wstar)*idx(0)};
+ return{ages,rows,crows,cimplied,rate,ret,expected,implied,Wstar,need:implied.reduce((a,b)=>a+b,0),proj:rows.reduce((a,r)=>a+r.mean,0),c10:q(cum,.1),c90:q(cum,.9),odds:ok/N,fair:fair/ann,p1:price(Wstar)*idx(0)};
 }
 let view='season';const V=()=>view==='cum'?{rows:res.crows,implied:res.cimplied}:{rows:res.rows,implied:res.implied};
 function yscale(vw){const top=Math.max(...vw.rows.map(r=>r.p90),...vw.implied)+0.05;const st=[1,2,5,10,20,50].find(x=>Math.ceil(top/x)<=8)||100;const hi=Math.max(4,Math.ceil(top/st)*st);return[0,hi,st]}
 let res=null;const svg=$('chart'),fig=$('fig'),tip=$('tip');
 function draw(){if(!res)return;const vw=V();const W=svg.clientWidth,H=svg.clientHeight;if(!W)return;
- const n=res.ages.length,small=W<520,ml=small?34:46,mr=10,mt=small?92:112,stag=n*(small?36:48)>(W-ml-mr),mb=small?(stag?56:34):(stag?72:40),iw=W-ml-mr,ih=H-mt-mb;
+ const n=res.ages.length,small=W<520,ml=small?52:68,mr=10,mt=small?92:112,stag=n*(small?36:48)>(W-ml-mr),mb=small?(stag?56:34):(stag?72:40),iw=W-ml-mr,ih=H-mt-mb;
  const [ymin,ymax,step]=yscale(vw);
  const X=t=>ml+(n===1?iw/2:iw*(t+.5)/n),Y=v=>mt+ih*(1-(Math.max(v,ymin)-ymin)/(ymax-ymin));
  let h='';
@@ -77,15 +77,18 @@ function draw(){if(!res)return;const vw=V();const W=svg.clientWidth,H=svg.client
  res.ages.forEach((a,t)=>{const x=X(t),off=stag&&t%2?(small?30:44):0,y0=mt+ih+(small?18:24)+off;
   h+=`<line x1="${x}" x2="${x}" y1="${mt+ih}" y2="${mt+ih+5}" stroke="var(--muted)"/><text x="${x}" y="${y0}" text-anchor="middle" fill="var(--nav)" font-size="${fs}">${small?"'"+String(2027+t).slice(2):2027+t}</text>`;
   });
- const hx1=ml+iw*.25,hx2=ml+iw*.75,hf=small?14:18,cy=mt/2,l1=cy-(small?6:8),l2=cy+(small?16:20);
- h+=`<text x="${hx1}" y="${l1}" text-anchor="middle" fill="var(--ink)" font-family="DM Sans" font-weight="600" font-size="${hf}">Projected</text><text x="${hx1}" y="${l2}" text-anchor="middle" fill="var(--cyan)" font-weight="600" font-size="${hf+2}">${res.proj.toFixed(1)} fWAR</text>`;
- h+=`<text x="${hx2}" y="${l1}" text-anchor="middle" fill="var(--ink)" font-family="DM Sans" font-weight="600" font-size="${hf}">Contract Needs</text><text x="${hx2}" y="${l2}" text-anchor="middle" fill="var(--amber)" font-weight="600" font-size="${hf+2}">${res.need.toFixed(1)} fWAR</text>`;
+ const yl=view==='cum'?'Cumulative fWAR':'fWAR, per Year',yf=small?12:14;   // the y axis's label, along it
+ h+=`<text transform="translate(${yf+2},${mt+ih/2}) rotate(-90)" text-anchor="middle" fill="var(--nav)" font-family="DM Sans" font-weight="600" font-size="${yf}">${yl}</text>`;
+ // 4. the header pair: the fWAR values larger than their labels
+ const hx1=ml+iw*.25,hx2=ml+iw*.75,hf=small?14:18,vf=small?22:28,cy=mt/2,l1=cy-(small?8:12),l2=cy+(small?20:26);
+ h+=`<text x="${hx1}" y="${l1}" text-anchor="middle" fill="var(--ink)" font-family="DM Sans" font-weight="600" font-size="${hf}">Projected</text><text x="${hx1}" y="${l2}" text-anchor="middle" fill="var(--cyan)" font-weight="600" font-size="${vf}">${res.proj.toFixed(1)} fWAR</text>`;
+ h+=`<text x="${hx2}" y="${l1}" text-anchor="middle" fill="var(--ink)" font-family="DM Sans" font-weight="600" font-size="${hf}">Contract Needs</text><text x="${hx2}" y="${l2}" text-anchor="middle" fill="var(--amber)" font-weight="600" font-size="${vf}">${res.need.toFixed(1)} fWAR</text>`;
  h+=`<line id="hov" x1="0" x2="0" y1="${mt}" y2="${mt+ih}" stroke="var(--nav)" stroke-dasharray="4 4" visibility="hidden"/><rect id="hit" x="${ml}" y="${mt}" width="${iw}" height="${ih}" fill="transparent"/>`;
  svg.innerHTML=h;
  const hit=$('hit'),hov=$('hov');
  const move=e=>{const r=svg.getBoundingClientRect(),px=(e.touches?e.touches[0].clientX:e.clientX)-r.left;const t=Math.max(0,Math.min(n-1,Math.round((px-ml)/iw*n-.5)));const x=X(t),rw=vw.rows[t];
   hov.setAttribute('x1',x);hov.setAttribute('x2',x);hov.setAttribute('visibility','visible');
-  tip.innerHTML=view==='cum'?`<b>Through ${2027+t} - Age ${res.ages[t]}</b><div class="r"><span class="c">Projected</span><span>${rw.mean.toFixed(1)}</span></div><div class="r"><span>80% range</span><span>${rw.p10.toFixed(1)} – ${rw.p90.toFixed(1)}</span></div><div class="r"><span class="a">Contract-implied</span><span>${vw.implied[t].toFixed(1)}</span></div>`:`<b>${2027+t} - Age ${res.ages[t]}</b><div class="r"><span class="c">Projected</span><span>${rw.mean.toFixed(1)}</span></div><div class="r"><span>80% range</span><span>${rw.p10.toFixed(1)} – ${rw.p90.toFixed(1)}</span></div><div class="r"><span class="a">Contract-implied</span><span>${vw.implied[t].toFixed(1)}</span></div><div class="r"><span>Full-season rate</span><span>${res.rate[t].toFixed(2)}</span></div><div class="r"><span>Playing-time retention</span><span>${Math.round(res.ret[t]*100)}%</span></div>`;
+  tip.innerHTML=view==='cum'?`<b>Through ${2027+t} - Age ${res.ages[t]}</b><div class="r"><span class="c">Projected</span><span>${rw.mean.toFixed(1)}</span></div><div class="r"><span>80% range</span><span>${rw.p10.toFixed(1)} – ${rw.p90.toFixed(1)}</span></div><div class="r"><span class="a">Contract-implied</span><span>${vw.implied[t].toFixed(1)}</span></div>`:`<b>${2027+t} - Age ${res.ages[t]}</b><div class="r"><span class="c">Projected</span><span>${rw.mean.toFixed(1)}</span></div><div class="r"><span>80% range</span><span>${rw.p10.toFixed(1)} – ${rw.p90.toFixed(1)}</span></div><div class="r"><span class="a">Contract-implied</span><span>${vw.implied[t].toFixed(1)}</span></div>`;
   tip.style.opacity=1;const tw=tip.offsetWidth;let lx=x+14+tw>W?x-14-tw:x+14;lx=Math.max(0,Math.min(lx,W-tw));tip.style.left=lx+'px';tip.style.top=(mt+8)+'px'};
  hit.addEventListener('mousemove',move);hit.addEventListener('touchstart',move,{passive:true});hit.addEventListener('touchmove',move,{passive:true});
  hit.addEventListener('mouseleave',()=>{tip.style.opacity=0;hov.setAttribute('visibility','hidden')});
@@ -98,7 +101,7 @@ function run(){const age=Math.round(clamp($('age').value,20,40,30)),yrs=Math.rou
  $('sh-title').textContent=`${yrs} Year${yrs>1?'s':''}, $${tot>=100?tot.toFixed(0):tot.toFixed(1)}M`;
  $('sh-sub').textContent=`${role==='sp'?'Starting Pitcher':'Hitter'}, Age ${res.ages[0]}${yrs>1?'–'+res.ages[res.ages.length-1]:''} | $${aav.toFixed(1)}M AAV`;
  const o=res.odds,k=$('k-odds');k.textContent=Math.round(o*100)+'%';k.className='n '+(o>.75?'g':o<.25?'rd':'');
- const f0=v=>{const r=Math.round(v);return r<0?'−'+(-r):String(r)};$('k-range').textContent=`${f0(res.c5)}–${f0(res.c95)}`;
+ const f0=v=>{const r=Math.round(v);return r<0?'−'+(-r):String(r)};$('k-range').textContent=`${f0(res.c10)}–${f0(res.c90)}`;
  let ann=0;for(let t=0;t<yrs;t++)ann+=D**t;const sur=(res.fair-aav)*ann;$('k-surp').textContent=(sur>=0?'+':'−')+'$'+Math.abs(sur).toFixed(0)+'M';$('k-fair').textContent='$'+res.fair.toFixed(1)+'M';$('k-star').textContent=res.Wstar.toFixed(1);
  draw();try{localStorage.setItem('cvp',JSON.stringify({age,yrs,aav,w1,role}))}catch(e){}}
 function setRole(r){role=r;$('r-sp').setAttribute('aria-pressed',r==='sp');$('r-h').setAttribute('aria-pressed',r==='h');run()}
@@ -125,10 +128,11 @@ async function renderPNG(){
  if(logo){const lw=300;g.drawImage(logo,S-P-lw,84,lw,lw*logo.naturalHeight/logo.naturalWidth)}
  T($('sh-title').textContent,P,140,DM(700,76),C.cyanh);
  T($('sh-sub').textContent,P,200,WS(500,34),C.ink);
- const n=res.ages.length,ml=P+52,mr=S-P,mt=470,mb=1210,iw=mr-ml,ih=mb-mt;
+ const n=res.ages.length,ml=P+100,mr=S-P,mt=470,mb=1210,iw=mr-ml,ih=mb-mt;
+ g.save();g.translate(P+30,(mt+mb)/2);g.rotate(-Math.PI/2);T(view==='cum'?'Cumulative fWAR':'fWAR, per Year',0,0,DM(600,32),C.nav,'center');g.restore();
  const hx1=ml+iw*.25,hx2=ml+iw*.75;
- T('Projected',hx1,322,DM(600,38),C.ink,'center');T(res.proj.toFixed(1)+' fWAR',hx1,378,WS(600,40),C.cyan,'center');
- T('Contract Needs',hx2,322,DM(600,38),C.ink,'center');T(res.need.toFixed(1)+' fWAR',hx2,378,WS(600,40),C.amber,'center');
+ T('Projected',hx1,322,DM(600,38),C.ink,'center');T(res.proj.toFixed(1)+' fWAR',hx1,392,WS(600,56),C.cyan,'center');
+ T('Contract Needs',hx2,322,DM(600,38),C.ink,'center');T(res.need.toFixed(1)+' fWAR',hx2,392,WS(600,56),C.amber,'center');
  const [ymin,ymax,step]=yscale(vw);
  const X=t=>ml+(n===1?iw/2:iw*(t+.5)/n),Y=v=>mt+ih*(1-(Math.max(v,ymin)-ymin)/(ymax-ymin));
  for(let v=ymin;v<=ymax;v+=step){g.strokeStyle=v===0?C.center:C.grid;g.lineWidth=2;g.beginPath();g.moveTo(ml,Y(v));g.lineTo(mr,Y(v));g.stroke();T(v<0?'−'+(-v):String(v),ml-18,Y(v)+11,WS(400,32),v<0?C.red:C.nav,'right')}
@@ -144,7 +148,7 @@ async function renderPNG(){
  const kx=P,kh=210,ky=S-P-kh,kw=S-2*P,cw=kw/5;
  g.strokeStyle=C.kpib;g.lineWidth=3;g.beginPath();g.roundRect(kx,ky,kw,kh,20);g.stroke();
  g.strokeStyle=C.div;for(let i=1;i<5;i++){g.beginPath();g.moveTo(kx+cw*i,ky);g.lineTo(kx+cw*i,ky+kh);g.stroke()}
- const o=res.odds,K=[['Chance of Positive Value',Math.round(o*100)+'%',o>.75?C.green:o<.25?C.red:C.ink,''],['Projected Range',$('k-range').textContent,C.cyan,'total fWAR, 90%'],['Expected Surplus',$('k-surp').textContent,C.ink,'present value'],['Fair AAV',$('k-fair').textContent,C.ink,'at his projection'],['Priced As',$('k-star').textContent,C.ink,'fWAR in year 1']];
+ const o=res.odds,K=[['Chance of Positive Value',Math.round(o*100)+'%',o>.75?C.green:o<.25?C.red:C.ink,''],['Projected Range',$('k-range').textContent,C.cyan,'Total fWAR'],['Expected Surplus',$('k-surp').textContent,C.ink,'present value'],['Fair AAV',$('k-fair').textContent,C.ink,'at his projection'],['Priced As',$('k-star').textContent,C.ink,'fWAR in year 1']];
  K.forEach(([l,v,col,sub],i)=>{const cx=kx+cw*(i+.5);g.font=DM(600,30);const words=l.split(' ');let lines=[l];if(g.measureText(l).width>cw-24){const m=Math.ceil(words.length/2);lines=[words.slice(0,m).join(' '),words.slice(m).join(' ')]}
   lines.forEach((ln,j)=>T(ln,cx,ky+(lines.length>1?46:60)+j*34,DM(600,30),C.cyanh,'center'));T(v,cx,ky+(sub?140:150),DM(700,50),col,'center');if(sub)T(sub,cx,ky+184,WS(400,30),C.meta,'center')});
  return await new Promise(r=>cv.toBlob(r,'image/png'));
