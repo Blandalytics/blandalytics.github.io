@@ -789,7 +789,8 @@ GAME_ROW = ("pitcher_id", "date", "team", "team_id", "org", "starter", "outs", "
 
 def games_file(by: dict[int, list[dict]], sched: dict[int, Game], year: int, level: Level,
                org: dict[int, str]) -> dict:  # fmt: skip
-    """Every pitcher's games at a level, a row of GAME_ROW each, oldest first: what the page's
+    """Every pitcher's games at a level, a row of GAME_ROW each, his in the order his cards pool
+    them (so a traded pitcher's teams come in the same order): what the page's
     grades table sums over a date range as ``entry`` reads a card. Each has his team (by id,
     as ``stints`` splits a traded pitcher's season, and below MLB its organization), whether
     he started, his outs (from the game card's line), each skill mean and the pitches it
@@ -817,7 +818,6 @@ def games_file(by: dict[int, list[dict]], sched: dict[int, Game], year: int, lev
                 [[c, n, int(total) if total.is_integer() else _num(total, 1), k]
                  for c, (n, total, k) in types.items()],
             ])  # fmt: skip
-    rows.sort(key=lambda r: (r[1], r[0]))
     played = Counter(g.date for g in sched.values() if g.final)
     teams = {t for g in sched.values() for t in (g.home, g.away)}
     return {
