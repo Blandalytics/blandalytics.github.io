@@ -58,7 +58,10 @@ bucket's cards/<level>/seasons/:
     <year>/<key>.json   a season card; <key> is the pitcher's id, or <id>-<team> for a stint
     <year>/index.json   the season's cards (name, team, pitches, grades, Stuff+ by type), its
                         last day and the games each team had played by then (the page
-                        prorates its pitch threshold by them), and the scale its Stuff+ is on
+                        prorates its pitch threshold by them), the scale its Stuff+ is on,
+                        and the line onto it from the game cards' (``scale``)
+    <year>/pitches/<id>.json   a pitcher's season game by game with every pitch (pitch_file):
+                        what his cards are pooled from, for a card over a date range
     index.json          the seasons built"""
 
 from __future__ import annotations
@@ -653,10 +656,9 @@ def pitcher_cards(job: Job) -> list[tuple[str, dict]]:
     return out
 
 
-def build_all(s: requests.Session, by: dict[int, list[dict]], sched: dict[int, Game], year: int,
-              level: Level):  # fmt: skip
+def build_all(by: dict[int, list[dict]], sched: dict[int, Game], year: int, level: Level,
+              info: dict[int, Person], scale: Scale, org: dict[int, str]):  # fmt: skip
     """Every pitcher's cards, built across the machine's cores."""
-    info, scale, org = people(s, list(by), year, level.sport), season_scale(s), orgs(s, year, level)
     jobs = [(pid, games, info[pid], {g["game_pk"]: sched[g["game_pk"]] for g in games}, year,
              scale, level, org) for pid, games in by.items()]  # fmt: skip
     with concurrent.futures.ProcessPoolExecutor() as pool:
@@ -716,6 +718,62 @@ def store(out: str | None):
     return LocalStore(out) if out else R2Store()
 
 
+# each pitch column's decimals in a pitch file: finer than a KDE or a mean could feel
+PITCH_DIGITS = {"hb": 2, "ivb": 2, "x": 3, "z": 3, "velo": 1, "plvStuff+": 1, "PLV+": 1,
+                "xSLGcon": 3}  # fmt: skip
+FASTBALL_KEYS = ("Ext", "HAVAA", "IVB_acc", "HB_acc")
+
+
+def _cell(k: str, v):
+    return _num(v, PITCH_DIGITS[k]) if k in PITCH_DIGITS else v
+
+
+def pitch_file(pid: int, games: list[dict], sched: dict[int, Game], year: int, level: Level,
+               birth: str | None, org: dict[int, str]) -> dict:  # fmt: skip
+    """A pitcher's regular season at a level game by game, with every pitch: what a season
+    card is pooled from, so a card over any of its dates (the page's date range) can be
+    pooled in the browser as ``build`` pools the season's. Each game has its team (by id, as
+    ``stints`` splits a traded pitcher's season, and below MLB its organization), whether he
+    started, its skill means and the pitches they graded (``graded``, their weights), its
+    arm angle, its primary fastball's extension, HAVAA and break (which ``fastball`` weights
+    by that type's pitches), what is provisional, and its pitches as rows of ``keys``."""
+    last = games[-1]
+    out = []
+    for g in games:
+        game = sched[g["game_pk"]]
+        tid = game.home if g["home"] else game.away
+        fb = g.get("fastball")
+        out.append({
+            "date": g["date"], "game_pk": g["game_pk"], "team": g["team"], "team_id": tid,
+            "org": org.get(tid), "home": g["home"], "starter": bool(g.get("starter")),
+            "skills": {k: _num(v, 3) for k, v in (g.get("skills") or {}).items()},
+            "graded": graded(g), "arm_angle": _num(g.get("arm_angle"), 2),
+            "fastball": fb and {"code": fb["code"],
+                                "values": {k: _num(fb["values"].get(k), 3) for k in FASTBALL_KEYS}},
+            "provisional": g.get("provisional") or [],
+            "pitches": [[_cell(k, p.get(k)) for k in PITCH_KEYS] for p in g["pitches"]],
+        })  # fmt: skip
+    return {
+        "version": 1, "season": year, "level": level.code, "pitcher_id": pid,
+        "name": last["name"], "hand": last["hand"], "birth": birth,
+        "keys": list(PITCH_KEYS), "games": out,
+    }  # fmt: skip
+
+
+def write_pitches(st, level: Level, year: int, sched: dict[int, Game], by: dict[int, list[dict]],
+                  info: dict[int, Person], org: dict[int, str]) -> None:  # fmt: skip
+    """Each pitcher's pitch file, <year>/pitches/<id>.json beside the season's cards."""
+
+    def put(item):
+        pid, games = item
+        data = pitch_file(pid, games, sched, year, level, info[pid].birth, org)
+        st.put(f"{level.seasons}/{year}/pitches/{pid}.json", _json(data), "application/json",
+               CARD_CACHE)  # fmt: skip
+
+    with concurrent.futures.ThreadPoolExecutor(16) as pool:
+        list(pool.map(put, by.items()))
+
+
 def _index(st, key: str) -> dict:
     raw = st.get(key)
     return json.loads(raw) if raw else {}
@@ -755,7 +813,12 @@ def publish(st, s: requests.Session, level: Level, year: int, sched: dict[int, G
         return
     if wanted:
         by = {pid: by[pid] for pid in wanted if pid in by}
-    built = build_all(s, by, sched, year, level)
+    info, scale, org = people(s, list(by), year, level.sport), season_scale(s), orgs(s, year, level)
+    built = build_all(by, sched, year, level, info, scale, org)
+    # the line from the game scale's Stuff+ and PLV+ to the season's, for the page's
+    # date-range cards (each [a, b]: season value = a + b x a mean of the pitches')
+    meta["scale"] = {k: [round(a, 6), round(b, 6)] for k, (a, b) in scale.items()}
+    write_pitches(st, level, year, sched, by, info, org)
     write(st, level, year, built, meta, merge=bool(wanted))
     print(f"{year} {level.name}: {len(built)} cards for {len(by)} pitchers through {through}",
           file=sys.stderr)  # fmt: skip
