@@ -269,8 +269,13 @@ under the level's game cards:
 - `.../seasons/<season>/index.json` — the season's cards (name, team, pitches, innings, the
   grade means and Stuff+ by type: what the list and the table show), its last day, the
   games each team had played by then (`team_games`, which the threshold is prorated by) and
-  the scale its Stuff+ is on (`plus_scale`);
-- `.../seasons/<season>/<key>.json` — a card (about 25 KB).
+  the scale its Stuff+ is on (`plus_scale`), with the line from the game cards' Stuff+ and PLV+
+  to it (`scale`, `[a, b]` per column);
+- `.../seasons/<season>/<key>.json` — a card (about 25 KB);
+- `.../seasons/<season>/pitches/<id>.json` — a pitcher's season game by game with every pitch
+  (rows of `keys`), each game's team, skill means and their weights, arm angle and fastball:
+  what a card is pooled from, so a card over a date range can be pooled in the browser. A
+  stint's is its pitcher's, split by `team_id`.
 
 This season's are pooled from the Game Cards page's day files by the workflow's last job, at
 each level each morning that they have moved (about six minutes for MLB's whole season); one
