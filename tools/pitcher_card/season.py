@@ -62,6 +62,8 @@ bucket's cards/<level>/seasons/:
                         and the line onto it from the game cards' (``scale``)
     <year>/pitches/<id>.json   a pitcher's season game by game with every pitch (pitch_file):
                         what his cards are pooled from, for a card over a date range
+    <year>/games.json   every pitcher's games, a row each (games_file): what the page's
+                        grades table sums over a date range
     index.json          the seasons built"""
 
 from __future__ import annotations
@@ -72,6 +74,7 @@ import datetime as dt
 import gzip
 import json
 import os
+import re
 import sys
 import time
 from collections import Counter, defaultdict
@@ -109,7 +112,7 @@ RUN = str(int(time.time()))  # past the CDN's copy of a day, which may be from b
 DEFAULT_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", "season")
 # what a season card reads of a game card and its pitches (the rest is dropped on loading)
 GAME_KEYS = ("pitcher_id", "name", "hand", "team", "home", "game_pk", "date", "bio", "starter",
-             "skills", "fastball", "arm_angle", "level", "provisional")  # fmt: skip
+             "skills", "fastball", "arm_angle", "level", "provisional", "line")  # fmt: skip
 PITCH_KEYS = ("t", "hb", "ivb", "x", "z", "stand", "velo", "d", "plvStuff+", "PLV+", "xSLGcon")
 
 
@@ -774,6 +777,56 @@ def write_pitches(st, level: Level, year: int, sched: dict[int, Game], by: dict[
         list(pool.map(put, by.items()))
 
 
+def outs(line: str | None) -> int | None:
+    """The outs a game card's line ('5.2 IP, 3 ER, ...') says he got: 17."""
+    m = re.match(r"(\d+)\.([012]) IP,", line or "")
+    return 3 * int(m[1]) + int(m[2]) if m else None
+
+
+GAME_ROW = ("pitcher_id", "date", "team", "team_id", "org", "starter", "outs", "stuff", "stuff_n",
+            "loc", "loc_n", "plv", "plv_n", "types")  # fmt: skip
+
+
+def games_file(by: dict[int, list[dict]], sched: dict[int, Game], year: int, level: Level,
+               org: dict[int, str]) -> dict:  # fmt: skip
+    """Every pitcher's games at a level, a row of GAME_ROW each, oldest first: what the page's
+    grades table sums over a date range as ``entry`` reads a card. Each has his team (by id,
+    as ``stints`` splits a traded pitcher's season, and below MLB its organization), whether
+    he started, his outs (from the game card's line), each skill mean and the pitches it
+    graded (``graded``), and by pitch type [code, pitches, the sum of their game-scale
+    Stuff+, how many had one]. With the final games each day and the level's teams, so the
+    page can prorate its pitch threshold over the range as ``team_games`` does a season."""
+    rows, who = [], {}
+    for pid, games in by.items():
+        who[str(pid)] = [games[-1]["name"], games[-1]["hand"]]
+        for g in games:
+            game = sched[g["game_pk"]]
+            tid = game.home if g["home"] else game.away
+            sk, w = g.get("skills") or {}, graded(g)
+            types: dict[str, list] = {}
+            for p in g["pitches"]:
+                t = types.setdefault(p["t"], [0, 0.0, 0])
+                t[0] += 1
+                if p.get("plvStuff+") is not None:
+                    t[1] += p["plvStuff+"]
+                    t[2] += 1
+            rows.append([
+                pid, g["date"], g["team"], tid, org.get(tid), int(bool(g.get("starter"))),
+                outs(g.get("line")), _num(sk.get("stuff"), 3), w["stuff"], _num(sk.get("loc"), 3),
+                w["loc"], _num(sk.get("plv"), 3), w["plv"],
+                [[c, n, int(total) if total.is_integer() else _num(total, 1), k]
+                 for c, (n, total, k) in types.items()],
+            ])  # fmt: skip
+    rows.sort(key=lambda r: (r[1], r[0]))
+    played = Counter(g.date for g in sched.values() if g.final)
+    teams = {t for g in sched.values() for t in (g.home, g.away)}
+    return {
+        "version": 1, "season": year, "level": level.code, "keys": list(GAME_ROW),
+        "pitchers": who, "rows": rows, "days": dict(sorted(played.items())),
+        "teams": len(teams), "full_games": level.full_games,
+    }  # fmt: skip
+
+
 def _index(st, key: str) -> dict:
     raw = st.get(key)
     return json.loads(raw) if raw else {}
@@ -811,9 +864,13 @@ def publish(st, s: requests.Session, level: Level, year: int, sched: dict[int, G
     if not (wanted or force) and all(old.get(k) == meta[k] for k in ("through", "days", "games")):
         print(f"{year}: up to date (through {through})", file=sys.stderr)
         return
+    org = orgs(s, year, level)
+    # every pitcher's games, even when only some cards are built: the page's range table
+    st.put(f"{level.seasons}/{year}/games.json", _json(games_file(by, sched, year, level, org)),
+           "application/json", INDEX_CACHE)  # fmt: skip
     if wanted:
         by = {pid: by[pid] for pid in wanted if pid in by}
-    info, scale, org = people(s, list(by), year, level.sport), season_scale(s), orgs(s, year, level)
+    info, scale = people(s, list(by), year, level.sport), season_scale(s)
     built = build_all(by, sched, year, level, info, scale, org)
     # the line from the game scale's Stuff+ and PLV+ to the season's, for the page's
     # date-range cards (each [a, b]: season value = a + b x a mean of the pitches')
