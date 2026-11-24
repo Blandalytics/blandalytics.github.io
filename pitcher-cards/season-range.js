@@ -270,5 +270,226 @@
     };
   }
 
-  return { games, statsUrl, lines, build, stints };
+  // ---- the KDE regions (season.py's movement_layers and location_plots) ----------------
+  // regions() is the published card's plots for a range: each type's KDE regions as path
+  // data, or its pitches when it has too few for them. It is the slow part (a Gaussian sum
+  // over a 150 x 150 grid per type and side), so the page runs it in kde-worker.js and
+  // draws the card with plots() meanwhile.
+  const GRIDSIZE = 150, CUT = 3, KDE_MIN = 10, LOCATION_MIN = 20;
+  const MOVEMENT_BW = 2, MOVEMENT_SHARE = 0.95, TIER_SHARES = [1, 2 / 3, 1 / 3], LOCATION_LEVELS = [0.64];
+  const THIN = 0.35; // shapes.THIN: inches between kept vertices
+
+  // kernel([xy]): the type's Scott kernel, [cxx, cxy, cyy]; null if degenerate
+  function kernel(xy) {
+    const n = xy.length;
+    if (n < 2) return null;
+    let mx = 0, my = 0;
+    for (const [x, y] of xy) { mx += x; my += y; }
+    mx /= n; my /= n;
+    let sxx = 0, sxy = 0, syy = 0;
+    for (const [x, y] of xy) { const dx = x - mx, dy = y - my; sxx += dx * dx; sxy += dx * dy; syy += dy * dy; }
+    const f = Math.pow(n, -1 / 3) / (n - 1);
+    const c = [sxx * f, sxy * f, syy * f];
+    return c[0] * c[2] - c[1] * c[1] > 0 ? c : null;
+  }
+  // density(): the KDE of xy (unnormalised) at each of the points (xs[k], ys[k])
+  function density(xy, xs, ys, c) {
+    const det = c[0] * c[2] - c[1] * c[1];
+    const a = c[2] / det, b = -c[1] / det, d = c[0] / det;
+    const n = xy.length, px = new Float64Array(n), py = new Float64Array(n);
+    xy.forEach(([x, y], i) => { px[i] = x; py[i] = y; });
+    const out = new Float64Array(xs.length);
+    for (let k = 0; k < xs.length; k++) {
+      const qx = xs[k], qy = ys[k];
+      let s = 0;
+      for (let i = 0; i < n; i++) {
+        const dx = qx - px[i], dy = qy - py[i];
+        const d2 = a * dx * dx + 2 * b * dx * dy + d * dy * dy;
+        s += Math.exp(-0.5 * (d2 > 0 ? d2 : 0));
+      }
+      out[k] = s;
+    }
+    return out;
+  }
+  // numpy's linspace
+  function linspace(lo, hi, n) {
+    const step = (hi - lo) / (n - 1), out = new Float64Array(n);
+    for (let i = 0; i < n; i++) out[i] = lo + i * step;
+    out[n - 1] = hi;
+    return out;
+  }
+  // the grid, CUT bandwidths past the points, and the density over it (row i is gy[i])
+  function grid(xy, c) {
+    const bw = [Math.sqrt(c[0]), Math.sqrt(c[2])];
+    const xsAll = xy.map((p) => p[0]), ysAll = xy.map((p) => p[1]);
+    const gx = linspace(Math.min(...xsAll) - bw[0] * CUT, Math.max(...xsAll) + bw[0] * CUT, GRIDSIZE);
+    const gy = linspace(Math.min(...ysAll) - bw[1] * CUT, Math.max(...ysAll) + bw[1] * CUT, GRIDSIZE);
+    const xs = new Float64Array(GRIDSIZE * GRIDSIZE), ys = new Float64Array(GRIDSIZE * GRIDSIZE);
+    for (let i = 0; i < GRIDSIZE; i++) for (let j = 0; j < GRIDSIZE; j++) { xs[i * GRIDSIZE + j] = gx[j]; ys[i * GRIDSIZE + j] = gy[i]; }
+    return { gx, gy, z: density(xy, xs, ys, c) };
+  }
+
+  // ---- shapes._paths: the region where z > level as path data, one string per outer
+  // boundary with its holes. Marching squares with each boundary piece run so the region
+  // lies on its left: outer rings anticlockwise, holes clockwise, as contourpy gives them;
+  // a saddle cell joins its high corners when the mean of its four is above the level. The
+  // grid is padded with a border far below any level, so a region reaching the edge closes
+  // along it.
+  const PAD = -1e300;
+  function contours(gx, gy, z, level) {
+    const nx = gx.length, ny = gy.length, W = nx + 2, H = ny + 2;
+    const X = new Float64Array(W), Y = new Float64Array(H), Z = new Float64Array(W * H).fill(PAD);
+    for (let j = 0; j < nx; j++) X[j + 1] = gx[j];
+    for (let i = 0; i < ny; i++) Y[i + 1] = gy[i];
+    X[0] = 2 * gx[0] - gx[1]; X[W - 1] = 2 * gx[nx - 1] - gx[nx - 2];
+    Y[0] = 2 * gy[0] - gy[1]; Y[H - 1] = 2 * gy[ny - 1] - gy[ny - 2];
+    for (let i = 0; i < ny; i++) for (let j = 0; j < nx; j++) Z[(i + 1) * W + j + 1] = z[i * nx + j];
+    const up = (i, j) => Z[i * W + j] > level;
+    // a crossing on the edge from vertex (i0, j0) to (i1, j1): [edge id, x, y]
+    function cross(i0, j0, i1, j1) {
+      const za = Z[i0 * W + j0], zb = Z[i1 * W + j1], t = (level - za) / (zb - za);
+      const id = i0 === i1 ? (i0 * W + Math.min(j0, j1)) * 2 : (Math.min(i0, i1) * W + j0) * 2 + 1;
+      return [id, X[j0] + t * (X[j1] - X[j0]), Y[i0] + t * (Y[i1] - Y[i0])];
+    }
+    const next = new Map(); // a crossing's edge id -> [its point, the edge id the segment ends on]
+    for (let i = 0; i < H - 1; i++) {
+      for (let j = 0; j < W - 1; j++) {
+        const corners = [[i, j], [i, j + 1], [i + 1, j + 1], [i + 1, j]]; // anticlockwise from bottom left
+        const ups = corners.map(([a, b]) => up(a, b));
+        if (ups.every((u) => u) || ups.every((u) => !u)) continue;
+        const cs = []; // crossings anticlockwise: [kind, crossing], kind "x" leaving the region, "e" entering
+        for (let k = 0; k < 4; k++) {
+          const a = corners[k], b = corners[(k + 1) % 4];
+          if (ups[k] !== ups[(k + 1) % 4]) cs.push([ups[k] ? "x" : "e", cross(a[0], a[1], b[0], b[1])]);
+        }
+        const link = (x, e) => next.set(x[0], [[x[1], x[2]], e[0]]);
+        if (cs.length === 2) {
+          const x = cs[0][0] === "x" ? cs[0][1] : cs[1][1], e = cs[0][0] === "e" ? cs[0][1] : cs[1][1];
+          link(x, e);
+        } else {
+          const mid = (Z[i * W + j] + Z[i * W + j + 1] + Z[(i + 1) * W + j + 1] + Z[(i + 1) * W + j]) / 4;
+          for (let k = 0; k < 4; k++) {
+            if (cs[k][0] !== "x") continue;
+            // joined: on to the next entry round the cell; apart: back to the one before
+            link(cs[k][1], mid > level ? cs[(k + 1) % 4][1] : cs[(k + 3) % 4][1]);
+          }
+        }
+      }
+    }
+    // the rings, each from its lowest edge id so the order is fixed
+    const rings = [];
+    const ids = [...next.keys()].sort((a, b) => a - b), used = new Set();
+    for (const start of ids) {
+      if (used.has(start)) continue;
+      const ring = [];
+      let at = start;
+      while (!used.has(at) && next.has(at)) {
+        used.add(at);
+        const [pt, to] = next.get(at);
+        ring.push(pt);
+        at = to;
+      }
+      if (ring.length >= 3) rings.push(ring);
+    }
+    return rings;
+  }
+  function area(ring) {
+    let s = 0;
+    for (let k = 0; k < ring.length; k++) {
+      const [x0, y0] = ring[k], [x1, y1] = ring[(k + 1) % ring.length];
+      s += x0 * y1 - x1 * y0;
+    }
+    return s / 2;
+  }
+  function inside([x, y], ring) {
+    let c = false;
+    for (let k = 0, m = ring.length - 1; k < ring.length; m = k++) {
+      const [xi, yi] = ring[k], [xm, ym] = ring[m];
+      if (yi > y !== ym > y && x < ((xm - xi) * (y - yi)) / (ym - yi) + xi) c = !c;
+    }
+    return c;
+  }
+  const tenths = (v) => (v / 10).toFixed(1).replace(/0+$/, "").replace(/\.$/, "");
+  // shapes._ring: absolute start, then relative moves in tenths, thinned
+  function ringPath(points) {
+    const pts = points.map(([x, y]) => [PC.pyRound(x * 10), PC.pyRound(y * 10)]);
+    let last = pts[0];
+    const parts = [`M${tenths(last[0])},${tenths(last[1])}`];
+    for (const pt of pts.slice(1)) {
+      if (Math.hypot(pt[0] - last[0], pt[1] - last[1]) >= THIN * 10) {
+        parts.push(`l${tenths(pt[0] - last[0])},${tenths(pt[1] - last[1])}`);
+        last = pt;
+      }
+    }
+    return parts.join(" ") + "Z";
+  }
+  function paths(gx, gy, z, level) {
+    const rings = contours(gx, gy, z, level).map((r) => ({ r, a: area(r) }));
+    const outers = rings.filter((x) => x.a > 0).map((x) => ({ ...x, holes: [] }));
+    for (const h of rings.filter((x) => x.a < 0)) {
+      const home = outers.filter((o) => inside(h.r[0], o.r)).sort((p, q) => p.a - q.a)[0];
+      if (home) home.holes.push(h.r);
+    }
+    return outers.map((o) => [o.r, ...o.holes].map(ringPath).join(" "));
+  }
+
+  // season.py's tiers: Movement's, the outermost around the `share` densest pitches
+  function tiers(xy, insideN, c) {
+    const { gx, gy, z } = grid(xy, c);
+    const at = Array.from(density(xy, xy.map((p) => p[0]), xy.map((p) => p[1]), c)).sort((p, q) => q - p);
+    return TIER_SHARES.map((f) => paths(gx, gy, z, at[Math.max(1, PC.pyRound(insideN * f)) - 1]));
+  }
+  // season.py's _level: the density above which 1 - isoprop of the mass lies
+  function massLevel(z, isoprop) {
+    const v = Array.from(z).sort((p, q) => q - p);
+    let total = 0;
+    for (const x of v) total += x;
+    const want = 1 - isoprop;
+    let cum = 0;
+    for (let k = 0; k < v.length; k++) {
+      cum += v[k];
+      if (cum / total >= want) return v[k];
+    }
+    return v[v.length - 1];
+  }
+  function massTiers(xy, c, isoprops) {
+    const { gx, gy, z } = grid(xy, c);
+    return isoprops.map((q) => paths(gx, gy, z, massLevel(z, q)));
+  }
+  function pointsOf(pitches, xk, yk, code, unit) {
+    return pitches.filter((p) => p.t === code && p[xk] != null && p[yk] != null).map((p) => [p[xk] * unit, p[yk] * unit]);
+  }
+  // the plots with KDE regions, from the pitches (each with t, hb, ivb, x, z, stand) and the
+  // types most thrown first
+  function regions(pitches, order) {
+    const movement = [];
+    for (const code of order) {
+      const xy = pointsOf(pitches, "hb", "ivb", code, 1);
+      if (!xy.length) continue;
+      let c = xy.length >= KDE_MIN ? kernel(xy) : null;
+      c = c && c.map((v) => v * MOVEMENT_BW * MOVEMENT_BW);
+      movement.push(c ? { code, tiers: tiers(xy, PC.pyRound(MOVEMENT_SHARE * xy.length), c) }
+        : { code, points: xy.map(([x, y]) => [num(x, 2), num(y, 2)]) });
+    }
+    const out = { movement, min: LOCATION_MIN, scattered: {} };
+    for (const side of ["L", "R"]) {
+      out[side] = []; out.scattered[side] = [];
+      const faced = pitches.filter((p) => p.stand === side);
+      const usage = (cd) => count(faced, (p) => p.t === cd);
+      const ranked = order.map((cd, i) => [cd, i]).sort((a, b) => usage(a[0]) - usage(b[0]) || a[1] - b[1]).map((x) => x[0]);
+      for (const code of ranked) {
+        const xy = pointsOf(faced, "x", "z", code, 12);
+        if (!xy.length) continue;
+        const c = xy.length >= LOCATION_MIN ? kernel(xy) : null;
+        if (c) out[side].push({ code, tiers: massTiers(xy, c, LOCATION_LEVELS) });
+        else {
+          out.scattered[side].push(code);
+          out[side].push({ code, points: xy.map(([x, y]) => [num(x, 1), num(y, 1)]) });
+        }
+      }
+    }
+    return out;
+  }
+
+  return { games, statsUrl, lines, build, stints, regions };
 });

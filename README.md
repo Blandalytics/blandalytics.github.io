@@ -280,8 +280,10 @@ under the level's game cards:
 The page's From and To dates (`?from=` / `?to=`) draw a card over part of a season:
 [`pitcher-cards/season-range.js`](pitcher-cards/season-range.js) pools the pitch file's games in
 the range as `season.py`'s `build()` pools the season's (a full-season range reproduces the
-published card), with the range's line from the Stats API (`byDateRange`). Its plots show
-each type's pitches rather than KDE regions, and its letters use the season cuts. A season
+published card), with the range's line from the Stats API (`byDateRange`). Its KDE regions
+(`SeasonRange.regions`, a port of `season.py`'s and `shapes.py`'s) are worked out in
+[`pitcher-cards/kde-worker.js`](pitcher-cards/kde-worker.js), the card showing its pitches
+until they come; on the same pitches they match Python's. Its letters use the season cuts. A season
 without pitch files (no `scale` in its index) has the dates disabled.
 
 This season's are pooled from the Game Cards page's day files by the workflow's last job, at
