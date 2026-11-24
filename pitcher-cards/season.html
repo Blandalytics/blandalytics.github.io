@@ -200,18 +200,18 @@ p,li,.note,.prov{text-wrap:pretty}
 </main>
 </div>
 
-<div class="prov" id="rangeNote" hidden><b>A date-range card</b> is pooled from the pitches between the dates. Its letters and colors use the full-season cutoffs, so a short range grades further from average. As on the season cards, a pitch type thrown fewer than 10 times shows as its pitches in Movement, and fewer than 20 times to a side in the location plots. The grades table and the pitch threshold stay full-season.</div>
+<div class="prov" id="rangeNote" hidden><b>A date-range card</b> is pooled from the pitches between the dates. Its letters and colors use the full-season cutoffs, so a short range grades further from average. As on the season cards, a pitch type thrown fewer than 10 times shows as its pitches in Movement, and fewer than 20 times to a side in the location plots. The grades table, the Pitcher list and the pitch threshold follow the dates, the threshold prorated by the games played between them.<span id="rangeTable" hidden> This season’s table stays full-season.</span></div>
 <div class="prov" id="prov" hidden><b>PLV and Location are provisional below MLB</b> (the models aren't yet calibrated to minor-league strike zones and parks).</div>
 <footer class="note">Data (especially pitch types) are subject to change.</footer>
 
 <script src="/shared/share-image.js?v=2"></script>
 <script src="card.js?v=32"></script>
-<script src="season-range.js?v=2"></script>
+<script src="season-range.js?v=3"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var levelSel = $('level'), seasonSel = $('season'), minIn = $('minPitches'), split = $('split'), pitcherSel = $('pitcher');
-  var fromIn = $('from'), toIn = $('to'), fullBtn = $('fullSeason'), rangeNote = $('rangeNote'), busy = $('busy');
+  var fromIn = $('from'), toIn = $('to'), fullBtn = $('fullSeason'), rangeNote = $('rangeNote'), busy = $('busy'), rangeTable = $('rangeTable');
   var pitcherQ = $('pitcherQ'), pitcherList = $('pitcherList');
   var cardEl = $('cardBox'), empty = $('empty'), png = $('png'), status = $('status'), prov = $('prov');
   // the season cards live in the bucket (tools/pitcher_card/season.py writes them), a level's
@@ -268,25 +268,28 @@ p,li,.note,.prov{text-wrap:pretty}
   }
   function minPitches() {
     var v = parseInt(minIn.value, 10);
-    return isFinite(v) && v >= 0 ? v : defaultMin(season);
+    return isFinite(v) && v >= 0 ? v : defaultMin(listing());
   }
   // a traded pitcher's whole season, or with the split each team's part of it, by last name
   function rows() {
     if (!season) return [];
     var min = minPitches();
-    return season.pitchers.filter(function (e) {
+    return listing().pitchers.filter(function (e) {
       return (split.checked ? !e.traded : !e.stint) && e.n >= min;
     }).sort(function (a, b) {
       return lastName(a.name).localeCompare(lastName(b.name)) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key);
     });
   }
-  function byKey(key) { return season ? season.pitchers.filter(function (e) { return e.key === key; })[0] : null; }
+  // his card under `key`, else (a stint's key in a range where he pitched for one team) his
+  // whole range's
+  function entryFor(key) { return key ? byKey(key) || byKey(String(key).split('-')[0]) : null; }
+  function byKey(key) { return season ? listing().pitchers.filter(function (e) { return e.key === key; })[0] : null; }
   function letterOf(e, k) { return PitcherCard.letter(e.skills[k], k, PitcherCard.SEASON_GRADE_CUTS); }
 
   // the state in the URL: #<season>/<key>, and the threshold and the split when not the defaults
   function saveState() {
     var q = new URLSearchParams(location.search);
-    if (season && minPitches() !== defaultMin(season)) q.set('min', minPitches()); else q.delete('min');
+    if (season && minPitches() !== defaultMin(listing())) q.set('min', minPitches()); else q.delete('min');
     if (split.checked) q.set('split', '1'); else q.delete('split');
     if (level !== MLB) q.set('level', level); else q.delete('level');
     if (fromIn.value) q.set('from', fromIn.value); else q.delete('from');
@@ -380,13 +383,47 @@ p,li,.note,.prov{text-wrap:pretty}
     });
     showRange();
   }
+  // ---- the table over a range: season-range.js's board of <season>/games.json (every
+  // pitcher's games, a row each) in place of the season's index, so the Pitcher list, the
+  // threshold (prorated by the games played in the range) and the grades table follow the
+  // dates. A season without the file keeps its full-season table.
+  var rangeIx = null, gamesCache = {}, boardToken = 0;
+  function listing() { return rangeIx || season; }
+  function loadGames() {
+    var url = new URL(season.season + '/games.json', seasonsUrl(level)).href;
+    if (!(url in gamesCache)) gamesCache[url] = getJson(url).catch(function () { delete gamesCache[url]; return null; });
+    return gamesCache[url];
+  }
+  // the board for the dates on show (none without a range); resolves false if a later call
+  // has superseded it
+  function updateBoard() {
+    var token = ++boardToken, ix = season, from = fromIn.value, to = toIn.value;
+    if (!ix || !rangeOn()) { rangeIx = null; rangeTable.hidden = true; return Promise.resolve(true); }
+    return loadGames().then(function (file) {
+      if (token !== boardToken) return false;
+      rangeIx = file ? Object.assign(SeasonRange.board(file, from, to, ix.scale),
+        {level: ix.level, season: ix.season, plus_scale: ix.plus_scale, through: ix.through}) : null;
+      rangeTable.hidden = !!rangeIx;
+      return true;
+    });
+  }
   function onRange(ev) {
     // the other end follows when the two cross
     if (fromIn.value && toIn.value && fromIn.value > toIn.value) {
       if (ev && ev.target === fromIn) toIn.value = fromIn.value; else fromIn.value = toIn.value;
     }
     showRange();
-    if (season) onPitcher();
+    if (!season) return;
+    var keep = pitcherSel.value;
+    updateBoard().then(function (fresh) {
+      if (!fresh) return;
+      // the threshold starts at the range's; the pitcher on stage stays listed if he pitched in it
+      minIn.placeholder = String(defaultMin(listing()));
+      minIn.value = defaultMin(listing());
+      var e = entryFor(keep);
+      if (e && e.n < minPitches()) minIn.value = e.n;
+      refresh(e ? e.key : keep);
+    });
   }
   fromIn.addEventListener('change', onRange);
   toIn.addEventListener('change', onRange);
@@ -437,7 +474,7 @@ p,li,.note,.prov{text-wrap:pretty}
     if (!window.Worker) return;
     if (kdeWorker && kdeFor !== id) { kdeWorker.terminate(); kdeWorker = null; }
     if (!kdeWorker) {
-      try { kdeWorker = new Worker('kde-worker.js?v=1'); } catch (err) { return; }
+      try { kdeWorker = new Worker('kde-worker.js?v=2'); } catch (err) { return; }
       kdeWorker.onmessage = function (ev) {
         var d = ev.data;
         kdeFor = null; busy.hidden = true;
@@ -533,7 +570,7 @@ p,li,.note,.prov{text-wrap:pretty}
     gradesTable.innerHTML = head + '<tbody>' + body + '</tbody>';
     wrap.scrollTop = top; wrap.scrollLeft = left;
     gradesSum.innerHTML = 'Grades and Stuff+ <span class="n">· ' + list.length + ' pitcher' + (list.length === 1 ? '' : 's')
-      + ' with ' + thousands(minPitches()) + '+ pitches</span>';
+      + ' with ' + thousands(minPitches()) + '+ pitches' + (rangeIx ? ', ' + esc(rangeText()) : '') + '</span>';
     gradesEl.hidden = false;
     rowShown = null;
     showGradeRow();
@@ -596,16 +633,19 @@ p,li,.note,.prov{text-wrap:pretty}
     return loadSeason(year).then(function (ix) {
       if (seasonSel.value !== String(year) || level !== lvl) return;
       season = ix;
-      minIn.placeholder = String(defaultMin(ix));
-      minIn.value = min != null ? min : defaultMin(ix);
       minIn.disabled = split.disabled = false;
       setRangeBounds(ix);
-      var e = key ? byKey(key) : null;
-      if (e && e.stint) split.checked = true;
-      if (e && e.n < minPitches()) minIn.value = e.n;
       status.textContent = ix.season + ' ' + atLevel() + 'regular season, through ' + niceDate(ix.through) + ' · '
         + thousands(ix.pitchers.length) + ' cards';
-      refresh(e ? e.key : null);
+      return updateBoard().then(function (fresh) {
+        if (!fresh || season !== ix) return;
+        minIn.placeholder = String(defaultMin(listing()));
+        minIn.value = min != null ? min : defaultMin(listing());
+        var e = entryFor(key);
+        if (e && e.stint) split.checked = true;
+        if (e && e.n < minPitches()) minIn.value = e.n;
+        refresh(e ? e.key : null);
+      });
     }).catch(function () {
       if (level !== lvl) return;
       season = null;

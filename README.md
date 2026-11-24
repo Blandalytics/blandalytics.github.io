@@ -275,7 +275,10 @@ under the level's game cards:
 - `.../seasons/<season>/pitches/<id>.json` — a pitcher's season game by game with every pitch
   (rows of `keys`), each game's team, skill means and their weights, arm angle and fastball:
   what a card is pooled from, so a card over a date range can be pooled in the browser. A
-  stint's is its pitcher's, split by `team_id`.
+  stint's is its pitcher's, split by `team_id`;
+- `.../seasons/<season>/games.json` — every pitcher's games, a row each (team, starter, outs,
+  each skill mean and its weight, and by pitch type its pitches and game-scale Stuff+ sum),
+  with the final games each day: what the page's grades table sums over a date range.
 
 The page's From and To dates (`?from=` / `?to=`) draw a card over part of a season:
 [`pitcher-cards/season-range.js`](pitcher-cards/season-range.js) pools the pitch file's games in
@@ -283,7 +286,10 @@ the range as `season.py`'s `build()` pools the season's (a full-season range rep
 published card), with the range's line from the Stats API (`byDateRange`). Its KDE regions
 (`SeasonRange.regions`, a port of `season.py`'s and `shapes.py`'s) are worked out in
 [`pitcher-cards/kde-worker.js`](pitcher-cards/kde-worker.js), the card showing its pitches
-until they come; on the same pitches they match Python's. Its letters use the season cuts. A season
+until they come; on the same pitches they match Python's. Its letters use the season cuts. With a range set, the
+Pitcher list, the grades table and the pitch threshold follow it too: `SeasonRange.board`
+sums `games.json` over the range into the season index's fields (over the whole season it
+reproduces the index), the threshold prorated by the games each team played in the range. A season
 without pitch files (no `scale` in its index) has the dates disabled.
 
 This season's are pooled from the Game Cards page's day files by the workflow's last job, at

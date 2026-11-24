@@ -491,5 +491,75 @@
     return out;
   }
 
-  return { games, statsUrl, lines, build, stints, regions };
+  // ---- the grades table over a range (season.py's entry, from games_file's rows) ---------
+  // board(file, from, to, scale): the season index's fields for the range: its `pitchers`
+  // (each pitcher's range as the index lists his season, a traded one's teams as stints
+  // too) and `team_games`, the games each team played in it on average, which the page
+  // prorates its threshold by (full_games a full season's)
+  function board(file, from, to, scale) {
+    const K = Object.fromEntries(file.keys.map((k, i) => [k, i]));
+    const by = new Map();
+    for (const r of file.rows) {
+      const d = r[K.date];
+      if ((from && d < from) || (to && d > to)) continue;
+      const pid = r[K.pitcher_id];
+      if (!by.has(pid)) by.set(pid, []);
+      by.get(pid).push(r);
+    }
+    const ipText = (o) => `${Math.floor(o / 3)}.${o % 3}`;
+    function entry(key, pid, rows, team, stint, traded) {
+      const [name, hand] = file.pitchers[String(pid)];
+      const skills = {};
+      for (const k of ["stuff", "loc", "plv"]) skills[k] = num(weighted(rows.map((r) => [r[K[k]], r[K[k + "_n"]]])), 2);
+      const types = new Map(); // code -> [pitches, Stuff+ sum, Stuff+ count]
+      for (const r of rows) {
+        for (const [c, n, s, k] of r[K.types]) {
+          const t = types.get(c) || [0, 0, 0];
+          types.set(c, [t[0] + n, t[1] + s, t[2] + k]);
+        }
+      }
+      const [a, b] = (scale && scale["plvStuff+"]) || [0, 1];
+      const stuff = {}, thrown = {};
+      for (const [c, [n, s, k]] of types) {
+        thrown[c] = n;
+        if (k) stuff[c] = num(a + b * (s / k), 0); // type_rows: a + b x the pitches' mean
+      }
+      const outsAll = rows.map((r) => r[K.outs]).filter((o) => o != null);
+      const e = {
+        key, id: pid, name, team, hand,
+        n: [...types.values()].reduce((x, t) => x + t[0], 0), g: rows.length,
+        gs: count(rows, (r) => r[K.starter]), ip: outsAll.length ? ipText(outsAll.reduce((x, o) => x + o, 0)) : null,
+        skills, stuff, thrown,
+      };
+      if (stint) e.stint = true;
+      else if (traded) e.traded = true;
+      return e;
+    }
+    const named = (team, org) => (org ? `${team} (${org})` : team);
+    const pitchers = [];
+    for (const [pid, rows] of by) {
+      const parts = new Map(); // team id -> rows, in the order he pitched for them
+      for (const r of rows) {
+        if (!parts.has(r[K.team_id])) parts.set(r[K.team_id], []);
+        parts.get(r[K.team_id]).push(r);
+      }
+      const teams = [...parts.values()].map((rs) => rs[rs.length - 1]);
+      const last = rows[rows.length - 1];
+      const team = file.level === "mlb" ? teams.map((r) => r[K.team]).join("/") : named(last[K.team], last[K.org]);
+      pitchers.push(entry(String(pid), pid, rows, team, false, parts.size > 1));
+      if (parts.size > 1) {
+        for (const rs of parts.values()) {
+          const l = rs[rs.length - 1];
+          const t = file.level === "mlb" ? l[K.team] : named(l[K.team], l[K.org]);
+          pitchers.push(entry(`${pid}-${l[K.team]}`, pid, rs, t, true, false));
+        }
+      }
+    }
+    pitchers.sort((p, q) => cmp(p.key, q.key));
+    let played = 0;
+    for (const [d, n] of Object.entries(file.days)) if ((!from || d >= from) && (!to || d <= to)) played += n;
+    return { pitchers, team_games: file.teams ? num((2 * played) / file.teams, 2) : 0, full_games: file.full_games };
+  }
+
+  return { games, statsUrl, lines, build, stints, regions, board };
 });
