@@ -103,6 +103,11 @@ body.plpd{display:flex; flex-direction:column}
   color:var(--text-text-nav); font-size:15px; text-align:center; padding:0 20px;
 }
 .empty[hidden]{display:none}
+/* a range card's regions being worked out: a chip over the card's top edge */
+.busy{position:absolute; top:calc(var(--space-300) + 8px); left:50%; transform:translateX(-50%); z-index:2;
+  padding:6px 12px; border-radius:var(--radius-lg); background:var(--surfaces-surface-3); border:1px solid var(--borders-border-tab);
+  color:var(--text-text-cell); font-size:13px; line-height:1.3; white-space:nowrap; box-shadow:var(--shadow-pl-data-table-wrap-shadow)}
+.busy[hidden]{display:none}
 .note,.prov{padding:8px var(--layout-page-content-gutter); color:var(--text-text-nav); font-size:13px; line-height:1.45;
   border-top:1px solid var(--surface-border-card); background:var(--surfaces-surface-2)}
 .note{padding-bottom:12px}
@@ -191,21 +196,22 @@ p,li,.note,.prov{text-wrap:pretty}
 <main class="stage" id="stage">
   <div class="card" id="cardBox" hidden></div>
   <div class="empty" id="empty">Pick a season and a pitcher.</div>
+  <div class="busy" id="busy" role="status" hidden>Drawing movement and location regions…</div>
 </main>
 </div>
 
-<div class="prov" id="rangeNote" hidden><b>A date-range card</b> is pooled from the pitches between the dates. Its letters and colors use the full-season cutoffs, so a short range grades further from average, and its movement and locations show every pitch. The grades table and the pitch threshold stay full-season.</div>
+<div class="prov" id="rangeNote" hidden><b>A date-range card</b> is pooled from the pitches between the dates. Its letters and colors use the full-season cutoffs, so a short range grades further from average. As on the season cards, a pitch type thrown fewer than 10 times shows as its pitches in Movement, and fewer than 20 times to a side in the location plots. The grades table and the pitch threshold stay full-season.</div>
 <div class="prov" id="prov" hidden><b>PLV and Location are provisional below MLB</b> (the models aren't yet calibrated to minor-league strike zones and parks).</div>
 <footer class="note">Data (especially pitch types) are subject to change.</footer>
 
 <script src="/shared/share-image.js?v=2"></script>
 <script src="card.js?v=32"></script>
-<script src="season-range.js?v=1"></script>
+<script src="season-range.js?v=2"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var levelSel = $('level'), seasonSel = $('season'), minIn = $('minPitches'), split = $('split'), pitcherSel = $('pitcher');
-  var fromIn = $('from'), toIn = $('to'), fullBtn = $('fullSeason'), rangeNote = $('rangeNote');
+  var fromIn = $('from'), toIn = $('to'), fullBtn = $('fullSeason'), rangeNote = $('rangeNote'), busy = $('busy');
   var pitcherQ = $('pitcherQ'), pitcherList = $('pitcherList');
   var cardEl = $('cardBox'), empty = $('empty'), png = $('png'), status = $('status'), prov = $('prov');
   // the season cards live in the bucket (tools/pitcher_card/season.py writes them), a level's
@@ -349,7 +355,13 @@ p,li,.note,.prov{text-wrap:pretty}
       var gs = SeasonRange.games(file, from, to, stint);
       if (!gs.length) return {error: e.name + ' didn’t pitch' + (stint ? ' for ' + stint : '') + ' between those dates.'};
       return rangeLines(file, from, to).then(function (lines) {
-        return {card: SeasonRange.build(file, gs, {from: from, to: to, lines: lines || undefined, scale: scale, stint: stint})};
+        var card = SeasonRange.build(file, gs, {from: from, to: to, lines: lines || undefined, scale: scale, stint: stint});
+        // what the worker needs for the KDE regions: each pitch's type, movement, location and side
+        var pitches = [];
+        gs.forEach(function (g) {
+          g.pitches.forEach(function (p) { pitches.push({t: p.t, hb: p.hb, ivb: p.ivb, x: p.x, z: p.z, stand: p.stand}); });
+        });
+        return {card: card, pitches: pitches, order: card.types.map(function (r) { return r.code; })};
       });
     });
   }
@@ -381,7 +393,7 @@ p,li,.note,.prov{text-wrap:pretty}
   fullBtn.addEventListener('click', function () { fromIn.value = toIn.value = ''; onRange(); });
 
   function clearStage(text) {
-    shown = null; wanted = null;
+    shown = null; wanted = null; busy.hidden = true;
     cardEl.hidden = true; cardEl.innerHTML = '';
     empty.hidden = false; png.hidden = true;
     empty.textContent = text;
@@ -409,10 +421,36 @@ p,li,.note,.prov{text-wrap:pretty}
       wanted = null;
       if (r.error) { clearStage(r.error); return; }
       var card = r.card;
+      if (r.pitches && regionCache[id]) card.plots = regionCache[id];
       var svg = PitcherCard.draw(cardEl, card, {logo: LOGO});
       shown = {key: id, card: card, svg: svg};
       cardEl.hidden = false; empty.hidden = true; png.hidden = false;
+      if (r.pitches && !regionCache[id]) requestRegions(id, r.pitches, r.order);
+      else busy.hidden = true;
     });
+  }
+
+  // ---- a range card's KDE regions, from kde-worker.js: the card shows its pitches until
+  // they come, then is drawn again with them. A newer card's request stops an older one.
+  var regionCache = {}, kdeWorker = null, kdeFor = null;
+  function requestRegions(id, pitches, order) {
+    if (!window.Worker) return;
+    if (kdeWorker && kdeFor !== id) { kdeWorker.terminate(); kdeWorker = null; }
+    if (!kdeWorker) {
+      try { kdeWorker = new Worker('kde-worker.js?v=1'); } catch (err) { return; }
+      kdeWorker.onmessage = function (ev) {
+        var d = ev.data;
+        kdeFor = null; busy.hidden = true;
+        if (d.error || !d.plots) return;        // the card keeps its pitches
+        regionCache[d.id] = d.plots;
+        if (!shown || shown.key !== d.id) return;
+        shown.card.plots = d.plots;
+        shown.svg = PitcherCard.draw(cardEl, shown.card, {logo: LOGO});
+      };
+      kdeWorker.onerror = function () { kdeFor = null; busy.hidden = true; };
+    }
+    kdeFor = id; busy.hidden = false;
+    kdeWorker.postMessage({id: id, pitches: pitches, order: order});
   }
 
   // ---- the grades table: every card the Pitcher list offers, with its pitches, innings, season
