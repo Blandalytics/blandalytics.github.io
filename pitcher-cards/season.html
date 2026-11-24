@@ -39,6 +39,8 @@ body.plpd{display:flex; flex-direction:column}
 .field input.num{box-sizing:border-box; height:40px; width:110px; padding:0 12px; border:1px solid var(--borders-border-tab);
   border-radius:var(--radius-lg); background:var(--surfaces-surface-3); box-shadow:var(--shadow-pl-filter-search-input-inset);
   font-family:var(--font-text); font-size:14px; font-weight:500; line-height:1.2; color:var(--text-text-cell); font-variant-numeric:tabular-nums}
+.field input.num.date{width:150px}
+.field input.num:disabled{opacity:.5; cursor:not-allowed}
 .field input.num:hover{background-color:#262940}
 .field input.num:focus-visible{outline:2px solid var(--brand-brand-cyan); outline-offset:2px}
 .btn[hidden]{display:none}
@@ -156,6 +158,15 @@ p,li,.note,.prov{text-wrap:pretty}
     <input id="minPitches" class="num" type="number" min="0" step="50" inputmode="numeric" disabled>
   </div>
   <label class="check plpd-check"><input type="checkbox" id="split" disabled>Split traded pitchers by team</label>
+  <div class="field plpd-filter-field">
+    <label class="plpd-filter-field__label" for="from">From</label>
+    <input id="from" class="num date" type="date" disabled>
+  </div>
+  <div class="field plpd-filter-field">
+    <label class="plpd-filter-field__label" for="to">To</label>
+    <input id="to" class="num date" type="date" disabled>
+  </div>
+  <button class="btn plpd-btn" id="fullSeason" type="button" hidden>Full season</button>
   <div class="field wide plpd-filter-field">
     <label class="plpd-filter-field__label" for="pitcherQ">Pitcher</label>
     <div class="plpd-autocomplete">
@@ -183,15 +194,18 @@ p,li,.note,.prov{text-wrap:pretty}
 </main>
 </div>
 
+<div class="prov" id="rangeNote" hidden><b>A date-range card</b> is pooled from the pitches between the dates. Its letters and colors use the full-season cutoffs, so a short range grades further from average, and its movement and locations show every pitch. The grades table and the pitch threshold stay full-season.</div>
 <div class="prov" id="prov" hidden><b>PLV and Location are provisional below MLB</b> (the models aren't yet calibrated to minor-league strike zones and parks).</div>
 <footer class="note">Data (especially pitch types) are subject to change.</footer>
 
 <script src="/shared/share-image.js?v=2"></script>
-<script src="card.js?v=31"></script>
+<script src="card.js?v=32"></script>
+<script src="season-range.js?v=1"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var levelSel = $('level'), seasonSel = $('season'), minIn = $('minPitches'), split = $('split'), pitcherSel = $('pitcher');
+  var fromIn = $('from'), toIn = $('to'), fullBtn = $('fullSeason'), rangeNote = $('rangeNote');
   var pitcherQ = $('pitcherQ'), pitcherList = $('pitcherList');
   var cardEl = $('cardBox'), empty = $('empty'), png = $('png'), status = $('status'), prov = $('prov');
   // the season cards live in the bucket (tools/pitcher_card/season.py writes them), a level's
@@ -269,6 +283,8 @@ p,li,.note,.prov{text-wrap:pretty}
     if (season && minPitches() !== defaultMin(season)) q.set('min', minPitches()); else q.delete('min');
     if (split.checked) q.set('split', '1'); else q.delete('split');
     if (level !== MLB) q.set('level', level); else q.delete('level');
+    if (fromIn.value) q.set('from', fromIn.value); else q.delete('from');
+    if (toIn.value) q.set('to', toIn.value); else q.delete('to');
     var s = q.toString();
     var hash = season && pitcherSel.value ? '#' + season.season + '/' + pitcherSel.value : '';
     history.replaceState(null, '', location.pathname + (s ? '?' + s : '') + hash);
@@ -305,6 +321,65 @@ p,li,.note,.prov{text-wrap:pretty}
     if (!(url in cardCache)) cardCache[url] = getJson(url).catch(function () { delete cardCache[url]; return null; });
     return cardCache[url];
   }
+  // ---- a date-range card (season-range.js), pooled here from the pitcher's pitch file beside
+  // the season's cards (<season>/pitches/<id>.json) with the range's line from the Stats API.
+  // A blank date leaves that end open; both blank is the season's published card.
+  var pitchCache = {}, lineCache = {};
+  function rangeOn() { return !!(fromIn.value || toIn.value); }
+  function rangeText() {
+    if (!rangeOn()) return '';
+    return (fromIn.value ? niceDate(fromIn.value) : 'Start') + '–' + (toIn.value ? niceDate(toIn.value) : niceDate(season.through));
+  }
+  function pitchFile(id) {
+    var url = new URL(season.season + '/pitches/' + id + '.json', seasonsUrl(level)).href;
+    if (!(url in pitchCache)) pitchCache[url] = getJson(url).catch(function () { delete pitchCache[url]; return null; });
+    return pitchCache[url];
+  }
+  function rangeLines(file, from, to) {
+    var url = SeasonRange.statsUrl(file, from, to);
+    if (!(url in lineCache)) lineCache[url] = getJson(url).then(SeasonRange.lines, function () { delete lineCache[url]; return null; });
+    return lineCache[url];
+  }
+  // {card} or {error}; `key` is the pitcher's id or a stint's <id>-<team>
+  function loadRangeCard(key, e) {
+    var from = fromIn.value, to = toIn.value, cut = key.indexOf('-');
+    var stint = cut > 0 ? key.slice(cut + 1) : null, scale = season.scale;
+    return pitchFile(cut > 0 ? key.slice(0, cut) : key).then(function (file) {
+      if (!file) return {error: 'Could not load ' + e.name + '’s pitches.'};
+      var gs = SeasonRange.games(file, from, to, stint);
+      if (!gs.length) return {error: e.name + ' didn’t pitch' + (stint ? ' for ' + stint : '') + ' between those dates.'};
+      return rangeLines(file, from, to).then(function (lines) {
+        return {card: SeasonRange.build(file, gs, {from: from, to: to, lines: lines || undefined, scale: scale, stint: stint})};
+      });
+    });
+  }
+  function showRange() {
+    rangeNote.hidden = fullBtn.hidden = !rangeOn();
+  }
+  // the season's dates: from its opening (March at the earliest) to its last day; a season
+  // without pitch files (not yet built for it) has no range
+  function setRangeBounds(ix) {
+    var y = String(ix.season), ok = !!ix.scale;
+    [fromIn, toIn].forEach(function (inp) {
+      if (!ok || (inp.value && inp.value.slice(0, 4) !== y)) inp.value = '';
+      inp.min = y + '-03-01'; inp.max = ix.through;
+      inp.disabled = !ok;
+      inp.title = ok ? '' : 'Date ranges aren’t available for ' + y + ' yet';
+    });
+    showRange();
+  }
+  function onRange(ev) {
+    // the other end follows when the two cross
+    if (fromIn.value && toIn.value && fromIn.value > toIn.value) {
+      if (ev && ev.target === fromIn) toIn.value = fromIn.value; else fromIn.value = toIn.value;
+    }
+    showRange();
+    if (season) onPitcher();
+  }
+  fromIn.addEventListener('change', onRange);
+  toIn.addEventListener('change', onRange);
+  fullBtn.addEventListener('click', function () { fromIn.value = toIn.value = ''; onRange(); });
+
   function clearStage(text) {
     shown = null; wanted = null;
     cardEl.hidden = true; cardEl.innerHTML = '';
@@ -322,14 +397,18 @@ p,li,.note,.prov{text-wrap:pretty}
       document.title = 'PLV Pitcher Season Card';
       return;
     }
-    document.title = e.name + ' — ' + season.season + ' ' + atLevel() + (e.stint ? e.team + ' ' : '') + '— PLV Pitcher Season Card';
-    var id = level + ':' + season.season + '/' + key;
+    document.title = e.name + ' — ' + season.season + ' ' + atLevel() + (e.stint ? e.team + ' ' : '')
+      + (rangeOn() ? rangeText() + ' ' : '') + '— PLV Pitcher Season Card';
+    var id = level + ':' + season.season + '/' + key + (rangeOn() ? '@' + fromIn.value + '~' + toIn.value : '');
     if ((shown && shown.key === id) || wanted === id) return;
     wanted = id;
-    loadCard(key).then(function (card) {
+    var got = rangeOn() ? loadRangeCard(key, e)
+      : loadCard(key).then(function (card) { return card ? {card: card} : {error: 'Could not load this card.'}; });
+    got.catch(function () { return {error: 'Could not build this card.'}; }).then(function (r) {
       if (wanted !== id) return;       // a later pick has superseded this one
       wanted = null;
-      if (!card) { clearStage('Could not load this card.'); return; }
+      if (r.error) { clearStage(r.error); return; }
+      var card = r.card;
       var svg = PitcherCard.draw(cardEl, card, {logo: LOGO});
       shown = {key: id, card: card, svg: svg};
       cardEl.hidden = false; empty.hidden = true; png.hidden = false;
@@ -482,6 +561,7 @@ p,li,.note,.prov{text-wrap:pretty}
       minIn.placeholder = String(defaultMin(ix));
       minIn.value = min != null ? min : defaultMin(ix);
       minIn.disabled = split.disabled = false;
+      setRangeBounds(ix);
       var e = key ? byKey(key) : null;
       if (e && e.stint) split.checked = true;
       if (e && e.n < minPitches()) minIn.value = e.n;
@@ -499,7 +579,11 @@ p,li,.note,.prov{text-wrap:pretty}
     });
   }
 
-  seasonSel.addEventListener('change', function () { pitcherSel.dataset.key = ''; openSeason(+seasonSel.value, null, null); });
+  // another season clears the range (its dates are that season's)
+  seasonSel.addEventListener('change', function () {
+    pitcherSel.dataset.key = ''; fromIn.value = toIn.value = '';
+    openSeason(+seasonSel.value, null, null);
+  });
   // another level opens on the same season if it has one (else its latest), at its own
   // threshold, and keeps the pitcher on stage if he is listed there too
   levelSel.addEventListener('change', function () { openLevel(levelSel.value, false); });
@@ -648,6 +732,9 @@ p,li,.note,.prov{text-wrap:pretty}
     }
     var h = fromHash(), q = parseInt(params.get('min'), 10);
     split.checked = params.get('split') === '1';
+    var iso = /^\d{4}-\d{2}-\d{2}$/;  // ?from= and ?to=, kept if they fall in the season opened
+    fromIn.value = iso.test(params.get('from') || '') ? params.get('from') : '';
+    toIn.value = iso.test(params.get('to') || '') ? params.get('to') : '';
     openSeason(h ? h.year : +years[0], isFinite(q) && q >= 0 ? q : null, h ? h.key : null);
   }
 

@@ -1313,7 +1313,9 @@
     if (card.season) {
       // below MLB the level's name (Triple-A), so a pitcher's season at each level saves apart
       const level = card.level && card.level.code !== "mlb" ? `_${card.level.name.replace(/ /g, "-")}` : "";
-      return `${card.name.replace(/ /g, "_")}_${card.season}${level}${card.stint ? `_${card.team}` : ""}_season_PLV_card.png`;
+      // a date range's (season-range.js) by its dates, so it saves apart from the whole season's
+      const r = card.range && (card.range.from || card.range.to) ? `_${card.range.from || "start"}_to_${card.range.to || "end"}` : "";
+      return `${card.name.replace(/ /g, "_")}_${card.season}${level}${card.stint ? `_${card.team}` : ""}${r}_season_PLV_card.png`;
     }
     return `${card.name.replace(/ /g, "_")}_${card.date}_${card.team}_${card.opp}_PLV_card.png`;
   }
