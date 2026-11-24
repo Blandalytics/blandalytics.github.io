@@ -401,7 +401,8 @@ p,li,.note,.prov{text-wrap:pretty}
     if (!ix || !rangeOn()) { rangeIx = null; rangeTable.hidden = true; return Promise.resolve(true); }
     return loadGames().then(function (file) {
       if (token !== boardToken) return false;
-      rangeIx = file ? Object.assign(SeasonRange.board(file, from, to, ix.scale),
+      // an open end runs to the season's last day, as the index's team_games does
+      rangeIx = file ? Object.assign(SeasonRange.board(file, from, to || ix.through, ix.scale),
         {level: ix.level, season: ix.season, plus_scale: ix.plus_scale, through: ix.through}) : null;
       rangeTable.hidden = !!rangeIx;
       return true;
