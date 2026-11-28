@@ -667,10 +667,13 @@ p,li,.note,.prov{text-wrap:pretty}
     openSeason(+seasonSel.value, null, null);
   });
   // another level opens on the same season if it has one (else its latest), at its own
-  // threshold, and keeps the pitcher on stage if he is listed there too; like another season
-  // it clears the range (a level's season has its own dates: the World Baseball Classic's
-  // are in March)
-  levelSel.addEventListener('change', function () { fromIn.value = toIn.value = ''; openLevel(levelSel.value, false); });
+  // threshold, and keeps the pitcher on stage if he is listed there too, and the range (to
+  // set the same dates side by side at MLB and Triple-A) unless it goes to or from a
+  // tournament, whose dates (the World Baseball Classic's March) no other level shares
+  levelSel.addEventListener('change', function () {
+    if (TOURNAMENTS[levelSel.value] || TOURNAMENTS[level]) fromIn.value = toIn.value = '';
+    openLevel(levelSel.value, false);
+  });
   var minTimer = null;
   minIn.addEventListener('input', function () {
     clearTimeout(minTimer);

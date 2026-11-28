@@ -222,7 +222,8 @@ in a season under way). The World Baseball Classic's starts at 50 over a team's 
 card for each team he pitched for, its line the one for that team. Below MLB the grades are on
 the MLB scale, as the game cards' are, and the page says PLV and Location are provisional
 there, as Game Cards does. Switching level keeps the season, and the pitcher if he is listed at
-the new level too, and clears a date range (each level's season has its own dates). The table is the Game Cards page's: pitches, innings, the season letters and Stuff+
+the new level too, and the date range, except to or from the WBC (whose dates, in March, no
+other level shares). The table is the Game Cards page's: pitches, innings, the season letters and Stuff+
 by pitch type (a type's only where he threw it at least 1% as often as Min pitches asks: 10
 times at 1,000), sorted by Stuff (by the means behind the letters, best first); a name opens its
 card, and the two split the window as there. `season.html#<season>/<key>` links a card (`<key>`
