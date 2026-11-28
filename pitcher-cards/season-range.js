@@ -25,7 +25,7 @@
   // season.py's LEVELS: sportId, name, and the game types its season is (a tournament's rounds)
   const LEVELS = {
     mlb: [1, "MLB", "R"], aaa: [11, "Triple-A", "R"], afx: [14, "Single-A", "R"],
-    int: [51, "World Baseball Classic", "F,D,L,W"],
+    int: [51, "WBC", "F,D,L,W"],  // the World Baseball Classic
   };
   // grades.DESC_MAP: a pitch's call to its outcome family
   const DESC = {
@@ -246,7 +246,7 @@
     const team = file.level === "mlb" ? teams.join("/") : last.team;
     const named = org ? `${team} (${org})` : team;
     const age = seasonAge(file.birth, file.season);
-    // a tournament's whole is just its name (2026 World Baseball Classic)
+    // a tournament's whole is just its name (2026 WBC)
     const span = from || to ? `${niceDate(from || gs[0].date)}–${niceDate(to || last.date)}` : level[2] === "R" ? "Season" : "";
     return {
       version: 4,
