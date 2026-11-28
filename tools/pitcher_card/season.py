@@ -149,7 +149,7 @@ LEVELS = {lv.code: lv for lv in (
     Level("aaa", 11, "Triple-A", 150),
     Level("afx", 14, "Single-A", 132),
     # pool play and the knockout rounds; its full_games is a team's pool games
-    Level("int", 51, "WBC", 4, "F,D,L,W"),  # the World Baseball Classic
+    Level("int", 51, "World Baseball Classic", 4, "F,D,L,W"),
 )}  # fmt: skip
 MLB = LEVELS["mlb"]
 
@@ -611,7 +611,7 @@ def chart_limit(pitches: list[dict]) -> int:
 def card_level(last: dict, level: Level) -> dict | None:
     """The game cards' level, by this level's name below MLB (card.js names a PNG by it): the
     World Baseball Classic's game cards have the Stats API's International Baseball, its
-    season cards WBC."""
+    season cards World Baseball Classic."""
     if level == MLB:
         return last.get("level")
     return {**(last.get("level") or {}), "name": level.name}
@@ -643,7 +643,7 @@ def build(games: list[dict], year: int, line: dict | None, age: int | None, team
         "teams": teams,
         "org": org,
         "stint": stint,
-        # 2026 MLB Season, 2026 Triple-A Season; 2026 WBC
+        # 2026 MLB Season, 2026 Triple-A Season; 2026 World Baseball Classic
         "title": f"{year} {level.name}" + ("" if level.tournament else " Season"),
         "bio": f"{last['hand']}HP | {named}" + ("" if age is None else f" | Age: {age}"),
         "line": ", ".join(segments),

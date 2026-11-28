@@ -209,8 +209,8 @@ the window again, and remembers it.
 first season the models' plus scale covers), for every Triple-A and Single-A pitcher from
 2026 (Single-A's Statcast is the Florida State League's alone, so its cards are FSL pitchers'),
 and for every pitcher in the 2026 World Baseball Classic (WBC: its pool play and knockout
-rounds, not its exhibitions; the card is titled "2026 WBC", and a pitcher is named by his
-country, "JPN").
+rounds, not its exhibitions; the card is titled "2026 World Baseball Classic", and a pitcher
+is named by his country, "JPN").
 Pick a level, a season and a pitcher; the Pitcher list and the grades table beside the card
 hold the pitchers with at least **Min pitches**, which starts at 1,000 for a full MLB season
 and 500 for a full one below it (where pitchers throw far fewer pitches), a full season being

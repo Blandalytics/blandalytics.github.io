@@ -206,7 +206,7 @@ p,li,.note,.prov{text-wrap:pretty}
 
 <script src="/shared/share-image.js?v=2"></script>
 <script src="card.js?v=32"></script>
-<script src="season-range.js?v=5"></script>
+<script src="season-range.js?v=6"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -477,7 +477,7 @@ p,li,.note,.prov{text-wrap:pretty}
     if (!window.Worker) return;
     if (kdeWorker && kdeFor !== id) { kdeWorker.terminate(); kdeWorker = null; }
     if (!kdeWorker) {
-      try { kdeWorker = new Worker('kde-worker.js?v=4'); } catch (err) { return; }
+      try { kdeWorker = new Worker('kde-worker.js?v=5'); } catch (err) { return; }
       kdeWorker.onmessage = function (ev) {
         var d = ev.data;
         kdeFor = null; busy.hidden = true;
