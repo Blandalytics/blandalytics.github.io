@@ -11,9 +11,12 @@ into a card dict that card.js draws with its season layout, for the Season Cards
                                                   # the archive a past season is pooled from
     python season.py --cuts                       # the season cuts and colour bins
 
-A level is one of LEVELS: MLB, Triple-A (aaa) or Single-A (afx, whose Statcast is the Florida
-State League's alone), each a Stats API sport code as the game cards' are. A season is its
-regular-season games at that level (the level's schedule, gameType R). This season's game
+A level is one of LEVELS: MLB, Triple-A (aaa), Single-A (afx, whose Statcast is the Florida
+State League's alone) or the World Baseball Classic (int), each a Stats API sport code as the
+game cards' are. A season is its regular-season games at that level (the level's schedule,
+gameType R); the World Baseball Classic's is its tournament (pool play and the knockout rounds,
+gameTypes F, D, L and W), without its exhibitions, and its card is titled for the tournament
+rather than a season. This season's game
 cards are the Game Cards page's (cards/<level>/data/<date>.json); a past season's, built the
 same way but without comparison seasons, are kept apart in cards/<level>/archive/<date>.json
 so the Game Cards page doesn't list them (MLB's alone so far). Each day is fetched once into
@@ -118,13 +121,19 @@ PITCH_KEYS = ("t", "hb", "ivb", "x", "z", "stand", "velo", "d", "plvStuff+", "PL
 
 class Level(NamedTuple):
     """A level the season cards are built for: its Stats API sport code (the game cards'
-    cards/<code>/), sportId, name, and the games each team plays in a full regular season
-    there (what the page prorates its pitch threshold by)."""
+    cards/<code>/), sportId, name, the games each team plays in a full regular season there
+    (what the page prorates its pitch threshold by), and the Stats API game types its season
+    is (R, a regular season; else a tournament's rounds)."""
 
     code: str
     sport: int
     name: str
     full_games: int
+    game_types: str = "R"
+
+    @property
+    def tournament(self) -> bool:
+        return self.game_types != "R"
 
     @property
     def seasons(self) -> str:  # the season cards' keys in the bucket
@@ -135,8 +144,13 @@ class Level(NamedTuple):
         return f"cards/{self.code}/archive"
 
 
-LEVELS = {lv.code: lv for lv in (Level("mlb", 1, "MLB", 162), Level("aaa", 11, "Triple-A", 150),
-                                 Level("afx", 14, "Single-A", 132))}  # fmt: skip
+LEVELS = {lv.code: lv for lv in (
+    Level("mlb", 1, "MLB", 162),
+    Level("aaa", 11, "Triple-A", 150),
+    Level("afx", 14, "Single-A", 132),
+    # pool play and the knockout rounds; its full_games is a team's pool games
+    Level("int", 51, "WBC", 4, "F,D,L,W"),  # the World Baseball Classic
+)}  # fmt: skip
 MLB = LEVELS["mlb"]
 
 
@@ -152,7 +166,7 @@ def schedule(s: requests.Session, year: int, level: Level) -> dict[int, Game]:
     """The level's regular-season games by gamePk. A game listed on two dates (postponed,
     or suspended and resumed) is kept on the one it was finished on."""
     fields = "dates,date,games,gamePk,status,codedGameState,teams,home,away,team,id"
-    q = {"sportId": level.sport, "season": year, "gameType": "R", "fields": fields}
+    q = {"sportId": level.sport, "season": year, "gameType": level.game_types, "fields": fields}
     r = s.get(f"{STATSAPI}/schedule", params=q, timeout=60)
     r.raise_for_status()
     games: dict[int, Game] = {}
@@ -504,28 +518,50 @@ def location_plots(pitches: list[dict], order: list[str]) -> dict:
 # ---- the season card ----------------------------------------------------------------
 class Person(NamedTuple):
     birth: str | None
-    lines: dict  # his regular-season pitching line at a level: by team id, the season's at None
+    lines: dict  # his season's pitching line at a level: by team id, the season's at None
 
 
-def person(s: requests.Session, pid: int, year: int, sport: int) -> Person:
-    """A pitcher's birth date and his regular-season pitching lines at a level (``sport``,
-    its sportId): one per team he pitched for, and the season's (for a traded pitcher the
-    total, else his one line)."""
-    stats = f"stats(group=[pitching],type=[season],season={year},gameType=[R],sportId={sport})"
+def _innings(outs: int) -> str:
+    return f"{outs // 3}.{outs % 3}"
+
+
+def combined(stats: list[dict]) -> dict:
+    """One line from a team's lines in several game types, which is how the Stats API gives
+    a tournament's (the World Baseball Classic's pool play, quarterfinal, ...): their counts
+    summed, and ERA and WHIP from the sums."""
+    if len(stats) == 1:
+        return stats[0]
+    keys = ("outs", "earnedRuns", "hits", "baseOnBalls", "strikeOuts", "battersFaced")
+    out = {k: sum(st.get(k) or 0 for st in stats) for k in keys}
+    ip = out["outs"] / 3
+    out["inningsPitched"] = _innings(out["outs"])
+    out["era"] = f"{9 * out['earnedRuns'] / ip:.2f}" if ip else None
+    out["whip"] = f"{(out['hits'] + out['baseOnBalls']) / ip:.2f}" if ip else None
+    return out
+
+
+def person(s: requests.Session, pid: int, year: int, level: Level) -> Person:
+    """A pitcher's birth date and his season's pitching lines at a level (its game types):
+    one per team he pitched for, and the season's (for a traded pitcher the total, else his
+    one line)."""
+    stats = (f"stats(group=[pitching],type=[season],season={year},gameType=[{level.game_types}],"
+             f"sportId={level.sport})")  # fmt: skip
     q = {"hydrate": stats}
     r = s.get(f"{STATSAPI}/people/{pid}", params=q, timeout=30)
     r.raise_for_status()
     p = r.json()["people"][0]
-    splits = [x for st in p.get("stats", []) for x in st.get("splits", [])]
-    lines = {(x.get("team") or {}).get("id"): x["stat"] for x in splits}
+    by = defaultdict(list)
+    for x in (x for st in p.get("stats", []) for x in st.get("splits", [])):
+        by[(x.get("team") or {}).get("id")].append(x["stat"])
+    lines = {team: combined(stats) for team, stats in by.items()}
     if None not in lines and len(lines) == 1:
         lines[None] = next(iter(lines.values()))
     return Person(p.get("birthDate"), lines)
 
 
-def people(s: requests.Session, pids: list[int], year: int, sport: int) -> dict[int, Person]:
+def people(s: requests.Session, pids: list[int], year: int, level: Level) -> dict[int, Person]:
     with concurrent.futures.ThreadPoolExecutor(8) as pool:
-        found = pool.map(lambda pid: person(s, pid, year, sport), pids)
+        found = pool.map(lambda pid: person(s, pid, year, level), pids)
         return dict(zip(pids, found, strict=True))
 
 
@@ -572,6 +608,15 @@ def chart_limit(pitches: list[dict]) -> int:
     return 29 if biggest is None else max(29, int(biggest / 6 + 2) * 6 - 1)
 
 
+def card_level(last: dict, level: Level) -> dict | None:
+    """The game cards' level, by this level's name below MLB (card.js names a PNG by it): the
+    World Baseball Classic's game cards have the Stats API's International Baseball, its
+    season cards WBC."""
+    if level == MLB:
+        return last.get("level")
+    return {**(last.get("level") or {}), "name": level.name}
+
+
 def build(games: list[dict], year: int, line: dict | None, age: int | None, teams: list[str],
           scale: Scale, level: Level, org: str | None = None,
           stint: bool = False) -> dict:  # fmt: skip
@@ -598,7 +643,8 @@ def build(games: list[dict], year: int, line: dict | None, age: int | None, team
         "teams": teams,
         "org": org,
         "stint": stint,
-        "title": f"{year} {level.name} Season",  # 2026 MLB Season, 2026 Triple-A Season
+        # 2026 MLB Season, 2026 Triple-A Season; 2026 WBC
+        "title": f"{year} {level.name}" + ("" if level.tournament else " Season"),
         "bio": f"{last['hand']}HP | {named}" + ("" if age is None else f" | Age: {age}"),
         "line": ", ".join(segments),
         "summary": segments,
@@ -619,7 +665,7 @@ def build(games: list[dict], year: int, line: dict | None, age: int | None, team
         },
         "missing_data": any(p.get("plvStuff+") is None for p in pitches),
         "comparisons": [],
-        "level": last.get("level"),
+        "level": card_level(last, level),
         "graded_vs": "mlb",
         "provisional": sorted({k for g in games for k in g.get("provisional") or []}),
     }
@@ -870,7 +916,7 @@ def publish(st, s: requests.Session, level: Level, year: int, sched: dict[int, G
            "application/json", INDEX_CACHE)  # fmt: skip
     if wanted:
         by = {pid: by[pid] for pid in wanted if pid in by}
-    info, scale = people(s, list(by), year, level.sport), season_scale(s)
+    info, scale = people(s, list(by), year, level), season_scale(s)
     built = build_all(by, sched, year, level, info, scale, org)
     # the line from the game scale's Stuff+ and PLV+ to the season's, for the page's
     # date-range cards (each [a, b]: season value = a + b x a mean of the pitches')
@@ -947,7 +993,8 @@ def type_values(by: dict[int, list[dict]], scale: Scale) -> dict[tuple[str, str]
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("pitchers", nargs="*", type=int, help="MLBAM ids (default: every pitcher)")
-    ap.add_argument("--level", choices=LEVELS, default="mlb", help="mlb, aaa or afx (default: mlb)")
+    ap.add_argument("--level", choices=LEVELS, default="mlb",
+                    help="mlb, aaa, afx or int (default: mlb)")  # fmt: skip
     ap.add_argument("--year", type=int, help="the season (default: this one, or last until then)")
     ap.add_argument("--publish", action="store_true", help="write the cards to the bucket")
     ap.add_argument("--out", help="write the cards to this folder instead")
@@ -966,7 +1013,8 @@ def main(argv=None) -> int:
     year = a.year or current_season(s, level)
     sched = schedule(s, year, level)
     paths = day_files(s, sched, os.path.join(a.cache, level.code, str(year)), level)
-    print(f"{len(paths)} days of {year} {level.name} regular-season game cards", file=sys.stderr)
+    kind = "tournament" if level.tournament else "regular-season"
+    print(f"{len(paths)} days of {year} {level.name} {kind} game cards", file=sys.stderr)
     if not paths:  # a level with no game cards that season (only MLB's are archived)
         return 0
     if a.cuts:

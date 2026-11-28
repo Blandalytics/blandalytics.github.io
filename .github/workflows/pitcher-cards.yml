@@ -7,13 +7,13 @@ name: Build pitcher cards
 # and today. A backfill splits its range into months and builds them in parallel, each
 # job checkpointing its day manifests in the bucket, and the index is rebuilt from the
 # manifests once every job has finished. Then the season cards (tools/pitcher_card/season.py,
-# cards/<level>/seasons/ for MLB, Triple-A and Single-A) are pooled from this season's game
-# cards, each level's when they have moved. A past season's MLB season cards (past_seasons) are
-# pooled from game cards built for them alone: its months are built as parallel jobs into a
-# folder, without comparison seasons, and kept in the bucket's archive (cards/mlb/archive/),
-# which the Game Cards page doesn't list. pool_seasons pools seasons' cards again, at every
-# level with game cards that season, from game cards already built (after a change to
-# season.py).
+# cards/<level>/seasons/ for MLB, Triple-A, Single-A and the World Baseball Classic) are pooled
+# from this season's game cards, each level's when they have moved. A past season's MLB season
+# cards (past_seasons) are pooled from game cards built for them alone: its months are built as
+# parallel jobs into a folder, without comparison seasons, and kept in the bucket's archive
+# (cards/mlb/archive/), which the Game Cards page doesn't list. pool_seasons pools seasons'
+# cards again, at every level with game cards that season, from game cards already built
+# (after a change to season.py).
 on:
   schedule:
     # 10:30 UTC is 6:30am Eastern: every game from the night before is final
@@ -284,12 +284,12 @@ jobs:
             python tools/pitcher_card/season.py --year "$YEAR" --publish --force
           done
           for YEAR in ${{ needs.plan.outputs.pool }}; do
-            for LEVEL in mlb aaa afx; do
+            for LEVEL in mlb aaa afx int; do
               python tools/pitcher_card/season.py --level "$LEVEL" --year "$YEAR" --publish --force
             done
           done
           status=0
-          for LEVEL in mlb aaa afx; do
+          for LEVEL in mlb aaa afx int; do
             python tools/pitcher_card/season.py --level "$LEVEL" --publish ${{ inputs.force && '--force' || '' }} || status=1
           done
           exit $status

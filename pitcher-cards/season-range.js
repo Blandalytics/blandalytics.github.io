@@ -22,7 +22,11 @@
 
   const STATSAPI = "https://statsapi.mlb.com/api/v1";
   const FASTBALLS = ["FF", "SI", "FC"];
-  const LEVELS = { mlb: [1, "MLB"], aaa: [11, "Triple-A"], afx: [14, "Single-A"] };
+  // season.py's LEVELS: sportId, name, and the game types its season is (a tournament's rounds)
+  const LEVELS = {
+    mlb: [1, "MLB", "R"], aaa: [11, "Triple-A", "R"], afx: [14, "Single-A", "R"],
+    int: [51, "WBC", "F,D,L,W"],  // the World Baseball Classic
+  };
   // grades.DESC_MAP: a pitch's call to its outcome family
   const DESC = {
     S: "swinging_strike", W: "swinging_strike", T: "swinging_strike", M: "swinging_strike",
@@ -85,17 +89,24 @@
 
   // ---- the summary line's stats ----
   function statsUrl(file, from, to) {
-    const sport = (LEVELS[file.level] || LEVELS.mlb)[0];
+    const [sport, , types] = LEVELS[file.level] || LEVELS.mlb;
     const start = from || `${file.season}-01-01`, end = to || `${file.season}-12-31`;
-    const h = `stats(group=[pitching],type=[byDateRange],startDate=${start},endDate=${end},gameType=[R],sportId=${sport})`;
+    const h = `stats(group=[pitching],type=[byDateRange],startDate=${start},endDate=${end},gameType=[${types}],sportId=${sport})`;
     return `${STATSAPI}/people/${file.pitcher_id}?hydrate=${encodeURIComponent(h)}`;
   }
   // season.py's person().lines: by team id, and the range's total at null (a traded
-  // pitcher's total, else his one line)
+  // pitcher's total, else his one line). A team's line over several game types (a
+  // tournament's rounds) comes split by type, with the Stats API's total across them as the
+  // all-sports (sport 0) split, which is the one kept
   function lines(response) {
     const p = ((response && response.people) || [])[0] || {};
     const out = new Map();
-    for (const st of p.stats || []) for (const x of st.splits || []) out.set((x.team || {}).id ?? null, x.stat);
+    for (const st of p.stats || []) {
+      for (const x of st.splits || []) {
+        const key = (x.team || {}).id ?? null;
+        if (!out.has(key) || (x.sport || {}).id === 0) out.set(key, x.stat);
+      }
+    }
     if (!out.has(null) && out.size === 1) out.set(null, [...out.values()][0]);
     return out;
   }
@@ -235,7 +246,8 @@
     const team = file.level === "mlb" ? teams.join("/") : last.team;
     const named = org ? `${team} (${org})` : team;
     const age = seasonAge(file.birth, file.season);
-    const span = from || to ? `${niceDate(from || gs[0].date)}–${niceDate(to || last.date)}` : "Season";
+    // a tournament's whole is just its name (2026 WBC)
+    const span = from || to ? `${niceDate(from || gs[0].date)}–${niceDate(to || last.date)}` : level[2] === "R" ? "Season" : "";
     return {
       version: 4,
       season: file.season,
@@ -245,7 +257,7 @@
       hand: file.hand,
       team, teams, org,
       stint: !!stint,
-      title: `${file.season} ${level[1]} ${span}`, // 2026 MLB Jun 1–Jul 31
+      title: `${file.season} ${level[1]}${span ? ` ${span}` : ""}`, // 2026 MLB Jun 1–Jul 31
       bio: `${file.hand}HP | ${named}` + (age == null ? "" : ` | Age: ${age}`),
       line: segments.join(", "),
       summary: segments,
