@@ -30,8 +30,6 @@ body.plpd{display:flex; flex-direction:column}
 .brand .sub{font-family:var(--font-display); font-size:12px; line-height:1.25; letter-spacing:.36px; color:var(--text-text-zero); font-variant-numeric:tabular-nums}
 .field select.plpd-filter-dropdown{width:auto; min-width:110px; font-variant-numeric:tabular-nums}
 #pitcherQ{width:224px}  /* the Level, Season, threshold, split and Share image beside it on one row at 1600px */
-/* the Level sizes to the level on show, not its longest (World Baseball Classic), where the browser can */
-#level{field-sizing:content}
 /* the Pitcher box's suggestions: Model Drilldown's list, ten rows tall before it scrolls */
 .suggest-list{--rows:10; max-height:calc(var(--rows) * 34px + 14px); overflow-y:auto; overscroll-behavior:contain;
   scrollbar-width:thin; scrollbar-color:var(--navy-500) transparent}
@@ -225,7 +223,7 @@ p,li,.note,.prov{text-wrap:pretty}
   var params = new URLSearchParams(location.search);
   var CARDS = new URL(params.get('cards') || 'https://data.blandalytics.com/cards/', location.href).href;
   var MLB = 'mlb';
-  var LEVELS = [['mlb', 'MLB'], ['aaa', 'Triple-A'], ['afx', 'Single-A'], ['int', 'World Baseball Classic']];
+  var LEVELS = [['mlb', 'MLB'], ['aaa', 'Triple-A'], ['afx', 'Single-A'], ['int', 'WBC']];
   var TOURNAMENTS = {int: true};      // a level whose season is a tournament, not a regular season
   var level = MLB;
   var levelIx = {};                   // each level's seasons index, for the levels with season cards
