@@ -30,6 +30,8 @@ body.plpd{display:flex; flex-direction:column}
 .brand .sub{font-family:var(--font-display); font-size:12px; line-height:1.25; letter-spacing:.36px; color:var(--text-text-zero); font-variant-numeric:tabular-nums}
 .field select.plpd-filter-dropdown{width:auto; min-width:110px; font-variant-numeric:tabular-nums}
 #pitcherQ{width:224px}  /* the Level, Season, threshold, split and Share image beside it on one row at 1600px */
+/* the Level sizes to the level on show, not its longest (World Baseball Classic), where the browser can */
+#level{field-sizing:content}
 /* the Pitcher box's suggestions: Model Drilldown's list, ten rows tall before it scrolls */
 .suggest-list{--rows:10; max-height:calc(var(--rows) * 34px + 14px); overflow-y:auto; overscroll-behavior:contain;
   scrollbar-width:thin; scrollbar-color:var(--navy-500) transparent}
@@ -206,7 +208,7 @@ p,li,.note,.prov{text-wrap:pretty}
 
 <script src="/shared/share-image.js?v=2"></script>
 <script src="card.js?v=32"></script>
-<script src="season-range.js?v=3"></script>
+<script src="season-range.js?v=4"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -223,7 +225,8 @@ p,li,.note,.prov{text-wrap:pretty}
   var params = new URLSearchParams(location.search);
   var CARDS = new URL(params.get('cards') || 'https://data.blandalytics.com/cards/', location.href).href;
   var MLB = 'mlb';
-  var LEVELS = [['mlb', 'MLB'], ['aaa', 'Triple-A'], ['afx', 'Single-A']];
+  var LEVELS = [['mlb', 'MLB'], ['aaa', 'Triple-A'], ['afx', 'Single-A'], ['int', 'World Baseball Classic']];
+  var TOURNAMENTS = {int: true};      // a level whose season is a tournament, not a regular season
   var level = MLB;
   var levelIx = {};                   // each level's seasons index, for the levels with season cards
   function seasonsUrl(code) { return new URL(code + '/seasons/index.json', CARDS).href; }
@@ -231,8 +234,9 @@ p,li,.note,.prov{text-wrap:pretty}
   function atLevel() { return level === MLB ? '' : levelName(level) + ' '; }  // 'Triple-A ', or nothing for MLB
   var LOGO = 'PitcherList_Stats_watermark_with_logo.webp';
   // the pitch threshold over a full season at each level, prorated by the games played: half
-  // MLB's below it, where pitchers throw far fewer pitches
-  var FULL_MIN = {mlb: 1000, aaa: 500, afx: 500};
+  // MLB's below it, where pitchers throw far fewer pitches, and 50 over the World Baseball
+  // Classic's pool games (its pitchers top out near 130)
+  var FULL_MIN = {mlb: 1000, aaa: 500, afx: 500, int: 50};
   var seasons = {};                   // the seasons index's seasons
   var season = null;                  // the chosen season's index
   var seasonCache = {}, cardCache = {};
@@ -475,7 +479,7 @@ p,li,.note,.prov{text-wrap:pretty}
     if (!window.Worker) return;
     if (kdeWorker && kdeFor !== id) { kdeWorker.terminate(); kdeWorker = null; }
     if (!kdeWorker) {
-      try { kdeWorker = new Worker('kde-worker.js?v=2'); } catch (err) { return; }
+      try { kdeWorker = new Worker('kde-worker.js?v=3'); } catch (err) { return; }
       kdeWorker.onmessage = function (ev) {
         var d = ev.data;
         kdeFor = null; busy.hidden = true;
@@ -636,7 +640,8 @@ p,li,.note,.prov{text-wrap:pretty}
       season = ix;
       minIn.disabled = split.disabled = false;
       setRangeBounds(ix);
-      status.textContent = ix.season + ' ' + atLevel() + 'regular season, through ' + niceDate(ix.through) + ' · '
+      status.textContent = ix.season + ' ' + (TOURNAMENTS[level] ? levelName(level) : atLevel() + 'regular season')
+        + ', through ' + niceDate(ix.through) + ' · '
         + thousands(ix.pitchers.length) + ' cards';
       return updateBoard().then(function (fresh) {
         if (!fresh || season !== ix) return;
@@ -664,8 +669,10 @@ p,li,.note,.prov{text-wrap:pretty}
     openSeason(+seasonSel.value, null, null);
   });
   // another level opens on the same season if it has one (else its latest), at its own
-  // threshold, and keeps the pitcher on stage if he is listed there too
-  levelSel.addEventListener('change', function () { openLevel(levelSel.value, false); });
+  // threshold, and keeps the pitcher on stage if he is listed there too; like another season
+  // it clears the range (a level's season has its own dates: the World Baseball Classic's
+  // are in March)
+  levelSel.addEventListener('change', function () { fromIn.value = toIn.value = ''; openLevel(levelSel.value, false); });
   var minTimer = null;
   minIn.addEventListener('input', function () {
     clearTimeout(minTimer);

@@ -206,19 +206,23 @@ the window again, and remembers it.
 
 [blandalytics.com/pitcher-cards/season.html](https://blandalytics.com/pitcher-cards/season.html)
 — the same card for a pitcher's whole regular season, for every MLB pitcher since 2020 (the
-first season the models' plus scale covers), and for every Triple-A and Single-A pitcher from
-2026 (Single-A's Statcast is the Florida State League's alone, so its cards are FSL pitchers').
+first season the models' plus scale covers), for every Triple-A and Single-A pitcher from
+2026 (Single-A's Statcast is the Florida State League's alone, so its cards are FSL pitchers'),
+and for every pitcher in the 2026 World Baseball Classic (its pool play and knockout rounds,
+not its exhibitions; the card is titled "2026 World Baseball Classic", and a pitcher is named
+by his country, "JPN").
 Pick a level, a season and a pitcher; the Pitcher list and the grades table beside the card
 hold the pitchers with at least **Min pitches**, which starts at 1,000 for a full MLB season
 and 500 for a full one below it (where pitchers throw far fewer pitches), a full season being
 that level's (162 games in MLB, 150 in Triple-A, 132 in Single-A), prorated by the games each
 team had played (about 370 in 2020's 60-game MLB season, 494 in Triple-A's 2026, and less early
-in a season under way).
+in a season under way). The World Baseball Classic's starts at 50 over a team's four pool games
+(its pitchers top out near 130 pitches).
 **Split traded pitchers by team** swaps a traded pitcher's whole season at the level for a
 card for each team he pitched for, its line the one for that team. Below MLB the grades are on
 the MLB scale, as the game cards' are, and the page says PLV and Location are provisional
 there, as Game Cards does. Switching level keeps the season, and the pitcher if he is listed at
-the new level too. The table is the Game Cards page's: pitches, innings, the season letters and Stuff+
+the new level too, and clears a date range (each level's season has its own dates). The table is the Game Cards page's: pitches, innings, the season letters and Stuff+
 by pitch type (a type's only where he threw it at least 1% as often as Min pitches asks: 10
 times at 1,000), sorted by Stuff (by the means behind the letters, best first); a name opens its
 card, and the two split the window as there. `season.html#<season>/<key>` links a card (`<key>`
@@ -261,9 +265,10 @@ on (`plus_scale`). They are coloured on `card.js`'s `SEASON_TYPE_BINS`: each typ
 `TYPE_BINS`. The Skills letters are already graded against seasons.
 
 The cards are pooled from the game cards by
-[`tools/pitcher_card/season.py`](tools/pitcher_card/season.py) (`--level mlb`, `aaa` or `afx`),
-the regular season being the level's schedule's (`gameType` R), and written to the bucket
-under the level's game cards:
+[`tools/pitcher_card/season.py`](tools/pitcher_card/season.py) (`--level mlb`, `aaa`, `afx` or
+`int`), the regular season being the level's schedule's (`gameType` R; the World Baseball
+Classic's tournament is `gameType` F, D, L and W, whose season lines the Stats API splits by
+round and `season.py` sums), and written to the bucket under the level's game cards:
 
 - `https://data.blandalytics.com/cards/<level>/seasons/index.json` — the seasons built;
 - `.../seasons/<season>/index.json` — the season's cards (name, team, pitches, innings, the
@@ -349,7 +354,7 @@ The pipeline lives in [`tools/pitcher_card/`](tools/pitcher_card/):
 | `shapes.py` | the comparison season's movement regions (seaborn's 90%-mass KDE contours) as SVG paths |
 | `grades.py` | pitch-type maps, letter grades and both game-score formulas |
 | `grade_cuts.py` | fits the Stuff / Locations / PLV letter cuts (`card.js`'s `GRADE_CUTS`) to a target grade distribution |
-| `season.py` | the season cards and their index at each level (MLB, Triple-A, Single-A), pooled from the game cards; a past season's game cards into the archive; the season letter cuts and colour bins |
+| `season.py` | the season cards and their index at each level (MLB, Triple-A, Single-A, World Baseball Classic), pooled from the game cards; a past season's game cards into the archive; the season letter cuts and colour bins |
 | `build_data.py` | assembles all of that into one card dict (numbers; `card.js` formats them) |
 | `render.py` | a standalone page around one card dict, drawn by `card.js` |
 | `build_site.py` | builds a date range into the bucket (or a folder with `--out`) and maintains the manifests; `--reindex` rebuilds the index alone; `--prune-pages` retires the old per-card pages |
